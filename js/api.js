@@ -313,14 +313,16 @@
       payload.reasoning_effort = effortLower;
     }
 
-    // Inyectar herramientas agenticas activadas (JS / Web / Search) si están disponibles
+    // Inyectar herramientas agenticas activadas (JS / Web / PDF / Search) si están disponibles
     const toolsList = [];
     const jsTool = Sandbox.JAVASCRIPT_TOOL_DEFINITION || (typeof window !== 'undefined' && window.ChatSandbox && window.ChatSandbox.JAVASCRIPT_TOOL_DEFINITION);
     const webTool = WebBrowser.WEB_TOOL_DEFINITION || (typeof window !== 'undefined' && window.ChatWebBrowser && window.ChatWebBrowser.WEB_TOOL_DEFINITION);
+    const pdfTool = WebBrowser.PDF_TOOL_DEFINITION || (typeof window !== 'undefined' && window.ChatWebBrowser && window.ChatWebBrowser.PDF_TOOL_DEFINITION);
     const searchTool = WebSearch.SEARCH_TOOL_DEFINITION || (typeof window !== 'undefined' && window.ChatWebSearch && window.ChatWebSearch.SEARCH_TOOL_DEFINITION);
 
     if (enableTools && enableAgentJs && jsTool) toolsList.push(jsTool);
     if (enableTools && enableAgentWeb && webTool) toolsList.push(webTool);
+    if (enableTools && enableAgentWeb && pdfTool) toolsList.push(pdfTool);
     if (enableTools && enableAgentSearch && searchTool) toolsList.push(searchTool);
 
     if (toolsList.length > 0) {

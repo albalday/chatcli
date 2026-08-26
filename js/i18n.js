@@ -129,7 +129,8 @@
       // Respuestas agénticas y herramientas
       tool_js_title: '⚡ Herramienta Ejecutada: execute_javascript ({ms}ms)',
       tool_sandbox_output: 'Salida del Sandbox:',
-      tool_web_title: 'Navegador Web & PDFs: fetch_web_page',
+      tool_web_title: 'Navegador Web: fetch_web_page',
+      tool_pdf_title: 'Documento PDF: download_pdf',
       tool_web_requested_url: '📤 URL Solicitada por el Modelo:',
       tool_web_content_received: '📥 Contenido Obtenido ({size}):',
       tool_web_empty: '(Página web o PDF cargado sin contenido de texto)',
@@ -174,7 +175,7 @@
       agent_js_title: '⚡ Ejecución de JavaScript Local (Sandbox)',
       agent_js_desc: 'Permite al modelo invocar execute_javascript para calcular, procesar datos o validar algoritmos en un entorno seguro en el navegador.',
       agent_web_title: '🌐 Navegación Web y Descarga de Documentos PDF',
-      agent_web_desc: 'Permite al modelo invocar fetch_web_page para consultar páginas web públicas y descargar documentos PDF en tiempo real extrayendo su texto al contexto.',
+      agent_web_desc: 'Permite al modelo invocar fetch_web_page para consultar páginas web públicas y download_pdf para descargar y extraer documentos PDF en tiempo real.',
       agent_datetime_title: '🕒 Enviar Fecha y Hora del Mundo Real',
       agent_datetime_desc: 'Inyecta de forma explícita la fecha, hora y año actual del mundo real en el contexto del prompt para que el modelo no confunda el presente con una fecha futura.',
       field_system_prompt: 'Prompt del Sistema (System Prompt por defecto)',
@@ -210,7 +211,7 @@
 
       // Contexto del sistema de fecha/hora del mundo real
       system_context_prefix: '\n\n[INFORMACIÓN TEMPORAL DEL MUNDO REAL]\n- Fecha y hora actual del mundo real: {datetime}.\n- Año presente en el mundo real: {year}.\n- Contexto temporal obligatorio: Esta es la fecha y hora REAL y PRESENTE del mundo físico en el que se produce esta conversación. No es una fecha hipotética, ni una simulación, ni una fecha futura. Todo acontecimiento anterior a este momento pertenece al pasado, y el año actual es {year}. Responde y razona siempre tomando esta fecha como el momento presente real de hoy.',
-      default_system_prompt: 'Eres un asistente de IA útil, conciso y preciso. Responde siempre con formato Markdown claro. Tienes disponibles capacidades agénticas en el navegador si están habilitadas (búsqueda en internet, ejecución de JavaScript local y consulta de páginas web en tiempo real).'
+      default_system_prompt: 'Eres un asistente de IA útil, conciso y preciso. Responde siempre con formato Markdown claro. Tienes disponibles capacidades agénticas en el navegador si están habilitadas (búsqueda en internet con search_web, consulta de páginas web con fetch_web_page, descarga y lectura de documentos PDF desde URLs con download_pdf, y ejecución de JavaScript local con execute_javascript).'
     },
 
     en: {
@@ -322,7 +323,8 @@
       // Respuestas agénticas y herramientas
       tool_js_title: '⚡ Tool Executed: execute_javascript ({ms}ms)',
       tool_sandbox_output: 'Sandbox Output:',
-      tool_web_title: 'Web Browser & PDFs: fetch_web_page',
+      tool_web_title: 'Web Browser: fetch_web_page',
+      tool_pdf_title: 'PDF Document: download_pdf',
       tool_web_requested_url: '📤 URL Requested by Model:',
       tool_web_content_received: '📥 Retrieved Content ({size}):',
       tool_web_empty: '(Web page or PDF loaded with no readable text content)',
@@ -367,7 +369,7 @@
       agent_js_title: '⚡ Local JavaScript Execution (Sandbox)',
       agent_js_desc: 'Allows the model to call execute_javascript to compute, process data, or validate algorithms safely in the browser.',
       agent_web_title: '🌐 Web Browsing & PDF Document Downloads',
-      agent_web_desc: 'Allows the model to call fetch_web_page to retrieve public web pages and download PDF documents in real-time extracting their text into context.',
+      agent_web_desc: 'Allows the model to call fetch_web_page to retrieve public web pages and download_pdf to download and extract PDF documents in real-time.',
       agent_datetime_title: '🕒 Send Real-World Date & Time',
       agent_datetime_desc: 'Explicitly injects the current real-world date, time, and year into the prompt context so the model does not mistake the present for a future date.',
       field_system_prompt: 'System Prompt (Default System Prompt)',
@@ -403,7 +405,7 @@
 
       // Contexto del sistema de fecha/hora del mundo real
       system_context_prefix: '\n\n[REAL-WORLD TEMPORAL INFORMATION]\n- Current real-world date and time: {datetime}.\n- Current real-world year: {year}.\n- Mandatory temporal context: This is the ACTUAL, REAL-WORLD PRESENT time of the physical world in which this conversation is occurring. It is NOT a hypothetical date, a simulation, or a future date. All events prior to this timestamp are in the past, and the current year is {year}. Always answer and reason taking this date and time as today\'s real-world present.',
-      default_system_prompt: 'You are a helpful, concise and precise AI assistant. Always respond with clear Markdown format. You have agentic capabilities available in the browser if enabled (web search, local JavaScript execution and real-time web browsing).'
+      default_system_prompt: 'You are a helpful, concise and precise AI assistant. Always respond with clear Markdown format. You have agentic capabilities available in the browser if enabled (internet search with search_web, web page fetching with fetch_web_page, downloading and reading PDF documents from URLs with download_pdf, and local JavaScript execution with execute_javascript).'
     }
   };
 

@@ -296,19 +296,37 @@
   }
 
   /**
-   * Definición estándar de herramienta (Tool/Function Calling) para OpenAI y LLMs compatibles.
+   * Definiciones estándar de herramientas (Tool/Function Calling) para OpenAI y LLMs compatibles.
    */
   const WEB_TOOL_DEFINITION = {
     type: 'function',
     function: {
       name: 'fetch_web_page',
-      description: 'Descarga y lee el texto de una URL web o descarga y extrae el contenido íntegro de un documento PDF (ej: "https://es.wikipedia.org/wiki/Sol" o "https://ejemplo.com/documento.pdf").',
+      description: 'Descarga y lee el texto y contenido de una página web o artículo a partir de su URL (ej: "https://es.wikipedia.org/wiki/Sol" o "https://nodejs.org/en/about").',
       parameters: {
         type: 'object',
         properties: {
           url: {
             type: 'string',
-            description: 'URL de la página web o del documento PDF a descargar y consultar.'
+            description: 'URL de la página web a consultar.'
+          }
+        },
+        required: ['url']
+      }
+    }
+  };
+
+  const PDF_TOOL_DEFINITION = {
+    type: 'function',
+    function: {
+      name: 'download_pdf',
+      description: 'Descarga un archivo o documento PDF desde una URL web y extrae todo su texto legible para analizarlo e integrarlo en el contexto de la conversación (ej: "https://arxiv.org/pdf/2310.06825.pdf" o "https://ejemplo.com/informe.pdf").',
+      parameters: {
+        type: 'object',
+        properties: {
+          url: {
+            type: 'string',
+            description: 'URL directa del documento PDF a descargar y extraer.'
           }
         },
         required: ['url']
@@ -318,6 +336,8 @@
 
   return {
     fetchPage,
-    WEB_TOOL_DEFINITION
+    downloadPdf: fetchPage,
+    WEB_TOOL_DEFINITION,
+    PDF_TOOL_DEFINITION
   };
 });

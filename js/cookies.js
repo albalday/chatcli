@@ -17,7 +17,7 @@
     apiType: 'openai', // 'openai' | 'ollama' | 'openrouter' | 'claude' | 'gemini' | 'custom'
     apiKey: '',
     model: '',
-    systemPrompt: 'Eres un asistente de IA útil, conciso y preciso. Responde siempre con formato Markdown claro. Tienes disponibles capacidades agénticas en el navegador si están habilitadas (ejecución de JavaScript local y consulta de páginas web en tiempo real).',
+    systemPrompt: 'Eres un asistente de IA útil, conciso y preciso. Responde siempre con formato Markdown claro. Tienes disponibles capacidades agénticas en el navegador si están habilitadas (búsqueda en internet con search_web, consulta de páginas web con fetch_web_page, descarga y lectura de documentos PDF desde URLs con download_pdf, y ejecución de JavaScript local con execute_javascript).',
     temperature: '0.7',
     reasoningEffort: 'none', // 'none' | 'low' | 'medium' | 'high'
     theme: 'light', // 'light' | 'dark'

@@ -1197,8 +1197,9 @@
               return continueAgenticCompletion(content, statsContainer, actions, btnCopy, updateStatsDisplay, previousMarkdown, assistantMsgId);
             }
 
-            // 2. Consulta de Páginas Web en el Navegador
-            else if (tc.function && tc.function.name === 'fetch_web_page') {
+            // 2. Consulta de Páginas Web o Descarga de PDFs
+            else if (tc.function && (tc.function.name === 'fetch_web_page' || tc.function.name === 'download_pdf')) {
+              const isPdfCall = tc.function.name === 'download_pdf';
               let urlToFetch = '';
               try {
                 const parsed = JSON.parse(tc.function.arguments || '{}');
@@ -1207,26 +1208,30 @@
                 urlToFetch = tc.function.arguments || '';
               }
 
-              addDebugLog('tool', `fetch_web_page: ${urlToFetch}`);
+              addDebugLog('tool', `${tc.function.name}: ${urlToFetch}`);
 
               const webRes = await (WebBrowser.fetchPage ? WebBrowser.fetchPage(urlToFetch) : { success: false, url: urlToFetch, content: '', error: 'Web module not available' });
+              const isPdfResult = webRes.isPdf || isPdfCall;
 
               const statusBadgeText = webRes.success
-                ? `HTTP ${webRes.status || 200} OK (${webRes.elapsedMs || 0}ms)`
+                ? (isPdfResult ? `PDF (${webRes.byteSize ? FileParser.formatBytes(webRes.byteSize) : 'OK'}) [${webRes.elapsedMs || 0}ms]` : `HTTP ${webRes.status || 200} OK (${webRes.elapsedMs || 0}ms)`)
                 : `Error (${webRes.elapsedMs || 0}ms)`;
+
+              const cardIcon = isPdfResult ? '📄' : '🌐';
+              const cardTitle = isPdfResult ? t('tool_pdf_title') : t('tool_web_title');
 
               const responsePreview = webRes.success
                 ? (webRes.content || t('tool_web_empty'))
                 : (webRes.error || t('tool_web_err_connect'));
 
-              addDebugLog('tool', `fetch_web_page (${statusBadgeText}) [${webRes.byteSize ? FileParser.formatBytes(webRes.byteSize) : '0 B'}]:\n${(responsePreview || '').substring(0, 200)}...`);
+              addDebugLog('tool', `${tc.function.name} (${statusBadgeText}) [${webRes.byteSize ? FileParser.formatBytes(webRes.byteSize) : '0 B'}]:\n${(responsePreview || '').substring(0, 200)}...`);
 
               const webCardHtml = `
-                <div class="web-request-card">
+                <div class="web-request-card ${isPdfResult ? 'pdf-request-card' : ''}">
                   <div class="web-card-header">
                     <div class="web-card-title">
-                      <span>🌐</span>
-                      <span>${t('tool_web_title')}</span>
+                      <span>${cardIcon}</span>
+                      <span>${cardTitle}</span>
                     </div>
                     <span class="web-card-badge">${statusBadgeText}</span>
                   </div>
@@ -1257,17 +1262,18 @@
                 id: assistantMsgId,
                 role: 'tool',
                 tool_call_id: tc.id,
-                name: 'fetch_web_page',
+                name: tc.function.name,
                 content: JSON.stringify({
                   success: webRes.success,
                   url: webRes.url || urlToFetch,
                   status: webRes.status || 200,
+                  isPdf: isPdfResult,
                   content: webRes.content,
                   error: webRes.error
                 })
               });
 
-              const toolMd = `> 🌐 **fetch_web_page** (${statusBadgeText})\n> URL: ${webRes.url || urlToFetch}\n> \`\`\`\n> ${(responsePreview || '').split('\n').join('\n> ')}\n> \`\`\``;
+              const toolMd = `> ${cardIcon} **${tc.function.name}** (${statusBadgeText})\n> URL: ${webRes.url || urlToFetch}\n> \`\`\`\n> ${(responsePreview || '').split('\n').join('\n> ')}\n> \`\`\``;
               const previousMarkdown = (accumulatedText ? accumulatedText + '\n\n' : '') + toolMd;
               return continueAgenticCompletion(content, statsContainer, actions, btnCopy, updateStatsDisplay, previousMarkdown, assistantMsgId);
             }

@@ -69,8 +69,9 @@ Desde el diseño de la arquitectura por módulos, la creación de la interfaz HT
    - Pestañas de filtrado (`Todo`, `🧠 Razonamiento`, `⚙️ Herramientas`, `🌐 Red`), auto-scroll y copia al portapapeles.
 
 5. **Capacidades Agénticas (Tools / Function Calling)**:
-   - **`search_web` (Activa por defecto)**: Motor de búsqueda en internet en tiempo real basado exclusivamente en la **API de DuckDuckGo** (Instant Answer, resúmenes, dominios web oficiales y temas relacionados).
-   - **`fetch_web_page` (Activa por defecto)**: Consulta de páginas web públicas y **descarga y extracción de documentos PDF (`.pdf`)** en tiempo real para integrar su contenido completo directamente en el contexto del modelo.
+   - **`download_pdf` (Activa por defecto)**: Descarga y extracción de texto completo de documentos PDF desde URLs web para lectura y análisis en el contexto del modelo.
+   - **`fetch_web_page` (Activa por defecto)**: Consulta y extracción en tiempo real del contenido y artículos de páginas web públicas.
+   - **`search_web` (Activa por defecto)**: Motor de búsqueda en internet en tiempo real basado en la **API de DuckDuckGo** (Instant Answers, resúmenes y dominios oficiales).
    - **`execute_javascript` (Activa por defecto)**: Sandbox seguro y aislado en el navegador para cálculos matemáticos, lógica y transformación de datos.
    - *Definiciones de herramientas ultracompactas* diseñadas para minimizar el consumo de tokens en cada petición.
 

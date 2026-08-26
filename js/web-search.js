@@ -150,7 +150,7 @@
         }
         mdOutput += `   - *Enlace:* ${item.url}\n\n`;
       });
-      mdOutput += `> *Nota para el asistente:* Si necesitas leer el contenido completo de cualquiera de estas páginas o documentos PDF, invoca la herramienta \`fetch_web_page\` pasando la URL correspondiente.`;
+      mdOutput += `> *Nota para el asistente:* Si necesitas leer el contenido completo de una página web invoca \`fetch_web_page\`, y si se trata de un documento PDF invoca \`download_pdf\` pasando la URL correspondiente.`;
     }
 
     return {
