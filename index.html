@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Cliente de chat web tipo OpenAI simple y ligero">
+  <title>ChatCLI - Cliente Web OpenAI</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <!-- Contenedor Principal del Chat (Usa todo el alto de la página: 100vh) -->
+  <main class="chat-container">
+    <div id="messages-list" class="messages-list">
+      <!-- Estado de Bienvenida inicial -->
+      <div id="welcome-banner" class="welcome-banner">
+        <div class="welcome-icon">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+          </svg>
+        </div>
+        <h2>¿En qué puedo ayudarte hoy?</h2>
+        <p class="welcome-desc">
+          Cliente de chat conectado a tu API. Puedes configurar el servidor, modelo, API Key y prompt en el botón de configuración junto a la caja de chat.
+        </p>
+
+        <div class="suggestion-cards">
+          <button class="suggestion-card" data-prompt="Explícame cómo funciona una API REST con un ejemplo sencillo en JavaScript.">
+            <span class="suggestion-title">💡 Explicar conceptos</span>
+            <span class="suggestion-text">¿Cómo funciona una API REST con JavaScript?</span>
+          </button>
+          <button class="suggestion-card" data-prompt="Escribe una función en JavaScript para ordenar un array de objetos por una clave específica.">
+            <span class="suggestion-title">💻 Escribir código</span>
+            <span class="suggestion-text">Función JS para ordenar un array de objetos</span>
+          </button>
+          <button class="suggestion-card" data-prompt="Dame 3 ideas de proyectos web interesantes que utilicen HTML5 y JavaScript Vanilla.">
+            <span class="suggestion-title">🚀 Ideas de proyectos</span>
+            <span class="suggestion-text">3 ideas de proyectos web en JavaScript Vanilla</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Barra de entrada inferior -->
+    <div class="chat-input-wrapper">
+      <!-- Previsualización de archivos adjuntos -->
+      <div id="attachments-container" class="attachments-container" style="display: none;"></div>
+
+      <!-- Barra de herramientas y configuración compacta al lado de la pregunta -->
+      <div class="input-toolbar-top">
+        <div class="toolbar-left">
+          <button type="button" class="badge-pill badge-server" id="badge-server" title="Servidor configurado (clic para cambiar)">
+            <span class="server-icon">🌐</span>
+            <span id="current-server-url">http://localhost:1234/v1</span>
+          </button>
+          <button type="button" class="badge-pill badge-model" id="badge-model" title="Modelo activo (clic para cambiar)">
+            <span class="status-dot"></span>
+            <span id="current-model-name">(Sin modelo)</span>
+          </button>
+        </div>
+        <div class="toolbar-right">
+          <button type="button" id="btn-clear-chat" class="btn-tool-mini" title="Limpiar conversación actual">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            </svg>
+            <span>Limpiar</span>
+          </button>
+          <button type="button" id="btn-new-chat" class="btn-tool-mini" title="Abrir nuevo chat en pestaña nueva">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            <span>Nuevo chat ↗</span>
+          </button>
+          <button type="button" id="btn-toggle-debug" class="btn-tool-mini btn-debug-toggle" title="Abrir/Cerrar panel lateral de razonamiento y logs">
+            <span class="debug-toggle-icon">🧠</span>
+            <span>Logs</span>
+          </button>
+          <button type="button" id="btn-open-settings" class="btn-tool-mini btn-config-mini" title="Abrir configuración de API y Modelo">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
+            <span>Configuración</span>
+          </button>
+        </div>
+      </div>
+
+      <form id="chat-form" class="chat-input-container">
+        <!-- Input oculto para selección de archivos -->
+        <input type="file" id="file-input" multiple accept=".pdf,.txt,.md,.json,.js,.ts,.py,.html,.css,.csv,.tsv,.xml,.yaml,.yml,.c,.cpp,.h,.java,.sql,.sh,.rs,.go,.php,image/*" style="display: none;">
+        
+        <!-- Botón para adjuntar archivos -->
+        <button type="button" id="btn-attach-file" class="btn-attach" title="Adjuntar archivos (PDF, código, texto, imágenes)">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
+          </svg>
+        </button>
+
+        <!-- Control de Nivel de Razonamiento (Thinking) -->
+        <div class="reasoning-control-wrapper">
+          <button type="button" id="btn-reasoning" class="btn-reasoning" title="Nivel de razonamiento (Desactivado por defecto)">
+            <span class="reasoning-icon">🧠</span>
+            <span id="reasoning-label" class="reasoning-label">None</span>
+          </button>
+
+          <!-- Menú desplegable de niveles -->
+          <div id="reasoning-menu" class="reasoning-menu" style="display: none;">
+            <div class="reasoning-menu-header">
+              <span>🧠 Nivel de Razonamiento</span>
+              <span id="reasoning-model-badge" class="reasoning-model-badge">-</span>
+            </div>
+            <div class="reasoning-options" id="reasoning-options-container">
+              <!-- Opciones según el tipo de endpoint configurado -->
+            </div>
+          </div>
+        </div>
+
+        <textarea
+          id="user-input"
+          class="chat-textarea"
+          rows="1"
+          placeholder="Envía un mensaje o arrastra un archivo... (Enter para enviar, Shift+Enter para nueva línea)"
+          required
+        ></textarea>
+
+        <div class="input-actions">
+          <button type="button" id="btn-stop-stream" class="btn-stop-stream" style="display: none;" title="Detener respuesta">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <rect x="6" y="6" width="12" height="12" rx="2"></rect>
+            </svg>
+            <span>Detener</span>
+          </button>
+
+          <button type="submit" id="btn-send" class="btn-send" title="Enviar mensaje">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="22" y1="2" x2="11" y2="13"></line>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+            </svg>
+          </button>
+        </div>
+      </form>
+      <p class="chat-disclaimer">
+        Las respuestas generadas pueden variar según el servidor y modelo configurados. Guarda tu API Key de forma segura.
+      </p>
+    </div>
+  </main>
+
+  <!-- Panel Lateral Derecho: Log & Debug / Razonamiento -->
+  <aside id="debug-panel" class="debug-panel" style="display: none;">
+    <div class="debug-panel-header">
+      <div class="debug-title">
+        <span class="debug-badge-icon">🧠</span>
+        <span class="debug-badge-text">Razonamiento & Logs</span>
+        <span id="debug-status-indicator" class="debug-status-indicator idle">Inactivo</span>
+      </div>
+      <div class="debug-actions">
+        <button type="button" id="btn-copy-debug" class="btn-debug-action" title="Copiar logs al portapapeles">📋</button>
+        <button type="button" id="btn-clear-debug" class="btn-debug-action" title="Limpiar logs">🗑️</button>
+        <button type="button" id="btn-toggle-autoscroll" class="btn-debug-action active" title="Auto-scroll activado">⬇️</button>
+        <button type="button" id="btn-close-debug" class="btn-debug-action btn-close-panel" title="Cerrar panel de logs">✕</button>
+      </div>
+    </div>
+
+    <!-- Pestañas de filtrado de logs -->
+    <div class="debug-tabs">
+      <button type="button" class="debug-tab active" data-debug-tab="all">Todo</button>
+      <button type="button" class="debug-tab" data-debug-tab="thinking">🧠 Razonamiento</button>
+      <button type="button" class="debug-tab" data-debug-tab="tool">⚙️ Herramientas</button>
+      <button type="button" class="debug-tab" data-debug-tab="network">🌐 Red</button>
+    </div>
+
+    <!-- Contenedor del Log Monospace -->
+    <div id="debug-log-content" class="debug-log-content" tabindex="0">
+      <div class="debug-entry debug-entry-system" data-type="system">
+        <span class="debug-time">[--:--:--]</span>
+        <span class="debug-tag system">[SISTEMA]</span>
+        <span class="debug-msg">Inspector de razonamiento y logs iniciado.</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Modal de Configuración con Pestañas y Botones Fijos -->
+  <dialog id="settings-dialog" class="settings-modal">
+    <div class="modal-header">
+      <div class="modal-title">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"></circle>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+        </svg>
+        <h3>Configuración del Chat</h3>
+      </div>
+      <button id="btn-close-settings" class="btn-close" aria-label="Cerrar modal">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Navegación por pestañas -->
+    <div class="modal-tabs-nav">
+      <button type="button" class="modal-tab-btn active" data-tab="tab-general">
+        <span>🌐 General y Servidor</span>
+      </button>
+      <button type="button" class="modal-tab-btn" data-tab="tab-agent">
+        <span>🤖 Agente y Fecha</span>
+      </button>
+      <button type="button" class="modal-tab-btn" data-tab="tab-model">
+        <span>⚙️ Modelo y Prompt</span>
+      </button>
+    </div>
+
+    <form id="settings-form" class="settings-form-wrapper">
+      <div class="modal-body">
+        <!-- Pestaña 1: General y Servidor -->
+        <div id="tab-general" class="modal-tab-pane active">
+          <div class="form-field">
+            <label for="setting-api-type">
+              <strong>Tipo de Interfaz / Protocolo</strong>
+              <span class="label-hint">Determina el formato del JSON de petición y las opciones de razonamiento.</span>
+            </label>
+            <select id="setting-api-type" class="combobox-select-helper" style="width: 100%;">
+              <option value="openai" selected>🤖 OpenAI / LM Studio / LocalAI / vLLM (/v1)</option>
+              <option value="ollama">🦙 Ollama (/api/tags)</option>
+              <option value="openrouter">🔀 OpenRouter (/api/v1)</option>
+              <option value="claude">🎭 Anthropic Claude (/v1)</option>
+              <option value="gemini">✨ Google Gemini (OpenAI compat)</option>
+              <option value="custom">⚙️ Personalizado</option>
+            </select>
+          </div>
+
+          <div class="form-field">
+            <label for="setting-api-url">
+              <strong>URL del Servidor / Endpoint de Chat</strong>
+              <span class="label-hint">Compatible con OpenAI, LM Studio, Ollama, LocalAI, vLLM, OpenRouter, etc.</span>
+            </label>
+            <div class="input-with-button-wrapper">
+              <input
+                type="url"
+                id="setting-api-url"
+                placeholder="http://localhost:1234/v1"
+                required
+              >
+              <button type="button" id="btn-query-server" class="btn-query-server" title="Consultar modelos disponibles y capacidades de la API en el servidor">
+                <svg class="query-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="11" cy="11" r="8"></circle>
+                  <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+                <span class="query-btn-text">Query</span>
+              </button>
+            </div>
+            <div id="server-query-status" class="server-query-status" style="display: none;"></div>
+          </div>
+
+          <div class="form-field">
+            <label for="setting-api-key">
+              <strong>Clave de API (API Key)</strong>
+              <span class="label-hint">Opcional si usas un servidor local (LM Studio / Ollama / LocalAI).</span>
+            </label>
+            <div class="input-password-wrapper">
+              <input
+                type="password"
+                id="setting-api-key"
+                placeholder="sk-..."
+                autocomplete="off"
+              >
+              <button type="button" id="btn-toggle-key" class="btn-toggle-visibility" title="Mostrar/Ocultar clave">
+                👁️
+              </button>
+            </div>
+          </div>
+
+          <div class="form-field">
+            <label for="setting-model">
+              <strong>Nombre del Modelo</strong>
+              <span class="label-hint">Selecciona de la lista del servidor o escribe cualquier nombre personalizado.</span>
+            </label>
+            <div class="combobox-wrapper">
+              <input
+                type="text"
+                id="setting-model"
+                list="model-datalist"
+                placeholder="Escribe o pulsa Query para consultar modelos..."
+                autocomplete="off"
+              >
+              <select id="model-select-helper" class="combobox-select-helper" title="Seleccionar modelo de la lista">
+                <option value="" disabled selected>▾ Elegir modelo detectado...</option>
+              </select>
+              <datalist id="model-datalist">
+                <!-- Se puebla automáticamente al pulsar Query -->
+              </datalist>
+            </div>
+          </div>
+
+          <div class="form-field">
+            <label>
+              <strong>Tema Visual de la Interfaz</strong>
+              <span class="label-hint">Selecciona el modo de visualización.</span>
+            </label>
+            <div class="theme-switcher-group" id="theme-switcher-group">
+              <button type="button" class="btn-theme-toggle active" id="btn-theme-light" data-theme="light">
+                <span>☀️ Modo Claro</span>
+              </button>
+              <button type="button" class="btn-theme-toggle" id="btn-theme-dark" data-theme="dark">
+                <span>🌙 Modo Oscuro</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Pestaña 2: Modo Agente y Fecha -->
+        <div id="tab-agent" class="modal-tab-pane">
+          <div class="settings-section-intro">
+            <p>Configura las herramientas agénticas y el contexto temporal que se transmiten al modelo.</p>
+          </div>
+
+          <div class="setting-toggle-card">
+            <div class="toggle-card-info">
+              <div class="toggle-card-title">
+                <span>⚡ Ejecución de JavaScript Local (Sandbox)</span>
+              </div>
+              <p class="toggle-card-desc">
+                Permite al modelo invocar <code>execute_javascript</code> para calcular, procesar datos o validar algoritmos en un entorno seguro en el navegador.
+              </p>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="setting-enable-agent-js" checked>
+              <span class="slider"></span>
+            </label>
+          </div>
+
+          <div class="setting-toggle-card">
+            <div class="toggle-card-info">
+              <div class="toggle-card-title">
+                <span>🌐 Consulta de Páginas Web en Tiempo Real</span>
+              </div>
+              <p class="toggle-card-desc">
+                Permite al modelo invocar <code>fetch_web_page</code> para consultar URLs y páginas web públicas en tiempo real a través del navegador.
+              </p>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="setting-enable-agent-web" checked>
+              <span class="slider"></span>
+            </label>
+          </div>
+
+          <div class="setting-toggle-card">
+            <div class="toggle-card-info">
+              <div class="toggle-card-title">
+                <span>🕒 Enviar siempre Fecha y Hora Actual</span>
+              </div>
+              <p class="toggle-card-desc">
+                Inyecta automáticamente la fecha y hora local del sistema en el contexto del prompt para que el modelo esté siempre orientado temporalmente.
+              </p>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="setting-send-datetime" checked>
+              <span class="slider"></span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Pestaña 3: Modelo y Prompt -->
+        <div id="tab-model" class="modal-tab-pane">
+          <div class="form-field">
+            <label for="setting-system-prompt">
+              <strong>Prompt del Sistema (System Prompt por defecto)</strong>
+              <span class="label-hint">Instrucciones base que guían el comportamiento del asistente.</span>
+            </label>
+            <textarea
+              id="setting-system-prompt"
+              rows="5"
+              placeholder="Eres un asistente útil, conciso y preciso..."
+            ></textarea>
+          </div>
+
+          <div class="form-field">
+            <label for="setting-temperature">
+              <strong>Temperatura: <span id="temperature-val">0.7</span></strong>
+              <span class="label-hint">Controla la creatividad de las respuestas (0 = determinista/preciso, 1 = creativo).</span>
+            </label>
+            <input
+              type="range"
+              id="setting-temperature"
+              min="0"
+              max="1.5"
+              step="0.1"
+              value="0.7"
+            >
+          </div>
+
+          <div class="cookie-notice">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="16" x2="12" y2="12"></line>
+              <line x1="12" y1="8" x2="12.01" y2="8"></line>
+            </svg>
+            <span>Toda la configuración se almacena localmente de forma persistente (compatible tanto con <strong>file://</strong> como con servidores web).</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pie del Modal FIJO con botones siempre visibles -->
+      <div class="modal-footer">
+        <button type="button" id="btn-reset-settings" class="btn-secondary">Restablecer valores</button>
+        <div class="footer-actions-right">
+          <button type="button" id="btn-cancel-settings" class="btn-secondary">Cancelar</button>
+          <button type="submit" class="btn-primary">Guardar Configuración</button>
+        </div>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Scripts de la aplicación (compatibles con file:// y http://) -->
+  <script src="js/cookies.js"></script>
+  <script src="js/sandbox.js"></script>
+  <script src="js/web-browser.js"></script>
+  <script src="js/markdown.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/file-parser.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
