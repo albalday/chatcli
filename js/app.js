@@ -1550,6 +1550,7 @@
     }
 
     await runAgentTurn();
+  }
 
   function finishGeneration() {
     isGenerating = false;
