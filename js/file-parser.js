@@ -118,30 +118,31 @@
   async function decompressDeflateData(uint8Array) {
     if (!uint8Array || uint8Array.length === 0) return null;
 
-    // Intento 1: DecompressionStream('deflate')
     if (typeof DecompressionStream !== 'undefined') {
+      // Intento 1: DecompressionStream('deflate')
       try {
         const ds = new DecompressionStream('deflate');
         const writer = ds.writable.getWriter();
-        writer.write(uint8Array);
-        writer.close();
+        const writePromise = writer.write(uint8Array).then(() => writer.close()).catch(() => {});
         const res = new Response(ds.readable);
         const buf = await res.arrayBuffer();
+        await writePromise;
         return new Uint8Array(buf);
       } catch (e) {}
 
-      // Intento 2: DecompressionStream('deflate-raw') si tiene cabecera zlib (0x78)
+      // Intento 2: DecompressionStream('deflate-raw')
       try {
+        let rawSlice = uint8Array;
         if (uint8Array.length > 6 && uint8Array[0] === 0x78) {
-          const rawSlice = uint8Array.subarray(2, uint8Array.length - 4);
-          const ds = new DecompressionStream('deflate-raw');
-          const writer = ds.writable.getWriter();
-          writer.write(rawSlice);
-          writer.close();
-          const res = new Response(ds.readable);
-          const buf = await res.arrayBuffer();
-          return new Uint8Array(buf);
+          rawSlice = uint8Array.subarray(2, uint8Array.length - 4);
         }
+        const dsRaw = new DecompressionStream('deflate-raw');
+        const writer = dsRaw.writable.getWriter();
+        const writePromise = writer.write(rawSlice).then(() => writer.close()).catch(() => {});
+        const res = new Response(dsRaw.readable);
+        const buf = await res.arrayBuffer();
+        await writePromise;
+        return new Uint8Array(buf);
       } catch (e) {}
     }
 

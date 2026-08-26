@@ -69,8 +69,8 @@ Desde el diseño de la arquitectura por módulos, la creación de la interfaz HT
    - Pestañas de filtrado (`Todo`, `🧠 Razonamiento`, `⚙️ Herramientas`, `🌐 Red`), auto-scroll y copia al portapapeles.
 
 5. **Capacidades Agénticas (Tools / Function Calling)**:
-   - **`search_web` (Activa por defecto)**: Motor de búsqueda en internet multi-fuente federado (DuckDuckGo + Wikipedia + Algolia Web) con CORS oficial nativo y protección contra bloqueos por peticiones repetidas.
-   - **`fetch_web_page` (Activa por defecto)**: Consulta y extracción en tiempo real del contenido íntegro de páginas web y URLs.
+   - **`search_web` (Activa por defecto)**: Motor de búsqueda en internet en tiempo real basado exclusivamente en la **API de DuckDuckGo** (Instant Answer, resúmenes, dominios web oficiales y temas relacionados).
+   - **`fetch_web_page` (Activa por defecto)**: Consulta de páginas web públicas y **descarga y extracción de documentos PDF (`.pdf`)** en tiempo real para integrar su contenido completo directamente en el contexto del modelo.
    - **`execute_javascript` (Activa por defecto)**: Sandbox seguro y aislado en el navegador para cálculos matemáticos, lógica y transformación de datos.
    - *Definiciones de herramientas ultracompactas* diseñadas para minimizar el consumo de tokens en cada petición.
 
@@ -105,8 +105,8 @@ chatcli/
 │   ├── api.js          # Cliente SSE universal, streaming y protocolos multi-endpoint
 │   ├── cookies.js      # Persistencia en localStorage y Cookies
 │   ├── sandbox.js      # Sandbox aislado para ejecución de JavaScript
-│   ├── web-search.js   # Módulo de búsqueda en internet multi-fuente federado
-│   ├── web-browser.js  # Módulo de consulta de páginas web en tiempo real
+│   ├── web-search.js   # Módulo de búsqueda en internet con la API de DuckDuckGo
+│   ├── web-browser.js  # Módulo de consulta de páginas web y descarga de PDFs en tiempo real
 │   ├── file-parser.js  # Extractor de texto para documentos PDF, código e imágenes
 │   └── markdown.js     # Parseador ligero de Markdown con soporte de bloques de código
 ├── bundle.py           # Script generador del archivo autónomo chatcli.html

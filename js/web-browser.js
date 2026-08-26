@@ -1,8 +1,8 @@
 /**
- * Módulo de consulta y navegación de páginas web en el navegador (ChatWebBrowser).
- * - Permite al modelo en modo agente consultar URLs y páginas web públicas en tiempo real.
- * - Utiliza un motor de lectura y extracción optimizado para LLMs con soporte CORS universal.
- * - Extrae texto limpio, títulos, enlaces y estructura en Markdown.
+ * Módulo de consulta y navegación de páginas web y documentos PDF en el navegador (ChatWebBrowser).
+ * - Permite al modelo en modo agente consultar URLs, páginas web públicas y descargar documentos PDF en tiempo real.
+ * - Extrae texto limpio, títulos, enlaces, estructura en Markdown y contenido íntegro de PDFs para integrarlo en el contexto.
+ * - Utiliza un motor optimizado para LLMs con soporte CORS universal y fallback local.
  * - Compatible con file:// y http://.
  */
 
@@ -17,6 +17,18 @@
 
   const MAX_CONTENT_LENGTH = 60000;
   const TIMEOUT_MS = 12000;
+
+  function getFileParser() {
+    if (typeof window !== 'undefined' && window.ChatFileParser) {
+      return window.ChatFileParser;
+    }
+    if (typeof require !== 'undefined') {
+      try {
+        return require('./file-parser.js');
+      } catch (e) {}
+    }
+    return null;
+  }
 
   /**
    * Extrae el texto legible y estructurado de un documento HTML local.
@@ -77,9 +89,9 @@
   }
 
   /**
-   * Consulta una página web o endpoint y devuelve el contenido legible.
-   * @param {string} rawUrl - URL a consultar
-   * @returns {Promise<{ success: boolean, url: string, content: string, byteSize?: number, status?: number, elapsedMs: number, error?: string }>}
+   * Consulta una página web o descarga un documento PDF y devuelve el contenido legible.
+   * @param {string} rawUrl - URL a consultar o descargar
+   * @returns {Promise<{ success: boolean, url: string, content: string, byteSize?: number, status?: number, elapsedMs: number, isPdf?: boolean, error?: string }>}
    */
   async function fetchPage(rawUrl) {
     let url = (rawUrl || '').trim();
@@ -100,23 +112,40 @@
 
     const startTime = performance.now();
     const isLocalUrl = /^(https?:\/\/)?(localhost|127\.0\.0\.1|192\.168\.|10\.|0\.0\.0\.0)/i.test(url);
+    const isPdfUrl = /\.pdf(\?|#|$)/i.test(url);
+    const FileParser = getFileParser();
 
     // 1. Si es una URL local o una API directa, intentar fetch directo primero
     if (isLocalUrl) {
       try {
         const directRes = await fetchWithTimeout(url, {
-          headers: { 'Accept': 'application/json,text/html,text/plain,*/*' }
+          headers: { 'Accept': 'application/json,application/pdf,text/html,text/plain,*/*' }
         }, 5000);
 
-        const rawText = await directRes.text();
-        const elapsed = parseFloat((performance.now() - startTime).toFixed(2));
+        const contentType = (directRes.headers.get('content-type') || '').toLowerCase();
+        let content = '';
+        let byteSize = 0;
+        let isPdf = isPdfUrl || contentType.includes('application/pdf');
 
+        if (isPdf && FileParser && FileParser.extractTextFromPdf) {
+          const arrayBuffer = await directRes.arrayBuffer();
+          byteSize = arrayBuffer.byteLength;
+          const extractedText = await FileParser.extractTextFromPdf(arrayBuffer);
+          content = `[Documento PDF: ${url.split('/').pop().split('?')[0] || 'documento.pdf'}]\n[URL: ${url}]\n[Tamaño: ${FileParser.formatBytes ? FileParser.formatBytes(byteSize) : byteSize + ' B'}]\n\n--- Contenido extraído del PDF ---\n\n${extractedText}`;
+        } else {
+          const rawText = await directRes.text();
+          byteSize = rawText.length;
+          content = rawText.slice(0, MAX_CONTENT_LENGTH);
+        }
+
+        const elapsed = parseFloat((performance.now() - startTime).toFixed(2));
         return {
           success: directRes.ok,
           url: url,
           status: directRes.status,
-          content: rawText.slice(0, MAX_CONTENT_LENGTH),
-          byteSize: rawText.length,
+          content: content,
+          byteSize: byteSize,
+          isPdf: isPdf,
           elapsedMs: elapsed,
           error: directRes.ok ? undefined : `HTTP ${directRes.status}`
         };
@@ -132,7 +161,7 @@
       }
     }
 
-    // 2. Método principal para páginas web públicas: Gateway Reader para LLMs (CORS universal y extracción en Markdown)
+    // 2. Método principal para páginas web públicas y PDFs: Gateway Reader para LLMs (CORS universal y extracción en Markdown)
     try {
       const readerUrl = `https://r.jina.ai/${url}`;
       const readerRes = await fetchWithTimeout(readerUrl, {
@@ -156,14 +185,44 @@
           status: 200,
           content: content,
           byteSize: content.length,
+          isPdf: isPdfUrl,
           elapsedMs: elapsed
         };
       }
     } catch (readerErr) {
-      console.warn('Reader API no disponible, intentando proxy alternativo:', readerErr);
+      console.warn('Reader API no disponible, intentando extracción directa/proxy:', readerErr);
     }
 
-    // 3. Fallback: Proxy AllOrigins JSON
+    // 3. Si es un documento PDF, intentar descarga binaria directa y extracción local con FileParser
+    if (isPdfUrl && FileParser && FileParser.extractTextFromPdf) {
+      try {
+        const directRes = await fetchWithTimeout(url, {
+          headers: { 'Accept': 'application/pdf,*/*' }
+        }, 8000);
+
+        if (directRes.ok) {
+          const arrayBuffer = await directRes.arrayBuffer();
+          const extractedText = await FileParser.extractTextFromPdf(arrayBuffer);
+          const elapsed = parseFloat((performance.now() - startTime).toFixed(2));
+          const fileName = url.split('/').pop().split('?')[0] || 'documento.pdf';
+          const sizeStr = FileParser.formatBytes ? FileParser.formatBytes(arrayBuffer.byteLength) : arrayBuffer.byteLength + ' B';
+
+          return {
+            success: true,
+            url: url,
+            status: 200,
+            content: `[Documento PDF: ${fileName}]\n[URL: ${url}]\n[Tamaño: ${sizeStr}]\n\n--- Contenido extraído del PDF ---\n\n${extractedText}`,
+            byteSize: arrayBuffer.byteLength,
+            isPdf: true,
+            elapsedMs: elapsed
+          };
+        }
+      } catch (pdfErr) {
+        console.warn('Descarga directa de PDF bloqueada o fallida:', pdfErr);
+      }
+    }
+
+    // 4. Fallback: Proxy AllOrigins JSON
     try {
       const allOriginsUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
       const aoRes = await fetchWithTimeout(allOriginsUrl, {}, 8000);
@@ -189,28 +248,38 @@
       console.warn('Fallback AllOrigins no disponible:', aoErr);
     }
 
-    // 4. Fallback final: Fetch directo estándar por si el servidor de destino tiene cabeceras CORS
+    // 5. Fallback final: Fetch directo estándar por si el servidor de destino tiene cabeceras CORS
     try {
       const directRes = await fetchWithTimeout(url, {
-        headers: { 'Accept': 'text/html,application/xhtml+xml,application/json,text/plain;q=0.9,*/*;q=0.8' }
+        headers: { 'Accept': 'text/html,application/xhtml+xml,application/json,application/pdf,text/plain;q=0.9,*/*;q=0.8' }
       }, 5000);
 
-      const rawText = await directRes.text();
-      const elapsed = parseFloat((performance.now() - startTime).toFixed(2));
-
+      const contentType = (directRes.headers.get('content-type') || '').toLowerCase();
       let parsedContent;
-      if (rawText.includes('<html') || rawText.includes('<!DOCTYPE')) {
-        parsedContent = extractReadableTextFromHtml(rawText, url);
+      let isPdf = isPdfUrl || contentType.includes('application/pdf');
+
+      if (isPdf && FileParser && FileParser.extractTextFromPdf) {
+        const arrayBuffer = await directRes.arrayBuffer();
+        const extractedText = await FileParser.extractTextFromPdf(arrayBuffer);
+        const fileName = url.split('/').pop().split('?')[0] || 'documento.pdf';
+        parsedContent = `[Documento PDF: ${fileName}]\n[URL: ${url}]\n\n--- Contenido extraído del PDF ---\n\n${extractedText}`;
       } else {
-        parsedContent = rawText.slice(0, MAX_CONTENT_LENGTH);
+        const rawText = await directRes.text();
+        if (rawText.includes('<html') || rawText.includes('<!DOCTYPE')) {
+          parsedContent = extractReadableTextFromHtml(rawText, url);
+        } else {
+          parsedContent = rawText.slice(0, MAX_CONTENT_LENGTH);
+        }
       }
 
+      const elapsed = parseFloat((performance.now() - startTime).toFixed(2));
       return {
         success: directRes.ok,
         url: url,
         status: directRes.status,
         content: parsedContent,
-        byteSize: rawText.length,
+        byteSize: parsedContent.length,
+        isPdf: isPdf,
         elapsedMs: elapsed,
         error: directRes.ok ? undefined : `HTTP ${directRes.status}: ${directRes.statusText}`
       };
@@ -221,25 +290,25 @@
         url: url,
         content: '',
         elapsedMs: elapsed,
-        error: `No se pudo acceder a la página web (${finalErr.message || 'Error de conexión o bloqueo de red'}).`
+        error: `No se pudo acceder a la página web o descargar el documento PDF (${finalErr.message || 'Error de conexión o bloqueo de red'}).`
       };
     }
   }
 
   /**
-   * Definición estándar de herramienta (Tool/Function Calling) para OpenAI.
+   * Definición estándar de herramienta (Tool/Function Calling) para OpenAI y LLMs compatibles.
    */
   const WEB_TOOL_DEFINITION = {
     type: 'function',
     function: {
       name: 'fetch_web_page',
-      description: 'Descarga el texto de una URL web (ej: "https://es.wikipedia.org/wiki/Sol").',
+      description: 'Descarga y lee el texto de una URL web o descarga y extrae el contenido íntegro de un documento PDF (ej: "https://es.wikipedia.org/wiki/Sol" o "https://ejemplo.com/documento.pdf").',
       parameters: {
         type: 'object',
         properties: {
           url: {
             type: 'string',
-            description: 'URL a consultar.'
+            description: 'URL de la página web o del documento PDF a descargar y consultar.'
           }
         },
         required: ['url']
