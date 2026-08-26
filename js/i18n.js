@@ -209,9 +209,47 @@
       md_output_title: 'Salida (Consola / Retorno):',
       md_clear_output: 'Limpiar salida',
 
+      // Barra lateral e Historial de Conversaciones (Sidebar)
+      sidebar_title: 'Conversaciones',
+      btn_sidebar_title: 'Abrir/Cerrar historial de chats',
+      btn_chats_history: 'Chats',
+      btn_new_chat_sidebar_title: 'Crear nueva conversación',
+      btn_close_sidebar_title: 'Cerrar barra lateral',
+      sidebar_search_placeholder: 'Buscar en historial...',
+      sidebar_no_chats: 'No hay conversaciones guardadas',
+      btn_import_chat: 'Importar',
+      btn_import_chat_title: 'Importar conversación desde archivo JSON',
+      btn_export_all: 'Exportar',
+      btn_export_short: 'Exportar',
+      btn_export_chat_title: 'Exportar conversación (Markdown, JSON, PDF)',
+      chat_untitled: 'Nueva conversación',
+      chat_delete_confirm: '¿Seguro que deseas eliminar esta conversación?',
+      chat_imported_success: 'Conversación importada con éxito.',
+
+      // Modal de Exportación
+      export_modal_title: 'Exportar Conversación',
+      btn_close_export_title: 'Cerrar modal de exportación',
+      export_md_title: 'Descargar Markdown (.md)',
+      export_md_desc: 'Formato limpio con formato, código y tablas legible en cualquier visor.',
+      export_json_title: 'Descargar JSON de Sesión (.json)',
+      export_json_desc: 'Historial estructurado completo con herramientas, imágenes y metadatos para restaurar.',
+      export_pdf_title: 'Imprimir / Guardar como PDF',
+      export_pdf_desc: 'Genera un documento PDF limpio maquetado para lectura e informes.',
+
+      // Controles de Voz (STT / TTS)
+      btn_voice_title: 'Dictado por voz (Micrófono)',
+      voice_not_supported: 'El dictado por voz no es compatible con este navegador.',
+      btn_speak: 'Escuchar',
+      btn_speak_title: 'Leer respuesta en voz alta',
+      btn_stop_speak: 'Detener',
+      btn_stop_speak_title: 'Detener lectura en voz alta',
+
+      // Gráficos interactivos
+      tool_chart_title: '📊 Visualización de Datos ({type})',
+
       // Contexto del sistema de fecha/hora del mundo real
       system_context_prefix: '\n\n[INFORMACIÓN TEMPORAL DEL MUNDO REAL]\n- Fecha y hora actual del mundo real: {datetime}.\n- Año presente en el mundo real: {year}.\n- Contexto temporal obligatorio: Esta es la fecha y hora REAL y PRESENTE del mundo físico en el que se produce esta conversación. No es una fecha hipotética, ni una simulación, ni una fecha futura. Todo acontecimiento anterior a este momento pertenece al pasado, y el año actual es {year}. Responde y razona siempre tomando esta fecha como el momento presente real de hoy.',
-      default_system_prompt: 'Eres un asistente de IA útil, conciso y preciso. Responde siempre con formato Markdown claro. Tienes disponibles capacidades agénticas en el navegador si están habilitadas (búsqueda en internet con search_web, consulta de páginas web con fetch_web_page, descarga y lectura de documentos PDF desde URLs con download_pdf, y ejecución de JavaScript local con execute_javascript).'
+      default_system_prompt: 'Eres un asistente de IA útil, conciso y preciso. Responde siempre con formato Markdown claro. Tienes disponibles capacidades agénticas en el navegador si están habilitadas (búsqueda en internet con search_web, consulta de páginas web con fetch_web_page, descarga y lectura de documentos PDF desde URLs con download_pdf, generación de gráficos interactivos con render_chart, y ejecución de JavaScript local con execute_javascript).'
     },
 
     en: {
@@ -403,9 +441,47 @@
       md_output_title: 'Output (Console / Return):',
       md_clear_output: 'Clear output',
 
-      // Contexto del sistema de fecha/hora del mundo real
+      // Sidebar & Conversation History
+      sidebar_title: 'Conversations',
+      btn_sidebar_title: 'Toggle chat history',
+      btn_chats_history: 'Chats',
+      btn_new_chat_sidebar_title: 'Create new conversation',
+      btn_close_sidebar_title: 'Close sidebar',
+      sidebar_search_placeholder: 'Search history...',
+      sidebar_no_chats: 'No saved conversations',
+      btn_import_chat: 'Import',
+      btn_import_chat_title: 'Import conversation from JSON file',
+      btn_export_all: 'Export',
+      btn_export_short: 'Export',
+      btn_export_chat_title: 'Export conversation (Markdown, JSON, PDF)',
+      chat_untitled: 'New conversation',
+      chat_delete_confirm: 'Are you sure you want to delete this conversation?',
+      chat_imported_success: 'Conversation imported successfully.',
+
+      // Export Modal
+      export_modal_title: 'Export Conversation',
+      btn_close_export_title: 'Close export modal',
+      export_md_title: 'Download Markdown (.md)',
+      export_md_desc: 'Clean format with markdown, code and tables readable in any viewer.',
+      export_json_title: 'Download Session JSON (.json)',
+      export_json_desc: 'Complete structured history with tools, images and metadata to restore.',
+      export_pdf_title: 'Print / Save as PDF',
+      export_pdf_desc: 'Generates a clean PDF document formatted for reading and reports.',
+
+      // Voice Controls (STT / TTS)
+      btn_voice_title: 'Voice dictation (Microphone)',
+      voice_not_supported: 'Voice dictation is not supported in this browser.',
+      btn_speak: 'Speak',
+      btn_speak_title: 'Read response aloud',
+      btn_stop_speak: 'Stop',
+      btn_stop_speak_title: 'Stop reading aloud',
+
+      // Interactive Charts
+      tool_chart_title: '📊 Data Visualization ({type})',
+
+      // Real-world temporal system context
       system_context_prefix: '\n\n[REAL-WORLD TEMPORAL INFORMATION]\n- Current real-world date and time: {datetime}.\n- Current real-world year: {year}.\n- Mandatory temporal context: This is the ACTUAL, REAL-WORLD PRESENT time of the physical world in which this conversation is occurring. It is NOT a hypothetical date, a simulation, or a future date. All events prior to this timestamp are in the past, and the current year is {year}. Always answer and reason taking this date and time as today\'s real-world present.',
-      default_system_prompt: 'You are a helpful, concise and precise AI assistant. Always respond with clear Markdown format. You have agentic capabilities available in the browser if enabled (internet search with search_web, web page fetching with fetch_web_page, downloading and reading PDF documents from URLs with download_pdf, and local JavaScript execution with execute_javascript).'
+      default_system_prompt: 'You are a helpful, concise and precise AI assistant. Always respond with clear Markdown format. You have agentic capabilities available in the browser if enabled (internet search with search_web, web page fetching with fetch_web_page, downloading and reading PDF documents from URLs with download_pdf, interactive chart rendering with render_chart, and local JavaScript execution with execute_javascript).'
     }
   };
 

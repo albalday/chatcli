@@ -1,6 +1,6 @@
-# 💬 ChatCLI - Cliente Web Universal de Chat para IA (v2.0)
+# 💬 ChatCLI - Cliente Web Universal de Chat para IA (v2.1)
 
-[![Versión](https://img.shields.io/badge/versión-2.0-blue.svg)](chatcli.html)
+[![Versión](https://img.shields.io/badge/versión-2.1-blue.svg)](chatcli.html)
 [![Multi-Idioma](https://img.shields.io/badge/idiomas-ES%20%7C%20EN-orange.svg)](#-soporte-multi-idioma-internacionalizaci%C3%B3n-i18n)
 [![Licencia](https://img.shields.io/badge/licencia-MIT-green.svg)](LICENSE)
 [![Desarrollo](https://img.shields.io/badge/100%25-Antigravity%20AI-purple.svg)](#-desarrollo-100-con-antigravity)
@@ -46,49 +46,42 @@ Desde el diseño de la arquitectura por módulos, la creación de la interfaz HT
 
 ## ✨ Características Principales
 
-1. **Soporte Multi-idioma (ES / EN)**:
-   - Detección inteligente del idioma del navegador con fallback a castellano.
-   - Selector en la barra de herramientas y en la ventana de ajustes con cambio en caliente.
+1. **Gestión Multi-Chat e Historial (Sidebar)**:
+   - Barra lateral izquierda retráctil con lista de conversaciones guardadas en `localStorage`/`ChatStorage`.
+   - Cambio dinámico e instantáneo entre hilos de conversación.
+   - Creación de nuevos chats dentro de la misma vista, renombrado inline y borrado individual.
+   - Buscador en tiempo real de conversaciones anteriores.
 
-2. **Compatibilidad Universal Multi-Endpoint**:
-   - **LM Studio** (`http://localhost:1234/v1`)
-   - **Ollama** (`http://localhost:11434`)
-   - **OpenAI** (`https://api.openai.com/v1`)
-   - **Anthropic Claude** (`https://api.anthropic.com/v1`)
-   - **Google Gemini** (`https://generativelanguage.googleapis.com/v1beta/openai`)
-   - **OpenRouter** (`https://openrouter.ai/api/v1`)
-   - **vLLM / LocalAI / Custom**
+2. **Herramientas Agénticas y Análisis Gráfico**:
+   - **`render_chart` (Nativo en SVG)**: Motor de gráficos autónomo (`js/charts.js`) capaz de visualizar datos en gráficos de barras, líneas y sectores/donut sin librerías externas.
+   - **`download_pdf`**: Descarga y extracción de texto completo de documentos PDF desde URLs web.
+   - **`fetch_web_page`**: Consulta y lectura de páginas web públicas y artículos HTML.
+   - **`search_web`**: Motor de búsqueda real en internet con DuckDuckGo (CORS bypass con Jina Reader) y Wikipedia.
+   - **`execute_javascript`**: Sandbox seguro para cálculos matemáticos y procesamiento de datos.
 
-3. **Control de Esfuerzo de Razonamiento (Thinking / CoT)**:
-   - Botón directo `🧠` en la barra del chat con los niveles estándar de la industria: **`None` (Desactivado)**, **`Low` (Bajo)**, **`Med` (Medio)**, **`High` (Alto)** y **`XHigh` (Muy Alto)**.
-   - Adaptación automática del payload por endpoint (`reasoning_effort` para OpenAI/LM Studio/vLLM, `thinking budget` para Claude, `reasoning` para OpenRouter).
+3. **Interacción por Voz (Voz a Texto / Texto a Voz)**:
+   - **Dictado por voz (Speech-to-Text)**: Botón de micrófono `🎙️` con reconocimiento continuo mediante Web Speech API adaptado al idioma activo (ES/EN).
+   - **Lectura en voz alta (Text-to-Speech)**: Botón `🔊 Escuchar` en cada respuesta del asistente con limpieza inteligente de markdown y selección de voz del sistema.
 
-4. **Panel Lateral de Logs y Razonamiento en Vivo (Consola Debug)**:
-   - Visualización en tiempo real de los tokens de razonamiento (`thinking`) según van llegando del servidor.
-   - Registro de peticiones de red (`[RED]`), ejecuciones de herramientas (`[HERRAMIENTA]`), estadísticas de generación (`[STATS]`) y errores.
-   - Pestañas de filtrado (`Todo`, `🧠 Razonamiento`, `⚙️ Herramientas`, `🌐 Red`), auto-scroll y copia al portapapeles.
+4. **Exportación e Importación Completa**:
+   - Descarga de conversaciones en formato **Markdown limpio (`.md`)**.
+   - Exportación de la sesión completa en **JSON estructurado (`.json`)** e importación directa para restaurar el chat.
+   - Modo de impresión y **Guardar como PDF** maquetado profesionalmente sin elementos de la interfaz.
 
-5. **Capacidades Agénticas (Tools / Function Calling)**:
-   - **`download_pdf` (Activa por defecto)**: Descarga y extracción de texto completo de documentos PDF desde URLs web para lectura y análisis en el contexto del modelo.
-   - **`fetch_web_page` (Activa por defecto)**: Consulta y extracción en tiempo real del contenido y artículos de páginas web públicas.
-   - **`search_web` (Activa por defecto)**: Motor de búsqueda en internet en tiempo real basado en la **API de DuckDuckGo** (Instant Answers, resúmenes y dominios oficiales).
-   - **`execute_javascript` (Activa por defecto)**: Sandbox seguro y aislado en el navegador para cálculos matemáticos, lógica y transformación de datos.
-   - *Definiciones de herramientas ultracompactas* diseñadas para minimizar el consumo de tokens en cada petición.
+5. **Adjuntos Multimodales y Pegado de Imágenes**:
+   - Soporte para adjuntar imágenes (`.png`, `.jpg`, `.webp`) y **pegado directo desde el portapapeles (`Ctrl + V`)**.
+   - Formateo multimodal estándar (OpenAI `image_url` y Claude `base64`).
+   - Soporte de documentos PDF y archivos de código/texto con Drag & Drop.
 
-6. **Métricas de Rendimiento Precisas**:
-   - **Latencia inicial (TTFT)**: Tiempo exacto hasta el 1º token (`⏳ 1º token: X.XXs`).
-   - **Velocidad de generación**: Calculada estrictamente durante el streaming (`⚡ X.X tok/s`).
-   - **Tiempo total** (`⏱️ X.XXs`) y **conteo estimado de tokens** (`📝 N tok`).
+6. **Compatibilidad Universal Multi-Endpoint**:
+   - **LM Studio** (`http://localhost:1234/v1`), **Ollama** (`http://localhost:11434`), **OpenAI**, **Claude**, **Gemini**, **OpenRouter**, **vLLM** y **LocalAI**.
 
-7. **Adjuntos Multimodales y Extracción en Cliente**:
-   - Soporte para **documentos PDF (`.pdf`)** con extracción directa de texto en JavaScript en el navegador.
-   - Soporte para imágenes (`.png`, `.jpg`, `.webp`) y archivos de código/texto (`.js`, `.py`, `.json`, `.csv`, `.md`, `.txt`, etc.).
-   - Soporte para arrastrar y soltar (**Drag & Drop**).
+7. **Control de Razonamiento (Thinking / CoT) y Consola en Vivo**:
+   - Botón directo `🧠` con niveles de pensamiento (`None`, `Low`, `Med`, `High`, `XHigh`).
+   - Panel de logs en tiempo real con filtrado (`Todo`, `🧠 Razonamiento`, `⚙️ Herramientas`, `🌐 Red`).
 
-8. **Gestión Total del Historial**:
-   - Borrado individual de mensajes con **eliminación estricta de memoria** (los mensajes borrados nunca se vuelven a enviar al servidor).
-   - Reutilización instantánea de preguntas con el botón ✏️.
-   - Botón para copiar respuestas completas en Markdown con un solo clic.
+8. **Métricas de Rendimiento Precisas**:
+   - Latencia al primer token (TTFT), velocidad (`⚡ tok/s`), tiempo total y conteo de tokens.
 
 ---
 
@@ -97,19 +90,23 @@ Desde el diseño de la arquitectura por módulos, la creación de la interfaz HT
 ```text
 chatcli/
 ├── chatcli.html        # 🚀 ARCHIVO AUTÓNOMO ÚNICO (Solo necesitas este archivo para usar el chat)
-├── index.html          # Interfaz principal modular y modal de configuración (<dialog>)
+├── index.html          # Interfaz principal modular, sidebar y modales (<dialog>)
 ├── css/
-│   └── styles.css      # Estilos visuales modernos, Glassmorphism, temas Claro/Oscuro y selectores
+│   └── styles.css      # Estilos visuales modernos, sidebar, gráficos SVG, voz y tema print
 ├── js/
-│   ├── app.js          # Controlador principal de la UI, eventos, historial y consola debug
+│   ├── app.js          # Controlador principal de la UI, multi-chat, eventos, voz y consola debug
 │   ├── i18n.js         # Módulo de Internacionalización y traducciones reactivas (ES/EN)
-│   ├── api.js          # Cliente SSE universal, streaming y protocolos multi-endpoint
+│   ├── api.js          # Cliente SSE universal, streaming, herramientas y protocolos multi-endpoint
+│   ├── charts.js       # Motor de renderizado de gráficos SVG nativos interactivos
 │   ├── cookies.js      # Persistencia en localStorage y Cookies
 │   ├── sandbox.js      # Sandbox aislado para ejecución de JavaScript
-│   ├── web-search.js   # Módulo de búsqueda en internet con la API de DuckDuckGo
+│   ├── web-search.js   # Buscador web en tiempo real con DuckDuckGo y Wikipedia
 │   ├── web-browser.js  # Módulo de consulta de páginas web y descarga de PDFs en tiempo real
 │   ├── file-parser.js  # Extractor de texto para documentos PDF, código e imágenes
 │   └── markdown.js     # Parseador ligero de Markdown con soporte de bloques de código
+├── bundle.py           # Script generador del archivo autónomo chatcli.html
+├── LICENSE             # Licencia MIT
+├── .gitignore          # Filtros para Git
 ├── bundle.py           # Script generador del archivo autónomo chatcli.html
 ├── LICENSE             # Licencia MIT
 ├── .gitignore          # Filtros para Git

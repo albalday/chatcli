@@ -103,6 +103,24 @@
       return 'execute_javascript';
     }
 
+    // 5. Renderizado de Gráficos (render_chart)
+    if (
+      clean === 'render_chart' ||
+      clean === 'draw_chart' ||
+      clean === 'create_chart' ||
+      clean === 'plot_chart' ||
+      clean === 'generate_chart' ||
+      clean === 'show_chart' ||
+      noUnderscore === 'renderchart' ||
+      noUnderscore === 'drawchart' ||
+      noUnderscore === 'createchart' ||
+      noUnderscore === 'plotchart' ||
+      noUnderscore === 'chart' ||
+      noUnderscore === 'grafico'
+    ) {
+      return 'render_chart';
+    }
+
     return clean;
   }
 
@@ -564,17 +582,19 @@
       payload.reasoning_effort = effortLower;
     }
 
-    // Inyectar herramientas agenticas activadas (JS / Web / PDF / Search) si están disponibles
+    // Inyectar herramientas agénticas activadas (JS / Web / PDF / Search / Charts) si están disponibles
     const toolsList = [];
     const jsTool = Sandbox.JAVASCRIPT_TOOL_DEFINITION || (typeof window !== 'undefined' && window.ChatSandbox && window.ChatSandbox.JAVASCRIPT_TOOL_DEFINITION);
     const webTool = WebBrowser.WEB_TOOL_DEFINITION || (typeof window !== 'undefined' && window.ChatWebBrowser && window.ChatWebBrowser.WEB_TOOL_DEFINITION);
     const pdfTool = WebBrowser.PDF_TOOL_DEFINITION || (typeof window !== 'undefined' && window.ChatWebBrowser && window.ChatWebBrowser.PDF_TOOL_DEFINITION);
     const searchTool = WebSearch.SEARCH_TOOL_DEFINITION || (typeof window !== 'undefined' && window.ChatWebSearch && window.ChatWebSearch.SEARCH_TOOL_DEFINITION);
+    const chartTool = (typeof window !== 'undefined' && window.ChatCharts && window.ChatCharts.CHART_TOOL_DEFINITION) || (typeof require !== 'undefined' ? (() => { try { return require('./charts.js').CHART_TOOL_DEFINITION; } catch(e){ return null; } })() : null);
 
     if (enableTools && enableAgentJs && jsTool) toolsList.push(jsTool);
     if (enableTools && enableAgentWeb && webTool) toolsList.push(webTool);
     if (enableTools && enableAgentWeb && pdfTool) toolsList.push(pdfTool);
     if (enableTools && enableAgentSearch && searchTool) toolsList.push(searchTool);
+    if (enableTools && chartTool) toolsList.push(chartTool);
 
     if (toolsList.length > 0) {
       payload.tools = toolsList;

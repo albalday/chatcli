@@ -8,6 +8,44 @@
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
+  <!-- Barra Lateral Izquierda: Historial de Conversaciones (Multi-Chat) -->
+  <aside id="chat-sidebar" class="chat-sidebar" style="display: none;">
+    <div class="sidebar-header">
+      <div class="sidebar-title">
+        <span class="sidebar-icon">💬</span>
+        <strong data-i18n="sidebar_title">Conversaciones</strong>
+      </div>
+      <div class="sidebar-actions">
+        <button type="button" id="btn-sidebar-new-chat" class="btn-sidebar-icon" data-i18n-title="btn_new_chat_sidebar_title" title="Crear nueva conversación">
+          ➕
+        </button>
+        <button type="button" id="btn-close-sidebar" class="btn-sidebar-icon" data-i18n-title="btn_close_sidebar_title" title="Cerrar barra lateral">
+          ✕
+        </button>
+      </div>
+    </div>
+
+    <div class="sidebar-search-box">
+      <input type="text" id="sidebar-search-input" class="sidebar-search-input" data-i18n-placeholder="sidebar_search_placeholder" placeholder="Buscar en historial...">
+    </div>
+
+    <div id="sidebar-chats-list" class="sidebar-chats-list">
+      <!-- Lista de chats generada dinámicamente -->
+    </div>
+
+    <div class="sidebar-footer">
+      <button type="button" id="btn-import-chat-file" class="btn-sidebar-footer" data-i18n-title="btn_import_chat_title" title="Importar conversación desde archivo JSON">
+        <span>📥</span>
+        <span data-i18n="btn_import_chat">Importar</span>
+      </button>
+      <input type="file" id="import-json-input" accept=".json" style="display: none;">
+      <button type="button" id="btn-open-export-modal" class="btn-sidebar-footer" data-i18n-title="btn_export_chat_title" title="Exportar conversación (Markdown, JSON, PDF)">
+        <span>📤</span>
+        <span data-i18n="btn_export_all">Exportar</span>
+      </button>
+    </div>
+  </aside>
+
   <!-- Contenedor Principal del Chat (Usa todo el alto de la página: 100vh) -->
   <main class="chat-container">
     <div id="messages-list" class="messages-list">
@@ -48,6 +86,10 @@
       <!-- Barra de herramientas y configuración compacta al lado de la pregunta -->
       <div class="input-toolbar-top">
         <div class="toolbar-left">
+          <button type="button" id="btn-toggle-sidebar" class="btn-tool-mini btn-sidebar-toggle" data-i18n-title="btn_sidebar_title" title="Abrir/Cerrar historial de chats">
+            <span>💬</span>
+            <span data-i18n="btn_chats_history">Chats</span>
+          </button>
           <button type="button" class="badge-pill badge-server" id="badge-server" data-i18n-title="server_badge_title" title="Servidor configurado (clic para cambiar)">
             <span class="server-icon">🌐</span>
             <span id="current-server-url">http://localhost:1234/v1</span>
@@ -61,6 +103,10 @@
           <button type="button" id="btn-lang-quick" class="btn-tool-mini btn-lang-quick" data-i18n-title="lang_switcher_title" title="Cambiar idioma / Switch language">
             <span>🌐</span>
             <span id="current-lang-label">ES</span>
+          </button>
+          <button type="button" id="btn-quick-export" class="btn-tool-mini" data-i18n-title="btn_export_chat_title" title="Exportar conversación (Markdown, JSON, PDF)">
+            <span>📤</span>
+            <span data-i18n="btn_export_short">Exportar</span>
           </button>
           <button type="button" id="btn-clear-chat" class="btn-tool-mini" data-i18n-title="btn_clear_chat_title" title="Limpiar conversación actual">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -130,6 +176,11 @@
         ></textarea>
 
         <div class="input-actions">
+          <!-- Botón Dictado por Voz (Speech-to-Text) -->
+          <button type="button" id="btn-voice-input" class="btn-voice-input" data-i18n-title="btn_voice_title" title="Dictado por voz (Micrófono)">
+            <span class="voice-mic-icon">🎙️</span>
+          </button>
+
           <button type="button" id="btn-stop-stream" class="btn-stop-stream" style="display: none;" data-i18n-title="btn_stop_title" title="Detener respuesta">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
               <rect x="6" y="6" width="12" height="12" rx="2"></rect>
@@ -450,10 +501,56 @@
     </form>
   </dialog>
 
+  <!-- Modal de Exportación y Compartir -->
+  <dialog id="export-modal" class="settings-dialog">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title">
+          <span class="modal-icon">📤</span>
+          <h3 data-i18n="export_modal_title">Exportar Conversación</h3>
+        </div>
+        <button type="button" id="btn-close-export" class="btn-close-modal" data-i18n-title="btn_close_export_title" title="Cerrar modal">✕</button>
+      </div>
+
+      <div class="modal-body-scrollable">
+        <div class="export-options-grid">
+          <button type="button" id="btn-export-markdown" class="export-card-btn">
+            <span class="export-card-icon">📄</span>
+            <div class="export-card-info">
+              <strong data-i18n="export_md_title">Descargar Markdown (.md)</strong>
+              <span data-i18n="export_md_desc">Formato limpio con formato, código y tablas legible en cualquier visor.</span>
+            </div>
+          </button>
+
+          <button type="button" id="btn-export-json" class="export-card-btn">
+            <span class="export-card-icon">📦</span>
+            <div class="export-card-info">
+              <strong data-i18n="export_json_title">Descargar JSON de Sesión (.json)</strong>
+              <span data-i18n="export_json_desc">Historial estructurado completo con herramientas, imágenes y metadatos para restaurar.</span>
+            </div>
+          </button>
+
+          <button type="button" id="btn-export-print" class="export-card-btn">
+            <span class="export-card-icon">🖨️</span>
+            <div class="export-card-info">
+              <strong data-i18n="export_pdf_title">Imprimir / Guardar como PDF</strong>
+              <span data-i18n="export_pdf_desc">Genera un documento PDF limpio maquetado para lectura e informes.</span>
+            </div>
+          </button>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" id="btn-cancel-export" class="btn-secondary" data-i18n="btn_close">Cerrar</button>
+      </div>
+    </div>
+  </dialog>
+
   <!-- Scripts de la aplicación (compatibles con file:// y http://) -->
   <script src="js/cookies.js"></script>
   <script src="js/i18n.js"></script>
   <script src="js/sandbox.js"></script>
+  <script src="js/charts.js"></script>
   <script src="js/web-browser.js"></script>
   <script src="js/web-search.js"></script>
   <script src="js/markdown.js"></script>

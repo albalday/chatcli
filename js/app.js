@@ -21,6 +21,7 @@
   const API = window.ChatAPI || {};
   const FileParser = window.ChatFileParser || {};
   const Sandbox = window.ChatSandbox || {};
+  const Charts = window.ChatCharts || {};
   const WebBrowser = window.ChatWebBrowser || {};
   const WebSearch = window.ChatWebSearch || {};
   const I18n = window.ChatI18n || {};
@@ -52,11 +53,35 @@
   let isGenerating = false;
   let attachedFiles = [];
 
+  // Estado de sesiones múltiples (Sidebar)
+  let currentSessionId = 'session_' + Date.now();
+  let savedSessions = [];
+
   // Referencias al DOM
   let elements = {};
 
   function cacheDomElements() {
     elements = {
+      // Barra lateral de chats
+      chatSidebar: document.getElementById('chat-sidebar'),
+      btnToggleSidebar: document.getElementById('btn-toggle-sidebar'),
+      btnCloseSidebar: document.getElementById('btn-close-sidebar'),
+      btnSidebarNewChat: document.getElementById('btn-sidebar-new-chat'),
+      sidebarSearchInput: document.getElementById('sidebar-search-input'),
+      sidebarChatsList: document.getElementById('sidebar-chats-list'),
+      btnImportChatFile: document.getElementById('btn-import-chat-file'),
+      importJsonInput: document.getElementById('import-json-input'),
+      btnOpenExportModal: document.getElementById('btn-open-export-modal'),
+      btnQuickExport: document.getElementById('btn-quick-export'),
+
+      // Modal de exportación
+      exportModal: document.getElementById('export-modal'),
+      btnCloseExport: document.getElementById('btn-close-export'),
+      btnCancelExport: document.getElementById('btn-cancel-export'),
+      btnExportMarkdown: document.getElementById('btn-export-markdown'),
+      btnExportJson: document.getElementById('btn-export-json'),
+      btnExportPrint: document.getElementById('btn-export-print'),
+
       badgeServer: document.getElementById('badge-server'),
       currentServerUrl: document.getElementById('current-server-url'),
       badgeModel: document.getElementById('badge-model'),
@@ -72,6 +97,7 @@
       userInput: document.getElementById('user-input'),
       btnSend: document.getElementById('btn-send'),
       btnStopStream: document.getElementById('btn-stop-stream'),
+      btnVoiceInput: document.getElementById('btn-voice-input'),
 
       // Sugerencias
       sugCardExplain: document.getElementById('sug-card-explain'),
@@ -176,6 +202,13 @@
       } else {
         tools.push(`- \`execute_javascript(code="...")\`: Executes JavaScript code safely in a local browser sandbox for math calculations and data processing.`);
       }
+    }
+
+    // Herramienta de Gráficos Nativos
+    if (isEs) {
+      tools.push(`- \`render_chart(type="bar"|"line"|"doughnut"|"pie", title="...", labels=["..."], datasets=[{"label":"...", "data":[...]}])\`: Genera y visualiza un gráfico interactivo (barras, líneas, donut o sectores) a partir de datos numéricos o tablas.`);
+    } else {
+      tools.push(`- \`render_chart(type="bar"|"line"|"doughnut"|"pie", title="...", labels=["..."], datasets=[{"label":"...", "data":[...]}])\`: Generates and renders an interactive chart (bar, line, doughnut or pie) from numerical data or tables.`);
     }
 
     if (tools.length === 0) return '';
@@ -1084,6 +1117,13 @@
     btnCopy.innerHTML = `📋 <span>${t('btn_copy')}</span>`;
     btnCopy.title = t('btn_copy_title');
 
+    const btnSpeak = document.createElement('button');
+    btnSpeak.type = 'button';
+    btnSpeak.className = 'btn-msg-action btn-msg-speak';
+    btnSpeak.innerHTML = `🔊 <span>${t('btn_speak')}</span>`;
+    btnSpeak.title = t('btn_speak_title');
+    btnSpeak.addEventListener('click', () => toggleSpeakMessage(content.innerText || content.textContent, btnSpeak));
+
     const btnDelete = document.createElement('button');
     btnDelete.type = 'button';
     btnDelete.className = 'btn-msg-action btn-delete';
@@ -1092,6 +1132,7 @@
     btnDelete.addEventListener('click', () => removeMessage(wrapper));
 
     actions.appendChild(btnCopy);
+    actions.appendChild(btnSpeak);
     actions.appendChild(btnDelete);
 
     footerRow.appendChild(statsContainer);
@@ -1597,6 +1638,51 @@
         turnIndex++;
         continue;
       }
+
+      // 4. Generación de Gráficos Interactivos SVG (render_chart)
+      else if (normName === 'render_chart') {
+        let chartArgs = {};
+        try {
+          chartArgs = typeof tc.function.arguments === 'object' ? tc.function.arguments : JSON.parse(tc.function.arguments || '{}');
+        } catch (e) {
+          chartArgs = { title: 'Gráfico', labels: [], datasets: [] };
+        }
+
+        addDebugLog('tool', `render_chart (${chartArgs.type || 'bar'}): "${chartArgs.title || 'Gráfico'}"`);
+
+        const chartHtml = (Charts.renderChartCard ? Charts.renderChartCard(chartArgs) : '<div class="chat-chart-card">Gráfico generado</div>');
+        const cardDiv = document.createElement('div');
+        cardDiv.innerHTML = chartHtml;
+        content.appendChild(cardDiv);
+        attachListeners(content);
+        if (turnFinalStats) updateStatsDisplay(turnFinalStats);
+        scrollToBottom();
+
+        chatHistory.push({
+          id: assistantMsgId,
+          role: 'assistant',
+          content: currentTurnText || null,
+          tool_calls: [tc]
+        });
+
+        chatHistory.push({
+          id: assistantMsgId,
+          role: 'tool',
+          tool_call_id: tc.id,
+          name: 'render_chart',
+          content: JSON.stringify({
+            success: true,
+            type: chartArgs.type || 'bar',
+            title: chartArgs.title || 'Gráfico'
+          })
+        });
+
+        const toolMd = `> 📊 **render_chart** (${chartArgs.type || 'bar'})\n> Título: "${chartArgs.title || 'Gráfico'}"\n\n`;
+        accumulatedConversationMarkdown += (currentTurnText ? currentTurnText + '\n\n' : '') + toolMd + '\n\n';
+
+        turnIndex++;
+        continue;
+      }
     }
 
     setDebugStatus('done', t('debug_status_done'));
@@ -1609,6 +1695,7 @@
     if (elements.btnSend) elements.btnSend.disabled = false;
     if (elements.btnStopStream) elements.btnStopStream.style.display = 'none';
     if (elements.userInput) elements.userInput.focus();
+    saveCurrentSession();
     scrollToBottom();
   }
 
@@ -1738,6 +1825,615 @@
   }
 
   // ==========================================================================
+  // Gestión de Múltiples Sesiones de Chat (Sidebar & Storage)
+  // ==========================================================================
+
+  function loadSessionsFromStorage() {
+    try {
+      const raw = Storage.getStorageItem ? Storage.getStorageItem('chat_sessions') : localStorage.getItem('chat_sessions');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          savedSessions = parsed;
+        }
+      }
+    } catch (e) {
+      console.warn('Error al cargar sesiones de chat:', e);
+    }
+
+    if (!savedSessions || savedSessions.length === 0) {
+      savedSessions = [{
+        id: currentSessionId,
+        title: t('chat_untitled'),
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        history: chatHistory.length > 0 ? chatHistory : [
+          { id: 'system_root', role: 'system', content: appConfig.systemPrompt || t('default_system_prompt') }
+        ]
+      }];
+    } else {
+      const active = savedSessions[0];
+      currentSessionId = active.id;
+      chatHistory = active.history || [
+        { id: 'system_root', role: 'system', content: appConfig.systemPrompt || t('default_system_prompt') }
+      ];
+      renderSessionMessages(chatHistory);
+    }
+
+    renderSidebarChats();
+  }
+
+  function saveCurrentSession() {
+    let sess = savedSessions.find(s => s.id === currentSessionId);
+    if (!sess) {
+      sess = {
+        id: currentSessionId,
+        title: t('chat_untitled'),
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        history: chatHistory
+      };
+      savedSessions.unshift(sess);
+    } else {
+      sess.history = chatHistory;
+      sess.updatedAt = Date.now();
+    }
+
+    // Auto-generar título si es el título genérico por defecto
+    const isUntitled = !sess.title ||
+      sess.title === t('chat_untitled') ||
+      sess.title === 'Nueva conversación' ||
+      sess.title === 'New conversation';
+
+    if (isUntitled && chatHistory.length > 1) {
+      const firstUser = chatHistory.find(m => m.role === 'user');
+      if (firstUser && firstUser.content) {
+        const rawContent = typeof firstUser.content === 'string' ? firstUser.content : (firstUser.content[0]?.text || '');
+        const candidate = rawContent.split('\n')[0].replace(/[#*`_>\[\]]/g, '').trim();
+        if (candidate) {
+          sess.title = candidate.length > 35 ? candidate.substring(0, 32) + '…' : candidate;
+        }
+      }
+    }
+
+    try {
+      const serialized = JSON.stringify(savedSessions);
+      if (Storage.setStorageItem) Storage.setStorageItem('chat_sessions', serialized);
+      else localStorage.setItem('chat_sessions', serialized);
+    } catch (e) {}
+
+    renderSidebarChats();
+  }
+
+  function renderSidebarChats(filterText = '') {
+    if (!elements.sidebarChatsList) return;
+    elements.sidebarChatsList.innerHTML = '';
+
+    const filter = filterText.toLowerCase().trim();
+    const matching = savedSessions.filter(s => {
+      if (!filter) return true;
+      if (s.title && s.title.toLowerCase().includes(filter)) return true;
+      return false;
+    });
+
+    if (matching.length === 0) {
+      const emptyDiv = document.createElement('div');
+      emptyDiv.className = 'sidebar-no-chats';
+      emptyDiv.style.cssText = 'padding: 1rem; text-align: center; color: var(--text-muted); font-size: 0.8rem;';
+      emptyDiv.textContent = t('sidebar_no_chats');
+      elements.sidebarChatsList.appendChild(emptyDiv);
+      return;
+    }
+
+    matching.forEach(s => {
+      const item = document.createElement('div');
+      item.className = 'sidebar-chat-item' + (s.id === currentSessionId ? ' active' : '');
+      item.setAttribute('data-session-id', s.id);
+
+      const d = new Date(s.updatedAt || s.createdAt || Date.now());
+      const timeStr = d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+      item.innerHTML = `
+        <div class="sidebar-chat-info">
+          <span class="sidebar-chat-title" title="${Markdown.escapeHtml(s.title || t('chat_untitled'))}">${Markdown.escapeHtml(s.title || t('chat_untitled'))}</span>
+          <span class="sidebar-chat-time">${timeStr}</span>
+        </div>
+        <div class="sidebar-chat-actions">
+          <button type="button" class="btn-chat-action btn-rename" title="Renombrar chat">✏️</button>
+          <button type="button" class="btn-chat-action btn-delete" title="Eliminar chat">🗑️</button>
+        </div>
+      `;
+
+      item.addEventListener('click', (e) => {
+        if (e.target.closest('.sidebar-chat-actions')) return;
+        switchToSession(s.id);
+      });
+
+      const btnRename = item.querySelector('.btn-rename');
+      if (btnRename) {
+        btnRename.addEventListener('click', (e) => renameSession(s.id, e));
+      }
+
+      const btnDelete = item.querySelector('.btn-delete');
+      if (btnDelete) {
+        btnDelete.addEventListener('click', (e) => deleteSession(s.id, e));
+      }
+
+      elements.sidebarChatsList.appendChild(item);
+    });
+  }
+
+  function switchToSession(sessionId) {
+    if (sessionId === currentSessionId) return;
+    saveCurrentSession();
+
+    const target = savedSessions.find(s => s.id === sessionId);
+    if (!target) return;
+
+    currentSessionId = target.id;
+    chatHistory = target.history || [
+      { id: 'system_root', role: 'system', content: appConfig.systemPrompt || t('default_system_prompt') }
+    ];
+
+    renderSessionMessages(chatHistory);
+    renderSidebarChats();
+
+    if (window.innerWidth < 900) {
+      closeSidebar();
+    }
+  }
+
+  function createNewSession() {
+    saveCurrentSession();
+
+    currentSessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+    const defaultPrompt = t('default_system_prompt');
+    chatHistory = [
+      { id: 'system_root', role: 'system', content: appConfig.systemPrompt || defaultPrompt }
+    ];
+
+    savedSessions.unshift({
+      id: currentSessionId,
+      title: t('chat_untitled'),
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      history: chatHistory
+    });
+
+    renderSessionMessages(chatHistory);
+    saveCurrentSession();
+
+    if (elements.userInput) {
+      elements.userInput.value = '';
+      autoResizeTextarea();
+      elements.userInput.focus();
+    }
+
+    if (window.innerWidth < 900) {
+      closeSidebar();
+    }
+  }
+
+  function deleteSession(sessionId, event) {
+    if (event) event.stopPropagation();
+    if (!confirm(t('chat_delete_confirm'))) return;
+
+    const idx = savedSessions.findIndex(s => s.id === sessionId);
+    if (idx === -1) return;
+
+    savedSessions.splice(idx, 1);
+
+    if (savedSessions.length === 0) {
+      createNewSession();
+    } else if (currentSessionId === sessionId) {
+      const next = savedSessions[0];
+      currentSessionId = next.id;
+      chatHistory = next.history || [
+        { id: 'system_root', role: 'system', content: appConfig.systemPrompt || t('default_system_prompt') }
+      ];
+      renderSessionMessages(chatHistory);
+    }
+
+    try {
+      const serialized = JSON.stringify(savedSessions);
+      if (Storage.setStorageItem) Storage.setStorageItem('chat_sessions', serialized);
+      else localStorage.setItem('chat_sessions', serialized);
+    } catch (e) {}
+
+    renderSidebarChats();
+  }
+
+  function renameSession(sessionId, event) {
+    if (event) event.stopPropagation();
+    const sess = savedSessions.find(s => s.id === sessionId);
+    if (!sess) return;
+
+    const newTitle = prompt('Nombre de la conversación:', sess.title || '');
+    if (newTitle !== null && newTitle.trim() !== '') {
+      sess.title = newTitle.trim();
+      saveCurrentSession();
+    }
+  }
+
+  function toggleSidebar() {
+    if (!elements.chatSidebar) return;
+    const isHidden = elements.chatSidebar.style.display === 'none' || !elements.chatSidebar.style.display;
+    elements.chatSidebar.style.display = isHidden ? 'flex' : 'none';
+  }
+
+  function closeSidebar() {
+    if (elements.chatSidebar) {
+      elements.chatSidebar.style.display = 'none';
+    }
+  }
+
+  function renderSessionMessages(history) {
+    if (!elements.messagesList) return;
+    elements.messagesList.innerHTML = '';
+
+    const validMessages = (history || []).filter(m => m && m.role !== 'system');
+    if (validMessages.length === 0) {
+      if (elements.welcomeBanner) {
+        elements.messagesList.appendChild(elements.welcomeBanner);
+        elements.welcomeBanner.style.display = 'block';
+      }
+      return;
+    }
+
+    if (elements.welcomeBanner) {
+      elements.welcomeBanner.style.display = 'none';
+    }
+
+    validMessages.forEach(msg => {
+      if (msg.role === 'user') {
+        let text = '';
+        let images = msg.images || [];
+        if (typeof msg.content === 'string') {
+          text = msg.content;
+        } else if (Array.isArray(msg.content)) {
+          const textPart = msg.content.find(c => c.type === 'text');
+          text = textPart ? textPart.text : '';
+          msg.content.forEach(c => {
+            if (c.type === 'image_url' && c.image_url?.url) {
+              if (!images.some(img => img.dataUrl === c.image_url.url)) {
+                images.push({ name: 'Imagen adjunta', dataUrl: c.image_url.url });
+              }
+            }
+          });
+        }
+        appendUserMessage(text, text, images);
+      } else if (msg.role === 'assistant') {
+        const { content, actions, btnCopy } = createAssistantMessagePlaceholder();
+        let renderedHtml = '';
+
+        if (msg.content) {
+          renderedHtml = Markdown.renderMarkdown ? Markdown.renderMarkdown(msg.content) : msg.content;
+        }
+
+        content.innerHTML = renderedHtml || '<p><em>(Sin respuesta de texto)</em></p>';
+
+        if (btnCopy) {
+          btnCopy.addEventListener('click', () => {
+            if (navigator.clipboard) {
+              navigator.clipboard.writeText(msg.content || content.innerText);
+              btnCopy.innerHTML = `✅ <span>${t('btn_copied')}</span>`;
+              setTimeout(() => {
+                btnCopy.innerHTML = `📋 <span>${t('btn_copy')}</span>`;
+              }, 2000);
+            }
+          });
+        }
+
+        if (actions) actions.style.display = 'flex';
+        if (Markdown.attachCopyCodeListeners) {
+          Markdown.attachCopyCodeListeners(content);
+        }
+      }
+    });
+
+    scrollToBottom();
+  }
+
+  // ==========================================================================
+  // Modal de Exportación e Importación de Conversaciones
+  // ==========================================================================
+
+  function openExportModal() {
+    if (elements.exportModal) {
+      if (typeof elements.exportModal.showModal === 'function') {
+        elements.exportModal.showModal();
+      } else {
+        elements.exportModal.style.display = 'block';
+      }
+    }
+  }
+
+  function closeExportModal() {
+    if (elements.exportModal) {
+      if (typeof elements.exportModal.close === 'function') {
+        elements.exportModal.close();
+      } else {
+        elements.exportModal.style.display = 'none';
+      }
+    }
+  }
+
+  function exportConversationAsMarkdown() {
+    const sess = savedSessions.find(s => s.id === currentSessionId);
+    const title = (sess && sess.title) || 'ChatCLI_Conversation';
+    const dateStr = new Date().toISOString().slice(0, 10);
+
+    let md = `# ${title}\n\n*Fecha de exportación: ${new Date().toLocaleString()}*\n*Modelo: ${appConfig.model || 'No especificado'}*\n\n---\n\n`;
+
+    chatHistory.forEach(m => {
+      if (m.role === 'user') {
+        const contentStr = typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
+        md += `### 👤 Usuario\n\n${contentStr}\n\n---\n\n`;
+      } else if (m.role === 'assistant' && m.content) {
+        md += `### 🤖 Asistente\n\n${m.content}\n\n---\n\n`;
+      }
+    });
+
+    downloadBlob(md, `${title.replace(/[^a-zA-Z0-9_-]/g, '_')}_${dateStr}.md`, 'text/markdown');
+    closeExportModal();
+  }
+
+  function exportConversationAsJson() {
+    const sess = savedSessions.find(s => s.id === currentSessionId);
+    const title = (sess && sess.title) || 'ChatCLI_Conversation';
+    const dateStr = new Date().toISOString().slice(0, 10);
+
+    const exportData = {
+      version: '2.1',
+      app: 'ChatCLI',
+      exportedAt: new Date().toISOString(),
+      session: sess || {
+        id: currentSessionId,
+        title: title,
+        history: chatHistory
+      },
+      config: {
+        model: appConfig.model,
+        apiUrl: appConfig.apiUrl,
+        apiType: appConfig.apiType
+      }
+    };
+
+    const jsonStr = JSON.stringify(exportData, null, 2);
+    downloadBlob(jsonStr, `${title.replace(/[^a-zA-Z0-9_-]/g, '_')}_${dateStr}.json`, 'application/json');
+    closeExportModal();
+  }
+
+  function exportConversationAsPrint() {
+    closeExportModal();
+    setTimeout(() => {
+      window.print();
+    }, 200);
+  }
+
+  function handleImportFileSelected(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(evt) {
+      try {
+        const data = JSON.parse(evt.target.result);
+        const importedSession = data.session || data;
+
+        if (!importedSession.history || !Array.isArray(importedSession.history)) {
+          alert('El archivo no contiene un historial de chat válido.');
+          return;
+        }
+
+        const newId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+        const newSession = {
+          id: newId,
+          title: importedSession.title || file.name.replace('.json', ''),
+          createdAt: importedSession.createdAt || Date.now(),
+          updatedAt: Date.now(),
+          history: importedSession.history
+        };
+
+        savedSessions.unshift(newSession);
+        currentSessionId = newId;
+        chatHistory = newSession.history;
+
+        renderSessionMessages(chatHistory);
+        saveCurrentSession();
+        alert(t('chat_imported_success'));
+      } catch (err) {
+        alert('Error al leer el archivo JSON: ' + (err.message || err));
+      }
+      if (elements.importJsonInput) elements.importJsonInput.value = '';
+    };
+    reader.readAsText(file);
+  }
+
+  function downloadBlob(content, filename, mimeType) {
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  // ==========================================================================
+  // Dictado por Voz (Speech-to-Text) y Lectura en Voz Alta (Text-to-Speech)
+  // ==========================================================================
+
+  let speechRecognition = null;
+  let isListening = false;
+  let activeSpeakingButton = null;
+
+  function setupVoiceInput() {
+    const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRec) {
+      if (elements.btnVoiceInput) {
+        elements.btnVoiceInput.style.opacity = '0.5';
+        elements.btnVoiceInput.title = t('voice_not_supported');
+      }
+      return;
+    }
+
+    speechRecognition = new SpeechRec();
+    speechRecognition.continuous = false;
+    speechRecognition.interimResults = true;
+
+    speechRecognition.onstart = function() {
+      isListening = true;
+      if (elements.btnVoiceInput) {
+        elements.btnVoiceInput.classList.add('recording');
+        const icon = elements.btnVoiceInput.querySelector('.voice-mic-icon');
+        if (icon) icon.textContent = '🔴';
+      }
+    };
+
+    speechRecognition.onresult = function(event) {
+      let transcript = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        transcript += event.results[i][0].transcript;
+      }
+      if (transcript && elements.userInput) {
+        elements.userInput.value = (elements.userInput.value ? elements.userInput.value + ' ' : '') + transcript;
+        autoResizeTextarea();
+      }
+    };
+
+    speechRecognition.onerror = function() {
+      stopVoiceInput();
+    };
+
+    speechRecognition.onend = function() {
+      stopVoiceInput();
+    };
+
+    if (elements.btnVoiceInput) {
+      elements.btnVoiceInput.addEventListener('click', () => {
+        if (isListening) {
+          stopVoiceInput();
+        } else {
+          startVoiceInput();
+        }
+      });
+    }
+  }
+
+  function startVoiceInput() {
+    if (!speechRecognition) return;
+    const lang = appConfig.language || (I18n.getLanguage ? I18n.getLanguage() : 'es');
+    speechRecognition.lang = (lang === 'en') ? 'en-US' : 'es-ES';
+    try {
+      speechRecognition.start();
+    } catch (e) {}
+  }
+
+  function stopVoiceInput() {
+    isListening = false;
+    if (speechRecognition) {
+      try { speechRecognition.stop(); } catch(e) {}
+    }
+    if (elements.btnVoiceInput) {
+      elements.btnVoiceInput.classList.remove('recording');
+      const icon = elements.btnVoiceInput.querySelector('.voice-mic-icon');
+      if (icon) icon.textContent = '🎙️';
+    }
+  }
+
+  function cleanTextForSpeech(raw) {
+    if (!raw) return '';
+    return raw
+      .replace(/```[\s\S]*?```/g, ' [Bloque de código omitido] ')
+      .replace(/`[^`]+`/g, ' ')
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+      .replace(/[#*>\-_~|]/g, ' ')
+      .replace(/https?:\/\/\S+/g, ' enlace ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function toggleSpeakMessage(text, buttonElement) {
+    if (!window.speechSynthesis) return;
+
+    if (window.speechSynthesis.speaking) {
+      window.speechSynthesis.cancel();
+      if (activeSpeakingButton) {
+        activeSpeakingButton.classList.remove('speaking');
+        activeSpeakingButton.innerHTML = `🔊 <span>${t('btn_speak')}</span>`;
+        activeSpeakingButton.title = t('btn_speak_title');
+      }
+      if (activeSpeakingButton === buttonElement) {
+        activeSpeakingButton = null;
+        return;
+      }
+    }
+
+    const clean = cleanTextForSpeech(text);
+    if (!clean) return;
+
+    const lang = appConfig.language || (I18n.getLanguage ? I18n.getLanguage() : 'es');
+    const utter = new SpeechSynthesisUtterance(clean);
+    utter.lang = (lang === 'en') ? 'en-US' : 'es-ES';
+    utter.rate = 1.0;
+
+    const voices = window.speechSynthesis.getVoices();
+    const matchingVoice = voices.find(v => v.lang.startsWith(utter.lang.slice(0, 2)));
+    if (matchingVoice) utter.voice = matchingVoice;
+
+    utter.onstart = function() {
+      activeSpeakingButton = buttonElement;
+      buttonElement.classList.add('speaking');
+      buttonElement.innerHTML = `⏹️ <span>${t('btn_stop_speak')}</span>`;
+      buttonElement.title = t('btn_stop_speak_title');
+    };
+
+    utter.onend = function() {
+      buttonElement.classList.remove('speaking');
+      buttonElement.innerHTML = `🔊 <span>${t('btn_speak')}</span>`;
+      buttonElement.title = t('btn_speak_title');
+      activeSpeakingButton = null;
+    };
+
+    utter.onerror = function() {
+      buttonElement.classList.remove('speaking');
+      buttonElement.innerHTML = `🔊 <span>${t('btn_speak')}</span>`;
+      buttonElement.title = t('btn_speak_title');
+      activeSpeakingButton = null;
+    };
+
+    window.speechSynthesis.speak(utter);
+  }
+
+  // ==========================================================================
+  // Pegado de Imágenes desde el Portapapeles (Ctrl + V)
+  // ==========================================================================
+
+  function handlePasteEvent(e) {
+    if (!e.clipboardData || !e.clipboardData.items) return;
+    const items = e.clipboardData.items;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type && items[i].type.startsWith('image/')) {
+        const file = items[i].getAsFile();
+        if (file) {
+          e.preventDefault();
+          if (FileParser.parseFile) {
+            FileParser.parseFile(file).then(parsed => {
+              attachedFiles.push(parsed);
+              renderAttachedFiles();
+            }).catch(err => {
+              console.error('Error pasting image:', err);
+            });
+          }
+        }
+      }
+    }
+  }
+
+  // ==========================================================================
   // Escuchadores de Eventos
   // ==========================================================================
 
@@ -1748,7 +2444,7 @@
       handleSendMessage();
     });
 
-    // Tecla Enter
+    // Tecla Enter y Pegado
     elements.userInput.addEventListener('keydown', function (e) {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
@@ -1757,6 +2453,7 @@
     });
 
     elements.userInput.addEventListener('input', autoResizeTextarea);
+    elements.userInput.addEventListener('paste', handlePasteEvent);
 
     // Botones de acción
     elements.btnStopStream.addEventListener('click', handleStopGeneration);
@@ -1791,6 +2488,49 @@
       elements.badgeModel.addEventListener('click', openSettingsModal);
     }
 
+    // Barra Lateral de Chats (Sidebar)
+    if (elements.btnToggleSidebar) {
+      elements.btnToggleSidebar.addEventListener('click', toggleSidebar);
+    }
+    if (elements.btnCloseSidebar) {
+      elements.btnCloseSidebar.addEventListener('click', closeSidebar);
+    }
+    if (elements.btnSidebarNewChat) {
+      elements.btnSidebarNewChat.addEventListener('click', createNewSession);
+    }
+    if (elements.sidebarSearchInput) {
+      elements.sidebarSearchInput.addEventListener('input', () => {
+        renderSidebarChats(elements.sidebarSearchInput.value);
+      });
+    }
+    if (elements.btnImportChatFile && elements.importJsonInput) {
+      elements.btnImportChatFile.addEventListener('click', () => elements.importJsonInput.click());
+      elements.importJsonInput.addEventListener('change', handleImportFileSelected);
+    }
+
+    // Modal de Exportación
+    if (elements.btnOpenExportModal) {
+      elements.btnOpenExportModal.addEventListener('click', openExportModal);
+    }
+    if (elements.btnQuickExport) {
+      elements.btnQuickExport.addEventListener('click', openExportModal);
+    }
+    if (elements.btnCloseExport) {
+      elements.btnCloseExport.addEventListener('click', closeExportModal);
+    }
+    if (elements.btnCancelExport) {
+      elements.btnCancelExport.addEventListener('click', closeExportModal);
+    }
+    if (elements.btnExportMarkdown) {
+      elements.btnExportMarkdown.addEventListener('click', exportConversationAsMarkdown);
+    }
+    if (elements.btnExportJson) {
+      elements.btnExportJson.addEventListener('click', exportConversationAsJson);
+    }
+    if (elements.btnExportPrint) {
+      elements.btnExportPrint.addEventListener('click', exportConversationAsPrint);
+    }
+
     // Razonamiento (Thinking)
     if (elements.btnReasoning) {
       elements.btnReasoning.addEventListener('click', (e) => {
@@ -1799,7 +2539,6 @@
       });
     }
 
-    // Cerrar menú de razonamiento al hacer clic fuera
     document.addEventListener('click', (e) => {
       if (elements.reasoningMenu && !elements.reasoningMenu.contains(e.target) && e.target !== elements.btnReasoning) {
         closeReasoningMenu();
@@ -1880,7 +2619,6 @@
     elements.settingsForm.addEventListener('submit', handleSaveSettings);
     elements.btnResetSettings.addEventListener('click', handleResetSettings);
 
-    // Cambio en selector de Tipo de Interfaz
     if (elements.settingApiType) {
       elements.settingApiType.addEventListener('change', function () {
         const val = this.value;
@@ -1904,7 +2642,6 @@
       });
     }
 
-    // Botón Query del Servidor
     if (elements.btnQueryServer) {
       elements.btnQueryServer.addEventListener('click', (e) => {
         e.preventDefault();
@@ -1912,7 +2649,6 @@
       });
     }
 
-    // Combobox de Modelo (Input y Select Auxiliar)
     if (elements.modelSelectHelper) {
       elements.modelSelectHelper.addEventListener('change', function () {
         if (this.value) {
@@ -1937,7 +2673,6 @@
       });
     }
 
-    // Navegación por pestañas del Modal
     if (elements.modalTabs && elements.modalTabs.length > 0) {
       elements.modalTabs.forEach(tabBtn => {
         tabBtn.addEventListener('click', function (e) {
@@ -1957,7 +2692,6 @@
       });
     }
 
-    // Botones de selección de tema (Claro / Oscuro)
     if (elements.themeButtons && elements.themeButtons.length > 0) {
       elements.themeButtons.forEach(btn => {
         btn.addEventListener('click', function (e) {
@@ -1972,7 +2706,6 @@
       });
     }
 
-    // Botones de selección de idioma en el Modal
     if (elements.langButtons && elements.langButtons.length > 0) {
       elements.langButtons.forEach(btn => {
         btn.addEventListener('click', function (e) {
@@ -1994,7 +2727,6 @@
       elements.btnToggleKey.textContent = isPass ? '🔒' : '👁️';
     });
 
-    // Cerrar modal solo cuando se hace clic fuera en el fondo (backdrop)
     elements.settingsDialog.addEventListener('click', function (e) {
       if (e.target === elements.settingsDialog) {
         closeSettingsModal();
@@ -2018,7 +2750,8 @@
     cacheDomElements();
     loadCachedModels();
     updateUIFromConfig();
-    resetConversation();
+    setupVoiceInput();
+    loadSessionsFromStorage();
     setupEventListeners();
 
     window.ChatApp = {
@@ -2028,10 +2761,17 @@
       addDebugLog,
       clearDebugLogs,
       setDebugStatus,
-      applyLanguage
+      applyLanguage,
+      switchToSession,
+      createNewSession,
+      deleteSession,
+      renameSession,
+      exportConversationAsMarkdown,
+      exportConversationAsJson,
+      exportConversationAsPrint
     };
 
-    console.log('💬 ChatCLI v2.0 initialized successfully with multi-language (ES/EN) and agentic capabilities.');
+    console.log('💬 ChatCLI v2.1 initialized successfully with Multi-chat Sidebar, SVG Charts, Voice STT/TTS and Export.');
   }
 
   if (document.readyState === 'loading') {
