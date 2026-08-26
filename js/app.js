@@ -379,6 +379,18 @@
       { id: 'system_root', role: 'system', content: appConfig.systemPrompt || defaultPrompt }
     ];
 
+    // Limpiar sesión vacía previa y generar nuevo ID de sesión limpia
+    if (Array.isArray(savedSessions)) {
+      savedSessions = savedSessions.filter(s => s.id !== currentSessionId);
+    }
+    currentSessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+
+    try {
+      const serialized = JSON.stringify(savedSessions || []);
+      if (Storage.setStorageItem) Storage.setStorageItem('chat_sessions', serialized);
+      else localStorage.setItem('chat_sessions', serialized);
+    } catch (e) {}
+
     if (elements.messagesList) {
       elements.messagesList.innerHTML = '';
       if (elements.welcomeBanner) {
@@ -393,6 +405,8 @@
       autoResizeTextarea();
       elements.userInput.focus();
     }
+
+    renderSidebarChats();
   }
 
   // ==========================================================================
@@ -984,14 +998,17 @@
       elements.messagesList.appendChild(elements.welcomeBanner);
       elements.welcomeBanner.style.display = 'block';
     }
+
+    // Persistir eliminación en el almacenamiento de la sesión
+    saveCurrentSession();
   }
 
-  function appendUserMessage(text, originalPrompt, attachedImages) {
+  function appendUserMessage(text, originalPrompt, attachedImages, existingMsgId) {
     if (elements.welcomeBanner && elements.welcomeBanner.parentNode) {
       elements.welcomeBanner.style.display = 'none';
     }
 
-    const msgId = 'msg_usr_' + Date.now() + '_' + Math.random().toString(36).substr(2, 7);
+    const msgId = existingMsgId || ('msg_usr_' + Date.now() + '_' + Math.random().toString(36).substr(2, 7));
 
     const wrapper = document.createElement('div');
     wrapper.className = 'message-wrapper user';
@@ -1074,8 +1091,8 @@
     return msgId;
   }
 
-  function createAssistantMessagePlaceholder() {
-    const msgId = 'msg_ast_' + Date.now() + '_' + Math.random().toString(36).substr(2, 7);
+  function createAssistantMessagePlaceholder(existingMsgId) {
+    const msgId = existingMsgId || ('msg_ast_' + Date.now() + '_' + Math.random().toString(36).substr(2, 7));
 
     const wrapper = document.createElement('div');
     wrapper.className = 'message-wrapper assistant';
@@ -1846,36 +1863,45 @@
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          savedSessions = parsed;
+          savedSessions = parsed.filter(s => s && Array.isArray(s.history) && s.history.some(m => m && m.role !== 'system'));
         }
       }
     } catch (e) {
       console.warn('Error al cargar sesiones de chat:', e);
     }
 
-    if (!savedSessions || savedSessions.length === 0) {
-      savedSessions = [{
-        id: currentSessionId,
-        title: t('chat_untitled'),
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-        history: chatHistory.length > 0 ? chatHistory : [
-          { id: 'system_root', role: 'system', content: appConfig.systemPrompt || t('default_system_prompt') }
-        ]
-      }];
-    } else {
-      const active = savedSessions[0];
-      currentSessionId = active.id;
-      chatHistory = active.history || [
-        { id: 'system_root', role: 'system', content: appConfig.systemPrompt || t('default_system_prompt') }
-      ];
-      renderSessionMessages(chatHistory);
+    if (!savedSessions) {
+      savedSessions = [];
     }
 
+    // Siempre iniciar en un chat nuevo y vacío al abrir o recargar la página (F5 / Ctrl+F5)
+    currentSessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+    const defaultPrompt = t('default_system_prompt');
+    chatHistory = [
+      { id: 'system_root', role: 'system', content: appConfig.systemPrompt || defaultPrompt }
+    ];
+
+    renderSessionMessages(chatHistory);
     renderSidebarChats();
   }
 
   function saveCurrentSession() {
+    const hasMessages = Array.isArray(chatHistory) && chatHistory.some(m => m && m.role !== 'system');
+    
+    // Si la conversación está vacía (o se han borrado todos los mensajes), no guardarla como sesión activa
+    if (!hasMessages) {
+      if (Array.isArray(savedSessions)) {
+        savedSessions = savedSessions.filter(s => s.id !== currentSessionId);
+        try {
+          const serialized = JSON.stringify(savedSessions);
+          if (Storage.setStorageItem) Storage.setStorageItem('chat_sessions', serialized);
+          else localStorage.setItem('chat_sessions', serialized);
+        } catch (e) {}
+      }
+      renderSidebarChats();
+      return;
+    }
+
     let sess = savedSessions.find(s => s.id === currentSessionId);
     if (!sess) {
       sess = {
@@ -1883,11 +1909,11 @@
         title: t('chat_untitled'),
         createdAt: Date.now(),
         updatedAt: Date.now(),
-        history: chatHistory
+        history: [...chatHistory]
       };
       savedSessions.unshift(sess);
     } else {
-      sess.history = chatHistory;
+      sess.history = [...chatHistory];
       sess.updatedAt = Date.now();
     }
 
@@ -1983,7 +2009,7 @@
     if (!target) return;
 
     currentSessionId = target.id;
-    chatHistory = target.history || [
+    chatHistory = target.history ? [...target.history] : [
       { id: 'system_root', role: 'system', content: appConfig.systemPrompt || t('default_system_prompt') }
     ];
 
@@ -2004,16 +2030,8 @@
       { id: 'system_root', role: 'system', content: appConfig.systemPrompt || defaultPrompt }
     ];
 
-    savedSessions.unshift({
-      id: currentSessionId,
-      title: t('chat_untitled'),
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-      history: chatHistory
-    });
-
     renderSessionMessages(chatHistory);
-    saveCurrentSession();
+    renderSidebarChats();
 
     if (elements.userInput) {
       elements.userInput.value = '';
@@ -2040,7 +2058,7 @@
     } else if (currentSessionId === sessionId) {
       const next = savedSessions[0];
       currentSessionId = next.id;
-      chatHistory = next.history || [
+      chatHistory = next.history ? [...next.history] : [
         { id: 'system_root', role: 'system', content: appConfig.systemPrompt || t('default_system_prompt') }
       ];
       renderSessionMessages(chatHistory);
@@ -2113,9 +2131,9 @@
             }
           });
         }
-        appendUserMessage(text, text, images);
+        appendUserMessage(text, text, images, msg.id);
       } else if (msg.role === 'assistant') {
-        const { content, actions, btnCopy } = createAssistantMessagePlaceholder();
+        const { content, actions, btnCopy } = createAssistantMessagePlaceholder(msg.id);
         let renderedHtml = '';
 
         if (msg.content) {
@@ -2136,7 +2154,7 @@
           });
         }
 
-        if (actions) actions.style.display = 'flex';
+        if (actions) actions.style.display = 'inline-flex';
         if (Markdown.attachCopyCodeListeners) {
           Markdown.attachCopyCodeListeners(content);
         }
