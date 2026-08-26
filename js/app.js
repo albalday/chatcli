@@ -1134,15 +1134,40 @@
         try {
           accumulatedText = finalText || accumulatedText;
 
+          // Si no hay tool_calls estructurados pero el modelo emitió una llamada en texto
+          if ((!toolCalls || toolCalls.length === 0) && accumulatedText) {
+            if (API.extractToolCallsFromText) {
+              const textCalls = API.extractToolCallsFromText(accumulatedText);
+              if (textCalls && textCalls.length > 0) {
+                toolCalls = textCalls;
+              }
+            }
+          }
+
           if (toolCalls && toolCalls.length > 0) {
             const tc = toolCalls[0];
+            const rawFuncName = tc.function?.name || '';
+            const normName = API.normalizeToolName ? API.normalizeToolName(rawFuncName) : rawFuncName.toLowerCase().replace(/_/g, '');
 
-            // 1. Ejecución de JavaScript Local
-            if (tc.function && tc.function.name === 'execute_javascript') {
+            // Si el texto acumulado es simplemente el bloque de llamada a la herramienta en crudo, limpiarlo de la UI
+            if (accumulatedText && (
+              accumulatedText.trim().startsWith('<tool_call') ||
+              accumulatedText.trim().startsWith('{"name"') ||
+              accumulatedText.trim().startsWith('```json\n{"name"') ||
+              accumulatedText.trim().startsWith('download_pdf(') ||
+              accumulatedText.trim().startsWith('downloadpdf(') ||
+              accumulatedText.trim().startsWith('fetch_web_page(') ||
+              accumulatedText.trim().startsWith('search_web(')
+            )) {
+              accumulatedText = '';
+            }
+
+            // 1. Ejecución de JavaScript Local (execute_javascript)
+            if (normName === 'execute_javascript') {
               let codeToRun = '';
               try {
-                const parsed = JSON.parse(tc.function.arguments || '{}');
-                codeToRun = parsed.code || '';
+                const parsed = typeof tc.function.arguments === 'object' ? tc.function.arguments : JSON.parse(tc.function.arguments || '{}');
+                codeToRun = parsed.code || parsed.javascript || parsed.js || parsed.script || parsed.input || (typeof parsed === 'string' ? parsed : '');
               } catch (e) {
                 codeToRun = tc.function.arguments || '';
               }
@@ -1197,18 +1222,18 @@
               return continueAgenticCompletion(content, statsContainer, actions, btnCopy, updateStatsDisplay, previousMarkdown, assistantMsgId);
             }
 
-            // 2. Consulta de Páginas Web o Descarga de PDFs
-            else if (tc.function && (tc.function.name === 'fetch_web_page' || tc.function.name === 'download_pdf')) {
-              const isPdfCall = tc.function.name === 'download_pdf';
+            // 2. Consulta de Páginas Web o Descarga de PDFs (fetch_web_page / download_pdf)
+            else if (normName === 'fetch_web_page' || normName === 'download_pdf') {
+              const isPdfCall = normName === 'download_pdf';
               let urlToFetch = '';
               try {
-                const parsed = JSON.parse(tc.function.arguments || '{}');
-                urlToFetch = parsed.url || '';
+                const parsed = typeof tc.function.arguments === 'object' ? tc.function.arguments : JSON.parse(tc.function.arguments || '{}');
+                urlToFetch = parsed.url || parsed.URL || parsed.uri || parsed.link || parsed.href || parsed.path || parsed.input || (typeof parsed === 'string' ? parsed : '');
               } catch (e) {
                 urlToFetch = tc.function.arguments || '';
               }
 
-              addDebugLog('tool', `${tc.function.name}: ${urlToFetch}`);
+              addDebugLog('tool', `${normName}: ${urlToFetch}`);
 
               const webRes = await (WebBrowser.fetchPage ? WebBrowser.fetchPage(urlToFetch) : { success: false, url: urlToFetch, content: '', error: 'Web module not available' });
               const isPdfResult = webRes.isPdf || isPdfCall;
@@ -1224,7 +1249,7 @@
                 ? (webRes.content || t('tool_web_empty'))
                 : (webRes.error || t('tool_web_err_connect'));
 
-              addDebugLog('tool', `${tc.function.name} (${statusBadgeText}) [${webRes.byteSize ? FileParser.formatBytes(webRes.byteSize) : '0 B'}]:\n${(responsePreview || '').substring(0, 200)}...`);
+              addDebugLog('tool', `${normName} (${statusBadgeText}) [${webRes.byteSize ? FileParser.formatBytes(webRes.byteSize) : '0 B'}]:\n${(responsePreview || '').substring(0, 200)}...`);
 
               const webCardHtml = `
                 <div class="web-request-card ${isPdfResult ? 'pdf-request-card' : ''}">
@@ -1262,7 +1287,7 @@
                 id: assistantMsgId,
                 role: 'tool',
                 tool_call_id: tc.id,
-                name: tc.function.name,
+                name: normName,
                 content: JSON.stringify({
                   success: webRes.success,
                   url: webRes.url || urlToFetch,
@@ -1273,17 +1298,17 @@
                 })
               });
 
-              const toolMd = `> ${cardIcon} **${tc.function.name}** (${statusBadgeText})\n> URL: ${webRes.url || urlToFetch}\n> \`\`\`\n> ${(responsePreview || '').split('\n').join('\n> ')}\n> \`\`\``;
+              const toolMd = `> ${cardIcon} **${normName}** (${statusBadgeText})\n> URL: ${webRes.url || urlToFetch}\n> \`\`\`\n> ${(responsePreview || '').split('\n').join('\n> ')}\n> \`\`\``;
               const previousMarkdown = (accumulatedText ? accumulatedText + '\n\n' : '') + toolMd;
               return continueAgenticCompletion(content, statsContainer, actions, btnCopy, updateStatsDisplay, previousMarkdown, assistantMsgId);
             }
 
             // 3. Búsqueda en Internet en Tiempo Real (search_web)
-            else if (tc.function && tc.function.name === 'search_web') {
+            else if (normName === 'search_web') {
               let queryToSearch = '';
               try {
-                const parsed = JSON.parse(tc.function.arguments || '{}');
-                queryToSearch = parsed.query || '';
+                const parsed = typeof tc.function.arguments === 'object' ? tc.function.arguments : JSON.parse(tc.function.arguments || '{}');
+                queryToSearch = parsed.query || parsed.q || parsed.search || parsed.keyword || parsed.term || parsed.text || parsed.input || (typeof parsed === 'string' ? parsed : '');
               } catch (e) {
                 queryToSearch = tc.function.arguments || '';
               }

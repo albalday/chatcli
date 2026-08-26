@@ -21,6 +21,181 @@
   const WebBrowser = typeof window !== 'undefined' ? (window.ChatWebBrowser || {}) : {};
   const WebSearch = typeof window !== 'undefined' ? (window.ChatWebSearch || {}) : {};
 
+  /**
+   * Normaliza los nombres de las herramientas admitiendo variaciones con y sin guiones bajos
+   * (ej. 'downloadpdf', 'download_pdf', 'fetchwebpage', 'fetch_web_page', 'searchweb', etc.).
+   */
+  function normalizeToolName(rawName) {
+    if (!rawName) return '';
+    const clean = String(rawName).trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
+    const noUnderscore = clean.replace(/_/g, '');
+
+    // 1. Descarga y extracción de PDF
+    if (
+      clean === 'download_pdf' ||
+      clean === 'fetch_pdf' ||
+      clean === 'download_pdf_document' ||
+      clean === 'fetch_pdf_document' ||
+      clean === 'download_file' ||
+      noUnderscore === 'downloadpdf' ||
+      noUnderscore === 'fetchpdf' ||
+      noUnderscore === 'downloadpdfdocument' ||
+      noUnderscore === 'fetchpdfdocument' ||
+      noUnderscore === 'downloadfile' ||
+      noUnderscore === 'getpdf' ||
+      noUnderscore === 'readpdf'
+    ) {
+      return 'download_pdf';
+    }
+
+    // 2. Navegación / Consulta de página web
+    if (
+      clean === 'fetch_web_page' ||
+      clean === 'fetch_web' ||
+      clean === 'fetch_url' ||
+      clean === 'get_web_page' ||
+      clean === 'read_web_page' ||
+      clean === 'web_fetch' ||
+      clean === 'browse_web' ||
+      noUnderscore === 'fetchwebpage' ||
+      noUnderscore === 'fetchweb' ||
+      noUnderscore === 'fetchurl' ||
+      noUnderscore === 'getwebpage' ||
+      noUnderscore === 'readwebpage' ||
+      noUnderscore === 'webpage' ||
+      noUnderscore === 'browse'
+    ) {
+      return 'fetch_web_page';
+    }
+
+    // 3. Búsqueda en internet
+    if (
+      clean === 'search_web' ||
+      clean === 'web_search' ||
+      clean === 'duckduckgo_search' ||
+      clean === 'duckduckgo' ||
+      clean === 'search_internet' ||
+      clean === 'internet_search' ||
+      noUnderscore === 'searchweb' ||
+      noUnderscore === 'websearch' ||
+      noUnderscore === 'duckduckgosearch' ||
+      noUnderscore === 'searchinternet' ||
+      noUnderscore === 'internetsearch' ||
+      noUnderscore === 'search'
+    ) {
+      return 'search_web';
+    }
+
+    // 4. Ejecución de JavaScript
+    if (
+      clean === 'execute_javascript' ||
+      clean === 'execute_js' ||
+      clean === 'run_javascript' ||
+      clean === 'run_js' ||
+      noUnderscore === 'executejavascript' ||
+      noUnderscore === 'executejs' ||
+      noUnderscore === 'runjavascript' ||
+      noUnderscore === 'runjs' ||
+      noUnderscore === 'javascript' ||
+      noUnderscore === 'evaljs' ||
+      noUnderscore === 'evaljavascript'
+    ) {
+      return 'execute_javascript';
+    }
+
+    return clean;
+  }
+
+  /**
+   * Extrae llamadas a herramientas cuando el modelo las emite como texto en el cuerpo del mensaje
+   * (XML <tool_call>, bloques de código markdown, JSON crudo o sintaxis de llamada de función).
+   */
+  function extractToolCallsFromText(text) {
+    if (!text || typeof text !== 'string') return null;
+    const trimmed = text.trim();
+
+    // 1. Bloque XML: <tool_call>...</tool_call> o <function_call>...</function_call>
+    const xmlMatch = trimmed.match(/<(?:tool_call|function_call|tool_calls)>(.*?)<\/(?:tool_call|function_call|tool_calls)>/s);
+    if (xmlMatch) {
+      try {
+        const parsed = JSON.parse(xmlMatch[1].trim());
+        const normName = normalizeToolName(parsed.name || parsed.function?.name || parsed.tool);
+        if (normName) {
+          const rawArgs = parsed.arguments !== undefined ? parsed.arguments : (parsed.parameters !== undefined ? parsed.parameters : (parsed.input !== undefined ? parsed.input : parsed));
+          return [{
+            id: `call_${Date.now()}_xml`,
+            type: 'function',
+            function: {
+              name: normName,
+              arguments: typeof rawArgs === 'object' ? JSON.stringify(rawArgs) : String(rawArgs || '{}')
+            }
+          }];
+        }
+      } catch (e) {}
+    }
+
+    // 2. Bloque de código Markdown: ```json { "name": ... } ```
+    const codeMatch = trimmed.match(/```(?:json)?\s*(\{[\s\S]*?"name"[\s\S]*?\})\s*```/);
+    if (codeMatch) {
+      try {
+        const parsed = JSON.parse(codeMatch[1].trim());
+        const normName = normalizeToolName(parsed.name || parsed.function?.name || parsed.tool);
+        if (normName) {
+          const rawArgs = parsed.arguments !== undefined ? parsed.arguments : (parsed.parameters !== undefined ? parsed.parameters : (parsed.input !== undefined ? parsed.input : parsed));
+          return [{
+            id: `call_${Date.now()}_code`,
+            type: 'function',
+            function: {
+              name: normName,
+              arguments: typeof rawArgs === 'object' ? JSON.stringify(rawArgs) : String(rawArgs || '{}')
+            }
+          }];
+        }
+      } catch (e) {}
+    }
+
+    // 3. Objeto JSON crudo que contiene "name" y coincide con alguna herramienta
+    if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        const normName = normalizeToolName(parsed.name || parsed.function?.name || parsed.tool);
+        if (normName && (normName === 'download_pdf' || normName === 'fetch_web_page' || normName === 'search_web' || normName === 'execute_javascript')) {
+          const rawArgs = parsed.arguments !== undefined ? parsed.arguments : (parsed.parameters !== undefined ? parsed.parameters : (parsed.input !== undefined ? parsed.input : parsed));
+          return [{
+            id: `call_${Date.now()}_json`,
+            type: 'function',
+            function: {
+              name: normName,
+              arguments: typeof rawArgs === 'object' ? JSON.stringify(rawArgs) : String(rawArgs || '{}')
+            }
+          }];
+        }
+      } catch (e) {}
+    }
+
+    // 4. Sintaxis directa: download_pdf("url") o download_pdf(url="...") o fetch_web_page("url")
+    const fnMatch = trimmed.match(/^(download_pdf|downloadpdf|fetch_pdf|fetch_web_page|fetchwebpage|fetch_web|search_web|searchweb|execute_javascript|executejs|execute_js)\s*\(\s*(?:(?:url|query|code)\s*=\s*)?["'`]([\s\S]*?)["'`]\s*\)$/i);
+    if (fnMatch) {
+      const normName = normalizeToolName(fnMatch[1]);
+      const val = fnMatch[2];
+      let argObj = {};
+      if (normName === 'execute_javascript') argObj = { code: val };
+      else if (normName === 'search_web') argObj = { query: val };
+      else argObj = { url: val };
+
+      return [{
+        id: `call_${Date.now()}_fn`,
+        type: 'function',
+        function: {
+          name: normName,
+          arguments: JSON.stringify(argObj)
+        }
+      }];
+    }
+
+    return null;
+  }
+
   function detectApiType(rawUrl, explicitType) {
     if (explicitType && explicitType !== 'auto') {
       return explicitType;
@@ -376,8 +551,22 @@
 
     function getFinalToolCalls() {
       const callIndices = Object.keys(accumulatedToolCalls);
-      if (callIndices.length === 0) return null;
-      return callIndices.map(idx => accumulatedToolCalls[idx]);
+      if (callIndices.length > 0) {
+        return callIndices.map(idx => {
+          const item = accumulatedToolCalls[idx];
+          if (item?.function?.name) {
+            item.function.name = normalizeToolName(item.function.name) || item.function.name;
+          }
+          return item;
+        });
+      }
+      if (accumulatedText) {
+        const textToolCalls = extractToolCallsFromText(accumulatedText);
+        if (textToolCalls && textToolCalls.length > 0) {
+          return textToolCalls;
+        }
+      }
+      return null;
     }
 
     try {
@@ -641,6 +830,8 @@
     getStandardReasoningOptions,
     STANDARD_REASONING_MODES,
     streamChatCompletion,
-    estimateTokens
+    estimateTokens,
+    normalizeToolName,
+    extractToolCallsFromText
   };
 });
