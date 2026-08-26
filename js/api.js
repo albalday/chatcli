@@ -493,9 +493,36 @@
       headers['Authorization'] = `Bearer ${apiKey.trim()}`;
     }
 
+    // Formateo de mensajes multimodales (OpenAI image_url vs Claude image source)
+    let formattedMessages = messages;
+    if (detectedType === 'claude') {
+      formattedMessages = messages.map(m => {
+        if (Array.isArray(m.content)) {
+          const claudeParts = m.content.map(part => {
+            if (part.type === 'image_url' && part.image_url && part.image_url.url) {
+              const match = part.image_url.url.match(/^data:([^;]+);base64,(.+)$/);
+              if (match) {
+                return {
+                  type: 'image',
+                  source: {
+                    type: 'base64',
+                    media_type: match[1],
+                    data: match[2]
+                  }
+                };
+              }
+            }
+            return part;
+          });
+          return { ...m, content: claudeParts };
+        }
+        return m;
+      });
+    }
+
     const payload = {
       model: (model || '').trim(),
-      messages: messages,
+      messages: formattedMessages,
       stream: true,
       temperature: parseFloat(temperature) || 0.7
     };

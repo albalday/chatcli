@@ -248,13 +248,15 @@
 
     if (isImage) {
       const base64 = await readFileAsDataUrl(file);
+      const mime = file.type || (file.name.toLowerCase().endsWith('.png') ? 'image/png' : file.name.toLowerCase().endsWith('.webp') ? 'image/webp' : file.name.toLowerCase().endsWith('.gif') ? 'image/gif' : file.name.toLowerCase().endsWith('.svg') ? 'image/svg+xml' : 'image/jpeg');
       return {
         name: file.name,
         size: file.size,
         type: 'image',
-        content: `[Imagen adjunta: ${file.name} (${formatBytes(file.size)}, tipo: ${file.type || 'imagen'})]`,
+        mimeType: mime,
+        content: `[Imagen adjunta: ${file.name} (${formatBytes(file.size)})]`,
         dataUrl: base64,
-        preview: `🖼️ Imagen: ${file.name} (${formatBytes(file.size)})`
+        preview: `🖼️ ${file.name} (${formatBytes(file.size)})`
       };
     }
 

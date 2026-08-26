@@ -193,7 +193,25 @@
 
     rawMessages.forEach(m => {
       if (m.role === 'user') {
-        messages.push({ role: 'user', content: m.content || '' });
+        if (m.images && Array.isArray(m.images) && m.images.length > 0) {
+          const contentParts = [];
+          if (m.content) {
+            contentParts.push({ type: 'text', text: m.content });
+          }
+          m.images.forEach(img => {
+            if (img && img.dataUrl) {
+              contentParts.push({
+                type: 'image_url',
+                image_url: {
+                  url: img.dataUrl
+                }
+              });
+            }
+          });
+          messages.push({ role: 'user', content: contentParts });
+        } else {
+          messages.push({ role: 'user', content: m.content || '' });
+        }
       } else if (m.role === 'assistant') {
         const item = { role: 'assistant', content: m.content !== undefined ? m.content : '' };
         if (m.tool_calls && Array.isArray(m.tool_calls) && m.tool_calls.length > 0) {
@@ -931,7 +949,7 @@
     }
   }
 
-  function appendUserMessage(text, originalPrompt) {
+  function appendUserMessage(text, originalPrompt, attachedImages) {
     if (elements.welcomeBanner && elements.welcomeBanner.parentNode) {
       elements.welcomeBanner.style.display = 'none';
     }
@@ -955,6 +973,28 @@
     const content = document.createElement('div');
     content.className = 'message-content';
     content.textContent = text;
+
+    // Miniaturas visuales de imágenes adjuntas
+    if (attachedImages && attachedImages.length > 0) {
+      const imagesGrid = document.createElement('div');
+      imagesGrid.className = 'message-images-grid';
+      attachedImages.forEach(img => {
+        const itemDiv = document.createElement('div');
+        itemDiv.className = 'message-image-item';
+        itemDiv.innerHTML = `
+          <img src="${img.dataUrl}" alt="${Markdown.escapeHtml(img.name)}" class="message-image-thumb" title="${Markdown.escapeHtml(img.name)}">
+          <div class="message-image-caption">${Markdown.escapeHtml(img.name)}</div>
+        `;
+        const imgEl = itemDiv.querySelector('img');
+        if (imgEl) {
+          imgEl.addEventListener('click', () => {
+            window.open(img.dataUrl, '_blank');
+          });
+        }
+        imagesGrid.appendChild(itemDiv);
+      });
+      content.appendChild(imagesGrid);
+    }
 
     const footerRow = document.createElement('div');
     footerRow.className = 'message-footer-row';
@@ -1080,13 +1120,20 @@
 
     let fullPrompt = rawText;
     let displayText = rawText;
+    let imageAttachments = [];
 
     if (attachedFiles.length > 0) {
+      imageAttachments = attachedFiles.filter(f => f.type === 'image' && f.dataUrl).map(f => ({
+        name: f.name,
+        dataUrl: f.dataUrl,
+        mimeType: f.mimeType || 'image/jpeg'
+      }));
+
       const attachmentsText = attachedFiles.map(file => {
         if (file.type === 'pdf') {
           return `\n\n--- PDF Document: ${file.name} (${FileParser.formatBytes(file.size)}) ---\n\`\`\`text\n${file.content}\n\`\`\``;
         } else if (file.type === 'image') {
-          return `\n\n--- Image: ${file.name} (${FileParser.formatBytes(file.size)}) ---\n${file.content}`;
+          return `\n\n--- Image: ${file.name} (${FileParser.formatBytes(file.size)}) ---`;
         }
         return `\n\n--- File: ${file.name} (${FileParser.formatBytes(file.size)}) ---\n\`\`\`\n${file.content}\n\`\`\``;
       }).join('');
@@ -1100,8 +1147,12 @@
       displayText = rawText ? `${rawText}\n\n[${fileNamesList}]` : `[${fileNamesList}]`;
     }
 
-    const userMsgId = appendUserMessage(displayText, rawText);
-    chatHistory.push({ id: userMsgId, role: 'user', content: fullPrompt });
+    const userMsgId = appendUserMessage(displayText, rawText, imageAttachments);
+    const historyEntry = { id: userMsgId, role: 'user', content: fullPrompt };
+    if (imageAttachments.length > 0) {
+      historyEntry.images = imageAttachments;
+    }
+    chatHistory.push(historyEntry);
 
     elements.userInput.value = '';
     clearAttachedFiles();

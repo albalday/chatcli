@@ -997,6 +997,48 @@ body {
   background-color: #fee2e2;
 }
 
+/* Cuadrícula de imágenes adjuntas en el chat */
+.message-images-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 0.6rem;
+}
+
+.message-image-item {
+  position: relative;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-surface);
+  box-shadow: var(--shadow-sm);
+  max-width: 280px;
+}
+
+.message-image-thumb {
+  display: block;
+  max-width: 100%;
+  max-height: 220px;
+  object-fit: cover;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.message-image-thumb:hover {
+  transform: scale(1.03);
+}
+
+.message-image-caption {
+  font-size: 0.725rem;
+  color: var(--text-muted);
+  padding: 0.25rem 0.5rem;
+  background-color: var(--bg-surface);
+  border-top: 1px solid var(--border-color);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .chat-input-container {
   display: flex;
   align-items: flex-end;
