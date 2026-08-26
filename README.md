@@ -125,45 +125,7 @@ chatcli/
 
 ---
 
-## 📋 Metaprompt para Replicar este Proyecto
-
-Si deseas generar un proyecto similar utilizando **Google Antigravity** o cualquier modelo de lenguaje avanzado, puedes utilizar el siguiente prompt maestro detallado:
-
-```text
-Actúa como un Ingeniero de Software Frontend Senior y Diseñador de Interfaces Web. Crea una aplicación web de chat para modelos de Inteligencia Artificial ("ChatCLI") construida 100% en Vanilla HTML5, CSS3 y JavaScript sin dependencias pesadas ni frameworks, optimizada para funcionar como una SPA modular y también compilable a un único archivo autónomo (.html).
-
-La aplicación debe cumplir con los siguientes requerimientos:
-
-1. ARQUITECTURA MULTI-ENDPOINT Y MULTI-IDIOMA:
-- Compatible con servidores compatibles con OpenAI (LM Studio, vLLM, LocalAI), Ollama, Anthropic Claude, Google Gemini y OpenRouter.
-- Botón "Query" junto a la URL del servidor que consulte los endpoints (/v1/models, /models, /api/tags) y pueble un combobox dinámico con los modelos instalados/disponibles.
-- Soporte completo para multi-idioma (Castellano e Inglés) con autodetección por navegador y selector interactivo.
-- Persistencia universal de ajustes (URL, modelo, API key, prompt de sistema, temperatura, idioma, tema claro/oscuro) mediante localStorage y cookies.
-
-2. RAZONAMIENTO Y STREAMING (SSE):
-- Consumo en tiempo real mediante Server-Sent Events (SSE).
-- Selector estático en la barra del chat para niveles de razonamiento (None, Low, Med, High, XHigh), que configure el payload de forma adecuada según el endpoint (reasoning_effort: "none"|"low"|"medium"|"high"|"xhigh" para OpenAI/LM Studio, thinking budget para Claude, etc.).
-- Extracción de tokens de pensamiento en tiempo real (delta.reasoning_content, delta.thinking, bloques <think>).
-- Panel lateral derecho estilo consola de debug (con selector de filtros: Todo, Razonamiento, Herramientas, Red), auto-scroll conmutable, marcas de tiempo y botón de copia, que muestre la actividad del servidor sin alterar el diseño del chat.
-- Métricas en cada respuesta: TTFT (latencia al primer token), tokens/segundo, duración total y tokens estimados.
-
-3. HERRAMIENTAS AGÉNTICAS (TOOL CALLING):
-- Soporte para llamadas a funciones (Function Calling).
-- Herramienta "execute_javascript": ejecución segura en sandbox local sin acceso a red ni archivos, con captura de console.log y retorno.
-- Herramienta "fetch_web_page": consulta y extracción de texto de páginas web.
-- Descripciones de herramientas ultracompactas con un único ejemplo para minimizar el consumo de tokens en cada petición.
-
-4. GESTIÓN DE MENSAJES Y ADJUNTOS:
-- Historial sincronizado con IDs únicos por turno: al borrar cualquier mensaje del chat, eliminarlo completamente de la memoria para que nunca se vuelva a enviar en futuras peticiones.
-- Soporte para adjuntar archivos (código, texto, imágenes) y descompresión/extracción de texto de documentos PDF (.pdf) en cliente con FileReader.
-- Parser de Markdown ligero integrado con botones para copiar código y respuesta completa.
-
-5. EMPAQUETADO AUTÓNOMO:
-- Proporciona el proyecto dividido en módulos limpios (index.html, css/styles.css, js/app.js, js/i18n.js, js/api.js, js/cookies.js, js/sandbox.js, js/web-browser.js, js/file-parser.js) y un script en Python (bundle.py) que compile todo en un único archivo "chatcli.html" auto-contenido listo para usarse con doble clic.
-```
-
----
-
 ## 📄 Licencia
 
 Este proyecto se distribuye bajo la licencia **MIT**. Consulta el archivo `LICENSE` para más detalles.
+
