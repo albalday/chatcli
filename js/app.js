@@ -164,8 +164,10 @@
       : defaultPrompt;
 
     if (appConfig.sendDateTime !== false) {
+      const now = new Date();
       const dtString = getFormattedDateTime();
-      const timeContext = t('system_context_prefix', { datetime: dtString });
+      const currentYear = now.getFullYear();
+      const timeContext = t('system_context_prefix', { datetime: dtString, year: currentYear });
 
       if (messages.length > 0 && messages[0].role === 'system') {
         messages[0].content = (messages[0].content || '') + timeContext;
