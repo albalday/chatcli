@@ -1,6 +1,7 @@
-# 💬 ChatCLI - Cliente Web Universal de Chat para IA (v0.9)
+# 💬 ChatCLI - Cliente Web Universal de Chat para IA (v1.0)
 
-[![Versión](https://img.shields.io/badge/versión-0.9-blue.svg)](chatcli.html)
+[![Versión](https://img.shields.io/badge/versión-1.0-blue.svg)](chatcli.html)
+[![Multi-Idioma](https://img.shields.io/badge/idiomas-ES%20%7C%20EN-orange.svg)](#-soporte-multi-idioma-internacionalizaci%C3%B3n-i18n)
 [![Licencia](https://img.shields.io/badge/licencia-MIT-green.svg)](LICENSE)
 [![Desarrollo](https://img.shields.io/badge/100%25-Antigravity%20AI-purple.svg)](#-desarrollo-100-con-antigravity)
 
@@ -17,6 +18,16 @@ El objetivo primordial de este proyecto es disponer de un **cliente de chat para
 
 ---
 
+## 🌐 Soporte Multi-Idioma (Internacionalización / i18n)
+
+A partir de la versión **v1.0**, ChatCLI cuenta con soporte completo y reactivo para múltiples idiomas:
+- **Español (Castellano)**: Idioma por defecto de la aplicación.
+- **English**: Detección automática si el idioma configurado en el navegador es inglés (`en`).
+- **Selector de Idioma Dinámico**: Conmutable al instante con el botón directo `🌐 ES | EN` en la barra superior o desde el modal de Configuración, con persistencia automática de tu preferencia.
+- **Localización Completa**: Traducción inmediata de toda la interfaz, sugerencias interactivas, menús de razonamiento, consola de depuración, herramientas agénticas y marcas temporales del contexto del sistema.
+
+---
+
 ## ⚠️ Descargo de Responsabilidad (Proyecto de Aficionado)
 
 > [!IMPORTANT]
@@ -29,13 +40,17 @@ El objetivo primordial de este proyecto es disponer de un **cliente de chat para
 
 **Todo este proyecto ha sido concebido, programado, probado y empaquetado exclusivamente con Google Antigravity, sin que el autor haya tecleado manualmente una sola línea de código.**
 
-Desde el diseño de la arquitectura por módulos, la creación de la interfaz HTML5/CSS3 con temas claro y oscuro, el cliente de streaming por SSE, el soporte multi-endpoint, el parseador de documentos PDF en cliente, el sandbox de ejecución agéntica, hasta el empaquetador en Base64 en Python y las pruebas unitarias automatizadas: todo el ciclo de vida del software ha sido generado mediante programación en pareja (*pair programming*) con Antigravity.
+Desde el diseño de la arquitectura por módulos, la creación de la interfaz HTML5/CSS3 con temas claro y oscuro, el sistema de internacionalización i18n, el cliente de streaming por SSE, el soporte multi-endpoint, el parseador de documentos PDF en cliente, el sandbox de ejecución agéntica, hasta el empaquetador en Base64 en Python y las pruebas automatizadas: todo el ciclo de vida del software ha sido generado mediante programación en pareja (*pair programming*) con Antigravity.
 
 ---
 
 ## ✨ Características Principales
 
-1. **Compatibilidad Universal Multi-Endpoint**:
+1. **Soporte Multi-idioma (ES / EN)**:
+   - Detección inteligente del idioma del navegador con fallback a castellano.
+   - Selector en la barra de herramientas y en la ventana de ajustes con cambio en caliente.
+
+2. **Compatibilidad Universal Multi-Endpoint**:
    - **LM Studio** (`http://localhost:1234/v1`)
    - **Ollama** (`http://localhost:11434`)
    - **OpenAI** (`https://api.openai.com/v1`)
@@ -44,31 +59,31 @@ Desde el diseño de la arquitectura por módulos, la creación de la interfaz HT
    - **OpenRouter** (`https://openrouter.ai/api/v1`)
    - **vLLM / LocalAI / Custom**
 
-2. **Control de Esfuerzo de Razonamiento (Thinking / CoT)**:
+3. **Control de Esfuerzo de Razonamiento (Thinking / CoT)**:
    - Botón directo `🧠` en la barra del chat con los niveles estándar de la industria: **`None` (Desactivado)**, **`Low` (Bajo)**, **`Med` (Medio)**, **`High` (Alto)** y **`XHigh` (Muy Alto)**.
    - Adaptación automática del payload por endpoint (`reasoning_effort` para OpenAI/LM Studio/vLLM, `thinking budget` para Claude, `reasoning` para OpenRouter).
 
-3. **Panel Lateral de Logs y Razonamiento en Vivo (Consola Debug)**:
+4. **Panel Lateral de Logs y Razonamiento en Vivo (Consola Debug)**:
    - Visualización en tiempo real de los tokens de razonamiento (`thinking`) según van llegando del servidor.
    - Registro de peticiones de red (`[RED]`), ejecuciones de herramientas (`[HERRAMIENTA]`), estadísticas de generación (`[STATS]`) y errores.
    - Pestañas de filtrado (`Todo`, `🧠 Razonamiento`, `⚙️ Herramientas`, `🌐 Red`), auto-scroll y copia al portapapeles.
 
-4. **Capacidades Agénticas (Tools / Function Calling)**:
+5. **Capacidades Agénticas (Tools / Function Calling)**:
    - **`execute_javascript`**: Sandbox seguro y aislado en el navegador para cálculos matemáticos, lógica y transformación de datos.
    - **`fetch_web_page`**: Consulta y extracción en tiempo real del contenido de páginas web y URLs.
    - *Definiciones de herramientas ultracompactas* diseñadas para minimizar el consumo de tokens en cada petición.
 
-5. **Métricas de Rendimiento Precisas**:
+6. **Métricas de Rendimiento Precisas**:
    - **Latencia inicial (TTFT)**: Tiempo exacto hasta el 1º token (`⏳ 1º token: X.XXs`).
    - **Velocidad de generación**: Calculada estrictamente durante el streaming (`⚡ X.X tok/s`).
    - **Tiempo total** (`⏱️ X.XXs`) y **conteo estimado de tokens** (`📝 N tok`).
 
-6. **Adjuntos Multimodales y Extracción en Cliente**:
+7. **Adjuntos Multimodales y Extracción en Cliente**:
    - Soporte para **documentos PDF (`.pdf`)** con extracción directa de texto en JavaScript en el navegador.
    - Soporte para imágenes (`.png`, `.jpg`, `.webp`) y archivos de código/texto (`.js`, `.py`, `.json`, `.csv`, `.md`, `.txt`, etc.).
    - Soporte para arrastrar y soltar (**Drag & Drop**).
 
-7. **Gestión Total del Historial**:
+8. **Gestión Total del Historial**:
    - Borrado individual de mensajes con **eliminación estricta de memoria** (los mensajes borrados nunca se vuelven a enviar al servidor).
    - Reutilización instantánea de preguntas con el botón ✏️.
    - Botón para copiar respuestas completas en Markdown con un solo clic.
@@ -82,9 +97,10 @@ chatcli/
 ├── chatcli.html        # 🚀 ARCHIVO AUTÓNOMO ÚNICO (Solo necesitas este archivo para usar el chat)
 ├── index.html          # Interfaz principal modular y modal de configuración (<dialog>)
 ├── css/
-│   └── styles.css      # Estilos visuales modernos, Glassmorphism, temas Claro/Oscuro
+│   └── styles.css      # Estilos visuales modernos, Glassmorphism, temas Claro/Oscuro y selectores
 ├── js/
 │   ├── app.js          # Controlador principal de la UI, eventos, historial y consola debug
+│   ├── i18n.js         # Módulo de Internacionalización y traducciones reactivas (ES/EN)
 │   ├── api.js          # Cliente SSE universal, streaming y protocolos multi-endpoint
 │   ├── cookies.js      # Persistencia en localStorage y Cookies
 │   ├── sandbox.js      # Sandbox aislado para ejecución de JavaScript
@@ -92,6 +108,8 @@ chatcli/
 │   ├── file-parser.js  # Extractor de texto para documentos PDF, código e imágenes
 │   └── markdown.js     # Parseador ligero de Markdown con soporte de bloques de código
 ├── bundle.py           # Script generador del archivo autónomo chatcli.html
+├── LICENSE             # Licencia MIT
+├── .gitignore          # Filtros para Git
 └── README.md           # Documentación del proyecto
 ```
 
@@ -116,10 +134,11 @@ Actúa como un Ingeniero de Software Frontend Senior y Diseñador de Interfaces 
 
 La aplicación debe cumplir con los siguientes requerimientos:
 
-1. ARQUITECTURA MULTI-ENDPOINT:
+1. ARQUITECTURA MULTI-ENDPOINT Y MULTI-IDIOMA:
 - Compatible con servidores compatibles con OpenAI (LM Studio, vLLM, LocalAI), Ollama, Anthropic Claude, Google Gemini y OpenRouter.
 - Botón "Query" junto a la URL del servidor que consulte los endpoints (/v1/models, /models, /api/tags) y pueble un combobox dinámico con los modelos instalados/disponibles.
-- Persistencia universal de ajustes (URL, modelo, API key, prompt de sistema, temperatura, tema claro/oscuro) mediante localStorage y cookies.
+- Soporte completo para multi-idioma (Castellano e Inglés) con autodetección por navegador y selector interactivo.
+- Persistencia universal de ajustes (URL, modelo, API key, prompt de sistema, temperatura, idioma, tema claro/oscuro) mediante localStorage y cookies.
 
 2. RAZONAMIENTO Y STREAMING (SSE):
 - Consumo en tiempo real mediante Server-Sent Events (SSE).
@@ -140,7 +159,7 @@ La aplicación debe cumplir con los siguientes requerimientos:
 - Parser de Markdown ligero integrado con botones para copiar código y respuesta completa.
 
 5. EMPAQUETADO AUTÓNOMO:
-- Proporciona el proyecto dividido en módulos limpios (index.html, css/styles.css, js/app.js, js/api.js, js/cookies.js, js/sandbox.js, js/web-browser.js, js/file-parser.js) y un script en Python (bundle.py) que compile todo en un único archivo "chatcli.html" auto-contenido listo para usarse con doble clic.
+- Proporciona el proyecto dividido en módulos limpios (index.html, css/styles.css, js/app.js, js/i18n.js, js/api.js, js/cookies.js, js/sandbox.js, js/web-browser.js, js/file-parser.js) y un script en Python (bundle.py) que compile todo en un único archivo "chatcli.html" auto-contenido listo para usarse con doble clic.
 ```
 
 ---

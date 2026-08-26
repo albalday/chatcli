@@ -1,6 +1,7 @@
 /**
- * Aplicación principal del cliente de chat Web (ChatCLI).
+ * Aplicación principal del cliente de chat Web (ChatCLI v1.0).
  * Incluye:
+ * - Soporte Multi-idioma (Castellano / Inglés) con autodetección por navegador y persistencia.
  * - Selector de nivel de razonamiento (Thinking/CoT) con detección automática de capacidades del modelo.
  * - Nuevo chat abriendo en una nueva pestaña.
  * - Estadísticas y acciones agrupadas en la misma línea debajo de la respuesta.
@@ -21,16 +22,27 @@
   const FileParser = window.ChatFileParser || {};
   const Sandbox = window.ChatSandbox || {};
   const WebBrowser = window.ChatWebBrowser || {};
+  const I18n = window.ChatI18n || {};
+
+  function t(key, params) {
+    if (I18n.t) return I18n.t(key, params);
+    return key;
+  }
 
   // Estado de la aplicación
   let appConfig = Storage.loadConfig ? Storage.loadConfig() : {
     apiUrl: 'http://localhost:1234/v1',
-    apiType: 'auto',
+    apiType: 'openai',
     apiKey: '',
     model: '',
-    systemPrompt: 'Eres un asistente de IA útil, conciso y preciso. Responde siempre con formato Markdown claro.',
+    systemPrompt: '',
     temperature: '0.7',
-    reasoningEffort: 'off'
+    reasoningEffort: 'none',
+    theme: 'light',
+    language: 'es',
+    enableAgentJs: true,
+    enableAgentWeb: true,
+    sendDateTime: true
   };
 
   let chatHistory = [];
@@ -50,12 +62,19 @@
       btnClearChat: document.getElementById('btn-clear-chat'),
       btnNewChat: document.getElementById('btn-new-chat'),
       btnOpenSettings: document.getElementById('btn-open-settings'),
+      btnLangQuick: document.getElementById('btn-lang-quick'),
+      currentLangLabel: document.getElementById('current-lang-label'),
       messagesList: document.getElementById('messages-list'),
       welcomeBanner: document.getElementById('welcome-banner'),
       chatForm: document.getElementById('chat-form'),
       userInput: document.getElementById('user-input'),
       btnSend: document.getElementById('btn-send'),
       btnStopStream: document.getElementById('btn-stop-stream'),
+
+      // Sugerencias
+      sugCardExplain: document.getElementById('sug-card-explain'),
+      sugCardCode: document.getElementById('sug-card-code'),
+      sugCardIdeas: document.getElementById('sug-card-ideas'),
 
       // Razonamiento (Thinking)
       btnReasoning: document.getElementById('btn-reasoning'),
@@ -99,6 +118,7 @@
       settingTemperature: document.getElementById('setting-temperature'),
       temperatureVal: document.getElementById('temperature-val'),
       themeButtons: document.querySelectorAll('.btn-theme-toggle'),
+      langButtons: document.querySelectorAll('.btn-lang-toggle'),
       modalTabs: document.querySelectorAll('.modal-tab-btn'),
       modalPanes: document.querySelectorAll('.modal-tab-pane'),
       settingEnableAgentJs: document.getElementById('setting-enable-agent-js'),
@@ -108,20 +128,23 @@
   }
 
   function getFormattedDateTime() {
+    const lang = appConfig.language || (I18n.getLanguage ? I18n.getLanguage() : 'es');
+    if (I18n.getFormattedDateTime) {
+      return I18n.getFormattedDateTime(new Date(), lang);
+    }
     const now = new Date();
-    const options = {
+    const locale = (lang === 'en') ? 'en-US' : 'es-ES';
+    return now.toLocaleDateString(locale, {
       weekday: 'long',
       year: 'numeric',
       month: 'long',
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit'
-    };
-    return now.toLocaleDateString('es-ES', options);
+    });
   }
 
   function buildEffectiveMessages() {
-    // Clonar e higienizar mensajes eliminando campos internos como 'id'
     const messages = chatHistory
       .filter(m => m && m.role)
       .map(m => {
@@ -132,17 +155,30 @@
         return clean;
       });
 
+    const defaultPrompt = t('default_system_prompt');
+    const activePrompt = (appConfig.systemPrompt && appConfig.systemPrompt.trim() !== '')
+      ? appConfig.systemPrompt
+      : defaultPrompt;
+
     if (appConfig.sendDateTime !== false) {
-      const timeContext = `\n\n[Contexto del Sistema: Fecha y hora actual es ${getFormattedDateTime()}]`;
+      const dtString = getFormattedDateTime();
+      const timeContext = t('system_context_prefix', { datetime: dtString });
+
       if (messages.length > 0 && messages[0].role === 'system') {
         messages[0].content = (messages[0].content || '') + timeContext;
       } else {
         messages.unshift({
           role: 'system',
-          content: (appConfig.systemPrompt || '') + timeContext
+          content: activePrompt + timeContext
         });
       }
+    } else if (messages.length === 0 || messages[0].role !== 'system') {
+      messages.unshift({
+        role: 'system',
+        content: activePrompt
+      });
     }
+
     return messages;
   }
 
@@ -168,13 +204,60 @@
     }
   }
 
+  function applyLanguage(lang) {
+    const target = (lang === 'en') ? 'en' : 'es';
+    appConfig.language = target;
+
+    if (I18n.setLanguage) {
+      I18n.setLanguage(target, true);
+    }
+    if (Storage.saveConfig) {
+      Storage.saveConfig({ language: target });
+    }
+
+    // Actualizar indicador en toolbar
+    if (elements.currentLangLabel) {
+      elements.currentLangLabel.textContent = target.toUpperCase();
+    }
+
+    // Actualizar botones de idioma en el modal
+    if (elements.langButtons && elements.langButtons.length > 0) {
+      elements.langButtons.forEach(btn => {
+        if (btn.getAttribute('data-lang') === target) {
+          btn.classList.add('active');
+        } else {
+          btn.classList.remove('active');
+        }
+      });
+    }
+
+    // Actualizar data-prompt en tarjetas de sugerencia
+    if (elements.sugCardExplain) elements.sugCardExplain.setAttribute('data-prompt', t('sug_explain_prompt'));
+    if (elements.sugCardCode) elements.sugCardCode.setAttribute('data-prompt', t('sug_code_prompt'));
+    if (elements.sugCardIdeas) elements.sugCardIdeas.setAttribute('data-prompt', t('sug_ideas_prompt'));
+
+    // Actualizar modelo y servidor en badges
+    if (elements.currentModelName) {
+      elements.currentModelName.textContent = appConfig.model ? appConfig.model : t('no_model');
+    }
+
+    // Actualizar UI de razonamiento
+    updateReasoningUI(appConfig.reasoningEffort);
+
+    // Actualizar placeholder de prompt del sistema si está vacío
+    if (elements.settingSystemPrompt) {
+      elements.settingSystemPrompt.setAttribute('placeholder', t('field_system_prompt_placeholder'));
+    }
+  }
+
   function resetConversation() {
     if (isGenerating && currentAbortController) {
       currentAbortController.abort();
     }
 
+    const defaultPrompt = t('default_system_prompt');
     chatHistory = [
-      { id: 'system_root', role: 'system', content: appConfig.systemPrompt || DEFAULT_CONFIG.systemPrompt }
+      { id: 'system_root', role: 'system', content: appConfig.systemPrompt || defaultPrompt }
     ];
 
     if (elements.messagesList) {
@@ -243,7 +326,7 @@
       defaultOpt.value = '';
       defaultOpt.disabled = true;
       defaultOpt.selected = true;
-      defaultOpt.textContent = `▾ Elegir modelo detectado (${models.length})...`;
+      defaultOpt.textContent = t('model_select_count', { count: models.length });
       elements.modelSelectHelper.appendChild(defaultOpt);
 
       const currentVal = elements.settingModel ? elements.settingModel.value.trim() : (appConfig.model || '');
@@ -278,13 +361,13 @@
 
     const apiUrl = (elements.settingApiUrl ? elements.settingApiUrl.value : appConfig.apiUrl || '').trim();
     const apiKey = (elements.settingApiKey ? elements.settingApiKey.value : appConfig.apiKey || '').trim();
-    const apiType = (elements.settingApiType ? elements.settingApiType.value : appConfig.apiType || 'auto').trim();
+    const apiType = (elements.settingApiType ? elements.settingApiType.value : appConfig.apiType || 'openai').trim();
 
     if (!apiUrl) {
       if (elements.serverQueryStatus) {
         elements.serverQueryStatus.style.display = 'block';
         elements.serverQueryStatus.className = 'server-query-status status-error';
-        elements.serverQueryStatus.textContent = 'Por favor, introduce una URL de servidor válida.';
+        elements.serverQueryStatus.textContent = t('err_invalid_url');
       }
       return;
     }
@@ -292,17 +375,17 @@
     elements.btnQueryServer.disabled = true;
     elements.btnQueryServer.classList.add('loading');
     const queryText = elements.btnQueryServer.querySelector('.query-btn-text');
-    if (queryText) queryText.textContent = 'Consultando...';
+    if (queryText) queryText.textContent = t('btn_querying_text');
 
     if (elements.serverQueryStatus) {
       elements.serverQueryStatus.style.display = 'block';
       elements.serverQueryStatus.className = 'server-query-status status-loading';
-      elements.serverQueryStatus.textContent = `⏳ Conectando con ${apiUrl} para obtener modelos...`;
+      elements.serverQueryStatus.textContent = t('err_connecting_models', { url: apiUrl });
     }
 
     try {
       if (!API.fetchServerModels) {
-        throw new Error('Función de consulta de modelos no disponible en API.');
+        throw new Error('API query function not available.');
       }
 
       const res = await API.fetchServerModels(apiUrl, apiKey, apiType);
@@ -313,22 +396,22 @@
 
         if (elements.serverQueryStatus) {
           elements.serverQueryStatus.className = 'server-query-status status-success';
-          elements.serverQueryStatus.innerHTML = `✅ <strong>${res.count} modelos detectados con éxito</strong> en <code>${res.endpoint}</code>.`;
+          elements.serverQueryStatus.innerHTML = t('msg_models_success', { count: res.count, endpoint: res.endpoint });
         }
       } else {
-        throw new Error(res.error || 'El servidor no devolvió una lista de modelos válida.');
+        throw new Error(res.error || 'Server did not return a valid models list.');
       }
     } catch (err) {
-      console.error('Error al consultar modelos del servidor:', err);
+      console.error('Error querying server models:', err);
       if (elements.serverQueryStatus) {
         const esc = Markdown.escapeHtml || function(s) { return s; };
         elements.serverQueryStatus.className = 'server-query-status status-error';
-        elements.serverQueryStatus.innerHTML = `❌ <strong>Error al conectar con la API:</strong> ${esc(err.message || String(err))}`;
+        elements.serverQueryStatus.innerHTML = t('err_api_connect', { err: esc(err.message || String(err)) });
       }
     } finally {
       elements.btnQueryServer.disabled = false;
       elements.btnQueryServer.classList.remove('loading');
-      if (queryText) queryText.textContent = 'Query';
+      if (queryText) queryText.textContent = t('btn_query_text');
     }
   }
 
@@ -336,122 +419,27 @@
   // Control Dinámico de Nivel de Razonamiento (Thinking / CoT)
   // ==========================================================================
 
-  function renderReasoningMenuOptions(reasoningInfo, activeLevel) {
-    if (!elements.reasoningOptionsContainer) return;
-
-    elements.reasoningOptionsContainer.innerHTML = '';
-    const levels = (reasoningInfo && Array.isArray(reasoningInfo.levels)) ? reasoningInfo.levels : ['off', 'on'];
-
-    levels.forEach(lvl => {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'reasoning-option';
-      btn.setAttribute('data-level', lvl);
-
-      let indicator = '⚪';
-      let title = lvl;
-      let desc = '';
-
-      const lower = String(lvl).toLowerCase().trim();
-      switch (lower) {
-        case 'off':
-        case 'none':
-          indicator = '⚪';
-          title = lower === 'none' ? 'Desactivado (None)' : 'Desactivado (Off)';
-          desc = 'Sin razonamiento extendido';
-          break;
-        case 'on':
-          indicator = '🧠';
-          title = 'Activado (On)';
-          desc = 'Razonamiento extendido activado';
-          break;
-        case 'minimal':
-          indicator = '🟢';
-          title = 'Mínimo (Minimal)';
-          desc = 'Razonamiento ultra rápido y conciso';
-          break;
-        case 'low':
-          indicator = '🟢';
-          title = 'Bajo (Low)';
-          desc = 'Razonamiento ligero y rápido';
-          break;
-        case 'medium':
-          indicator = '🟡';
-          title = 'Medio (Medium)';
-          desc = 'Equilibrio entre velocidad y análisis';
-          break;
-        case 'high':
-          indicator = '🔴';
-          title = 'Alto (High)';
-          desc = 'Máximo análisis y deducción profunda';
-          break;
-        case 'xhigh':
-          indicator = '🔥';
-          title = 'Extra Alto (X-High)';
-          desc = 'Razonamiento exhaustivo máximo';
-          break;
-        default:
-          indicator = '⚙️';
-          title = lvl.charAt(0).toUpperCase() + lvl.slice(1);
-          desc = `Nivel '${lvl}' configurado por el servidor`;
-          break;
-      }
-
-      const activeLower = String(activeLevel || 'off').toLowerCase().trim();
-      if (lower === activeLower || (activeLower === 'off' && lower === 'none') || (activeLower === 'none' && lower === 'off')) {
-        btn.classList.add('active');
-      }
-
-      if (reasoningInfo && reasoningInfo.supported && lower === String(reasoningInfo.recommended || '').toLowerCase()) {
-        btn.classList.add('recommended');
-      }
-
-      btn.innerHTML = `
-        <span class="option-indicator">${indicator}</span>
-        <div class="option-text">
-          <strong>${title}</strong>
-          <small>${desc}</small>
-        </div>
-      `;
-
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        updateReasoningUI(lvl);
-        closeReasoningMenu();
-      });
-
-      elements.reasoningOptionsContainer.appendChild(btn);
-    });
-  }
-
-  function toggleReasoningMenu() {
-    if (!elements.reasoningMenu) return;
-
-    const isVisible = elements.reasoningMenu.style.display === 'block';
-    if (isVisible) {
-      closeReasoningMenu();
-      return;
+  function getReasoningLevelLabel(lvl) {
+    const lower = String(lvl).toLowerCase().trim();
+    switch (lower) {
+      case 'off':
+      case 'none':
+        return { icon: '⚪', label: t('reasoning_level_none'), desc: t('reasoning_desc_none') };
+      case 'on':
+        return { icon: '🧠', label: t('reasoning_level_on'), desc: t('reasoning_desc_on') };
+      case 'minimal':
+        return { icon: '🟢', label: t('reasoning_level_minimal'), desc: t('reasoning_desc_minimal') };
+      case 'low':
+        return { icon: '🟢', label: t('reasoning_level_low'), desc: t('reasoning_desc_low') };
+      case 'medium':
+        return { icon: '🟡', label: t('reasoning_level_medium'), desc: t('reasoning_desc_medium') };
+      case 'high':
+        return { icon: '🔴', label: t('reasoning_level_high'), desc: t('reasoning_desc_high') };
+      case 'xhigh':
+        return { icon: '🔥', label: t('reasoning_level_xhigh'), desc: t('reasoning_desc_xhigh') };
+      default:
+        return { icon: '⚙️', label: lvl.charAt(0).toUpperCase() + lvl.slice(1), desc: '' };
     }
-
-    openReasoningMenu();
-  }
-
-  function openReasoningMenu() {
-    if (!elements.reasoningMenu) return;
-
-    elements.reasoningMenu.style.display = 'block';
-
-    const apiType = appConfig.apiType || (elements.settingApiType ? elements.settingApiType.value : 'openai');
-    const reasoningConfig = API.getStandardReasoningOptions
-      ? API.getStandardReasoningOptions(apiType, appConfig.apiUrl)
-      : { levels: ['off', 'low', 'medium', 'high'], label: 'OpenAI / LM Studio' };
-
-    if (elements.reasoningModelBadge) {
-      elements.reasoningModelBadge.textContent = reasoningConfig.label || apiType.toUpperCase();
-      elements.reasoningModelBadge.title = `Protocolo activo: ${reasoningConfig.label || apiType}`;
-    }
-
-    renderReasoningMenuOptions(reasoningConfig, appConfig.reasoningEffort || 'off');
   }
 
   function renderReasoningMenuOptions(reasoningInfo, activeLevel) {
@@ -466,38 +454,20 @@
       btn.className = 'reasoning-option';
       btn.setAttribute('data-level', lvl);
 
-      const lvlLower = String(lvl).toLowerCase().trim();
-      const currentLower = String(activeLevel || 'off').toLowerCase().trim();
+      const info = getReasoningLevelLabel(lvl);
+      const lower = String(lvl).toLowerCase().trim();
+      const activeLower = String(activeLevel || 'off').toLowerCase().trim();
 
-      if (lvlLower === currentLower || (currentLower === 'off' && lvlLower === 'none') || (currentLower === 'none' && lvlLower === 'off')) {
+      if (lower === activeLower || (activeLower === 'off' && lower === 'none') || (activeLower === 'none' && lower === 'off')) {
         btn.classList.add('active');
       }
 
-      let labelText = lvl.toUpperCase();
-      let icon = '⚡';
-      if (lvlLower === 'off' || lvlLower === 'none') {
-        labelText = 'Desactivado (None)';
-        icon = '⚪';
-      } else if (lvlLower === 'low' || lvlLower === 'minimal') {
-        labelText = 'Bajo (Low)';
-        icon = '🟢';
-      } else if (lvlLower === 'medium') {
-        labelText = 'Medio (Medium)';
-        icon = '🟡';
-      } else if (lvlLower === 'high') {
-        labelText = 'Alto (High)';
-        icon = '🔴';
-      } else if (lvlLower === 'xhigh') {
-        labelText = 'Muy Alto (XHigh)';
-        icon = '🔥';
-      } else if (lvlLower === 'on') {
-        labelText = 'Activado (On)';
-        icon = '🟢';
-      }
-
       btn.innerHTML = `
-        <span class="option-icon">${icon}</span>
-        <span class="option-label">${labelText}</span>
+        <span class="option-icon">${info.icon}</span>
+        <div class="option-text">
+          <strong>${info.label}</strong>
+          ${info.desc ? `<small>${info.desc}</small>` : ''}
+        </div>
       `;
 
       btn.addEventListener('click', (e) => {
@@ -507,6 +477,33 @@
 
       elements.reasoningOptionsContainer.appendChild(btn);
     });
+  }
+
+  function toggleReasoningMenu() {
+    if (!elements.reasoningMenu) return;
+    const isVisible = elements.reasoningMenu.style.display === 'block';
+    if (isVisible) {
+      closeReasoningMenu();
+    } else {
+      openReasoningMenu();
+    }
+  }
+
+  function openReasoningMenu() {
+    if (!elements.reasoningMenu) return;
+    elements.reasoningMenu.style.display = 'block';
+
+    const apiType = appConfig.apiType || (elements.settingApiType ? elements.settingApiType.value : 'openai');
+    const reasoningConfig = API.getStandardReasoningOptions
+      ? API.getStandardReasoningOptions(apiType, appConfig.apiUrl)
+      : { levels: ['off', 'low', 'medium', 'high'], label: 'OpenAI / LM Studio' };
+
+    if (elements.reasoningModelBadge) {
+      elements.reasoningModelBadge.textContent = reasoningConfig.label || apiType.toUpperCase();
+      elements.reasoningModelBadge.title = `Protocol: ${reasoningConfig.label || apiType}`;
+    }
+
+    renderReasoningMenuOptions(reasoningConfig, appConfig.reasoningEffort || 'off');
   }
 
   function selectReasoningLevel(level) {
@@ -524,7 +521,6 @@
     const val = level || appConfig.reasoningEffort || 'none';
     const lower = String(val).toLowerCase().trim();
 
-    // Actualizar botón en la barra de chat
     if (elements.reasoningLabel) {
       if (lower === 'off' || lower === 'none') {
         elements.reasoningLabel.textContent = 'None';
@@ -546,7 +542,6 @@
       }
     }
 
-    // Actualizar opción activa en el menú si está desplegado
     if (elements.reasoningOptionsContainer) {
       const options = elements.reasoningOptionsContainer.querySelectorAll('.reasoning-option');
       options.forEach(opt => {
@@ -596,10 +591,10 @@
     elements.debugStatusIndicator.className = `debug-status-indicator ${status || 'idle'}`;
     let label = text;
     if (!label) {
-      if (status === 'streaming') label = 'Generando...';
-      else if (status === 'done') label = 'Completado';
-      else if (status === 'error') label = 'Error';
-      else label = 'Inactivo';
+      if (status === 'streaming') label = t('debug_status_streaming');
+      else if (status === 'done') label = t('debug_status_done');
+      else if (status === 'error') label = t('debug_status_error');
+      else label = t('debug_status_idle');
     }
     elements.debugStatusIndicator.textContent = label;
   }
@@ -614,8 +609,8 @@
     elements.debugLogContent.innerHTML = `
       <div class="debug-entry debug-entry-system" data-type="system">
         <span class="debug-time">[${getFormattedTime()}]</span>
-        <span class="debug-tag system">[SISTEMA]</span>
-        <span class="debug-msg">Logs limpiados. Esperando peticiones...</span>
+        <span class="debug-tag system">[${t('debug_tag_system')}]</span>
+        <span class="debug-msg">${t('debug_sys_cleared')}</span>
       </div>
     `;
     activeThinkingBlock = null;
@@ -639,7 +634,6 @@
   function addDebugLog(type, text, rawData) {
     if (!elements.debugLogContent) return;
 
-    // Si es un token de pensamiento ('thinking') y ya tenemos un bloque de pensamiento activo, agregar al mismo bloque
     if (type === 'thinking') {
       if (!activeThinkingBlock) {
         const entry = document.createElement('div');
@@ -648,7 +642,7 @@
         entry.innerHTML = `
           <div class="debug-entry-header">
             <span class="debug-time">[${getFormattedTime()}]</span>
-            <span class="debug-tag thinking">🧠 PENSAMIENTO</span>
+            <span class="debug-tag thinking">🧠 ${t('debug_tag_thinking')}</span>
           </div>
           <div class="debug-msg"></div>
         `;
@@ -670,30 +664,28 @@
       return;
     }
 
-    // Si no es thinking, cerrar el bloque activo de pensamiento para que el siguiente log empiece fresco
     activeThinkingBlock = null;
 
     const entry = document.createElement('div');
     entry.className = `debug-entry debug-entry-${type || 'info'}`;
     entry.setAttribute('data-type', type || 'info');
 
-    let tagLabel = 'INFO';
-    if (type === 'network') tagLabel = 'RED';
-    else if (type === 'thinking') tagLabel = 'PENSAMIENTO';
-    else if (type === 'tool') tagLabel = 'HERRAMIENTA';
-    else if (type === 'stats') tagLabel = 'STATS';
-    else if (type === 'error') tagLabel = 'ERROR';
-    else if (type === 'system') tagLabel = 'SISTEMA';
+    let tagLabel = t('debug_tag_info');
+    if (type === 'network') tagLabel = t('debug_tag_network');
+    else if (type === 'thinking') tagLabel = t('debug_tag_thinking');
+    else if (type === 'tool') tagLabel = t('debug_tag_tool');
+    else if (type === 'stats') tagLabel = t('debug_tag_stats');
+    else if (type === 'error') tagLabel = t('debug_tag_error');
+    else if (type === 'system') tagLabel = t('debug_tag_system');
 
     entry.innerHTML = `
       <div class="debug-entry-header">
         <span class="debug-time">[${getFormattedTime()}]</span>
-        <span class="debug-tag ${type || 'info'}">${tagLabel}</span>
+        <span class="debug-tag ${type || 'info'}">[${tagLabel}]</span>
       </div>
       <div class="debug-msg">${Markdown.escapeHtml(text)}</div>
     `;
 
-    // Aplicar filtro si no es 'all'
     if (activeDebugFilter !== 'all') {
       const match = (activeDebugFilter === type) || (activeDebugFilter === 'tool' && type === 'tool') || (activeDebugFilter === 'network' && (type === 'network' || type === 'stats'));
       if (!match) entry.style.display = 'none';
@@ -730,10 +722,10 @@
       elements.currentServerUrl.textContent = appConfig.apiUrl || 'http://localhost:1234/v1';
     }
     if (elements.currentModelName) {
-      elements.currentModelName.textContent = appConfig.model ? appConfig.model : '(Sin modelo)';
+      elements.currentModelName.textContent = appConfig.model ? appConfig.model : t('no_model');
     }
     if (elements.settingApiType) {
-      elements.settingApiType.value = appConfig.apiType || 'auto';
+      elements.settingApiType.value = appConfig.apiType || 'openai';
     }
     if (elements.settingApiUrl) {
       elements.settingApiUrl.value = appConfig.apiUrl || 'http://localhost:1234/v1';
@@ -747,8 +739,9 @@
     if (elements.modelSelectHelper && appConfig.model) {
       elements.modelSelectHelper.value = appConfig.model;
     }
-    updateReasoningUI(appConfig.reasoningEffort || 'off');
+    updateReasoningUI(appConfig.reasoningEffort || 'none');
     applyTheme(appConfig.theme || 'light');
+    applyLanguage(appConfig.language || 'es');
   }
 
   function autoResizeTextarea() {
@@ -792,7 +785,7 @@
         <span class="file-chip-icon">${icon}</span>
         <span class="file-chip-name" title="${file.name}">${file.name}</span>
         <span class="file-chip-size">(${FileParser.formatBytes(file.size)})</span>
-        <button type="button" class="btn-remove-chip" data-index="${index}" title="Quitar archivo">×</button>
+        <button type="button" class="btn-remove-chip" data-index="${index}" title="Remove">×</button>
       `;
 
       chip.querySelector('.btn-remove-chip').addEventListener('click', () => {
@@ -832,8 +825,8 @@
         }
         attachedFiles.push(parsed);
       } catch (err) {
-        console.error(`Error al procesar archivo ${file.name}:`, err);
-        alert(`No se pudo procesar el archivo ${file.name}: ${err.message || err}`);
+        console.error(`Error processing file ${file.name}:`, err);
+        alert(t('err_file_process', { name: file.name, err: err.message || err }));
       }
     }
     renderAttachedFiles();
@@ -863,7 +856,7 @@
       chatHistory = chatHistory.filter(m => m.id !== msgId);
       const removedCount = initialCount - chatHistory.length;
       if (removedCount > 0 && typeof addDebugLog === 'function') {
-        addDebugLog('system', `Mensaje [${msgId}] eliminado de la memoria y la interfaz (${removedCount} turnos retirados).`);
+        addDebugLog('system', t('msg_deleted_log', { id: msgId, count: removedCount }));
       }
     }
 
@@ -890,7 +883,7 @@
 
     const avatar = document.createElement('div');
     avatar.className = 'message-avatar';
-    avatar.textContent = 'Tú';
+    avatar.textContent = t('user_avatar');
 
     const contentWrapper = document.createElement('div');
     contentWrapper.className = 'message-content-wrapper';
@@ -899,7 +892,6 @@
     content.className = 'message-content';
     content.textContent = text;
 
-    // Fila inferior de acciones del usuario
     const footerRow = document.createElement('div');
     footerRow.className = 'message-footer-row';
 
@@ -909,8 +901,8 @@
     const btnReuse = document.createElement('button');
     btnReuse.type = 'button';
     btnReuse.className = 'btn-msg-action';
-    btnReuse.innerHTML = '✏️ <span>Reutilizar</span>';
-    btnReuse.title = 'Colocar mensaje en la caja de texto';
+    btnReuse.innerHTML = `✏️ <span>${t('btn_reuse')}</span>`;
+    btnReuse.title = t('btn_reuse_title');
     btnReuse.addEventListener('click', () => {
       elements.userInput.value = originalPrompt || text;
       autoResizeTextarea();
@@ -920,8 +912,8 @@
     const btnDelete = document.createElement('button');
     btnDelete.type = 'button';
     btnDelete.className = 'btn-msg-action btn-delete';
-    btnDelete.innerHTML = '🗑️ <span>Borrar</span>';
-    btnDelete.title = 'Eliminar esta pregunta';
+    btnDelete.innerHTML = `🗑️ <span>${t('btn_delete')}</span>`;
+    btnDelete.title = t('btn_delete_usr_title');
     btnDelete.addEventListener('click', () => removeMessage(wrapper));
 
     actions.appendChild(btnReuse);
@@ -971,16 +963,13 @@
     content.className = 'message-content';
     content.innerHTML = '<span class="streaming-cursor"></span>';
 
-    // Fila unificada de pie de mensaje
     const footerRow = document.createElement('div');
     footerRow.className = 'message-footer-row';
 
-    // Contenedor de estadísticas
     const statsContainer = document.createElement('div');
     statsContainer.className = 'message-stats';
     statsContainer.style.display = 'none';
 
-    // Barra de acciones del asistente
     const actions = document.createElement('div');
     actions.className = 'message-actions';
     actions.style.display = 'none';
@@ -988,14 +977,14 @@
     const btnCopy = document.createElement('button');
     btnCopy.type = 'button';
     btnCopy.className = 'btn-msg-action btn-copy-full';
-    btnCopy.innerHTML = '📋 <span>Copiar</span>';
-    btnCopy.title = 'Copiar respuesta completa al portapapeles';
+    btnCopy.innerHTML = `📋 <span>${t('btn_copy')}</span>`;
+    btnCopy.title = t('btn_copy_title');
 
     const btnDelete = document.createElement('button');
     btnDelete.type = 'button';
     btnDelete.className = 'btn-msg-action btn-delete';
-    btnDelete.innerHTML = '🗑️ <span>Borrar</span>';
-    btnDelete.title = 'Eliminar esta respuesta';
+    btnDelete.innerHTML = `🗑️ <span>${t('btn_delete')}</span>`;
+    btnDelete.title = t('btn_delete_ast_title');
     btnDelete.addEventListener('click', () => removeMessage(wrapper));
 
     actions.appendChild(btnCopy);
@@ -1031,20 +1020,20 @@
     if (attachedFiles.length > 0) {
       const attachmentsText = attachedFiles.map(file => {
         if (file.type === 'pdf') {
-          return `\n\n--- Documento PDF adjunto: ${file.name} (${FileParser.formatBytes(file.size)}) ---\n\`\`\`text\n${file.content}\n\`\`\``;
+          return `\n\n--- PDF Document: ${file.name} (${FileParser.formatBytes(file.size)}) ---\n\`\`\`text\n${file.content}\n\`\`\``;
         } else if (file.type === 'image') {
-          return `\n\n--- Imagen adjunta: ${file.name} (${FileParser.formatBytes(file.size)}) ---\n${file.content}`;
+          return `\n\n--- Image: ${file.name} (${FileParser.formatBytes(file.size)}) ---\n${file.content}`;
         }
-        return `\n\n--- Archivo adjunto: ${file.name} (${FileParser.formatBytes(file.size)}) ---\n\`\`\`\n${file.content}\n\`\`\``;
+        return `\n\n--- File: ${file.name} (${FileParser.formatBytes(file.size)}) ---\n\`\`\`\n${file.content}\n\`\`\``;
       }).join('');
 
-      fullPrompt = rawText ? `${rawText}\n${attachmentsText}` : `He adjuntado los siguientes archivos para su análisis:${attachmentsText}`;
+      fullPrompt = rawText ? `${rawText}\n${attachmentsText}` : `Attached files for analysis:${attachmentsText}`;
       
       const fileNamesList = attachedFiles.map(f => {
         const icon = f.type === 'pdf' ? '📕' : f.type === 'image' ? '🖼️' : '📎';
         return `${icon} ${f.name}`;
       }).join(', ');
-      displayText = rawText ? `${rawText}\n\n[${fileNamesList}]` : `[Archivos adjuntos: ${fileNamesList}]`;
+      displayText = rawText ? `${rawText}\n\n[${fileNamesList}]` : `[${fileNamesList}]`;
     }
 
     const userMsgId = appendUserMessage(displayText, rawText);
@@ -1068,7 +1057,7 @@
 
     if (!API.streamChatCompletion) {
       row.classList.add('message-error');
-      content.innerHTML = 'Error: Módulo de API no cargado correctamente.';
+      content.innerHTML = 'Error: Chat API module not loaded.';
       finishGeneration();
       return;
     }
@@ -1079,8 +1068,8 @@
         <div style="display:flex; align-items:flex-start; gap:0.5rem;">
           <span>⚠️</span>
           <div>
-            <strong>No hay ningún modelo seleccionado:</strong>
-            <p style="margin-top: 0.25rem;">Por favor, abre la <strong>Configuración</strong> para introducir un modelo o pulsa el botón <strong>Query</strong> para consultar los modelos disponibles en tu servidor (${appConfig.apiUrl}).</p>
+            <strong>${t('err_no_model_title')}</strong>
+            <p style="margin-top: 0.25rem;">${t('err_no_model_desc', { url: appConfig.apiUrl })}</p>
           </div>
         </div>
       `;
@@ -1093,13 +1082,13 @@
       if (!stats) return;
       statsContainer.style.display = 'inline-flex';
       statsContainer.innerHTML = `
-        <span class="stat-item" title="Tiempo hasta recibir el 1º token (Latencia / TTFT)">⏳ 1º token: ${stats.ttftSec}s</span>
+        <span class="stat-item" title="${t('stat_ttft_title')}">${t('stat_ttft', { sec: stats.ttftSec })}</span>
         <span>•</span>
-        <span class="stat-item" title="Velocidad de generación (calculada desde el 1º token)">⚡ ${stats.tokensPerSec} tok/s</span>
+        <span class="stat-item" title="${t('stat_speed_title')}">${t('stat_speed', { speed: stats.tokensPerSec })}</span>
         <span>•</span>
-        <span class="stat-item" title="Tiempo total de respuesta">⏱️ ${stats.totalSec}s</span>
+        <span class="stat-item" title="${t('stat_total_time_title')}">${t('stat_total_time', { sec: stats.totalSec })}</span>
         <span>•</span>
-        <span class="stat-item" title="Tokens totales estimados">📝 ${stats.tokens} tok</span>
+        <span class="stat-item" title="${t('stat_tokens_title')}">${t('stat_tokens', { tokens: stats.tokens })}</span>
       `;
     }
 
@@ -1118,7 +1107,7 @@
 
       onReasoningChunk: function (chunk, fullReasoning) {
         addDebugLog('thinking', chunk);
-        setDebugStatus('streaming', 'Pensando...');
+        setDebugStatus('streaming', t('debug_status_thinking'));
       },
 
       onLog: function (logData) {
@@ -1139,7 +1128,6 @@
         try {
           accumulatedText = finalText || accumulatedText;
 
-          // Si el modelo invoca herramientas agenticas (JS o Web)
           if (toolCalls && toolCalls.length > 0) {
             const tc = toolCalls[0];
 
@@ -1153,22 +1141,22 @@
                 codeToRun = tc.function.arguments || '';
               }
 
-              addDebugLog('tool', `Ejecutando herramienta execute_javascript:\n${codeToRun}`);
+              addDebugLog('tool', `execute_javascript:\n${codeToRun}`);
 
-              const toolExecRes = await (Sandbox.execute ? Sandbox.execute(codeToRun) : { success: false, error: 'Sandbox no disponible' });
+              const toolExecRes = await (Sandbox.execute ? Sandbox.execute(codeToRun) : { success: false, error: 'Sandbox not available' });
               const outputText = toolExecRes.success
                 ? (toolExecRes.result || (toolExecRes.logs && toolExecRes.logs.length > 0 ? toolExecRes.logs.join('\n') : 'undefined'))
                 : `Error: ${toolExecRes.error}`;
 
-              addDebugLog('tool', `Salida execute_javascript (${toolExecRes.executionTimeMs || 0}ms):\n${outputText}`);
+              addDebugLog('tool', `execute_javascript output (${toolExecRes.executionTimeMs || 0}ms):\n${outputText}`);
 
               const toolCardHtml = `
                 <div class="tool-execution-card">
                   <div class="tool-card-header">
-                    <span>⚡ Herramienta Ejecutada: execute_javascript (${toolExecRes.executionTimeMs || 0}ms)</span>
+                    <span>${t('tool_js_title', { ms: toolExecRes.executionTimeMs || 0 })}</span>
                   </div>
                   <pre class="tool-card-code"><code>${Markdown.escapeHtml(codeToRun)}</code></pre>
-                  <div class="tool-card-result"><strong>Salida del Sandbox:</strong>\n${Markdown.escapeHtml(outputText)}</div>
+                  <div class="tool-card-result"><strong>${t('tool_sandbox_output')}</strong>\n${Markdown.escapeHtml(outputText)}</div>
                 </div>
               `;
 
@@ -1213,35 +1201,35 @@
                 urlToFetch = tc.function.arguments || '';
               }
 
-              addDebugLog('tool', `Consultando herramienta fetch_web_page: ${urlToFetch}`);
+              addDebugLog('tool', `fetch_web_page: ${urlToFetch}`);
 
-              const webRes = await (WebBrowser.fetchPage ? WebBrowser.fetchPage(urlToFetch) : { success: false, url: urlToFetch, content: '', error: 'Módulo web no disponible' });
+              const webRes = await (WebBrowser.fetchPage ? WebBrowser.fetchPage(urlToFetch) : { success: false, url: urlToFetch, content: '', error: 'Web module not available' });
 
               const statusBadgeText = webRes.success
                 ? `HTTP ${webRes.status || 200} OK (${webRes.elapsedMs || 0}ms)`
                 : `Error (${webRes.elapsedMs || 0}ms)`;
 
               const responsePreview = webRes.success
-                ? (webRes.content || '(Página web cargada sin contenido de texto)')
-                : (webRes.error || 'Error al conectar con la página web');
+                ? (webRes.content || t('tool_web_empty'))
+                : (webRes.error || t('tool_web_err_connect'));
 
-              addDebugLog('tool', `Respuesta fetch_web_page (${statusBadgeText}) [${webRes.byteSize ? FileParser.formatBytes(webRes.byteSize) : '0 B'}]:\n${(responsePreview || '').substring(0, 200)}...`);
+              addDebugLog('tool', `fetch_web_page (${statusBadgeText}) [${webRes.byteSize ? FileParser.formatBytes(webRes.byteSize) : '0 B'}]:\n${(responsePreview || '').substring(0, 200)}...`);
 
               const webCardHtml = `
                 <div class="web-request-card">
                   <div class="web-card-header">
                     <div class="web-card-title">
                       <span>🌐</span>
-                      <span>Navegador Web: <strong>fetch_web_page</strong></span>
+                      <span>${t('tool_web_title')}</span>
                     </div>
                     <span class="web-card-badge">${statusBadgeText}</span>
                   </div>
                   <div class="web-card-section web-request-section">
-                    <div class="section-label">📤 URL Solicitada por el Modelo:</div>
+                    <div class="section-label">${t('tool_web_requested_url')}</div>
                     <div class="url-badge"><a href="${Markdown.escapeHtml(webRes.url || urlToFetch)}" target="_blank" rel="noopener noreferrer">${Markdown.escapeHtml(webRes.url || urlToFetch)}</a></div>
                   </div>
                   <div class="web-card-section web-response-section">
-                    <div class="section-label">📥 Contenido Obtenido (${webRes.byteSize ? FileParser.formatBytes(webRes.byteSize) : (webRes.content ? webRes.content.length + ' chars' : '0 B')}):</div>
+                    <div class="section-label">${t('tool_web_content_received', { size: webRes.byteSize ? FileParser.formatBytes(webRes.byteSize) : (webRes.content ? webRes.content.length + ' chars' : '0 B') })}</div>
                     <pre class="web-response-body"><code>${Markdown.escapeHtml(responsePreview)}</code></pre>
                   </div>
                 </div>
@@ -1280,12 +1268,12 @@
           }
 
           // Flujo normal sin herramientas
-          content.innerHTML = parseMd(accumulatedText || '(Respuesta vacía)');
+          content.innerHTML = parseMd(accumulatedText || t('empty_response'));
           attachListeners(content);
           chatHistory.push({ id: assistantMsgId, role: 'assistant', content: accumulatedText });
 
           if (stats) updateStatsDisplay(stats);
-          setDebugStatus('done', 'Completado');
+          setDebugStatus('done', t('debug_status_done'));
 
           actions.style.display = 'inline-flex';
           btnCopy.addEventListener('click', async () => {
@@ -1293,7 +1281,7 @@
               await navigator.clipboard.writeText(accumulatedText);
               const span = btnCopy.querySelector('span');
               const originalText = span.textContent;
-              span.textContent = '¡Copiado!';
+              span.textContent = t('copied_text');
               btnCopy.classList.add('copied');
 
               setTimeout(() => {
@@ -1301,14 +1289,14 @@
                 btnCopy.classList.remove('copied');
               }, 2000);
             } catch (err) {
-              console.error('Error al copiar respuesta:', err);
+              console.error('Error copying response:', err);
             }
           });
 
           finishGeneration();
         } catch (err) {
-          console.error('Error procesando respuesta final:', err);
-          setDebugStatus('error', 'Error');
+          console.error('Error processing final response:', err);
+          setDebugStatus('error', t('debug_status_error'));
           addDebugLog('error', err.message || String(err));
           row.classList.add('message-error');
           content.innerHTML = (content.innerHTML || '') + `
@@ -1316,7 +1304,7 @@
               <div style="display:flex; align-items:flex-start; gap:0.5rem;">
                 <span>⚠️</span>
                 <div>
-                  <strong>Error procesando la herramienta:</strong>
+                  <strong>${t('tool_error_title')}</strong>
                   <p style="margin-top: 0.25rem;">${err.message || err}</p>
                 </div>
               </div>
@@ -1328,17 +1316,17 @@
       },
 
       onError: function (error) {
-        setDebugStatus('error', 'Error');
+        setDebugStatus('error', t('debug_status_error'));
         addDebugLog('error', error.message || String(error));
         row.classList.add('message-error');
         content.innerHTML = `
           <div style="display:flex; align-items:flex-start; gap:0.5rem;">
             <span>⚠️</span>
             <div>
-              <strong>Error al conectar con el servidor:</strong>
+              <strong>${t('err_server_connect')}</strong>
               <p style="margin-top: 0.25rem;">${error.message || error}</p>
               <p style="margin-top: 0.5rem; font-size: 0.85em; opacity: 0.9;">
-                💡 Abre la <strong>Configuración</strong> para verificar la URL del servidor (${appConfig.apiUrl}), el modelo y tu API Key.
+                ${t('err_server_connect_hint', { url: appConfig.apiUrl })}
               </p>
             </div>
           </div>
@@ -1368,7 +1356,7 @@
 
       onReasoningChunk: function (chunk) {
         addDebugLog('thinking', chunk);
-        setDebugStatus('streaming', 'Pensando...');
+        setDebugStatus('streaming', t('debug_status_thinking'));
       },
 
       onLog: function (logData) {
@@ -1387,12 +1375,12 @@
 
       onDone: function (finalText, stats) {
         secondText = finalText || secondText;
-        content.innerHTML = baseHtml + '<div class="agentic-response-block">' + parseMd(secondText || '(Respuesta generada tras ejecución)') + '</div>';
+        content.innerHTML = baseHtml + '<div class="agentic-response-block">' + parseMd(secondText || `(${t('empty_response')})`) + '</div>';
         attachListeners(content);
         chatHistory.push({ id: assistantMsgId, role: 'assistant', content: secondText });
 
         if (stats && updateStatsDisplay) updateStatsDisplay(stats);
-        setDebugStatus('done', 'Completado');
+        setDebugStatus('done', t('debug_status_done'));
 
         actions.style.display = 'inline-flex';
         btnCopy.addEventListener('click', async () => {
@@ -1401,7 +1389,7 @@
             await navigator.clipboard.writeText(finalMarkdown);
             const span = btnCopy.querySelector('span');
             const originalText = span.textContent;
-            span.textContent = '¡Copiado!';
+            span.textContent = t('copied_text');
             btnCopy.classList.add('copied');
 
             setTimeout(() => {
@@ -1409,7 +1397,7 @@
               btnCopy.classList.remove('copied');
             }, 2000);
           } catch (err) {
-            console.error('Error al copiar respuesta compuesta:', err);
+            console.error('Error copying composite response:', err);
           }
         });
 
@@ -1417,12 +1405,12 @@
       },
 
       onError: function (error) {
-        setDebugStatus('error', 'Error');
+        setDebugStatus('error', t('debug_status_error'));
         addDebugLog('error', error.message || String(error));
         row.classList.add('message-error');
         content.innerHTML = baseHtml + `
           <div class="agentic-response-block message-error" style="margin-top: 1rem;">
-            <p><strong>Error en la respuesta del asistente:</strong> ${error.message || error}</p>
+            <p><strong>${t('tool_error_assistant')}</strong> ${error.message || error}</p>
           </div>
         `;
         actions.style.display = 'inline-flex';
@@ -1461,6 +1449,7 @@
     elements.settingTemperature.value = appConfig.temperature || '0.7';
     elements.temperatureVal.textContent = appConfig.temperature || '0.7';
     applyTheme(appConfig.theme || 'light');
+    applyLanguage(appConfig.language || 'es');
 
     if (elements.serverQueryStatus) {
       elements.serverQueryStatus.style.display = 'none';
@@ -1478,7 +1467,6 @@
       elements.settingSendDateTime.checked = appConfig.sendDateTime !== false;
     }
 
-    // Activar primera pestaña por defecto al abrir
     if (elements.modalTabs && elements.modalTabs.length > 0) {
       elements.modalTabs.forEach(b => b.classList.remove('active'));
       elements.modalPanes.forEach(p => p.classList.remove('active'));
@@ -1506,8 +1494,9 @@
       model: selectedModel,
       systemPrompt: elements.settingSystemPrompt.value.trim(),
       temperature: elements.settingTemperature.value,
-      reasoningEffort: appConfig.reasoningEffort || 'off',
+      reasoningEffort: appConfig.reasoningEffort || 'none',
       theme: appConfig.theme || 'light',
+      language: appConfig.language || 'es',
       enableAgentJs: elements.settingEnableAgentJs ? elements.settingEnableAgentJs.checked : true,
       enableAgentWeb: elements.settingEnableAgentWeb ? elements.settingEnableAgentWeb.checked : true,
       sendDateTime: elements.settingSendDateTime ? elements.settingSendDateTime.checked : true
@@ -1519,7 +1508,7 @@
     appConfig = newConfig;
 
     if (chatHistory.length > 0 && chatHistory[0].role === 'system') {
-      chatHistory[0].content = appConfig.systemPrompt;
+      chatHistory[0].content = appConfig.systemPrompt || t('default_system_prompt');
     }
 
     updateUIFromConfig();
@@ -1535,10 +1524,11 @@
       elements.settingApiUrl.value = defaults.apiUrl;
       elements.settingApiKey.value = defaults.apiKey;
       elements.settingModel.value = defaults.model;
-      elements.settingSystemPrompt.value = defaults.systemPrompt;
+      elements.settingSystemPrompt.value = '';
       elements.settingTemperature.value = defaults.temperature;
       elements.temperatureVal.textContent = defaults.temperature;
       applyTheme(defaults.theme || 'light');
+      applyLanguage(defaults.language || 'es');
 
       if (elements.modelSelectHelper) {
         elements.modelSelectHelper.value = defaults.model;
@@ -1589,6 +1579,14 @@
     if (elements.btnNewChat) {
       elements.btnNewChat.addEventListener('click', () => {
         window.open(window.location.href, '_blank');
+      });
+    }
+
+    // Botón rápido de Idioma en la barra superior
+    if (elements.btnLangQuick) {
+      elements.btnLangQuick.addEventListener('click', () => {
+        const nextLang = (appConfig.language === 'en') ? 'es' : 'en';
+        applyLanguage(nextLang);
       });
     }
 
@@ -1783,6 +1781,18 @@
       });
     }
 
+    // Botones de selección de idioma en el Modal
+    if (elements.langButtons && elements.langButtons.length > 0) {
+      elements.langButtons.forEach(btn => {
+        btn.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          const targetLang = btn.getAttribute('data-lang') || 'es';
+          applyLanguage(targetLang);
+        });
+      });
+    }
+
     elements.settingTemperature.addEventListener('input', function (e) {
       elements.temperatureVal.textContent = e.target.value;
     });
@@ -1826,10 +1836,11 @@
       toggleDebugPanel,
       addDebugLog,
       clearDebugLogs,
-      setDebugStatus
+      setDebugStatus,
+      applyLanguage
     };
 
-    console.log('💬 ChatCLI inicializado con éxito (con panel de logs, razonamiento en tiempo real e inspector).');
+    console.log('💬 ChatCLI v1.0 initialized successfully with multi-language (ES/EN) and agentic capabilities.');
   }
 
   if (document.readyState === 'loading') {

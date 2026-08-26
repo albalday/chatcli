@@ -30,7 +30,7 @@ def build_standalone_html():
         with open(css_path, "r", encoding="utf-8") as f:
             css_content = f.read()
 
-    js_files = ["cookies.js", "sandbox.js", "web-browser.js", "markdown.js", "api.js", "file-parser.js", "app.js"]
+    js_files = ["cookies.js", "i18n.js", "sandbox.js", "web-browser.js", "markdown.js", "api.js", "file-parser.js", "app.js"]
     js_encoded = {}
 
     for jf in js_files:

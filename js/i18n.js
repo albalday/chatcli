@@ -1,0 +1,568 @@
+/**
+ * Módulo de Internacionalización y Multi-idioma (ChatI18n) para ChatCLI v1.0.
+ * Soporta Castellano (es) e Inglés (en).
+ * - Detección automática del idioma del navegador (inglés si empieza por 'en', español por defecto).
+ * - Persistencia de preferencia de idioma en ChatStorage.
+ * - Traducción reactiva del DOM vía atributos data-i18n, data-i18n-title, data-i18n-placeholder, etc.
+ * - Helper t(key, params) para cadenas dinámicas.
+ * - Formateador de fecha/hora según el idioma activo.
+ */
+
+(function (root, factory) {
+  if (typeof exports === 'object' && typeof module !== 'undefined') {
+    module.exports = factory();
+  } else {
+    root.ChatI18n = factory();
+  }
+})(typeof self !== 'undefined' ? self : this, function () {
+  'use strict';
+
+  const Storage = typeof window !== 'undefined' ? (window.ChatStorage || {}) : {};
+
+  const TRANSLATIONS = {
+    es: {
+      // Metadatos y Encabezados
+      app_title: 'ChatCLI v1.0 - Cliente Web Universal de Chat para IA',
+      app_description: 'Cliente de chat web universal, ligero y autosuficiente para modelos de lenguaje (LLMs)',
+      
+      // Bienvenida y Sugerencias
+      welcome_heading: '¿En qué puedo ayudarte hoy?',
+      welcome_desc: 'Cliente de chat conectado a tu API. Puedes configurar el servidor, modelo, API Key y prompt en el botón de configuración junto a la caja de chat.',
+      sug_explain_title: '💡 Explicar conceptos',
+      sug_explain_text: '¿Cómo funciona una API REST con JavaScript?',
+      sug_explain_prompt: 'Explícame cómo funciona una API REST con un ejemplo sencillo en JavaScript.',
+      sug_code_title: '💻 Escribir código',
+      sug_code_text: 'Función JS para ordenar un array de objetos',
+      sug_code_prompt: 'Escribe una función en JavaScript para ordenar un array de objetos por una clave específica.',
+      sug_ideas_title: '🚀 Ideas de proyectos',
+      sug_ideas_text: '3 ideas de proyectos web en JavaScript Vanilla',
+      sug_ideas_prompt: 'Dame 3 ideas de proyectos web interesantes que utilicen HTML5 y JavaScript Vanilla.',
+
+      // Barra de herramientas superior
+      server_badge_title: 'Servidor configurado (clic para cambiar)',
+      model_badge_title: 'Modelo activo (clic para cambiar)',
+      no_model: '(Sin modelo)',
+      btn_clear_chat: 'Limpiar',
+      btn_clear_chat_title: 'Limpiar conversación actual',
+      btn_new_chat: 'Nuevo chat ↗',
+      btn_new_chat_title: 'Abrir nuevo chat en pestaña nueva',
+      btn_logs: 'Logs',
+      btn_logs_title: 'Abrir/Cerrar panel lateral de razonamiento y logs',
+      btn_settings: 'Configuración',
+      btn_settings_title: 'Abrir configuración de API y Modelo',
+      lang_switcher_title: 'Cambiar idioma / Switch language',
+
+      // Barra de entrada y formulario
+      btn_attach_title: 'Adjuntar archivos (PDF, código, texto, imágenes)',
+      reasoning_btn_title: 'Nivel de razonamiento (Desactivado por defecto)',
+      reasoning_menu_title: '🧠 Nivel de Razonamiento',
+      input_placeholder: 'Envía un mensaje o arrastra un archivo... (Enter para enviar, Shift+Enter para nueva línea)',
+      btn_stop: 'Detener',
+      btn_stop_title: 'Detener respuesta',
+      btn_send_title: 'Enviar mensaje',
+      chat_disclaimer: 'Las respuestas generadas pueden variar según el servidor y modelo configurados. Guarda tu API Key de forma segura.',
+
+      // Niveles de razonamiento
+      reasoning_level_none: 'Desactivado (None)',
+      reasoning_desc_none: 'Sin razonamiento extendido',
+      reasoning_level_on: 'Activado (On)',
+      reasoning_desc_on: 'Razonamiento extendido activado',
+      reasoning_level_minimal: 'Mínimo (Minimal)',
+      reasoning_desc_minimal: 'Razonamiento ultra rápido y conciso',
+      reasoning_level_low: 'Bajo (Low)',
+      reasoning_desc_low: 'Razonamiento ligero y rápido',
+      reasoning_level_medium: 'Medio (Medium)',
+      reasoning_desc_medium: 'Equilibrio entre velocidad y análisis',
+      reasoning_level_high: 'Alto (High)',
+      reasoning_desc_high: 'Máximo análisis y deducción profunda',
+      reasoning_level_xhigh: 'Extra Alto (X-High)',
+      reasoning_desc_xhigh: 'Razonamiento exhaustivo máximo',
+
+      // Panel lateral de Logs y Razonamiento
+      debug_panel_title: 'Razonamiento & Logs',
+      debug_status_idle: 'Inactivo',
+      debug_status_streaming: 'Generando...',
+      debug_status_thinking: 'Pensando...',
+      debug_status_done: 'Completado',
+      debug_status_error: 'Error',
+      btn_copy_debug_title: 'Copiar logs al portapapeles',
+      btn_clear_debug_title: 'Limpiar logs',
+      btn_autoscroll_title: 'Auto-scroll activado',
+      btn_close_debug_title: 'Cerrar panel de logs',
+      debug_tab_all: 'Todo',
+      debug_tab_thinking: '🧠 Razonamiento',
+      debug_tab_tool: '⚙️ Herramientas',
+      debug_tab_network: '🌐 Red',
+      debug_sys_init: 'Inspector de razonamiento y logs iniciado.',
+      debug_sys_cleared: 'Logs limpiados. Esperando peticiones...',
+      debug_tag_system: 'SISTEMA',
+      debug_tag_thinking: 'PENSAMIENTO',
+      debug_tag_tool: 'HERRAMIENTA',
+      debug_tag_network: 'RED',
+      debug_tag_stats: 'STATS',
+      debug_tag_error: 'ERROR',
+      debug_tag_info: 'INFO',
+
+      // Mensajes del chat y acciones
+      user_avatar: 'Tú',
+      btn_reuse: 'Reutilizar',
+      btn_reuse_title: 'Colocar mensaje en la caja de texto',
+      btn_delete: 'Borrar',
+      btn_delete_usr_title: 'Eliminar esta pregunta',
+      btn_delete_ast_title: 'Eliminar esta respuesta',
+      btn_copy: 'Copiar',
+      btn_copy_title: 'Copiar respuesta completa al portapapeles',
+      copied_text: '¡Copiado!',
+      empty_response: '(Respuesta vacía)',
+      msg_deleted_log: 'Mensaje [{id}] eliminado de la memoria y la interfaz ({count} turnos retirados).',
+
+      // Estadísticas
+      stat_ttft: '⏳ 1º token: {sec}s',
+      stat_ttft_title: 'Tiempo hasta recibir el 1º token (Latencia / TTFT)',
+      stat_speed: '⚡ {speed} tok/s',
+      stat_speed_title: 'Velocidad de generación (calculada desde el 1º token)',
+      stat_total_time: '⏱️ {sec}s',
+      stat_total_time_title: 'Tiempo total de respuesta',
+      stat_tokens: '📝 {tokens} tok',
+      stat_tokens_title: 'Tokens totales estimados',
+
+      // Respuestas agénticas y herramientas
+      tool_js_title: '⚡ Herramienta Ejecutada: execute_javascript ({ms}ms)',
+      tool_sandbox_output: 'Salida del Sandbox:',
+      tool_web_title: 'Navegador Web: fetch_web_page',
+      tool_web_requested_url: '📤 URL Solicitada por el Modelo:',
+      tool_web_content_received: '📥 Contenido Obtenido ({size}):',
+      tool_web_empty: '(Página web cargada sin contenido de texto)',
+      tool_web_err_connect: 'Error al conectar con la página web',
+      tool_error_title: 'Error procesando la herramienta:',
+      tool_error_assistant: 'Error en la respuesta del asistente:',
+
+      // Modal de Configuración
+      modal_title: 'Configuración del Chat',
+      modal_close_aria: 'Cerrar modal',
+      tab_general: '🌐 General y Servidor',
+      tab_agent: '🤖 Agente y Fecha',
+      tab_model: '⚙️ Modelo y Prompt',
+      field_language: 'Idioma de la Interfaz (Language)',
+      field_language_hint: 'Selecciona el idioma visual de la aplicación.',
+      field_api_type: 'Tipo de Interfaz / Protocolo',
+      field_api_type_hint: 'Determina el formato del JSON de petición y las opciones de razonamiento.',
+      field_api_url: 'URL del Servidor / Endpoint de Chat',
+      field_api_url_hint: 'Compatible con OpenAI, LM Studio, Ollama, LocalAI, vLLM, OpenRouter, Claude, Gemini, etc.',
+      btn_query_title: 'Consultar modelos disponibles y capacidades de la API en el servidor',
+      btn_query_text: 'Query',
+      btn_querying_text: 'Consultando...',
+      field_api_key: 'Clave de API (API Key)',
+      field_api_key_hint: 'Opcional si usas un servidor local (LM Studio / Ollama / LocalAI).',
+      btn_toggle_key_title: 'Mostrar/Ocultar clave',
+      field_model: 'Nombre del Modelo',
+      field_model_hint: 'Selecciona de la lista del servidor o escribe cualquier nombre personalizado.',
+      field_model_placeholder: 'Escribe o pulsa Query para consultar modelos...',
+      model_select_default: '▾ Elegir modelo detectado...',
+      model_select_count: '▾ Elegir modelo detectado ({count})...',
+      field_theme: 'Tema Visual de la Interfaz',
+      field_theme_hint: 'Selecciona el modo de visualización.',
+      theme_light: '☀️ Modo Claro',
+      theme_dark: '🌙 Modo Oscuro',
+      agent_intro: 'Configura las herramientas agénticas y el contexto temporal que se transmiten al modelo.',
+      agent_js_title: '⚡ Ejecución de JavaScript Local (Sandbox)',
+      agent_js_desc: 'Permite al modelo invocar execute_javascript para calcular, procesar datos o validar algoritmos en un entorno seguro en el navegador.',
+      agent_web_title: '🌐 Consulta de Páginas Web en Tiempo Real',
+      agent_web_desc: 'Permite al modelo invocar fetch_web_page para consultar URLs y páginas web públicas en tiempo real a través del navegador.',
+      agent_datetime_title: '🕒 Enviar siempre Fecha y Hora Actual',
+      agent_datetime_desc: 'Inyecta automáticamente la fecha y hora local del sistema en el contexto del prompt para que el modelo esté siempre orientado temporalmente.',
+      field_system_prompt: 'Prompt del Sistema (System Prompt por defecto)',
+      field_system_prompt_hint: 'Instrucciones base que guían el comportamiento del asistente.',
+      field_system_prompt_placeholder: 'Eres un asistente útil, conciso y preciso...',
+      field_temperature: 'Temperatura: {val}',
+      field_temperature_hint: 'Controla la creatividad de las respuestas (0 = determinista/preciso, 1 = creativo).',
+      cookie_notice: 'Toda la configuración se almacena localmente de forma persistente (compatible tanto con <strong>file://</strong> como con servidores web).',
+      btn_reset: 'Restablecer valores',
+      btn_cancel: 'Cancelar',
+      btn_save: 'Guardar Configuración',
+
+      // Mensajes de estado y errores
+      err_no_model_title: 'No hay ningún modelo seleccionado:',
+      err_no_model_desc: 'Por favor, abre la <strong>Configuración</strong> para introducir un modelo o pulsa el botón <strong>Query</strong> para consultar los modelos disponibles en tu servidor ({url}).',
+      err_server_connect: 'Error al conectar con el servidor:',
+      err_server_connect_hint: '💡 Abre la <strong>Configuración</strong> para verificar la URL del servidor ({url}), el modelo y tu API Key.',
+      err_invalid_url: 'Por favor, introduce una URL de servidor válida.',
+      err_connecting_models: '⏳ Conectando con {url} para obtener modelos...',
+      msg_models_success: '✅ <strong>{count} modelos detectados con éxito</strong> en <code>{endpoint}</code>.',
+      err_api_connect: '❌ <strong>Error al conectar con la API:</strong> {err}',
+      err_file_process: 'No se pudo procesar el archivo {name}: {err}',
+
+      // Markdown & Sandbox
+      md_thought_title: '💭 Proceso de razonamiento',
+      md_thought_reasoning: '💭 Razonando...',
+      md_run_js_title: 'Ejecutar en sandbox local (sin red ni archivos)',
+      md_run_js_btn: 'Ejecutar JS',
+      md_copy_code_title: 'Copiar código',
+      md_copy_code_btn: 'Copiar',
+      md_output_title: 'Salida (Consola / Retorno):',
+      md_clear_output: 'Limpiar salida',
+
+      // Contexto del sistema de fecha/hora
+      system_context_prefix: '\n\n[Contexto del Sistema: Fecha y hora actual es {datetime}]',
+      default_system_prompt: 'Eres un asistente de IA útil, conciso y preciso. Responde siempre con formato Markdown claro. Tienes disponibles capacidades agénticas en el navegador si están habilitadas (ejecución de JavaScript local y consulta de páginas web en tiempo real).'
+    },
+
+    en: {
+      // Metadatos y Encabezados
+      app_title: 'ChatCLI v1.0 - Universal AI Chat Web Client',
+      app_description: 'Universal, lightweight, standalone web chat client for Large Language Models (LLMs)',
+      
+      // Bienvenida y Sugerencias
+      welcome_heading: 'How can I help you today?',
+      welcome_desc: 'Chat client connected to your API. You can configure the server, model, API Key, and system prompt using the settings button next to the input box.',
+      sug_explain_title: '💡 Explain concepts',
+      sug_explain_text: 'How does a REST API work with JavaScript?',
+      sug_explain_prompt: 'Explain how a REST API works with a simple example in JavaScript.',
+      sug_code_title: '💻 Write code',
+      sug_code_text: 'JS function to sort an array of objects',
+      sug_code_prompt: 'Write a JavaScript function to sort an array of objects by a specific key.',
+      sug_ideas_title: '🚀 Project ideas',
+      sug_ideas_text: '3 interesting web project ideas in Vanilla JavaScript',
+      sug_ideas_prompt: 'Give me 3 interesting web project ideas using HTML5 and Vanilla JavaScript.',
+
+      // Barra de herramientas superior
+      server_badge_title: 'Configured server (click to change)',
+      model_badge_title: 'Active model (click to change)',
+      no_model: '(No model)',
+      btn_clear_chat: 'Clear',
+      btn_clear_chat_title: 'Clear current conversation',
+      btn_new_chat: 'New chat ↗',
+      btn_new_chat_title: 'Open new chat in a new tab',
+      btn_logs: 'Logs',
+      btn_logs_title: 'Open/Close reasoning & logs side panel',
+      btn_settings: 'Settings',
+      btn_settings_title: 'Open API and Model settings',
+      lang_switcher_title: 'Switch language / Cambiar idioma',
+
+      // Barra de entrada y formulario
+      btn_attach_title: 'Attach files (PDF, code, text, images)',
+      reasoning_btn_title: 'Reasoning effort level (Disabled by default)',
+      reasoning_menu_title: '🧠 Reasoning Level',
+      input_placeholder: 'Send a message or drag a file... (Enter to send, Shift+Enter for new line)',
+      btn_stop: 'Stop',
+      btn_stop_title: 'Stop response generation',
+      btn_send_title: 'Send message',
+      chat_disclaimer: 'Generated responses may vary based on configured server and model. Keep your API Key secure.',
+
+      // Niveles de razonamiento
+      reasoning_level_none: 'Disabled (None)',
+      reasoning_desc_none: 'No extended reasoning',
+      reasoning_level_on: 'Enabled (On)',
+      reasoning_desc_on: 'Extended reasoning enabled',
+      reasoning_level_minimal: 'Minimal',
+      reasoning_desc_minimal: 'Ultra-fast and concise reasoning',
+      reasoning_level_low: 'Low',
+      reasoning_desc_low: 'Lightweight and fast reasoning',
+      reasoning_level_medium: 'Medium',
+      reasoning_desc_medium: 'Balanced speed and analytical depth',
+      reasoning_level_high: 'High',
+      reasoning_desc_high: 'Maximum reasoning and deep deduction',
+      reasoning_level_xhigh: 'Extra High (X-High)',
+      reasoning_desc_xhigh: 'Exhaustive reasoning effort',
+
+      // Panel lateral de Logs y Razonamiento
+      debug_panel_title: 'Reasoning & Logs',
+      debug_status_idle: 'Idle',
+      debug_status_streaming: 'Generating...',
+      debug_status_thinking: 'Thinking...',
+      debug_status_done: 'Completed',
+      debug_status_error: 'Error',
+      btn_copy_debug_title: 'Copy logs to clipboard',
+      btn_clear_debug_title: 'Clear logs',
+      btn_autoscroll_title: 'Auto-scroll enabled',
+      btn_close_debug_title: 'Close logs panel',
+      debug_tab_all: 'All',
+      debug_tab_thinking: '🧠 Thinking',
+      debug_tab_tool: '⚙️ Tools',
+      debug_tab_network: '🌐 Network',
+      debug_sys_init: 'Reasoning and logs inspector started.',
+      debug_sys_cleared: 'Logs cleared. Waiting for requests...',
+      debug_tag_system: 'SYSTEM',
+      debug_tag_thinking: 'THINKING',
+      debug_tag_tool: 'TOOL',
+      debug_tag_network: 'NETWORK',
+      debug_tag_stats: 'STATS',
+      debug_tag_error: 'ERROR',
+      debug_tag_info: 'INFO',
+
+      // Mensajes del chat y acciones
+      user_avatar: 'You',
+      btn_reuse: 'Reuse',
+      btn_reuse_title: 'Put message into the input box',
+      btn_delete: 'Delete',
+      btn_delete_usr_title: 'Delete this question',
+      btn_delete_ast_title: 'Delete this response',
+      btn_copy: 'Copy',
+      btn_copy_title: 'Copy full response to clipboard',
+      copied_text: 'Copied!',
+      empty_response: '(Empty response)',
+      msg_deleted_log: 'Message [{id}] removed from memory and UI ({count} turns cleared).',
+
+      // Estadísticas
+      stat_ttft: '⏳ 1st token: {sec}s',
+      stat_ttft_title: 'Time to first token (Latency / TTFT)',
+      stat_speed: '⚡ {speed} tok/s',
+      stat_speed_title: 'Generation speed (calculated from 1st token)',
+      stat_total_time: '⏱️ {sec}s',
+      stat_total_time_title: 'Total response time',
+      stat_tokens: '📝 {tokens} tok',
+      stat_tokens_title: 'Estimated total tokens',
+
+      // Respuestas agénticas y herramientas
+      tool_js_title: '⚡ Tool Executed: execute_javascript ({ms}ms)',
+      tool_sandbox_output: 'Sandbox Output:',
+      tool_web_title: 'Web Browser: fetch_web_page',
+      tool_web_requested_url: '📤 URL Requested by Model:',
+      tool_web_content_received: '📥 Retrieved Content ({size}):',
+      tool_web_empty: '(Web page loaded with no readable text content)',
+      tool_web_err_connect: 'Error connecting to web page',
+      tool_error_title: 'Error processing tool:',
+      tool_error_assistant: 'Error in assistant response:',
+
+      // Modal de Configuración
+      modal_title: 'Chat Settings',
+      modal_close_aria: 'Close modal',
+      tab_general: '🌐 General & Server',
+      tab_agent: '🤖 Agent & Date',
+      tab_model: '⚙️ Model & Prompt',
+      field_language: 'Interface Language (Idioma)',
+      field_language_hint: 'Select the visual language of the application.',
+      field_api_type: 'Interface Type / Protocol',
+      field_api_type_hint: 'Determines the request JSON format and reasoning options.',
+      field_api_url: 'Server URL / Chat Endpoint',
+      field_api_url_hint: 'Compatible with OpenAI, LM Studio, Ollama, LocalAI, vLLM, OpenRouter, Claude, Gemini, etc.',
+      btn_query_title: 'Query available models and API capabilities from the server',
+      btn_query_text: 'Query',
+      btn_querying_text: 'Querying...',
+      field_api_key: 'API Key',
+      field_api_key_hint: 'Optional when using a local server (LM Studio / Ollama / LocalAI).',
+      btn_toggle_key_title: 'Show/Hide API Key',
+      field_model: 'Model Name',
+      field_model_hint: 'Select from the server model list or type any custom name.',
+      field_model_placeholder: 'Type or click Query to discover models...',
+      model_select_default: '▾ Choose detected model...',
+      model_select_count: '▾ Choose detected model ({count})...',
+      field_theme: 'Visual Interface Theme',
+      field_theme_hint: 'Select the display appearance mode.',
+      theme_light: '☀️ Light Mode',
+      theme_dark: '🌙 Dark Mode',
+      agent_intro: 'Configure agentic tools and temporal context passed to the model.',
+      agent_js_title: '⚡ Local JavaScript Execution (Sandbox)',
+      agent_js_desc: 'Allows the model to call execute_javascript to compute, process data, or validate algorithms safely in the browser.',
+      agent_web_title: '🌐 Real-time Web Page Fetching',
+      agent_web_desc: 'Allows the model to call fetch_web_page to retrieve public URLs and web pages in real-time through the browser.',
+      agent_datetime_title: '🕒 Always Send Current Date & Time',
+      agent_datetime_desc: 'Automatically injects the system local date and time into the prompt context so the model is always temporally oriented.',
+      field_system_prompt: 'System Prompt (Default System Prompt)',
+      field_system_prompt_hint: 'Base instructions guiding the assistant behavior.',
+      field_system_prompt_placeholder: 'You are a helpful, concise and precise assistant...',
+      field_temperature: 'Temperature: {val}',
+      field_temperature_hint: 'Controls randomness/creativity (0 = deterministic/precise, 1 = creative).',
+      cookie_notice: 'All settings are stored locally and persistently (compatible with both <strong>file://</strong> and web servers).',
+      btn_reset: 'Reset defaults',
+      btn_cancel: 'Cancel',
+      btn_save: 'Save Settings',
+
+      // Mensajes de estado y errores
+      err_no_model_title: 'No model selected:',
+      err_no_model_desc: 'Please open <strong>Settings</strong> to enter a model or click <strong>Query</strong> to discover available models on your server ({url}).',
+      err_server_connect: 'Error connecting to server:',
+      err_server_connect_hint: '💡 Open <strong>Settings</strong> to verify server URL ({url}), model name, and API Key.',
+      err_invalid_url: 'Please enter a valid server URL.',
+      err_connecting_models: '⏳ Connecting to {url} to fetch models...',
+      msg_models_success: '✅ <strong>{count} models detected successfully</strong> at <code>{endpoint}</code>.',
+      err_api_connect: '❌ <strong>Error connecting to API:</strong> {err}',
+      err_file_process: 'Could not process file {name}: {err}',
+
+      // Markdown & Sandbox
+      md_thought_title: '💭 Reasoning process',
+      md_thought_reasoning: '💭 Reasoning...',
+      md_run_js_title: 'Run in local sandbox (no network or files)',
+      md_run_js_btn: 'Run JS',
+      md_copy_code_title: 'Copy code',
+      md_copy_code_btn: 'Copy',
+      md_output_title: 'Output (Console / Return):',
+      md_clear_output: 'Clear output',
+
+      // Contexto del sistema de fecha/hora
+      system_context_prefix: '\n\n[System Context: Current date and time is {datetime}]',
+      default_system_prompt: 'You are a helpful, concise and precise AI assistant. Always respond with clear Markdown format. You have agentic capabilities available in the browser if enabled (local JavaScript execution and real-time web browsing).'
+    }
+  };
+
+  let currentLang = 'es';
+
+  /**
+   * Detecta el idioma inicial según la política:
+   * 1. Si hay preferencia guardada en storage ('es' o 'en'), usarla.
+   * 2. Si no, comprobar el idioma del navegador. Si empieza por 'en', usar 'en'.
+   * 3. En caso contrario, usar 'es' por defecto.
+   */
+  function detectInitialLanguage() {
+    try {
+      if (Storage.getStorageItem) {
+        const saved = Storage.getStorageItem('language');
+        if (saved === 'es' || saved === 'en') {
+          return saved;
+        }
+      }
+    } catch (e) {}
+
+    try {
+      const browserLang = (
+        (navigator.languages && navigator.languages.length ? navigator.languages[0] : null) ||
+        navigator.language ||
+        navigator.userLanguage ||
+        ''
+      ).toLowerCase();
+
+      if (browserLang.startsWith('en')) {
+        return 'en';
+      }
+    } catch (e) {}
+
+    return 'es';
+  }
+
+  function getLanguage() {
+    return currentLang;
+  }
+
+  function setLanguage(lang, persist = true) {
+    const target = (lang === 'en') ? 'en' : 'es';
+    currentLang = target;
+
+    if (persist && Storage.setStorageItem) {
+      Storage.setStorageItem('language', target);
+    }
+
+    if (typeof document !== 'undefined') {
+      document.documentElement.lang = target;
+      applyTranslations(document);
+    }
+
+    return target;
+  }
+
+  /**
+   * Obtiene la traducción para una clave, interpolando parámetros opcionales {nombre}.
+   */
+  function t(key, params) {
+    const dict = TRANSLATIONS[currentLang] || TRANSLATIONS.es;
+    let str = dict[key];
+    if (str === undefined) {
+      str = TRANSLATIONS.es[key] !== undefined ? TRANSLATIONS.es[key] : key;
+    }
+
+    if (params && typeof params === 'object') {
+      Object.keys(params).forEach(k => {
+        const val = params[k];
+        str = str.replace(new RegExp(`\\{${k}\\}`, 'g'), val !== undefined && val !== null ? val : '');
+      });
+    }
+
+    return str;
+  }
+
+  /**
+   * Formatea la fecha y hora actual en el locale correspondiente ('es-ES' o 'en-US').
+   */
+  function getFormattedDateTime(date = new Date(), lang = currentLang) {
+    const locale = (lang === 'en') ? 'en-US' : 'es-ES';
+    const options = {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    };
+    try {
+      return date.toLocaleDateString(locale, options);
+    } catch (e) {
+      return date.toLocaleString();
+    }
+  }
+
+  /**
+   * Aplica las traducciones a todos los elementos del DOM marcados con atributos data-i18n*.
+   */
+  function applyTranslations(rootElement = document) {
+    if (!rootElement || typeof rootElement.querySelectorAll !== 'function') return;
+
+    // 1. data-i18n -> textContent
+    rootElement.querySelectorAll('[data-i18n]').forEach(el => {
+      const key = el.getAttribute('data-i18n');
+      if (key) {
+        el.textContent = t(key);
+      }
+    });
+
+    // 2. data-i18n-html -> innerHTML
+    rootElement.querySelectorAll('[data-i18n-html]').forEach(el => {
+      const key = el.getAttribute('data-i18n-html');
+      if (key) {
+        el.innerHTML = t(key);
+      }
+    });
+
+    // 3. data-i18n-title -> title attribute
+    rootElement.querySelectorAll('[data-i18n-title]').forEach(el => {
+      const key = el.getAttribute('data-i18n-title');
+      if (key) {
+        el.setAttribute('title', t(key));
+      }
+    });
+
+    // 4. data-i18n-placeholder -> placeholder attribute
+    rootElement.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+      const key = el.getAttribute('data-i18n-placeholder');
+      if (key) {
+        el.setAttribute('placeholder', t(key));
+      }
+    });
+
+    // 5. data-i18n-aria -> aria-label attribute
+    rootElement.querySelectorAll('[data-i18n-aria]').forEach(el => {
+      const key = el.getAttribute('data-i18n-aria');
+      if (key) {
+        el.setAttribute('aria-label', t(key));
+      }
+    });
+
+    // 6. Actualizar título de la página
+    if (typeof document !== 'undefined') {
+      document.title = t('app_title');
+      const metaDesc = document.querySelector('meta[name="description"]');
+      if (metaDesc) {
+        metaDesc.setAttribute('content', t('app_description'));
+      }
+    }
+  }
+
+  function getAvailableLanguages() {
+    return [
+      { code: 'es', label: 'Español', flag: '🇪🇸' },
+      { code: 'en', label: 'English', flag: '🇬🇧' }
+    ];
+  }
+
+  // Inicialización automática de idioma
+  currentLang = detectInitialLanguage();
+
+  return {
+    t,
+    getLanguage,
+    setLanguage,
+    detectInitialLanguage,
+    getFormattedDateTime,
+    applyTranslations,
+    getAvailableLanguages,
+    TRANSLATIONS
+  };
+});

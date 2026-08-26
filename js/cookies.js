@@ -21,6 +21,7 @@
     temperature: '0.7',
     reasoningEffort: 'none', // 'none' | 'low' | 'medium' | 'high'
     theme: 'light', // 'light' | 'dark'
+    language: 'es', // 'es' | 'en'
     enableAgentJs: true,
     enableAgentWeb: true,
     sendDateTime: true
@@ -128,6 +129,7 @@
     const temperature = getStorageItem('temperature');
     const reasoningEffort = getStorageItem('reasoningEffort');
     const theme = getStorageItem('theme');
+    const language = getStorageItem('language');
     const enableAgentJs = getStorageItem('enableAgentJs');
     const enableAgentWeb = getStorageItem('enableAgentWeb');
     const sendDateTime = getStorageItem('sendDateTime');
@@ -141,6 +143,16 @@
     let effectiveTheme = theme;
     if (effectiveTheme !== 'dark' && effectiveTheme !== 'light') {
       effectiveTheme = 'light';
+    }
+
+    let effectiveLanguage = language;
+    if (effectiveLanguage !== 'es' && effectiveLanguage !== 'en') {
+      // Usar auto-detección del módulo i18n si existe, o default
+      if (typeof window !== 'undefined' && window.ChatI18n && window.ChatI18n.detectInitialLanguage) {
+        effectiveLanguage = window.ChatI18n.detectInitialLanguage();
+      } else {
+        effectiveLanguage = DEFAULT_CONFIG.language;
+      }
     }
 
     let parsedReasoningConfig = null;
@@ -162,6 +174,7 @@
       reasoningEffort: (reasoningEffort === 'off' || reasoningEffort === 'none') ? 'none' : (reasoningEffort !== null && reasoningEffort !== '' ? reasoningEffort : DEFAULT_CONFIG.reasoningEffort),
       modelReasoningConfig: parsedReasoningConfig,
       theme: effectiveTheme,
+      language: effectiveLanguage,
       enableAgentJs: parseBool(enableAgentJs, DEFAULT_CONFIG.enableAgentJs),
       enableAgentWeb: parseBool(enableAgentWeb, DEFAULT_CONFIG.enableAgentWeb),
       sendDateTime: parseBool(sendDateTime, DEFAULT_CONFIG.sendDateTime)
@@ -180,6 +193,7 @@
       setStorageItem('modelReasoningConfig', config.modelReasoningConfig ? JSON.stringify(config.modelReasoningConfig) : '');
     }
     if (config.theme !== undefined) setStorageItem('theme', config.theme);
+    if (config.language !== undefined) setStorageItem('language', config.language);
     if (config.enableAgentJs !== undefined) setStorageItem('enableAgentJs', String(config.enableAgentJs));
     if (config.enableAgentWeb !== undefined) setStorageItem('enableAgentWeb', String(config.enableAgentWeb));
     if (config.sendDateTime !== undefined) setStorageItem('sendDateTime', String(config.sendDateTime));

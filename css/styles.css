@@ -1942,6 +1942,67 @@ input:checked + .slider:before {
   border-color: #334155;
 }
 
+/* Selector Segmentado de Idioma */
+.lang-switcher-group {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4rem;
+  background-color: var(--bg-app);
+  padding: 0.25rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+}
+
+.btn-lang-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.6rem 0.85rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  background-color: transparent;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.btn-lang-toggle:hover {
+  color: var(--text-main);
+  background-color: rgba(0, 0, 0, 0.04);
+}
+
+[data-theme="dark"] .btn-lang-toggle:hover {
+  background-color: rgba(255, 255, 255, 0.06);
+}
+
+.btn-lang-toggle.active {
+  background-color: var(--bg-surface);
+  color: var(--primary);
+  border-color: var(--border-color);
+  font-weight: 600;
+  box-shadow: var(--shadow-sm);
+}
+
+[data-theme="dark"] .btn-lang-toggle.active {
+  background-color: #1e293b;
+  color: #60a5fa;
+  border-color: #334155;
+}
+
+.btn-lang-quick {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.btn-lang-quick:hover {
+  color: var(--primary);
+  border-color: var(--primary);
+}
+
 /* Reglas de Modo Oscuro */
 [data-theme="dark"] .welcome-card {
   background-color: var(--bg-surface);

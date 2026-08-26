@@ -1,5 +1,5 @@
 /**
- * Módulo de parseo y renderizado de Markdown (ChatMarkdown).
+ * Módulo de parseo y renderizado de Markdown (ChatMarkdown) con soporte i18n.
  * Parser directo por bloques (Block Tokenizer).
  * - Soporta bloques de código con cabecera, botón de copia y botón de ejecución JS local.
  * - Soporta bloques de razonamiento <think>...</think> (DeepSeek-R1, QwQ, Ollama).
@@ -16,6 +16,17 @@
   'use strict';
 
   const Sandbox = typeof window !== 'undefined' ? (window.ChatSandbox || {}) : {};
+  const I18n = typeof window !== 'undefined' ? (window.ChatI18n || {}) : {};
+
+  function tr(key, fallback, params) {
+    if (typeof window !== 'undefined' && window.ChatI18n && window.ChatI18n.t) {
+      return window.ChatI18n.t(key, params);
+    }
+    if (I18n.t) {
+      return I18n.t(key, params);
+    }
+    return fallback;
+  }
 
   function escapeHtml(str) {
     if (!str) return '';
@@ -35,12 +46,15 @@
 
     let p = escapeHtml(text);
 
+    const thoughtTitle = tr('md_thought_title', '💭 Proceso de razonamiento');
+    const thoughtReasoning = tr('md_thought_reasoning', '💭 Razonando...');
+
     // 1. Bloques de pensamiento <think>...</think>
     p = p.replace(/&lt;think&gt;([\s\S]*?)&lt;\/think&gt;/gi, function (match, thought) {
       return `
         <details class="thought-block" open>
           <summary class="thought-summary">
-            <span>💭 Proceso de razonamiento</span>
+            <span>${thoughtTitle}</span>
           </summary>
           <div class="thought-content">${thought.trim().replace(/\n/g, '<br>')}</div>
         </details>
@@ -51,7 +65,7 @@
       return `
         <details class="thought-block" open>
           <summary class="thought-summary">
-            <span>💭 Razonando...</span>
+            <span>${thoughtReasoning}</span>
           </summary>
           <div class="thought-content">${thought.trim().replace(/\n/g, '<br>')}</div>
         </details>
@@ -136,6 +150,11 @@
     let codeLines = [];
     let textBuffer = [];
 
+    const runTitle = tr('md_run_js_title', 'Ejecutar en sandbox local (sin red ni archivos)');
+    const runBtn = tr('md_run_js_btn', 'Ejecutar JS');
+    const copyTitle = tr('md_copy_code_title', 'Copiar código');
+    const copyBtn = tr('md_copy_code_btn', 'Copiar');
+
     function flushTextBuffer() {
       if (textBuffer.length === 0) return;
       htmlResult += parseTextMarkdown(textBuffer.join('\n'));
@@ -150,11 +169,11 @@
       const isJs = safeLang.toLowerCase() === 'javascript' || safeLang.toLowerCase() === 'js';
 
       const runButtonHtml = isJs ? `
-        <button class="btn-run-code" data-code="${rawCodeAttr}" title="Ejecutar en sandbox local (sin red ni archivos)">
+        <button class="btn-run-code" data-code="${rawCodeAttr}" title="${runTitle}">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
             <polygon points="5 3 19 12 5 21 5 3"></polygon>
           </svg>
-          <span>Ejecutar JS</span>
+          <span>${runBtn}</span>
         </button>
       ` : '';
 
@@ -164,12 +183,12 @@
             <span class="code-lang">${safeLang}</span>
             <div class="code-block-actions">
               ${runButtonHtml}
-              <button class="btn-copy-code" data-code="${rawCodeAttr}" title="Copiar código">
+              <button class="btn-copy-code" data-code="${rawCodeAttr}" title="${copyTitle}">
                 <svg class="icon-copy" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                   <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
                 </svg>
-                <span>Copiar</span>
+                <span>${copyBtn}</span>
               </button>
             </div>
           </div>
@@ -225,7 +244,7 @@
           await navigator.clipboard.writeText(rawCode);
           const span = button.querySelector('span');
           const originalText = span.textContent;
-          span.textContent = '¡Copiado!';
+          span.textContent = tr('copied_text', '¡Copiado!');
           button.classList.add('copied');
 
           setTimeout(function () {
@@ -256,13 +275,13 @@
         }
 
         outputContainer.style.display = 'block';
-        outputContainer.innerHTML = '<div class="output-header"><span>⏳ Ejecutando en sandbox local...</span></div>';
+        outputContainer.innerHTML = '<div class="output-header"><span>⏳ ' + tr('agent_js_title', 'Ejecutando en sandbox local...') + '</span></div>';
 
         const sandboxRunner = window.ChatSandbox || Sandbox;
         if (sandboxRunner && sandboxRunner.execute) {
           const res = await sandboxRunner.execute(rawCode);
           const statusClass = res.success ? 'success' : 'error';
-          const headerTitle = res.success ? `▶️ Resultado (${res.executionTimeMs}ms)` : `⚠️ Error (${res.executionTimeMs}ms)`;
+          const headerTitle = res.success ? `▶️ ${tr('md_output_title', 'Resultado')} (${res.executionTimeMs}ms)` : `⚠️ Error (${res.executionTimeMs}ms)`;
 
           let outputContent = '';
           if (res.logs && res.logs.length > 0) {
@@ -275,13 +294,13 @@
             outputContent += `<div class="output-error">${escapeHtml(res.error)}</div>`;
           }
           if (!outputContent) {
-            outputContent = '<div class="output-empty">(Ejecutado sin salida de consola ni retorno)</div>';
+            outputContent = `<div class="output-empty">(${tr('empty_response', 'Ejecutado sin salida de consola ni retorno')})</div>`;
           }
 
           outputContainer.innerHTML = `
             <div class="output-header ${statusClass}">
               <span>${headerTitle}</span>
-              <button type="button" class="btn-close-output" title="Cerrar salida">×</button>
+              <button type="button" class="btn-close-output" title="${tr('md_clear_output', 'Cerrar salida')}">×</button>
             </div>
             <pre class="output-body">${outputContent}</pre>
           `;
