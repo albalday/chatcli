@@ -1,5 +1,5 @@
 /**
- * Aplicación principal del cliente de chat Web (ChatCLI v2.0).
+ * Aplicación principal del cliente de chat Web (ChatCLI v3.0).
  * Incluye:
  * - Soporte Multi-idioma (Castellano / Inglés) con autodetección por navegador y persistencia.
  * - Selector de nivel de razonamiento (Thinking/CoT) con detección automática de capacidades del modelo.
@@ -2810,7 +2810,7 @@
       exportConversationAsPrint
     };
 
-    console.log('💬 ChatCLI v2.1 initialized successfully with Multi-chat Sidebar, SVG Charts, Voice STT/TTS and Export.');
+    console.log('💬 ChatCLI v3.0 initialized successfully with Multi-chat Sidebar, SVG Charts, Voice STT/TTS and Export.');
   }
 
   if (document.readyState === 'loading') {

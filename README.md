@@ -1,6 +1,6 @@
-# 💬 ChatCLI - Cliente Web Universal de Chat para IA (v2.1)
+# 💬 ChatCLI - Cliente Web Universal de Chat para IA (v3.0)
 
-[![Versión](https://img.shields.io/badge/versión-2.1-blue.svg)](chatcli.html)
+[![Versión](https://img.shields.io/badge/versión-3.0-blue.svg)](chatcli.html)
 [![Multi-Idioma](https://img.shields.io/badge/idiomas-ES%20%7C%20EN-orange.svg)](#-soporte-multi-idioma-internacionalizaci%C3%B3n-i18n)
 [![Licencia](https://img.shields.io/badge/licencia-MIT-green.svg)](LICENSE)
 [![Desarrollo](https://img.shields.io/badge/100%25-Antigravity%20AI-purple.svg)](#-desarrollo-100-con-antigravity)
