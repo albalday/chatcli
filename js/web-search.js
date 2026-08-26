@@ -138,19 +138,26 @@
     const elapsed = parseFloat((performance.now() - startTime).toFixed(2));
 
     let mdOutput = '';
+    const isEn = (lang === 'en');
     if (results.length === 0) {
-      mdOutput = `[Búsqueda DuckDuckGo para "${cleanQuery}"]: No se encontraron resultados directos. Puedes intentar buscar con otros términos o usar directamente la herramienta \`fetch_web_page\` con una URL concreta.`;
+      mdOutput = isEn
+        ? `[DuckDuckGo search for "${cleanQuery}"]: No direct results found. Try searching with different terms or use \`fetch_web_page\` directly with a specific URL.`
+        : `[Búsqueda DuckDuckGo para "${cleanQuery}"]: No se encontraron resultados directos. Puedes intentar buscar con otros términos o usar directamente la herramienta \`fetch_web_page\` con una URL concreta.`;
     } else {
-      mdOutput = `### 🔍 Resultados de búsqueda DuckDuckGo para: "${cleanQuery}" (${results.length} resultados encontrados):\n\n`;
+      mdOutput = isEn
+        ? `### 🔍 DuckDuckGo search results for: "${cleanQuery}" (${results.length} results found):\n\n`
+        : `### 🔍 Resultados de búsqueda DuckDuckGo para: "${cleanQuery}" (${results.length} resultados encontrados):\n\n`;
       results.forEach((item, idx) => {
         mdOutput += `${idx + 1}. **[${item.title}](${item.url})**\n`;
-        mdOutput += `   - *Fuente:* \`${item.source}\`\n`;
+        mdOutput += `   - *${isEn ? 'Source' : 'Fuente'}:* \`${item.source}\`\n`;
         if (item.snippet) {
-          mdOutput += `   - *Resumen:* ${item.snippet}\n`;
+          mdOutput += `   - *${isEn ? 'Snippet' : 'Resumen'}:* ${item.snippet}\n`;
         }
-        mdOutput += `   - *Enlace:* ${item.url}\n\n`;
+        mdOutput += `   - *${isEn ? 'Link' : 'Enlace'}:* ${item.url}\n\n`;
       });
-      mdOutput += `> *Nota para el asistente:* Si necesitas leer el contenido completo de una página web invoca \`fetch_web_page\`, y si se trata de un documento PDF invoca \`download_pdf\` pasando la URL correspondiente.`;
+      mdOutput += isEn
+        ? `> *Assistant Note:* If you need to read the full content of a web page call \`fetch_web_page\`, or if it is a PDF document call \`download_pdf\` with the corresponding URL.`
+        : `> *Nota para el asistente:* Si necesitas leer el contenido completo de una página web invoca \`fetch_web_page\`, y si se trata de un documento PDF invoca \`download_pdf\` pasando la URL correspondiente.`;
     }
 
     return {

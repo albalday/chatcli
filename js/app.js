@@ -147,21 +147,80 @@
     });
   }
 
+  function getToolsSystemPromptGuide() {
+    const lang = appConfig.language || (I18n.getLanguage ? I18n.getLanguage() : 'es');
+    const isEs = lang !== 'en';
+    const tools = [];
+
+    if (appConfig.enableAgentWeb !== false) {
+      if (isEs) {
+        tools.push(`- \`download_pdf(url="...")\`: Descarga y extrae el texto completo de un documento PDF desde una URL web para analizar su contenido (ej: "https://arxiv.org/pdf/2310.06825.pdf" o "https://samplelib.com/pdf/sample-scanned.pdf").`);
+        tools.push(`- \`fetch_web_page(url="...")\`: Descarga y lee el texto de una página web pública o artículo HTML a partir de su URL (ej: "https://es.wikipedia.org/wiki/Sol").`);
+      } else {
+        tools.push(`- \`download_pdf(url="...")\`: Downloads and extracts all text from a PDF document given its web URL (e.g. "https://arxiv.org/pdf/2310.06825.pdf" or "https://samplelib.com/pdf/sample-scanned.pdf").`);
+        tools.push(`- \`fetch_web_page(url="...")\`: Retrieves and reads the clean text of a public web page or HTML article from its URL (e.g. "https://en.wikipedia.org/wiki/Sun").`);
+      }
+    }
+
+    if (appConfig.enableAgentSearch !== false) {
+      if (isEs) {
+        tools.push(`- \`search_web(query="...")\`: Busca información actualizada, noticias, artículos y enlaces en internet mediante DuckDuckGo.`);
+      } else {
+        tools.push(`- \`search_web(query="...")\`: Searches up-to-date information, news, articles, and links on the internet using DuckDuckGo.`);
+      }
+    }
+
+    if (appConfig.enableAgentJs !== false) {
+      if (isEs) {
+        tools.push(`- \`execute_javascript(code="...")\`: Ejecuta código JavaScript localmente en un sandbox seguro en el navegador para cálculos matemáticos y procesamiento de datos.`);
+      } else {
+        tools.push(`- \`execute_javascript(code="...")\`: Executes JavaScript code safely in a local browser sandbox for math calculations and data processing.`);
+      }
+    }
+
+    if (tools.length === 0) return '';
+
+    if (isEs) {
+      return `[HERRAMIENTAS Y FUNCIONES DISPONIBLES]:\nTienes disponibles las siguientes herramientas. Si necesitas consultar URLs, buscar en la web, leer documentos PDF o calcular, invoca la herramienta adecuada con sus parámetros obligatorios:\n${tools.join('\n')}\n*Instrucción de flujo:* Cuando obtengas el resultado de una herramienta, utilízalo para responder o invoca otra herramienta si necesitas más información.`;
+    } else {
+      return `[AVAILABLE TOOLS AND FUNCTIONS]:\nYou have the following tools available. If you need to fetch URLs, search the web, read PDF documents, or calculate, call the appropriate tool with its required parameters:\n${tools.join('\n')}\n*Workflow instruction:* Once you receive a tool's output, use it to answer the user or call another tool if you need more information.`;
+    }
+  }
+
   function buildEffectiveMessages() {
-    const messages = chatHistory
-      .filter(m => m && m.role)
-      .map(m => {
-        const clean = { role: m.role, content: m.content || '' };
-        if (m.tool_calls) clean.tool_calls = m.tool_calls;
-        if (m.tool_call_id) clean.tool_call_id = m.tool_call_id;
-        if (m.name) clean.name = m.name;
-        return clean;
-      });
+    const rawMessages = chatHistory.filter(m => m && m.role);
+    const messages = [];
+
+    rawMessages.forEach(m => {
+      if (m.role === 'user') {
+        messages.push({ role: 'user', content: m.content || '' });
+      } else if (m.role === 'assistant') {
+        const item = { role: 'assistant', content: m.content !== undefined ? m.content : '' };
+        if (m.tool_calls && Array.isArray(m.tool_calls) && m.tool_calls.length > 0) {
+          item.tool_calls = m.tool_calls;
+        }
+        messages.push(item);
+      } else if (m.role === 'tool') {
+        messages.push({
+          role: 'tool',
+          tool_call_id: m.tool_call_id || `call_${Date.now()}`,
+          name: m.name || 'tool',
+          content: typeof m.content === 'object' ? JSON.stringify(m.content) : String(m.content || '')
+        });
+      } else if (m.role === 'system') {
+        messages.push({ role: 'system', content: m.content || '' });
+      }
+    });
 
     const defaultPrompt = t('default_system_prompt');
-    const activePrompt = (appConfig.systemPrompt && appConfig.systemPrompt.trim() !== '')
+    let activePrompt = (appConfig.systemPrompt && appConfig.systemPrompt.trim() !== '')
       ? appConfig.systemPrompt
       : defaultPrompt;
+
+    const toolsGuide = getToolsSystemPromptGuide();
+    if (toolsGuide) {
+      activePrompt = activePrompt + '\n\n' + toolsGuide;
+    }
 
     if (appConfig.sendDateTime !== false) {
       const now = new Date();
@@ -1097,447 +1156,400 @@
       `;
     }
 
-    await API.streamChatCompletion({
-      apiUrl: appConfig.apiUrl,
-      apiType: appConfig.apiType,
-      apiKey: appConfig.apiKey,
-      model: appConfig.model,
-      messages: buildEffectiveMessages(),
-      temperature: appConfig.temperature,
-      reasoningEffort: appConfig.reasoningEffort || 'none',
-      enableTools: (appConfig.enableAgentJs !== false || appConfig.enableAgentWeb !== false || appConfig.enableAgentSearch !== false),
-      enableAgentJs: appConfig.enableAgentJs !== false,
-      enableAgentWeb: appConfig.enableAgentWeb !== false,
-      enableAgentSearch: appConfig.enableAgentSearch !== false,
-      signal: currentAbortController.signal,
+    const maxAgentTurns = 5;
+    let turnIndex = 0;
+    let accumulatedConversationMarkdown = '';
 
-      onReasoningChunk: function (chunk, fullReasoning) {
-        addDebugLog('thinking', chunk);
-        setDebugStatus('streaming', t('debug_status_thinking'));
-      },
+    async function runAgentTurn() {
+      if (turnIndex >= maxAgentTurns) {
+        setDebugStatus('done', t('debug_status_done'));
+        finishGeneration();
+        return;
+      }
 
-      onLog: function (logData) {
-        if (logData && logData.type !== 'thinking') {
-          addDebugLog(logData.type, logData.text);
-        }
-      },
+      let currentTurnText = '';
+      const turnBlock = document.createElement('div');
+      turnBlock.className = 'agentic-turn-block';
+      content.appendChild(turnBlock);
 
-      onChunk: function (fullTextSoFar, delta, stats) {
-        accumulatedText = fullTextSoFar;
-        content.innerHTML = parseMd(accumulatedText) + '<span class="streaming-cursor"></span>';
-        attachListeners(content);
-        if (stats) updateStatsDisplay(stats);
-        scrollToBottom();
-      },
+      await API.streamChatCompletion({
+        apiUrl: appConfig.apiUrl,
+        apiType: appConfig.apiType,
+        apiKey: appConfig.apiKey,
+        model: appConfig.model,
+        messages: buildEffectiveMessages(),
+        temperature: appConfig.temperature,
+        reasoningEffort: appConfig.reasoningEffort || 'none',
+        enableTools: (appConfig.enableAgentJs !== false || appConfig.enableAgentWeb !== false || appConfig.enableAgentSearch !== false),
+        enableAgentJs: appConfig.enableAgentJs !== false,
+        enableAgentWeb: appConfig.enableAgentWeb !== false,
+        enableAgentSearch: appConfig.enableAgentSearch !== false,
+        signal: currentAbortController.signal,
 
-      onDone: async function (finalText, stats, toolCalls, reasoningText) {
-        try {
-          accumulatedText = finalText || accumulatedText;
+        onReasoningChunk: function (chunk) {
+          addDebugLog('thinking', chunk);
+          setDebugStatus('streaming', t('debug_status_thinking'));
+        },
 
-          // Si no hay tool_calls estructurados pero el modelo emitió una llamada en texto
-          if ((!toolCalls || toolCalls.length === 0) && accumulatedText) {
-            if (API.extractToolCallsFromText) {
-              const textCalls = API.extractToolCallsFromText(accumulatedText);
-              if (textCalls && textCalls.length > 0) {
-                toolCalls = textCalls;
-              }
-            }
+        onLog: function (logData) {
+          if (logData && logData.type !== 'thinking') {
+            addDebugLog(logData.type, logData.text);
           }
+        },
 
-          if (toolCalls && toolCalls.length > 0) {
-            const tc = toolCalls[0];
-            const rawFuncName = tc.function?.name || '';
-            const normName = API.normalizeToolName ? API.normalizeToolName(rawFuncName) : rawFuncName.toLowerCase().replace(/_/g, '');
-
-            // Si el texto acumulado es simplemente el bloque de llamada a la herramienta en crudo, limpiarlo de la UI
-            const trimmedAcc = (accumulatedText || '').trim();
-            if (
-              trimmedAcc.startsWith('<|') ||
-              trimmedAcc.startsWith('<tool_call') ||
-              trimmedAcc.startsWith('<function_call') ||
-              trimmedAcc.startsWith('call:') ||
-              trimmedAcc.startsWith('{"name"') ||
-              trimmedAcc.startsWith('```json\n{"name"') ||
-              trimmedAcc.startsWith('download_pdf(') ||
-              trimmedAcc.startsWith('downloadpdf(') ||
-              trimmedAcc.startsWith('fetch_web_page(') ||
-              trimmedAcc.startsWith('fetchwebpage(') ||
-              trimmedAcc.startsWith('search_web(') ||
-              trimmedAcc.startsWith('searchweb(') ||
-              trimmedAcc.startsWith('execute_javascript(') ||
-              trimmedAcc.startsWith('executejs(')
-            ) {
-              accumulatedText = '';
-            }
-
-            // 1. Ejecución de JavaScript Local (execute_javascript)
-            if (normName === 'execute_javascript') {
-              let codeToRun = '';
-              try {
-                const parsed = typeof tc.function.arguments === 'object' ? tc.function.arguments : JSON.parse(tc.function.arguments || '{}');
-                codeToRun = parsed.code || parsed.javascript || parsed.js || parsed.script || parsed.input || (typeof parsed === 'string' ? parsed : '');
-              } catch (e) {
-                codeToRun = tc.function.arguments || '';
-              }
-
-              addDebugLog('tool', `execute_javascript:\n${codeToRun}`);
-
-              const toolExecRes = await (Sandbox.execute ? Sandbox.execute(codeToRun) : { success: false, error: 'Sandbox not available' });
-              const outputText = toolExecRes.success
-                ? (toolExecRes.result || (toolExecRes.logs && toolExecRes.logs.length > 0 ? toolExecRes.logs.join('\n') : 'undefined'))
-                : `Error: ${toolExecRes.error}`;
-
-              addDebugLog('tool', `execute_javascript output (${toolExecRes.executionTimeMs || 0}ms):\n${outputText}`);
-
-              const toolCardHtml = `
-                <div class="tool-execution-card">
-                  <div class="tool-card-header">
-                    <span>${t('tool_js_title', { ms: toolExecRes.executionTimeMs || 0 })}</span>
-                  </div>
-                  <pre class="tool-card-code"><code>${Markdown.escapeHtml(codeToRun)}</code></pre>
-                  <div class="tool-card-result"><strong>${t('tool_sandbox_output')}</strong>\n${Markdown.escapeHtml(outputText)}</div>
-                </div>
-              `;
-
-              content.innerHTML = (accumulatedText ? parseMd(accumulatedText) : '') + toolCardHtml;
-              attachListeners(content);
-              if (stats) updateStatsDisplay(stats);
-              scrollToBottom();
-
-              chatHistory.push({
-                id: assistantMsgId,
-                role: 'assistant',
-                content: accumulatedText || '',
-                tool_calls: toolCalls
-              });
-
-              chatHistory.push({
-                id: assistantMsgId,
-                role: 'tool',
-                tool_call_id: tc.id,
-                name: 'execute_javascript',
-                content: JSON.stringify({
-                  success: toolExecRes.success,
-                  result: toolExecRes.result,
-                  logs: toolExecRes.logs,
-                  executionTimeMs: toolExecRes.executionTimeMs,
-                  error: toolExecRes.error
-                })
-              });
-
-              const toolMd = `> ⚡ **execute_javascript**\n> \`\`\`javascript\n> ${codeToRun.split('\n').join('\n> ')}\n> \`\`\`\n> \`\`\`\n> ${outputText.split('\n').join('\n> ')}\n> \`\`\``;
-              const previousMarkdown = (accumulatedText ? accumulatedText + '\n\n' : '') + toolMd;
-              return continueAgenticCompletion(content, statsContainer, actions, btnCopy, updateStatsDisplay, previousMarkdown, assistantMsgId);
-            }
-
-            // 2. Consulta de Páginas Web o Descarga de PDFs (fetch_web_page / download_pdf)
-            else if (normName === 'fetch_web_page' || normName === 'download_pdf') {
-              const isPdfCall = normName === 'download_pdf';
-              let urlToFetch = '';
-              try {
-                const parsed = typeof tc.function.arguments === 'object' ? tc.function.arguments : JSON.parse(tc.function.arguments || '{}');
-                urlToFetch = parsed.url || parsed.URL || parsed.uri || parsed.link || parsed.href || parsed.path || parsed.input || (typeof parsed === 'string' ? parsed : '');
-              } catch (e) {
-                urlToFetch = tc.function.arguments || '';
-              }
-
-              addDebugLog('tool', `${normName}: ${urlToFetch}`);
-
-              const webRes = await (WebBrowser.fetchPage ? WebBrowser.fetchPage(urlToFetch) : { success: false, url: urlToFetch, content: '', error: 'Web module not available' });
-              const isPdfResult = webRes.isPdf || isPdfCall;
-
-              const statusBadgeText = webRes.success
-                ? (isPdfResult ? `PDF (${webRes.byteSize ? FileParser.formatBytes(webRes.byteSize) : 'OK'}) [${webRes.elapsedMs || 0}ms]` : `HTTP ${webRes.status || 200} OK (${webRes.elapsedMs || 0}ms)`)
-                : `Error (${webRes.elapsedMs || 0}ms)`;
-
-              const cardIcon = isPdfResult ? '📄' : '🌐';
-              const cardTitle = isPdfResult ? t('tool_pdf_title') : t('tool_web_title');
-
-              const responsePreview = webRes.success
-                ? (webRes.content || t('tool_web_empty'))
-                : (webRes.error || t('tool_web_err_connect'));
-
-              addDebugLog('tool', `${normName} (${statusBadgeText}) [${webRes.byteSize ? FileParser.formatBytes(webRes.byteSize) : '0 B'}]:\n${(responsePreview || '').substring(0, 200)}...`);
-
-              const webCardHtml = `
-                <div class="web-request-card ${isPdfResult ? 'pdf-request-card' : ''}">
-                  <div class="web-card-header">
-                    <div class="web-card-title">
-                      <span>${cardIcon}</span>
-                      <span>${cardTitle}</span>
-                    </div>
-                    <span class="web-card-badge">${statusBadgeText}</span>
-                  </div>
-                  <div class="web-card-section web-request-section">
-                    <div class="section-label">${t('tool_web_requested_url')}</div>
-                    <div class="url-badge"><a href="${Markdown.escapeHtml(webRes.url || urlToFetch)}" target="_blank" rel="noopener noreferrer">${Markdown.escapeHtml(webRes.url || urlToFetch)}</a></div>
-                  </div>
-                  <div class="web-card-section web-response-section">
-                    <div class="section-label">${t('tool_web_content_received', { size: webRes.byteSize ? FileParser.formatBytes(webRes.byteSize) : (webRes.content ? webRes.content.length + ' chars' : '0 B') })}</div>
-                    <pre class="web-response-body"><code>${Markdown.escapeHtml(responsePreview)}</code></pre>
-                  </div>
-                </div>
-              `;
-
-              content.innerHTML = (accumulatedText ? parseMd(accumulatedText) : '') + webCardHtml;
-              attachListeners(content);
-              if (stats) updateStatsDisplay(stats);
-              scrollToBottom();
-
-              chatHistory.push({
-                id: assistantMsgId,
-                role: 'assistant',
-                content: accumulatedText || '',
-                tool_calls: toolCalls
-              });
-
-              chatHistory.push({
-                id: assistantMsgId,
-                role: 'tool',
-                tool_call_id: tc.id,
-                name: normName,
-                content: JSON.stringify({
-                  success: webRes.success,
-                  url: webRes.url || urlToFetch,
-                  status: webRes.status || 200,
-                  isPdf: isPdfResult,
-                  content: webRes.content,
-                  error: webRes.error
-                })
-              });
-
-              const toolMd = `> ${cardIcon} **${normName}** (${statusBadgeText})\n> URL: ${webRes.url || urlToFetch}\n> \`\`\`\n> ${(responsePreview || '').split('\n').join('\n> ')}\n> \`\`\``;
-              const previousMarkdown = (accumulatedText ? accumulatedText + '\n\n' : '') + toolMd;
-              return continueAgenticCompletion(content, statsContainer, actions, btnCopy, updateStatsDisplay, previousMarkdown, assistantMsgId);
-            }
-
-            // 3. Búsqueda en Internet en Tiempo Real (search_web)
-            else if (normName === 'search_web') {
-              let queryToSearch = '';
-              try {
-                const parsed = typeof tc.function.arguments === 'object' ? tc.function.arguments : JSON.parse(tc.function.arguments || '{}');
-                queryToSearch = parsed.query || parsed.q || parsed.search || parsed.keyword || parsed.term || parsed.text || parsed.input || (typeof parsed === 'string' ? parsed : '');
-              } catch (e) {
-                queryToSearch = tc.function.arguments || '';
-              }
-
-              addDebugLog('tool', `search_web: "${queryToSearch}"`);
-
-              const searchRes = await (WebSearch.search ? WebSearch.search(queryToSearch, appConfig.language || 'es') : { success: false, query: queryToSearch, count: 0, results: [], markdown: 'Módulo de búsqueda no disponible', elapsedMs: 0 });
-
-              const statusBadgeText = `${searchRes.count} fuentes (${searchRes.elapsedMs || 0}ms)`;
-
-              addDebugLog('tool', `search_web (${searchRes.count} resultados) [${searchRes.elapsedMs || 0}ms]:\n${(searchRes.markdown || '').substring(0, 200)}...`);
-
-              let resultsHtml = '';
-              if (searchRes.results && searchRes.results.length > 0) {
-                resultsHtml = '<div class="search-results-list">' + searchRes.results.map(r => `
-                  <div class="search-result-item">
-                    <div><a href="${Markdown.escapeHtml(r.url)}" target="_blank" rel="noopener noreferrer">🔗 ${Markdown.escapeHtml(r.title)}</a> <small style="opacity:0.75;">(${Markdown.escapeHtml(r.source)})</small></div>
-                    ${r.snippet ? `<div class="search-result-snippet">${Markdown.escapeHtml(r.snippet)}</div>` : ''}
-                  </div>
-                `).join('') + '</div>';
-              } else {
-                resultsHtml = `<div class="search-result-snippet"><em>${t('tool_search_empty')}</em></div>`;
-              }
-
-              const searchCardHtml = `
-                <div class="web-search-card">
-                  <div class="web-card-header">
-                    <div class="web-card-title">
-                      <span>🔍</span>
-                      <span>${t('tool_search_title')}</span>
-                    </div>
-                    <span class="web-card-badge">${statusBadgeText}</span>
-                  </div>
-                  <div class="web-card-section">
-                    <div class="section-label">${t('tool_search_query')}</div>
-                    <div class="query-badge">"${Markdown.escapeHtml(queryToSearch)}"</div>
-                  </div>
-                  <div class="web-card-section">
-                    <div class="section-label">${t('tool_search_results', { count: searchRes.count })}</div>
-                    ${resultsHtml}
-                  </div>
-                </div>
-              `;
-
-              content.innerHTML = (accumulatedText ? parseMd(accumulatedText) : '') + searchCardHtml;
-              attachListeners(content);
-              if (stats) updateStatsDisplay(stats);
-              scrollToBottom();
-
-              chatHistory.push({
-                id: assistantMsgId,
-                role: 'assistant',
-                content: accumulatedText || '',
-                tool_calls: toolCalls
-              });
-
-              chatHistory.push({
-                id: assistantMsgId,
-                role: 'tool',
-                tool_call_id: tc.id,
-                name: 'search_web',
-                content: searchRes.markdown
-              });
-
-              const toolMd = `> 🔍 **search_web** (${searchRes.count} fuentes)\n> Query: "${queryToSearch}"\n> \`\`\`markdown\n> ${(searchRes.markdown || '').split('\n').join('\n> ')}\n> \`\`\``;
-              const previousMarkdown = (accumulatedText ? accumulatedText + '\n\n' : '') + toolMd;
-              return continueAgenticCompletion(content, statsContainer, actions, btnCopy, updateStatsDisplay, previousMarkdown, assistantMsgId);
-            }
-          }
-
-          // Flujo normal sin herramientas
-          content.innerHTML = parseMd(accumulatedText || t('empty_response'));
-          attachListeners(content);
-          chatHistory.push({ id: assistantMsgId, role: 'assistant', content: accumulatedText });
-
+        onChunk: function (fullTextSoFar, delta, stats) {
+          currentTurnText = fullTextSoFar;
+          turnBlock.innerHTML = parseMd(currentTurnText) + '<span class="streaming-cursor"></span>';
+          attachListeners(turnBlock);
           if (stats) updateStatsDisplay(stats);
-          setDebugStatus('done', t('debug_status_done'));
+          scrollToBottom();
+        },
 
-          actions.style.display = 'inline-flex';
-          btnCopy.addEventListener('click', async () => {
-            try {
-              await navigator.clipboard.writeText(accumulatedText);
-              const span = btnCopy.querySelector('span');
-              const originalText = span.textContent;
-              span.textContent = t('copied_text');
-              btnCopy.classList.add('copied');
+        onDone: async function (finalText, stats, toolCalls, reasoningText) {
+          try {
+            currentTurnText = finalText || currentTurnText;
 
-              setTimeout(() => {
-                span.textContent = originalText;
-                btnCopy.classList.remove('copied');
-              }, 2000);
-            } catch (err) {
-              console.error('Error copying response:', err);
+            // Extraer tool calls de texto si no llegaron en estructura nativa
+            if ((!toolCalls || toolCalls.length === 0) && currentTurnText) {
+              if (API.extractToolCallsFromText) {
+                const textCalls = API.extractToolCallsFromText(currentTurnText);
+                if (textCalls && textCalls.length > 0) {
+                  toolCalls = textCalls;
+                }
+              }
             }
-          });
 
-          finishGeneration();
-        } catch (err) {
-          console.error('Error processing final response:', err);
-          setDebugStatus('error', t('debug_status_error'));
-          addDebugLog('error', err.message || String(err));
-          row.classList.add('message-error');
-          content.innerHTML = (content.innerHTML || '') + `
-            <div class="agentic-response-block message-error" style="margin-top: 1rem;">
-              <div style="display:flex; align-items:flex-start; gap:0.5rem;">
-                <span>⚠️</span>
-                <div>
-                  <strong>${t('tool_error_title')}</strong>
-                  <p style="margin-top: 0.25rem;">${err.message || err}</p>
+            if (toolCalls && toolCalls.length > 0) {
+              const tc = toolCalls[0];
+              const rawFuncName = tc.function?.name || '';
+              const normName = API.normalizeToolName ? API.normalizeToolName(rawFuncName) : rawFuncName.toLowerCase().replace(/_/g, '');
+
+              // Limpiar llamadas a herramientas emitidas como texto crudo en la UI
+              const trimmedAcc = (currentTurnText || '').trim();
+              if (
+                trimmedAcc.startsWith('<|') ||
+                trimmedAcc.startsWith('<tool_call') ||
+                trimmedAcc.startsWith('<function_call') ||
+                trimmedAcc.startsWith('call:') ||
+                trimmedAcc.startsWith('{"name"') ||
+                trimmedAcc.startsWith('```json\n{"name"') ||
+                trimmedAcc.startsWith('download_pdf(') ||
+                trimmedAcc.startsWith('downloadpdf(') ||
+                trimmedAcc.startsWith('fetch_web_page(') ||
+                trimmedAcc.startsWith('fetchwebpage(') ||
+                trimmedAcc.startsWith('search_web(') ||
+                trimmedAcc.startsWith('searchweb(') ||
+                trimmedAcc.startsWith('execute_javascript(') ||
+                trimmedAcc.startsWith('executejs(')
+              ) {
+                currentTurnText = '';
+              }
+
+              if (currentTurnText) {
+                turnBlock.innerHTML = parseMd(currentTurnText);
+                attachListeners(turnBlock);
+              } else {
+                turnBlock.remove();
+              }
+
+              // 1. Ejecución de JavaScript
+              if (normName === 'execute_javascript') {
+                let codeToRun = '';
+                try {
+                  const parsed = typeof tc.function.arguments === 'object' ? tc.function.arguments : JSON.parse(tc.function.arguments || '{}');
+                  codeToRun = parsed.code || parsed.javascript || parsed.js || parsed.script || parsed.input || (typeof parsed === 'string' ? parsed : '');
+                } catch (e) {
+                  codeToRun = tc.function.arguments || '';
+                }
+
+                addDebugLog('tool', `execute_javascript:\n${codeToRun}`);
+                const toolExecRes = await (Sandbox.execute ? Sandbox.execute(codeToRun) : { success: false, error: 'Sandbox not available' });
+                const outputText = toolExecRes.success
+                  ? (toolExecRes.result || (toolExecRes.logs && toolExecRes.logs.length > 0 ? toolExecRes.logs.join('\n') : 'undefined'))
+                  : `Error: ${toolExecRes.error}`;
+
+                addDebugLog('tool', `execute_javascript output (${toolExecRes.executionTimeMs || 0}ms):\n${outputText}`);
+
+                const toolCardHtml = `
+                  <div class="tool-execution-card">
+                    <div class="tool-card-header">
+                      <span>${t('tool_js_title', { ms: toolExecRes.executionTimeMs || 0 })}</span>
+                    </div>
+                    <pre class="tool-card-code"><code>${Markdown.escapeHtml(codeToRun)}</code></pre>
+                    <div class="tool-card-result"><strong>${t('tool_sandbox_output')}</strong>\n${Markdown.escapeHtml(outputText)}</div>
+                  </div>
+                `;
+
+                const cardDiv = document.createElement('div');
+                cardDiv.innerHTML = toolCardHtml;
+                content.appendChild(cardDiv);
+                attachListeners(content);
+                if (stats) updateStatsDisplay(stats);
+                scrollToBottom();
+
+                chatHistory.push({
+                  id: assistantMsgId,
+                  role: 'assistant',
+                  content: currentTurnText || null,
+                  tool_calls: [tc]
+                });
+
+                chatHistory.push({
+                  id: assistantMsgId,
+                  role: 'tool',
+                  tool_call_id: tc.id,
+                  name: 'execute_javascript',
+                  content: JSON.stringify({
+                    success: toolExecRes.success,
+                    result: toolExecRes.result,
+                    logs: toolExecRes.logs,
+                    executionTimeMs: toolExecRes.executionTimeMs,
+                    error: toolExecRes.error
+                  })
+                });
+
+                const toolMd = `> ⚡ **execute_javascript**\n> \`\`\`javascript\n> ${codeToRun.split('\n').join('\n> ')}\n> \`\`\`\n> \`\`\`\n> ${outputText.split('\n').join('\n> ')}\n> \`\`\``;
+                accumulatedConversationMarkdown += (currentTurnText ? currentTurnText + '\n\n' : '') + toolMd + '\n\n';
+
+                turnIndex++;
+                return runAgentTurn();
+              }
+
+              // 2. Consulta Web o Descarga de PDF
+              else if (normName === 'fetch_web_page' || normName === 'download_pdf') {
+                const isPdfCall = normName === 'download_pdf';
+                let urlToFetch = '';
+                try {
+                  const parsed = typeof tc.function.arguments === 'object' ? tc.function.arguments : JSON.parse(tc.function.arguments || '{}');
+                  urlToFetch = parsed.url || parsed.URL || parsed.uri || parsed.link || parsed.href || parsed.path || parsed.input || (typeof parsed === 'string' ? parsed : '');
+                } catch (e) {
+                  urlToFetch = tc.function.arguments || '';
+                }
+
+                addDebugLog('tool', `${normName}: ${urlToFetch}`);
+                const webRes = await (WebBrowser.fetchPage ? WebBrowser.fetchPage(urlToFetch) : { success: false, url: urlToFetch, content: '', error: 'Web module not available' });
+                const isPdfResult = webRes.isPdf || isPdfCall;
+
+                const statusBadgeText = webRes.success
+                  ? (isPdfResult ? `PDF (${webRes.byteSize ? FileParser.formatBytes(webRes.byteSize) : 'OK'}) [${webRes.elapsedMs || 0}ms]` : `HTTP ${webRes.status || 200} OK (${webRes.elapsedMs || 0}ms)`)
+                  : `Error (${webRes.elapsedMs || 0}ms)`;
+
+                const cardIcon = isPdfResult ? '📄' : '🌐';
+                const cardTitle = isPdfResult ? t('tool_pdf_title') : t('tool_web_title');
+
+                const responsePreview = webRes.success
+                  ? (webRes.content || t('tool_web_empty'))
+                  : (webRes.error || t('tool_web_err_connect'));
+
+                addDebugLog('tool', `${normName} (${statusBadgeText}) [${webRes.byteSize ? FileParser.formatBytes(webRes.byteSize) : '0 B'}]:\n${(responsePreview || '').substring(0, 200)}...`);
+
+                const webCardHtml = `
+                  <div class="web-request-card ${isPdfResult ? 'pdf-request-card' : ''}">
+                    <div class="web-card-header">
+                      <div class="web-card-title">
+                        <span>${cardIcon}</span>
+                        <span>${cardTitle}</span>
+                      </div>
+                      <span class="web-card-badge">${statusBadgeText}</span>
+                    </div>
+                    <div class="web-card-section web-request-section">
+                      <div class="section-label">${t('tool_web_requested_url')}</div>
+                      <div class="url-badge"><a href="${Markdown.escapeHtml(webRes.url || urlToFetch)}" target="_blank" rel="noopener noreferrer">${Markdown.escapeHtml(webRes.url || urlToFetch)}</a></div>
+                    </div>
+                    <div class="web-card-section web-response-section">
+                      <div class="section-label">${t('tool_web_content_received', { size: webRes.byteSize ? FileParser.formatBytes(webRes.byteSize) : (webRes.content ? webRes.content.length + ' chars' : '0 B') })}</div>
+                      <pre class="web-response-body"><code>${Markdown.escapeHtml(responsePreview)}</code></pre>
+                    </div>
+                  </div>
+                `;
+
+                const cardDiv = document.createElement('div');
+                cardDiv.innerHTML = webCardHtml;
+                content.appendChild(cardDiv);
+                attachListeners(content);
+                if (stats) updateStatsDisplay(stats);
+                scrollToBottom();
+
+                chatHistory.push({
+                  id: assistantMsgId,
+                  role: 'assistant',
+                  content: currentTurnText || null,
+                  tool_calls: [tc]
+                });
+
+                chatHistory.push({
+                  id: assistantMsgId,
+                  role: 'tool',
+                  tool_call_id: tc.id,
+                  name: normName,
+                  content: JSON.stringify({
+                    success: webRes.success,
+                    url: webRes.url || urlToFetch,
+                    status: webRes.status || 200,
+                    isPdf: isPdfResult,
+                    content: webRes.content,
+                    error: webRes.error
+                  })
+                });
+
+                const toolMd = `> ${cardIcon} **${normName}** (${statusBadgeText})\n> URL: ${webRes.url || urlToFetch}\n> \`\`\`\n> ${(responsePreview || '').split('\n').join('\n> ')}\n> \`\`\``;
+                accumulatedConversationMarkdown += (currentTurnText ? currentTurnText + '\n\n' : '') + toolMd + '\n\n';
+
+                turnIndex++;
+                return runAgentTurn();
+              }
+
+              // 3. Búsqueda en Internet (search_web)
+              else if (normName === 'search_web') {
+                let queryToSearch = '';
+                try {
+                  const parsed = typeof tc.function.arguments === 'object' ? tc.function.arguments : JSON.parse(tc.function.arguments || '{}');
+                  queryToSearch = parsed.query || parsed.q || parsed.search || parsed.keyword || parsed.term || parsed.text || parsed.input || (typeof parsed === 'string' ? parsed : '');
+                } catch (e) {
+                  queryToSearch = tc.function.arguments || '';
+                }
+
+                addDebugLog('tool', `search_web: "${queryToSearch}"`);
+                const searchRes = await (WebSearch.search ? WebSearch.search(queryToSearch, appConfig.language || 'es') : { success: false, query: queryToSearch, count: 0, results: [], markdown: 'Módulo de búsqueda no disponible', elapsedMs: 0 });
+                const statusBadgeText = `${searchRes.count} fuentes (${searchRes.elapsedMs || 0}ms)`;
+
+                addDebugLog('tool', `search_web (${searchRes.count} resultados) [${searchRes.elapsedMs || 0}ms]:\n${(searchRes.markdown || '').substring(0, 200)}...`);
+
+                let resultsHtml = '';
+                if (searchRes.results && searchRes.results.length > 0) {
+                  resultsHtml = '<div class="search-results-list">' + searchRes.results.map(r => `
+                    <div class="search-result-item">
+                      <div><a href="${Markdown.escapeHtml(r.url)}" target="_blank" rel="noopener noreferrer">🔗 ${Markdown.escapeHtml(r.title)}</a> <small style="opacity:0.75;">(${Markdown.escapeHtml(r.source)})</small></div>
+                      ${r.snippet ? `<div class="search-result-snippet">${Markdown.escapeHtml(r.snippet)}</div>` : ''}
+                    </div>
+                  `).join('') + '</div>';
+                } else {
+                  resultsHtml = `<div class="search-result-snippet"><em>${t('tool_search_empty')}</em></div>`;
+                }
+
+                const searchCardHtml = `
+                  <div class="web-search-card">
+                    <div class="web-card-header">
+                      <div class="web-card-title">
+                        <span>🔍</span>
+                        <span>${t('tool_search_title')}</span>
+                      </div>
+                      <span class="web-card-badge">${statusBadgeText}</span>
+                    </div>
+                    <div class="web-card-section">
+                      <div class="section-label">${t('tool_search_query')}</div>
+                      <div class="query-badge">"${Markdown.escapeHtml(queryToSearch)}"</div>
+                    </div>
+                    <div class="web-card-section">
+                      <div class="section-label">${t('tool_search_results', { count: searchRes.count })}</div>
+                      ${resultsHtml}
+                    </div>
+                  </div>
+                `;
+
+                const cardDiv = document.createElement('div');
+                cardDiv.innerHTML = searchCardHtml;
+                content.appendChild(cardDiv);
+                attachListeners(content);
+                if (stats) updateStatsDisplay(stats);
+                scrollToBottom();
+
+                chatHistory.push({
+                  id: assistantMsgId,
+                  role: 'assistant',
+                  content: currentTurnText || null,
+                  tool_calls: [tc]
+                });
+
+                chatHistory.push({
+                  id: assistantMsgId,
+                  role: 'tool',
+                  tool_call_id: tc.id,
+                  name: 'search_web',
+                  content: searchRes.markdown
+                });
+
+                const toolMd = `> 🔍 **search_web** (${searchRes.count} fuentes)\n> Query: "${queryToSearch}"\n> \`\`\`markdown\n> ${(searchRes.markdown || '').split('\n').join('\n> ')}\n> \`\`\``;
+                accumulatedConversationMarkdown += (currentTurnText ? currentTurnText + '\n\n' : '') + toolMd + '\n\n';
+
+                turnIndex++;
+                return runAgentTurn();
+              }
+            }
+
+            // Turno final sin llamadas a herramientas
+            turnBlock.innerHTML = parseMd(currentTurnText || t('empty_response'));
+            attachListeners(turnBlock);
+            chatHistory.push({ id: assistantMsgId, role: 'assistant', content: currentTurnText });
+
+            if (stats) updateStatsDisplay(stats);
+            setDebugStatus('done', t('debug_status_done'));
+
+            actions.style.display = 'inline-flex';
+            btnCopy.addEventListener('click', async () => {
+              try {
+                const finalFullMarkdown = (accumulatedConversationMarkdown ? accumulatedConversationMarkdown : '') + currentTurnText;
+                await navigator.clipboard.writeText(finalFullMarkdown);
+                const span = btnCopy.querySelector('span');
+                const originalText = span.textContent;
+                span.textContent = t('copied_text');
+                btnCopy.classList.add('copied');
+
+                setTimeout(() => {
+                  span.textContent = originalText;
+                  btnCopy.classList.remove('copied');
+                }, 2000);
+              } catch (err) {
+                console.error('Error copying composite response:', err);
+              }
+            });
+
+            finishGeneration();
+
+          } catch (err) {
+            console.error('Error processing turn response:', err);
+            setDebugStatus('error', t('debug_status_error'));
+            addDebugLog('error', err.message || String(err));
+            row.classList.add('message-error');
+            turnBlock.innerHTML += `
+              <div class="agentic-response-block message-error" style="margin-top: 1rem;">
+                <div style="display:flex; align-items:flex-start; gap:0.5rem;">
+                  <span>⚠️</span>
+                  <div>
+                    <strong>${t('tool_error_title')}</strong>
+                    <p style="margin-top: 0.25rem;">${err.message || err}</p>
+                  </div>
                 </div>
+              </div>
+            `;
+            actions.style.display = 'inline-flex';
+            finishGeneration();
+          }
+        },
+
+        onError: function (error) {
+          setDebugStatus('error', t('debug_status_error'));
+          addDebugLog('error', error.message || String(error));
+          row.classList.add('message-error');
+          turnBlock.innerHTML = `
+            <div style="display:flex; align-items:flex-start; gap:0.5rem;">
+              <span>⚠️</span>
+              <div>
+                <strong>${t('err_server_connect')}</strong>
+                <p style="margin-top: 0.25rem;">${error.message || error}</p>
+                <p style="margin-top: 0.5rem; font-size: 0.85em; opacity: 0.9;">
+                  ${t('err_server_connect_hint', { url: appConfig.apiUrl })}
+                </p>
               </div>
             </div>
           `;
           actions.style.display = 'inline-flex';
           finishGeneration();
         }
-      },
+      });
+    }
 
-      onError: function (error) {
-        setDebugStatus('error', t('debug_status_error'));
-        addDebugLog('error', error.message || String(error));
-        row.classList.add('message-error');
-        content.innerHTML = `
-          <div style="display:flex; align-items:flex-start; gap:0.5rem;">
-            <span>⚠️</span>
-            <div>
-              <strong>${t('err_server_connect')}</strong>
-              <p style="margin-top: 0.25rem;">${error.message || error}</p>
-              <p style="margin-top: 0.5rem; font-size: 0.85em; opacity: 0.9;">
-                ${t('err_server_connect_hint', { url: appConfig.apiUrl })}
-              </p>
-            </div>
-          </div>
-        `;
-        actions.style.display = 'inline-flex';
-        finishGeneration();
-      }
-    });
-  }
-
-  async function continueAgenticCompletion(content, statsContainer, actions, btnCopy, updateStatsDisplay, previousMarkdown = "", assistantMsgId = "") {
-    let secondText = '';
-    const parseMd = Markdown.parseMarkdown || function(txt) { return txt; };
-    const attachListeners = Markdown.attachCopyCodeListeners || function() {};
-    const baseHtml = content.innerHTML;
-
-    await API.streamChatCompletion({
-      apiUrl: appConfig.apiUrl,
-      apiType: appConfig.apiType,
-      apiKey: appConfig.apiKey,
-      model: appConfig.model,
-      messages: buildEffectiveMessages(),
-      temperature: appConfig.temperature,
-      reasoningEffort: appConfig.reasoningEffort || 'none',
-      enableTools: false,
-      signal: currentAbortController.signal,
-
-      onReasoningChunk: function (chunk) {
-        addDebugLog('thinking', chunk);
-        setDebugStatus('streaming', t('debug_status_thinking'));
-      },
-
-      onLog: function (logData) {
-        if (logData && logData.type !== 'thinking') {
-          addDebugLog(logData.type, logData.text);
-        }
-      },
-
-      onChunk: function (fullTextSoFar, delta, stats) {
-        secondText = fullTextSoFar;
-        content.innerHTML = baseHtml + '<div class="agentic-response-block">' + parseMd(secondText) + '<span class="streaming-cursor"></span></div>';
-        attachListeners(content);
-        if (stats && updateStatsDisplay) updateStatsDisplay(stats);
-        scrollToBottom();
-      },
-
-      onDone: function (finalText, stats) {
-        secondText = finalText || secondText;
-        content.innerHTML = baseHtml + '<div class="agentic-response-block">' + parseMd(secondText || `(${t('empty_response')})`) + '</div>';
-        attachListeners(content);
-        chatHistory.push({ id: assistantMsgId, role: 'assistant', content: secondText });
-
-        if (stats && updateStatsDisplay) updateStatsDisplay(stats);
-        setDebugStatus('done', t('debug_status_done'));
-
-        actions.style.display = 'inline-flex';
-        btnCopy.addEventListener('click', async () => {
-          try {
-            const finalMarkdown = (previousMarkdown ? previousMarkdown + '\n\n' : '') + secondText;
-            await navigator.clipboard.writeText(finalMarkdown);
-            const span = btnCopy.querySelector('span');
-            const originalText = span.textContent;
-            span.textContent = t('copied_text');
-            btnCopy.classList.add('copied');
-
-            setTimeout(() => {
-              span.textContent = originalText;
-              btnCopy.classList.remove('copied');
-            }, 2000);
-          } catch (err) {
-            console.error('Error copying composite response:', err);
-          }
-        });
-
-        finishGeneration();
-      },
-
-      onError: function (error) {
-        setDebugStatus('error', t('debug_status_error'));
-        addDebugLog('error', error.message || String(error));
-        row.classList.add('message-error');
-        content.innerHTML = baseHtml + `
-          <div class="agentic-response-block message-error" style="margin-top: 1rem;">
-            <p><strong>${t('tool_error_assistant')}</strong> ${error.message || error}</p>
-          </div>
-        `;
-        actions.style.display = 'inline-flex';
-        finishGeneration();
-      }
-    });
-  }
+    await runAgentTurn();
 
   function finishGeneration() {
     isGenerating = false;
