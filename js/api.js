@@ -491,6 +491,7 @@
       enableAgentJs = false,
       enableAgentWeb = false,
       enableAgentSearch = false,
+      enableAgentChart = false,
       signal,
       onChunk,
       onReasoningChunk,
@@ -594,7 +595,7 @@
     if (enableTools && enableAgentWeb && webTool) toolsList.push(webTool);
     if (enableTools && enableAgentWeb && pdfTool) toolsList.push(pdfTool);
     if (enableTools && enableAgentSearch && searchTool) toolsList.push(searchTool);
-    if (enableTools && chartTool) toolsList.push(chartTool);
+    if (enableTools && enableAgentChart && chartTool) toolsList.push(chartTool);
 
     if (toolsList.length > 0) {
       payload.tools = toolsList;

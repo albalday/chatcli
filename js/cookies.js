@@ -25,6 +25,7 @@
     enableAgentJs: true,
     enableAgentWeb: true,
     enableAgentSearch: true,
+    enableAgentChart: true,
     sendDateTime: true
   };
 

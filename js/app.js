@@ -45,6 +45,7 @@
     enableAgentJs: true,
     enableAgentWeb: true,
     enableAgentSearch: true,
+    enableAgentChart: true,
     sendDateTime: true
   };
 
@@ -152,6 +153,7 @@
       settingEnableAgentJs: document.getElementById('setting-enable-agent-js'),
       settingEnableAgentWeb: document.getElementById('setting-enable-agent-web'),
       settingEnableAgentSearch: document.getElementById('setting-enable-agent-search'),
+      settingEnableAgentChart: document.getElementById('setting-enable-agent-chart'),
       settingSendDateTime: document.getElementById('setting-send-datetime'),
     };
   }
@@ -205,10 +207,12 @@
     }
 
     // Herramienta de Gráficos Nativos
-    if (isEs) {
-      tools.push(`- \`render_chart(type="bar"|"line"|"doughnut"|"pie", title="...", labels=["..."], datasets=[{"label":"...", "data":[...]}])\`: Genera y visualiza un gráfico interactivo (barras, líneas, donut o sectores) a partir de datos numéricos o tablas.`);
-    } else {
-      tools.push(`- \`render_chart(type="bar"|"line"|"doughnut"|"pie", title="...", labels=["..."], datasets=[{"label":"...", "data":[...]}])\`: Generates and renders an interactive chart (bar, line, doughnut or pie) from numerical data or tables.`);
+    if (appConfig.enableAgentChart !== false) {
+      if (isEs) {
+        tools.push(`- \`render_chart(type="bar"|"line"|"doughnut"|"pie", title="...", labels=["..."], datasets=[{"label":"...", "data":[...]}])\`: Genera y visualiza un gráfico interactivo (barras, líneas, donut o sectores) a partir de datos numéricos o tablas.`);
+      } else {
+        tools.push(`- \`render_chart(type="bar"|"line"|"doughnut"|"pie", title="...", labels=["..."], datasets=[{"label":"...", "data":[...]}])\`: Generates and renders an interactive chart (bar, line, doughnut or pie) from numerical data or tables.`);
+      }
     }
 
     if (tools.length === 0) return '';
@@ -1274,10 +1278,11 @@
         messages: buildEffectiveMessages(),
         temperature: appConfig.temperature,
         reasoningEffort: appConfig.reasoningEffort || 'none',
-        enableTools: (appConfig.enableAgentJs !== false || appConfig.enableAgentWeb !== false || appConfig.enableAgentSearch !== false),
+        enableTools: (appConfig.enableAgentJs !== false || appConfig.enableAgentWeb !== false || appConfig.enableAgentSearch !== false || appConfig.enableAgentChart !== false),
         enableAgentJs: appConfig.enableAgentJs !== false,
         enableAgentWeb: appConfig.enableAgentWeb !== false,
         enableAgentSearch: appConfig.enableAgentSearch !== false,
+        enableAgentChart: appConfig.enableAgentChart !== false,
         signal: currentAbortController.signal,
 
         onReasoningChunk: function (chunk) {
@@ -1737,6 +1742,9 @@
     if (elements.settingEnableAgentSearch) {
       elements.settingEnableAgentSearch.checked = appConfig.enableAgentSearch !== false;
     }
+    if (elements.settingEnableAgentChart) {
+      elements.settingEnableAgentChart.checked = appConfig.enableAgentChart !== false;
+    }
     if (elements.settingSendDateTime) {
       elements.settingSendDateTime.checked = appConfig.sendDateTime !== false;
     }
@@ -1774,6 +1782,7 @@
       enableAgentJs: elements.settingEnableAgentJs ? elements.settingEnableAgentJs.checked : true,
       enableAgentWeb: elements.settingEnableAgentWeb ? elements.settingEnableAgentWeb.checked : true,
       enableAgentSearch: elements.settingEnableAgentSearch ? elements.settingEnableAgentSearch.checked : true,
+      enableAgentChart: elements.settingEnableAgentChart ? elements.settingEnableAgentChart.checked : true,
       sendDateTime: elements.settingSendDateTime ? elements.settingSendDateTime.checked : true
     };
 
@@ -1817,6 +1826,9 @@
       }
       if (elements.settingEnableAgentSearch) {
         elements.settingEnableAgentSearch.checked = defaults.enableAgentSearch !== false;
+      }
+      if (elements.settingEnableAgentChart) {
+        elements.settingEnableAgentChart.checked = defaults.enableAgentChart !== false;
       }
       if (elements.settingSendDateTime) {
         elements.settingSendDateTime.checked = defaults.sendDateTime !== false;

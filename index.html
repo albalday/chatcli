@@ -271,22 +271,6 @@
       <div class="modal-body">
         <!-- Pestaña 1: General y Servidor -->
         <div id="tab-general" class="modal-tab-pane active">
-          <!-- Selector de Idioma -->
-          <div class="form-field">
-            <label>
-              <strong data-i18n="field_language">Idioma de la Interfaz (Language)</strong>
-              <span class="label-hint" data-i18n="field_language_hint">Selecciona el idioma visual de la aplicación.</span>
-            </label>
-            <div class="lang-switcher-group" id="lang-switcher-group">
-              <button type="button" class="btn-lang-toggle active" id="btn-lang-es" data-lang="es">
-                <span>🇪🇸 Español</span>
-              </button>
-              <button type="button" class="btn-lang-toggle" id="btn-lang-en" data-lang="en">
-                <span>🇬🇧 English</span>
-              </button>
-            </div>
-          </div>
-
           <div class="form-field">
             <label for="setting-api-type">
               <strong data-i18n="field_api_type">Tipo de Interfaz / Protocolo</strong>
@@ -317,7 +301,7 @@
               <button type="button" id="btn-query-server" class="btn-query-server" data-i18n-title="btn_query_title" title="Consultar modelos disponibles y capacidades de la API en el servidor">
                 <svg class="query-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <circle cx="11" cy="11" r="8"></circle>
-                  <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                  <line x1="21" y1="2" x2="16.65" y2="16.65"></line>
                 </svg>
                 <span class="query-btn-text" data-i18n="btn_query_text">Query</span>
               </button>
@@ -429,6 +413,21 @@
             </div>
             <label class="switch">
               <input type="checkbox" id="setting-enable-agent-web" checked>
+              <span class="slider"></span>
+            </label>
+          </div>
+
+          <div class="setting-toggle-card">
+            <div class="toggle-card-info">
+              <div class="toggle-card-title">
+                <span data-i18n="agent_chart_title">📊 Visualización de Datos y Gráficos Nativos (SVG)</span>
+              </div>
+              <p class="toggle-card-desc" data-i18n="agent_chart_desc">
+                Permite al modelo invocar <code>render_chart</code> para generar y mostrar gráficos interactivos de barras, líneas o sectores sin librerías externas.
+              </p>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="setting-enable-agent-chart" checked>
               <span class="slider"></span>
             </label>
           </div>
