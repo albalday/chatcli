@@ -88,7 +88,6 @@
       badgeModel: document.getElementById('badge-model'),
       currentModelName: document.getElementById('current-model-name'),
       btnClearChat: document.getElementById('btn-clear-chat'),
-      btnNewChat: document.getElementById('btn-new-chat'),
       btnOpenSettings: document.getElementById('btn-open-settings'),
       btnLangQuick: document.getElementById('btn-lang-quick'),
       currentLangLabel: document.getElementById('current-lang-label'),
@@ -2491,13 +2490,6 @@
     // Limpiar conversación actual
     if (elements.btnClearChat) {
       elements.btnClearChat.addEventListener('click', resetConversation);
-    }
-
-    // Nuevo chat en nueva pestaña
-    if (elements.btnNewChat) {
-      elements.btnNewChat.addEventListener('click', () => {
-        window.open(window.location.href, '_blank');
-      });
     }
 
     // Botón rápido de Idioma en la barra superior
