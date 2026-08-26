@@ -109,12 +109,63 @@
   /**
    * Extrae llamadas a herramientas cuando el modelo las emite como texto en el cuerpo del mensaje
    * (tokens especiales de Llama 3/Hermes <|toolcall>call:func{...}<toolcall|>, XML, markdown o JSON).
+   */
   function extractToolCallsFromText(text) {
     if (!text || typeof text !== 'string') return null;
     const trimmed = text.trim();
 
     // 1. Limpieza y soporte de sintaxis especial de Llama 3 / Hermes / Mistral / Command-R
     // Ejemplos:
+    // <|toolcall>call:fetchwebpage{url:<|"|>https://samplelib.com/pdf/sample-scanned.pdf<|"|>}<toolcall|>
+    // <|tool_call|>call:download_pdf{url:"..."}<|tool_call|>
+    // [TOOL_CALLS] call:search_web{query:"..."}
+    const cleaned = trimmed
+      .replace(/<\|"\|>/g, '"')
+      .replace(/<\|/g, '')
+      .replace(/\|>/g, '')
+      .replace(/<\/?tool_?calls?\|?>/gi, '')
+      .replace(/\[\/?TOOL_?CALLS?\]/gi, '')
+      .trim();
+
+    // 2. Sintaxis directa call:function_name{...}
+    const callMatch = cleaned.match(/call:([a-zA-Z0-9_-]+)\s*(\{[\s\S]*?\})/i);
+    if (callMatch) {
+      const rawName = callMatch[1];
+      const normName = normalizeToolName(rawName);
+      let rawJson = callMatch[2].replace(/([{,]\s*)([a-zA-Z0-9_]+)\s*:/g, (m, p1, p2) => p1 + '"' + p2 + '":');
+      try {
+        const parsed = JSON.parse(rawJson);
+        return [{
+          id: `call_${Date.now()}_llama`,
+          type: 'function',
+          function: {
+            name: normName,
+            arguments: JSON.stringify(parsed)
+          }
+        }];
+      } catch (e) {
+        const urlMatch = rawJson.match(/(?:url|link|href)\s*[:=]\s*["']?([^"'\s,}]+)/i);
+        const queryMatch = rawJson.match(/(?:query|q|search)\s*[:=]\s*["']?([^"'\s,}]+)/i);
+        const codeMatch = rawJson.match(/(?:code|js|javascript)\s*[:=]\s*["']?([^"'\s,}]+)/i);
+        let argObj = {};
+        if (urlMatch) argObj.url = urlMatch[1];
+        else if (queryMatch) argObj.query = queryMatch[1];
+        else if (codeMatch) argObj.code = codeMatch[1];
+
+        return [{
+          id: `call_${Date.now()}_llama`,
+          type: 'function',
+          function: {
+            name: normName,
+            arguments: JSON.stringify(argObj)
+          }
+        }];
+      }
+    }
+
+    // 3. Bloque XML: <tool_call>...</tool_call> o <function_call>...</function_call>
+    const xmlMatch = trimmed.match(/<(?:tool_call|function_call|tool_calls)>(.*?)<\/(?:tool_call|function_call|tool_calls)>/s);
+    if (xmlMatch) {
       try {
         const parsed = JSON.parse(xmlMatch[1].trim());
         const normName = normalizeToolName(parsed.name || parsed.function?.name || parsed.tool);
@@ -135,6 +186,7 @@
     // 4. Bloque de código Markdown: ```json { "name": ... } ```
     const codeMatch = trimmed.match(/```(?:json)?\s*(\{[\s\S]*?"name"[\s\S]*?\})\s*```/);
     if (codeMatch) {
+      try {
         const parsed = JSON.parse(codeMatch[1].trim());
         const normName = normalizeToolName(parsed.name || parsed.function?.name || parsed.tool);
         if (normName) {
@@ -155,6 +207,7 @@
     if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
       try {
         const parsed = JSON.parse(trimmed);
+        const normName = normalizeToolName(parsed.name || parsed.function?.name || parsed.tool);
         if (normName && (normName === 'download_pdf' || normName === 'fetch_web_page' || normName === 'search_web' || normName === 'execute_javascript')) {
           const rawArgs = parsed.arguments !== undefined ? parsed.arguments : (parsed.parameters !== undefined ? parsed.parameters : (parsed.input !== undefined ? parsed.input : parsed));
           return [{
@@ -174,6 +227,7 @@
     if (fnMatch) {
       const normName = normalizeToolName(fnMatch[1]);
       const val = fnMatch[2];
+      let argObj = {};
       if (normName === 'execute_javascript') argObj = { code: val };
       else if (normName === 'search_web') argObj = { query: val };
       else argObj = { url: val };
