@@ -1150,15 +1150,23 @@
             const normName = API.normalizeToolName ? API.normalizeToolName(rawFuncName) : rawFuncName.toLowerCase().replace(/_/g, '');
 
             // Si el texto acumulado es simplemente el bloque de llamada a la herramienta en crudo, limpiarlo de la UI
-            if (accumulatedText && (
-              accumulatedText.trim().startsWith('<tool_call') ||
-              accumulatedText.trim().startsWith('{"name"') ||
-              accumulatedText.trim().startsWith('```json\n{"name"') ||
-              accumulatedText.trim().startsWith('download_pdf(') ||
-              accumulatedText.trim().startsWith('downloadpdf(') ||
-              accumulatedText.trim().startsWith('fetch_web_page(') ||
-              accumulatedText.trim().startsWith('search_web(')
-            )) {
+            const trimmedAcc = (accumulatedText || '').trim();
+            if (
+              trimmedAcc.startsWith('<|') ||
+              trimmedAcc.startsWith('<tool_call') ||
+              trimmedAcc.startsWith('<function_call') ||
+              trimmedAcc.startsWith('call:') ||
+              trimmedAcc.startsWith('{"name"') ||
+              trimmedAcc.startsWith('```json\n{"name"') ||
+              trimmedAcc.startsWith('download_pdf(') ||
+              trimmedAcc.startsWith('downloadpdf(') ||
+              trimmedAcc.startsWith('fetch_web_page(') ||
+              trimmedAcc.startsWith('fetchwebpage(') ||
+              trimmedAcc.startsWith('search_web(') ||
+              trimmedAcc.startsWith('searchweb(') ||
+              trimmedAcc.startsWith('execute_javascript(') ||
+              trimmedAcc.startsWith('executejs(')
+            ) {
               accumulatedText = '';
             }
 
