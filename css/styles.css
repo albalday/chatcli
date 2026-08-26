@@ -431,12 +431,17 @@ body {
 /* Cursor parpadeante durante streaming */
 .streaming-cursor {
   display: inline-block;
-  width: 8px;
-  height: 16px;
+  width: 7px;
+  height: 1.1em;
   background-color: var(--primary);
-  vertical-align: middle;
-  margin-left: 2px;
+  vertical-align: -0.15em;
+  margin-left: 3px;
+  border-radius: 1px;
   animation: blink 0.8s infinite;
+}
+
+.initial-cursor {
+  margin: 0.2rem 0;
 }
 
 @keyframes blink {

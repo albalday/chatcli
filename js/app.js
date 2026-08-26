@@ -1118,7 +1118,7 @@
 
     const content = document.createElement('div');
     content.className = 'message-content';
-    content.innerHTML = '<span class="streaming-cursor"></span>';
+    content.innerHTML = '<span class="streaming-cursor initial-cursor"></span>';
 
     const footerRow = document.createElement('div');
     footerRow.className = 'message-footer-row';
@@ -1231,6 +1231,19 @@
     const parseMd = Markdown.parseMarkdown || function(txt) { return txt; };
     const attachListeners = Markdown.attachCopyCodeListeners || function() {};
 
+    function injectStreamingCursor(html) {
+      if (!html || html.trim() === '') {
+        return '<span class="streaming-cursor"></span>';
+      }
+      const trimmed = html.trimEnd();
+      const match = trimmed.match(/(<\/(?:p|li|h[1-6]|span|code|strong|em|td|blockquote)>)$/i);
+      if (match) {
+        const closingTag = match[1];
+        return trimmed.slice(0, -closingTag.length) + '<span class="streaming-cursor"></span>' + closingTag;
+      }
+      return trimmed + '<span class="streaming-cursor"></span>';
+    }
+
     if (!API.streamChatCompletion) {
       row.classList.add('message-error');
       content.innerHTML = 'Error: Chat API module not loaded.';
@@ -1277,6 +1290,10 @@
         break;
       }
 
+      if (turnIndex === 0) {
+        content.innerHTML = '';
+      }
+
       let currentTurnText = '';
       const turnBlock = document.createElement('div');
       turnBlock.className = 'agentic-turn-block';
@@ -1314,7 +1331,7 @@
 
         onChunk: function (fullTextSoFar, delta, stats) {
           currentTurnText = fullTextSoFar;
-          turnBlock.innerHTML = parseMd(currentTurnText) + '<span class="streaming-cursor"></span>';
+          turnBlock.innerHTML = injectStreamingCursor(parseMd(currentTurnText));
           attachListeners(turnBlock);
           if (stats) updateStatsDisplay(stats);
           scrollToBottom();
