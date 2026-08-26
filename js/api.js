@@ -19,6 +19,7 @@
 
   const Sandbox = typeof window !== 'undefined' ? (window.ChatSandbox || {}) : {};
   const WebBrowser = typeof window !== 'undefined' ? (window.ChatWebBrowser || {}) : {};
+  const WebSearch = typeof window !== 'undefined' ? (window.ChatWebSearch || {}) : {};
 
   function detectApiType(rawUrl, explicitType) {
     if (explicitType && explicitType !== 'auto') {
@@ -247,6 +248,7 @@
       enableTools = false,
       enableAgentJs = false,
       enableAgentWeb = false,
+      enableAgentSearch = false,
       signal,
       onChunk,
       onReasoningChunk,
@@ -311,13 +313,15 @@
       payload.reasoning_effort = effortLower;
     }
 
-    // Inyectar herramientas agenticas activadas (JS / Web) si están disponibles
+    // Inyectar herramientas agenticas activadas (JS / Web / Search) si están disponibles
     const toolsList = [];
     const jsTool = Sandbox.JAVASCRIPT_TOOL_DEFINITION || (typeof window !== 'undefined' && window.ChatSandbox && window.ChatSandbox.JAVASCRIPT_TOOL_DEFINITION);
     const webTool = WebBrowser.WEB_TOOL_DEFINITION || (typeof window !== 'undefined' && window.ChatWebBrowser && window.ChatWebBrowser.WEB_TOOL_DEFINITION);
+    const searchTool = WebSearch.SEARCH_TOOL_DEFINITION || (typeof window !== 'undefined' && window.ChatWebSearch && window.ChatWebSearch.SEARCH_TOOL_DEFINITION);
 
     if (enableTools && enableAgentJs && jsTool) toolsList.push(jsTool);
     if (enableTools && enableAgentWeb && webTool) toolsList.push(webTool);
+    if (enableTools && enableAgentSearch && searchTool) toolsList.push(searchTool);
 
     if (toolsList.length > 0) {
       payload.tools = toolsList;

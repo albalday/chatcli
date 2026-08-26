@@ -340,6 +340,21 @@
           <div class="setting-toggle-card">
             <div class="toggle-card-info">
               <div class="toggle-card-title">
+                <span data-i18n="agent_search_title">🔍 Búsqueda en Internet en Tiempo Real</span>
+              </div>
+              <p class="toggle-card-desc" data-i18n="agent_search_desc">
+                Permite al modelo invocar <code>search_web</code> para buscar información actualizada, noticias, enlaces y artículos en internet mediante APIs abiertas sin bloqueos.
+              </p>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="setting-enable-agent-search" checked>
+              <span class="slider"></span>
+            </label>
+          </div>
+
+          <div class="setting-toggle-card">
+            <div class="toggle-card-info">
+              <div class="toggle-card-title">
                 <span data-i18n="agent_js_title">⚡ Ejecución de JavaScript Local (Sandbox)</span>
               </div>
               <p class="toggle-card-desc" data-i18n="agent_js_desc">
@@ -440,6 +455,7 @@
   <script src="js/i18n.js"></script>
   <script src="js/sandbox.js"></script>
   <script src="js/web-browser.js"></script>
+  <script src="js/web-search.js"></script>
   <script src="js/markdown.js"></script>
   <script src="js/api.js"></script>
   <script src="js/file-parser.js"></script>

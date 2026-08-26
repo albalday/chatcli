@@ -777,6 +777,59 @@ body {
   word-break: break-word;
 }
 
+/* Subzona de Pantalla: Tarjeta de Búsqueda Web en Modo Agente */
+.web-search-card {
+  margin: 0.75rem 0;
+  border: 1px solid #0d9488;
+  background: #f0fdfa;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+
+.web-search-card .web-card-header {
+  background: linear-gradient(135deg, #0d9488, #14b8a6);
+}
+
+.web-search-card .web-card-section {
+  border-top: 1px solid #ccfbf1;
+}
+
+.web-search-card .query-badge {
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #0f766e;
+}
+
+.search-results-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 0.25rem;
+}
+
+.search-result-item {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: var(--radius-sm);
+  padding: 0.4rem 0.6rem;
+  font-size: 0.8rem;
+}
+
+.search-result-item a {
+  color: #0d9488;
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+.search-result-snippet {
+  color: var(--text-muted);
+  margin-top: 0.15rem;
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
 /* ==========================================================================
    Barra de Entrada Inferior y Botones Compactos al lado del Prompt
    ========================================================================== */
@@ -2237,6 +2290,34 @@ input:checked + .slider:before {
 [data-theme="dark"] .web-response-body {
   background-color: #030712;
   color: #f1f5f9;
+}
+
+/* Modo Oscuro: Tarjeta de búsqueda web */
+[data-theme="dark"] .web-search-card {
+  border-color: #0f766e;
+  background-color: #042f2e;
+}
+
+[data-theme="dark"] .web-search-card .web-card-section {
+  background-color: #071f1e;
+  border-top-color: #115e59;
+}
+
+[data-theme="dark"] .web-search-card .query-badge {
+  color: #2dd4bf;
+}
+
+[data-theme="dark"] .search-result-item {
+  background-color: #0d2827;
+  border-color: #134e4a;
+}
+
+[data-theme="dark"] .search-result-item a {
+  color: #2dd4bf;
+}
+
+[data-theme="dark"] .search-result-snippet {
+  color: #99f6e4;
 }
 
 /* Modo Oscuro: Pestañas de Navegación y Switches */

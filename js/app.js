@@ -22,6 +22,7 @@
   const FileParser = window.ChatFileParser || {};
   const Sandbox = window.ChatSandbox || {};
   const WebBrowser = window.ChatWebBrowser || {};
+  const WebSearch = window.ChatWebSearch || {};
   const I18n = window.ChatI18n || {};
 
   function t(key, params) {
@@ -42,6 +43,7 @@
     language: 'es',
     enableAgentJs: true,
     enableAgentWeb: true,
+    enableAgentSearch: true,
     sendDateTime: true
   };
 
@@ -123,6 +125,7 @@
       modalPanes: document.querySelectorAll('.modal-tab-pane'),
       settingEnableAgentJs: document.getElementById('setting-enable-agent-js'),
       settingEnableAgentWeb: document.getElementById('setting-enable-agent-web'),
+      settingEnableAgentSearch: document.getElementById('setting-enable-agent-search'),
       settingSendDateTime: document.getElementById('setting-send-datetime'),
     };
   }
@@ -1100,9 +1103,10 @@
       messages: buildEffectiveMessages(),
       temperature: appConfig.temperature,
       reasoningEffort: appConfig.reasoningEffort || 'none',
-      enableTools: (appConfig.enableAgentJs !== false || appConfig.enableAgentWeb !== false),
+      enableTools: (appConfig.enableAgentJs !== false || appConfig.enableAgentWeb !== false || appConfig.enableAgentSearch !== false),
       enableAgentJs: appConfig.enableAgentJs !== false,
       enableAgentWeb: appConfig.enableAgentWeb !== false,
+      enableAgentSearch: appConfig.enableAgentSearch !== false,
       signal: currentAbortController.signal,
 
       onReasoningChunk: function (chunk, fullReasoning) {
@@ -1262,6 +1266,81 @@
               });
 
               const toolMd = `> 🌐 **fetch_web_page** (${statusBadgeText})\n> URL: ${webRes.url || urlToFetch}\n> \`\`\`\n> ${(responsePreview || '').split('\n').join('\n> ')}\n> \`\`\``;
+              const previousMarkdown = (accumulatedText ? accumulatedText + '\n\n' : '') + toolMd;
+              return continueAgenticCompletion(content, statsContainer, actions, btnCopy, updateStatsDisplay, previousMarkdown, assistantMsgId);
+            }
+
+            // 3. Búsqueda en Internet en Tiempo Real (search_web)
+            else if (tc.function && tc.function.name === 'search_web') {
+              let queryToSearch = '';
+              try {
+                const parsed = JSON.parse(tc.function.arguments || '{}');
+                queryToSearch = parsed.query || '';
+              } catch (e) {
+                queryToSearch = tc.function.arguments || '';
+              }
+
+              addDebugLog('tool', `search_web: "${queryToSearch}"`);
+
+              const searchRes = await (WebSearch.search ? WebSearch.search(queryToSearch, appConfig.language || 'es') : { success: false, query: queryToSearch, count: 0, results: [], markdown: 'Módulo de búsqueda no disponible', elapsedMs: 0 });
+
+              const statusBadgeText = `${searchRes.count} fuentes (${searchRes.elapsedMs || 0}ms)`;
+
+              addDebugLog('tool', `search_web (${searchRes.count} resultados) [${searchRes.elapsedMs || 0}ms]:\n${(searchRes.markdown || '').substring(0, 200)}...`);
+
+              let resultsHtml = '';
+              if (searchRes.results && searchRes.results.length > 0) {
+                resultsHtml = '<div class="search-results-list">' + searchRes.results.map(r => `
+                  <div class="search-result-item">
+                    <div><a href="${Markdown.escapeHtml(r.url)}" target="_blank" rel="noopener noreferrer">🔗 ${Markdown.escapeHtml(r.title)}</a> <small style="opacity:0.75;">(${Markdown.escapeHtml(r.source)})</small></div>
+                    ${r.snippet ? `<div class="search-result-snippet">${Markdown.escapeHtml(r.snippet)}</div>` : ''}
+                  </div>
+                `).join('') + '</div>';
+              } else {
+                resultsHtml = `<div class="search-result-snippet"><em>${t('tool_search_empty')}</em></div>`;
+              }
+
+              const searchCardHtml = `
+                <div class="web-search-card">
+                  <div class="web-card-header">
+                    <div class="web-card-title">
+                      <span>🔍</span>
+                      <span>${t('tool_search_title')}</span>
+                    </div>
+                    <span class="web-card-badge">${statusBadgeText}</span>
+                  </div>
+                  <div class="web-card-section">
+                    <div class="section-label">${t('tool_search_query')}</div>
+                    <div class="query-badge">"${Markdown.escapeHtml(queryToSearch)}"</div>
+                  </div>
+                  <div class="web-card-section">
+                    <div class="section-label">${t('tool_search_results', { count: searchRes.count })}</div>
+                    ${resultsHtml}
+                  </div>
+                </div>
+              `;
+
+              content.innerHTML = (accumulatedText ? parseMd(accumulatedText) : '') + searchCardHtml;
+              attachListeners(content);
+              if (stats) updateStatsDisplay(stats);
+              scrollToBottom();
+
+              chatHistory.push({
+                id: assistantMsgId,
+                role: 'assistant',
+                content: accumulatedText || '',
+                tool_calls: toolCalls
+              });
+
+              chatHistory.push({
+                id: assistantMsgId,
+                role: 'tool',
+                tool_call_id: tc.id,
+                name: 'search_web',
+                content: searchRes.markdown
+              });
+
+              const toolMd = `> 🔍 **search_web** (${searchRes.count} fuentes)\n> Query: "${queryToSearch}"\n> \`\`\`markdown\n> ${(searchRes.markdown || '').split('\n').join('\n> ')}\n> \`\`\``;
               const previousMarkdown = (accumulatedText ? accumulatedText + '\n\n' : '') + toolMd;
               return continueAgenticCompletion(content, statsContainer, actions, btnCopy, updateStatsDisplay, previousMarkdown, assistantMsgId);
             }
@@ -1463,6 +1542,9 @@
     if (elements.settingEnableAgentWeb) {
       elements.settingEnableAgentWeb.checked = appConfig.enableAgentWeb !== false;
     }
+    if (elements.settingEnableAgentSearch) {
+      elements.settingEnableAgentSearch.checked = appConfig.enableAgentSearch !== false;
+    }
     if (elements.settingSendDateTime) {
       elements.settingSendDateTime.checked = appConfig.sendDateTime !== false;
     }
@@ -1499,6 +1581,7 @@
       language: appConfig.language || 'es',
       enableAgentJs: elements.settingEnableAgentJs ? elements.settingEnableAgentJs.checked : true,
       enableAgentWeb: elements.settingEnableAgentWeb ? elements.settingEnableAgentWeb.checked : true,
+      enableAgentSearch: elements.settingEnableAgentSearch ? elements.settingEnableAgentSearch.checked : true,
       sendDateTime: elements.settingSendDateTime ? elements.settingSendDateTime.checked : true
     };
 
@@ -1539,6 +1622,9 @@
       }
       if (elements.settingEnableAgentWeb) {
         elements.settingEnableAgentWeb.checked = defaults.enableAgentWeb !== false;
+      }
+      if (elements.settingEnableAgentSearch) {
+        elements.settingEnableAgentSearch.checked = defaults.enableAgentSearch !== false;
       }
       if (elements.settingSendDateTime) {
         elements.settingSendDateTime.checked = defaults.sendDateTime !== false;

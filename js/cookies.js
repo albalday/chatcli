@@ -24,6 +24,7 @@
     language: 'es', // 'es' | 'en'
     enableAgentJs: true,
     enableAgentWeb: true,
+    enableAgentSearch: true,
     sendDateTime: true
   };
 
@@ -132,6 +133,7 @@
     const language = getStorageItem('language');
     const enableAgentJs = getStorageItem('enableAgentJs');
     const enableAgentWeb = getStorageItem('enableAgentWeb');
+    const enableAgentSearch = getStorageItem('enableAgentSearch');
     const sendDateTime = getStorageItem('sendDateTime');
     const modelReasoningConfigRaw = getStorageItem('modelReasoningConfig');
 
@@ -177,6 +179,7 @@
       language: effectiveLanguage,
       enableAgentJs: parseBool(enableAgentJs, DEFAULT_CONFIG.enableAgentJs),
       enableAgentWeb: parseBool(enableAgentWeb, DEFAULT_CONFIG.enableAgentWeb),
+      enableAgentSearch: parseBool(enableAgentSearch, DEFAULT_CONFIG.enableAgentSearch),
       sendDateTime: parseBool(sendDateTime, DEFAULT_CONFIG.sendDateTime)
     };
   }
@@ -196,6 +199,7 @@
     if (config.language !== undefined) setStorageItem('language', config.language);
     if (config.enableAgentJs !== undefined) setStorageItem('enableAgentJs', String(config.enableAgentJs));
     if (config.enableAgentWeb !== undefined) setStorageItem('enableAgentWeb', String(config.enableAgentWeb));
+    if (config.enableAgentSearch !== undefined) setStorageItem('enableAgentSearch', String(config.enableAgentSearch));
     if (config.sendDateTime !== undefined) setStorageItem('sendDateTime', String(config.sendDateTime));
   }
 
