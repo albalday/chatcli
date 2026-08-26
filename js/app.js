@@ -1160,11 +1160,9 @@
     let turnIndex = 0;
     let accumulatedConversationMarkdown = '';
 
-    async function runAgentTurn() {
-      if (turnIndex >= maxAgentTurns) {
-        setDebugStatus('done', t('debug_status_done'));
-        finishGeneration();
-        return;
+    while (turnIndex < maxAgentTurns) {
+      if (currentAbortController && currentAbortController.signal.aborted) {
+        break;
       }
 
       let currentTurnText = '';
@@ -1172,7 +1170,11 @@
       turnBlock.className = 'agentic-turn-block';
       content.appendChild(turnBlock);
 
-      await API.streamChatCompletion({
+      let turnToolCalls = null;
+      let turnFinalStats = null;
+      let streamError = null;
+
+      const streamResult = await API.streamChatCompletion({
         apiUrl: appConfig.apiUrl,
         apiType: appConfig.apiType,
         apiKey: appConfig.apiKey,
@@ -1205,351 +1207,349 @@
           scrollToBottom();
         },
 
-        onDone: async function (finalText, stats, toolCalls, reasoningText) {
-          try {
-            currentTurnText = finalText || currentTurnText;
-
-            // Extraer tool calls de texto si no llegaron en estructura nativa
-            if ((!toolCalls || toolCalls.length === 0) && currentTurnText) {
-              if (API.extractToolCallsFromText) {
-                const textCalls = API.extractToolCallsFromText(currentTurnText);
-                if (textCalls && textCalls.length > 0) {
-                  toolCalls = textCalls;
-                }
-              }
-            }
-
-            if (toolCalls && toolCalls.length > 0) {
-              const tc = toolCalls[0];
-              const rawFuncName = tc.function?.name || '';
-              const normName = API.normalizeToolName ? API.normalizeToolName(rawFuncName) : rawFuncName.toLowerCase().replace(/_/g, '');
-
-              // Limpiar llamadas a herramientas emitidas como texto crudo en la UI
-              const trimmedAcc = (currentTurnText || '').trim();
-              if (
-                trimmedAcc.startsWith('<|') ||
-                trimmedAcc.startsWith('<tool_call') ||
-                trimmedAcc.startsWith('<function_call') ||
-                trimmedAcc.startsWith('call:') ||
-                trimmedAcc.startsWith('{"name"') ||
-                trimmedAcc.startsWith('```json\n{"name"') ||
-                trimmedAcc.startsWith('download_pdf(') ||
-                trimmedAcc.startsWith('downloadpdf(') ||
-                trimmedAcc.startsWith('fetch_web_page(') ||
-                trimmedAcc.startsWith('fetchwebpage(') ||
-                trimmedAcc.startsWith('search_web(') ||
-                trimmedAcc.startsWith('searchweb(') ||
-                trimmedAcc.startsWith('execute_javascript(') ||
-                trimmedAcc.startsWith('executejs(')
-              ) {
-                currentTurnText = '';
-              }
-
-              if (currentTurnText) {
-                turnBlock.innerHTML = parseMd(currentTurnText);
-                attachListeners(turnBlock);
-              } else {
-                turnBlock.remove();
-              }
-
-              // 1. Ejecución de JavaScript
-              if (normName === 'execute_javascript') {
-                let codeToRun = '';
-                try {
-                  const parsed = typeof tc.function.arguments === 'object' ? tc.function.arguments : JSON.parse(tc.function.arguments || '{}');
-                  codeToRun = parsed.code || parsed.javascript || parsed.js || parsed.script || parsed.input || (typeof parsed === 'string' ? parsed : '');
-                } catch (e) {
-                  codeToRun = tc.function.arguments || '';
-                }
-
-                addDebugLog('tool', `execute_javascript:\n${codeToRun}`);
-                const toolExecRes = await (Sandbox.execute ? Sandbox.execute(codeToRun) : { success: false, error: 'Sandbox not available' });
-                const outputText = toolExecRes.success
-                  ? (toolExecRes.result || (toolExecRes.logs && toolExecRes.logs.length > 0 ? toolExecRes.logs.join('\n') : 'undefined'))
-                  : `Error: ${toolExecRes.error}`;
-
-                addDebugLog('tool', `execute_javascript output (${toolExecRes.executionTimeMs || 0}ms):\n${outputText}`);
-
-                const toolCardHtml = `
-                  <div class="tool-execution-card">
-                    <div class="tool-card-header">
-                      <span>${t('tool_js_title', { ms: toolExecRes.executionTimeMs || 0 })}</span>
-                    </div>
-                    <pre class="tool-card-code"><code>${Markdown.escapeHtml(codeToRun)}</code></pre>
-                    <div class="tool-card-result"><strong>${t('tool_sandbox_output')}</strong>\n${Markdown.escapeHtml(outputText)}</div>
-                  </div>
-                `;
-
-                const cardDiv = document.createElement('div');
-                cardDiv.innerHTML = toolCardHtml;
-                content.appendChild(cardDiv);
-                attachListeners(content);
-                if (stats) updateStatsDisplay(stats);
-                scrollToBottom();
-
-                chatHistory.push({
-                  id: assistantMsgId,
-                  role: 'assistant',
-                  content: currentTurnText || null,
-                  tool_calls: [tc]
-                });
-
-                chatHistory.push({
-                  id: assistantMsgId,
-                  role: 'tool',
-                  tool_call_id: tc.id,
-                  name: 'execute_javascript',
-                  content: JSON.stringify({
-                    success: toolExecRes.success,
-                    result: toolExecRes.result,
-                    logs: toolExecRes.logs,
-                    executionTimeMs: toolExecRes.executionTimeMs,
-                    error: toolExecRes.error
-                  })
-                });
-
-                const toolMd = `> ⚡ **execute_javascript**\n> \`\`\`javascript\n> ${codeToRun.split('\n').join('\n> ')}\n> \`\`\`\n> \`\`\`\n> ${outputText.split('\n').join('\n> ')}\n> \`\`\``;
-                accumulatedConversationMarkdown += (currentTurnText ? currentTurnText + '\n\n' : '') + toolMd + '\n\n';
-
-                turnIndex++;
-                return runAgentTurn();
-              }
-
-              // 2. Consulta Web o Descarga de PDF
-              else if (normName === 'fetch_web_page' || normName === 'download_pdf') {
-                const isPdfCall = normName === 'download_pdf';
-                let urlToFetch = '';
-                try {
-                  const parsed = typeof tc.function.arguments === 'object' ? tc.function.arguments : JSON.parse(tc.function.arguments || '{}');
-                  urlToFetch = parsed.url || parsed.URL || parsed.uri || parsed.link || parsed.href || parsed.path || parsed.input || (typeof parsed === 'string' ? parsed : '');
-                } catch (e) {
-                  urlToFetch = tc.function.arguments || '';
-                }
-
-                addDebugLog('tool', `${normName}: ${urlToFetch}`);
-                const webRes = await (WebBrowser.fetchPage ? WebBrowser.fetchPage(urlToFetch) : { success: false, url: urlToFetch, content: '', error: 'Web module not available' });
-                const isPdfResult = webRes.isPdf || isPdfCall;
-
-                const statusBadgeText = webRes.success
-                  ? (isPdfResult ? `PDF (${webRes.byteSize ? FileParser.formatBytes(webRes.byteSize) : 'OK'}) [${webRes.elapsedMs || 0}ms]` : `HTTP ${webRes.status || 200} OK (${webRes.elapsedMs || 0}ms)`)
-                  : `Error (${webRes.elapsedMs || 0}ms)`;
-
-                const cardIcon = isPdfResult ? '📄' : '🌐';
-                const cardTitle = isPdfResult ? t('tool_pdf_title') : t('tool_web_title');
-
-                const responsePreview = webRes.success
-                  ? (webRes.content || t('tool_web_empty'))
-                  : (webRes.error || t('tool_web_err_connect'));
-
-                addDebugLog('tool', `${normName} (${statusBadgeText}) [${webRes.byteSize ? FileParser.formatBytes(webRes.byteSize) : '0 B'}]:\n${(responsePreview || '').substring(0, 200)}...`);
-
-                const webCardHtml = `
-                  <div class="web-request-card ${isPdfResult ? 'pdf-request-card' : ''}">
-                    <div class="web-card-header">
-                      <div class="web-card-title">
-                        <span>${cardIcon}</span>
-                        <span>${cardTitle}</span>
-                      </div>
-                      <span class="web-card-badge">${statusBadgeText}</span>
-                    </div>
-                    <div class="web-card-section web-request-section">
-                      <div class="section-label">${t('tool_web_requested_url')}</div>
-                      <div class="url-badge"><a href="${Markdown.escapeHtml(webRes.url || urlToFetch)}" target="_blank" rel="noopener noreferrer">${Markdown.escapeHtml(webRes.url || urlToFetch)}</a></div>
-                    </div>
-                    <div class="web-card-section web-response-section">
-                      <div class="section-label">${t('tool_web_content_received', { size: webRes.byteSize ? FileParser.formatBytes(webRes.byteSize) : (webRes.content ? webRes.content.length + ' chars' : '0 B') })}</div>
-                      <pre class="web-response-body"><code>${Markdown.escapeHtml(responsePreview)}</code></pre>
-                    </div>
-                  </div>
-                `;
-
-                const cardDiv = document.createElement('div');
-                cardDiv.innerHTML = webCardHtml;
-                content.appendChild(cardDiv);
-                attachListeners(content);
-                if (stats) updateStatsDisplay(stats);
-                scrollToBottom();
-
-                chatHistory.push({
-                  id: assistantMsgId,
-                  role: 'assistant',
-                  content: currentTurnText || null,
-                  tool_calls: [tc]
-                });
-
-                chatHistory.push({
-                  id: assistantMsgId,
-                  role: 'tool',
-                  tool_call_id: tc.id,
-                  name: normName,
-                  content: JSON.stringify({
-                    success: webRes.success,
-                    url: webRes.url || urlToFetch,
-                    status: webRes.status || 200,
-                    isPdf: isPdfResult,
-                    content: webRes.content,
-                    error: webRes.error
-                  })
-                });
-
-                const toolMd = `> ${cardIcon} **${normName}** (${statusBadgeText})\n> URL: ${webRes.url || urlToFetch}\n> \`\`\`\n> ${(responsePreview || '').split('\n').join('\n> ')}\n> \`\`\``;
-                accumulatedConversationMarkdown += (currentTurnText ? currentTurnText + '\n\n' : '') + toolMd + '\n\n';
-
-                turnIndex++;
-                return runAgentTurn();
-              }
-
-              // 3. Búsqueda en Internet (search_web)
-              else if (normName === 'search_web') {
-                let queryToSearch = '';
-                try {
-                  const parsed = typeof tc.function.arguments === 'object' ? tc.function.arguments : JSON.parse(tc.function.arguments || '{}');
-                  queryToSearch = parsed.query || parsed.q || parsed.search || parsed.keyword || parsed.term || parsed.text || parsed.input || (typeof parsed === 'string' ? parsed : '');
-                } catch (e) {
-                  queryToSearch = tc.function.arguments || '';
-                }
-
-                addDebugLog('tool', `search_web: "${queryToSearch}"`);
-                const searchRes = await (WebSearch.search ? WebSearch.search(queryToSearch, appConfig.language || 'es') : { success: false, query: queryToSearch, count: 0, results: [], markdown: 'Módulo de búsqueda no disponible', elapsedMs: 0 });
-                const statusBadgeText = `${searchRes.count} fuentes (${searchRes.elapsedMs || 0}ms)`;
-
-                addDebugLog('tool', `search_web (${searchRes.count} resultados) [${searchRes.elapsedMs || 0}ms]:\n${(searchRes.markdown || '').substring(0, 200)}...`);
-
-                let resultsHtml = '';
-                if (searchRes.results && searchRes.results.length > 0) {
-                  resultsHtml = '<div class="search-results-list">' + searchRes.results.map(r => `
-                    <div class="search-result-item">
-                      <div><a href="${Markdown.escapeHtml(r.url)}" target="_blank" rel="noopener noreferrer">🔗 ${Markdown.escapeHtml(r.title)}</a> <small style="opacity:0.75;">(${Markdown.escapeHtml(r.source)})</small></div>
-                      ${r.snippet ? `<div class="search-result-snippet">${Markdown.escapeHtml(r.snippet)}</div>` : ''}
-                    </div>
-                  `).join('') + '</div>';
-                } else {
-                  resultsHtml = `<div class="search-result-snippet"><em>${t('tool_search_empty')}</em></div>`;
-                }
-
-                const searchCardHtml = `
-                  <div class="web-search-card">
-                    <div class="web-card-header">
-                      <div class="web-card-title">
-                        <span>🔍</span>
-                        <span>${t('tool_search_title')}</span>
-                      </div>
-                      <span class="web-card-badge">${statusBadgeText}</span>
-                    </div>
-                    <div class="web-card-section">
-                      <div class="section-label">${t('tool_search_query')}</div>
-                      <div class="query-badge">"${Markdown.escapeHtml(queryToSearch)}"</div>
-                    </div>
-                    <div class="web-card-section">
-                      <div class="section-label">${t('tool_search_results', { count: searchRes.count })}</div>
-                      ${resultsHtml}
-                    </div>
-                  </div>
-                `;
-
-                const cardDiv = document.createElement('div');
-                cardDiv.innerHTML = searchCardHtml;
-                content.appendChild(cardDiv);
-                attachListeners(content);
-                if (stats) updateStatsDisplay(stats);
-                scrollToBottom();
-
-                chatHistory.push({
-                  id: assistantMsgId,
-                  role: 'assistant',
-                  content: currentTurnText || null,
-                  tool_calls: [tc]
-                });
-
-                chatHistory.push({
-                  id: assistantMsgId,
-                  role: 'tool',
-                  tool_call_id: tc.id,
-                  name: 'search_web',
-                  content: searchRes.markdown
-                });
-
-                const toolMd = `> 🔍 **search_web** (${searchRes.count} fuentes)\n> Query: "${queryToSearch}"\n> \`\`\`markdown\n> ${(searchRes.markdown || '').split('\n').join('\n> ')}\n> \`\`\``;
-                accumulatedConversationMarkdown += (currentTurnText ? currentTurnText + '\n\n' : '') + toolMd + '\n\n';
-
-                turnIndex++;
-                return runAgentTurn();
-              }
-            }
-
-            // Turno final sin llamadas a herramientas
-            turnBlock.innerHTML = parseMd(currentTurnText || t('empty_response'));
-            attachListeners(turnBlock);
-            chatHistory.push({ id: assistantMsgId, role: 'assistant', content: currentTurnText });
-
-            if (stats) updateStatsDisplay(stats);
-            setDebugStatus('done', t('debug_status_done'));
-
-            actions.style.display = 'inline-flex';
-            btnCopy.addEventListener('click', async () => {
-              try {
-                const finalFullMarkdown = (accumulatedConversationMarkdown ? accumulatedConversationMarkdown : '') + currentTurnText;
-                await navigator.clipboard.writeText(finalFullMarkdown);
-                const span = btnCopy.querySelector('span');
-                const originalText = span.textContent;
-                span.textContent = t('copied_text');
-                btnCopy.classList.add('copied');
-
-                setTimeout(() => {
-                  span.textContent = originalText;
-                  btnCopy.classList.remove('copied');
-                }, 2000);
-              } catch (err) {
-                console.error('Error copying composite response:', err);
-              }
-            });
-
-            finishGeneration();
-
-          } catch (err) {
-            console.error('Error processing turn response:', err);
-            setDebugStatus('error', t('debug_status_error'));
-            addDebugLog('error', err.message || String(err));
-            row.classList.add('message-error');
-            turnBlock.innerHTML += `
-              <div class="agentic-response-block message-error" style="margin-top: 1rem;">
-                <div style="display:flex; align-items:flex-start; gap:0.5rem;">
-                  <span>⚠️</span>
-                  <div>
-                    <strong>${t('tool_error_title')}</strong>
-                    <p style="margin-top: 0.25rem;">${err.message || err}</p>
-                  </div>
-                </div>
-              </div>
-            `;
-            actions.style.display = 'inline-flex';
-            finishGeneration();
-          }
+        onDone: function (finalText, stats, toolCalls) {
+          currentTurnText = finalText || currentTurnText;
+          turnFinalStats = stats;
+          turnToolCalls = toolCalls;
         },
 
         onError: function (error) {
-          setDebugStatus('error', t('debug_status_error'));
-          addDebugLog('error', error.message || String(error));
-          row.classList.add('message-error');
-          turnBlock.innerHTML = `
-            <div style="display:flex; align-items:flex-start; gap:0.5rem;">
-              <span>⚠️</span>
-              <div>
-                <strong>${t('err_server_connect')}</strong>
-                <p style="margin-top: 0.25rem;">${error.message || error}</p>
-                <p style="margin-top: 0.5rem; font-size: 0.85em; opacity: 0.9;">
-                  ${t('err_server_connect_hint', { url: appConfig.apiUrl })}
-                </p>
-              </div>
-            </div>
-          `;
-          actions.style.display = 'inline-flex';
-          finishGeneration();
+          streamError = error;
         }
       });
+
+      if (streamError) {
+        if (currentAbortController && currentAbortController.signal.aborted) {
+          break;
+        }
+        setDebugStatus('error', t('debug_status_error'));
+        addDebugLog('error', streamError.message || String(streamError));
+        row.classList.add('message-error');
+        turnBlock.innerHTML = `
+          <div style="display:flex; align-items:flex-start; gap:0.5rem;">
+            <span>⚠️</span>
+            <div>
+              <strong>${t('err_server_connect')}</strong>
+              <p style="margin-top: 0.25rem;">${streamError.message || streamError}</p>
+              <p style="margin-top: 0.5rem; font-size: 0.85em; opacity: 0.9;">
+                ${t('err_server_connect_hint', { url: appConfig.apiUrl })}
+              </p>
+            </div>
+          </div>
+        `;
+        actions.style.display = 'inline-flex';
+        finishGeneration();
+        return;
+      }
+
+      if (streamResult) {
+        currentTurnText = streamResult.accumulatedText || currentTurnText;
+        turnToolCalls = streamResult.toolCalls || turnToolCalls;
+        turnFinalStats = streamResult.stats || turnFinalStats;
+      }
+
+      // Extraer tool calls de texto si no llegaron en estructura nativa
+      if ((!turnToolCalls || turnToolCalls.length === 0) && currentTurnText) {
+        if (API.extractToolCallsFromText) {
+          const textCalls = API.extractToolCallsFromText(currentTurnText);
+          if (textCalls && textCalls.length > 0) {
+            turnToolCalls = textCalls;
+          }
+        }
+      }
+
+      // Si no hay herramientas para ejecutar, es la respuesta final -> salir del bucle
+      if (!turnToolCalls || turnToolCalls.length === 0) {
+        turnBlock.innerHTML = parseMd(currentTurnText || t('empty_response'));
+        attachListeners(turnBlock);
+        chatHistory.push({ id: assistantMsgId, role: 'assistant', content: currentTurnText });
+
+        if (turnFinalStats) updateStatsDisplay(turnFinalStats);
+        setDebugStatus('done', t('debug_status_done'));
+
+        actions.style.display = 'inline-flex';
+        btnCopy.addEventListener('click', async () => {
+          try {
+            const finalFullMarkdown = (accumulatedConversationMarkdown ? accumulatedConversationMarkdown : '') + currentTurnText;
+            await navigator.clipboard.writeText(finalFullMarkdown);
+            const span = btnCopy.querySelector('span');
+            const originalText = span.textContent;
+            span.textContent = t('copied_text');
+            btnCopy.classList.add('copied');
+
+            setTimeout(() => {
+              span.textContent = originalText;
+              btnCopy.classList.remove('copied');
+            }, 2000);
+          } catch (err) {
+            console.error('Error copying composite response:', err);
+          }
+        });
+
+        finishGeneration();
+        return;
+      }
+
+      // Procesar llamada a herramienta
+      const tc = turnToolCalls[0];
+      const rawFuncName = tc.function?.name || '';
+      const normName = API.normalizeToolName ? API.normalizeToolName(rawFuncName) : rawFuncName.toLowerCase().replace(/_/g, '');
+
+      // Limpiar llamadas a herramientas emitidas como texto crudo en la UI
+      const trimmedAcc = (currentTurnText || '').trim();
+      if (
+        trimmedAcc.startsWith('<|') ||
+        trimmedAcc.startsWith('<tool_call') ||
+        trimmedAcc.startsWith('<function_call') ||
+        trimmedAcc.startsWith('call:') ||
+        trimmedAcc.startsWith('{"name"') ||
+        trimmedAcc.startsWith('```json\n{"name"') ||
+        trimmedAcc.startsWith('download_pdf(') ||
+        trimmedAcc.startsWith('downloadpdf(') ||
+        trimmedAcc.startsWith('fetch_web_page(') ||
+        trimmedAcc.startsWith('fetchwebpage(') ||
+        trimmedAcc.startsWith('search_web(') ||
+        trimmedAcc.startsWith('searchweb(') ||
+        trimmedAcc.startsWith('execute_javascript(') ||
+        trimmedAcc.startsWith('executejs(')
+      ) {
+        currentTurnText = '';
+      }
+
+      if (currentTurnText) {
+        turnBlock.innerHTML = parseMd(currentTurnText);
+        attachListeners(turnBlock);
+      } else {
+        turnBlock.remove();
+      }
+
+      // 1. Ejecución de JavaScript
+      if (normName === 'execute_javascript') {
+        let codeToRun = '';
+        try {
+          const parsed = typeof tc.function.arguments === 'object' ? tc.function.arguments : JSON.parse(tc.function.arguments || '{}');
+          codeToRun = parsed.code || parsed.javascript || parsed.js || parsed.script || parsed.input || (typeof parsed === 'string' ? parsed : '');
+        } catch (e) {
+          codeToRun = tc.function.arguments || '';
+        }
+
+        addDebugLog('tool', `execute_javascript:\n${codeToRun}`);
+        const toolExecRes = await (Sandbox.execute ? Sandbox.execute(codeToRun) : { success: false, error: 'Sandbox not available' });
+        const outputText = toolExecRes.success
+          ? (toolExecRes.result || (toolExecRes.logs && toolExecRes.logs.length > 0 ? toolExecRes.logs.join('\n') : 'undefined'))
+          : `Error: ${toolExecRes.error}`;
+
+        addDebugLog('tool', `execute_javascript output (${toolExecRes.executionTimeMs || 0}ms):\n${outputText}`);
+
+        const toolCardHtml = `
+          <div class="tool-execution-card">
+            <div class="tool-card-header">
+              <span>${t('tool_js_title', { ms: toolExecRes.executionTimeMs || 0 })}</span>
+            </div>
+            <pre class="tool-card-code"><code>${Markdown.escapeHtml(codeToRun)}</code></pre>
+            <div class="tool-card-result"><strong>${t('tool_sandbox_output')}</strong>\n${Markdown.escapeHtml(outputText)}</div>
+          </div>
+        `;
+
+        const cardDiv = document.createElement('div');
+        cardDiv.innerHTML = toolCardHtml;
+        content.appendChild(cardDiv);
+        attachListeners(content);
+        if (turnFinalStats) updateStatsDisplay(turnFinalStats);
+        scrollToBottom();
+
+        chatHistory.push({
+          id: assistantMsgId,
+          role: 'assistant',
+          content: currentTurnText || null,
+          tool_calls: [tc]
+        });
+
+        chatHistory.push({
+          id: assistantMsgId,
+          role: 'tool',
+          tool_call_id: tc.id,
+          name: 'execute_javascript',
+          content: JSON.stringify({
+            success: toolExecRes.success,
+            result: toolExecRes.result,
+            logs: toolExecRes.logs,
+            executionTimeMs: toolExecRes.executionTimeMs,
+            error: toolExecRes.error
+          })
+        });
+
+        const toolMd = `> ⚡ **execute_javascript**\n> \`\`\`javascript\n> ${codeToRun.split('\n').join('\n> ')}\n> \`\`\`\n> \`\`\`\n> ${outputText.split('\n').join('\n> ')}\n> \`\`\``;
+        accumulatedConversationMarkdown += (currentTurnText ? currentTurnText + '\n\n' : '') + toolMd + '\n\n';
+
+        turnIndex++;
+        continue;
+      }
+
+      // 2. Consulta Web o Descarga de PDF
+      else if (normName === 'fetch_web_page' || normName === 'download_pdf') {
+        const isPdfCall = normName === 'download_pdf';
+        let urlToFetch = '';
+        try {
+          const parsed = typeof tc.function.arguments === 'object' ? tc.function.arguments : JSON.parse(tc.function.arguments || '{}');
+          urlToFetch = parsed.url || parsed.URL || parsed.uri || parsed.link || parsed.href || parsed.path || parsed.input || (typeof parsed === 'string' ? parsed : '');
+        } catch (e) {
+          urlToFetch = tc.function.arguments || '';
+        }
+
+        addDebugLog('tool', `${normName}: ${urlToFetch}`);
+        const webRes = await (WebBrowser.fetchPage ? WebBrowser.fetchPage(urlToFetch) : { success: false, url: urlToFetch, content: '', error: 'Web module not available' });
+        const isPdfResult = webRes.isPdf || isPdfCall;
+
+        const statusBadgeText = webRes.success
+          ? (isPdfResult ? `PDF (${webRes.byteSize ? FileParser.formatBytes(webRes.byteSize) : 'OK'}) [${webRes.elapsedMs || 0}ms]` : `HTTP ${webRes.status || 200} OK (${webRes.elapsedMs || 0}ms)`)
+          : `Error (${webRes.elapsedMs || 0}ms)`;
+
+        const cardIcon = isPdfResult ? '📄' : '🌐';
+        const cardTitle = isPdfResult ? t('tool_pdf_title') : t('tool_web_title');
+
+        const responsePreview = webRes.success
+          ? (webRes.content || t('tool_web_empty'))
+          : (webRes.error || t('tool_web_err_connect'));
+
+        addDebugLog('tool', `${normName} (${statusBadgeText}) [${webRes.byteSize ? FileParser.formatBytes(webRes.byteSize) : '0 B'}]:\n${(responsePreview || '').substring(0, 200)}...`);
+
+        const webCardHtml = `
+          <div class="web-request-card ${isPdfResult ? 'pdf-request-card' : ''}">
+            <div class="web-card-header">
+              <div class="web-card-title">
+                <span>${cardIcon}</span>
+                <span>${cardTitle}</span>
+              </div>
+              <span class="web-card-badge">${statusBadgeText}</span>
+            </div>
+            <div class="web-card-section web-request-section">
+              <div class="section-label">${t('tool_web_requested_url')}</div>
+              <div class="url-badge"><a href="${Markdown.escapeHtml(webRes.url || urlToFetch)}" target="_blank" rel="noopener noreferrer">${Markdown.escapeHtml(webRes.url || urlToFetch)}</a></div>
+            </div>
+            <div class="web-card-section web-response-section">
+              <div class="section-label">${t('tool_web_content_received', { size: webRes.byteSize ? FileParser.formatBytes(webRes.byteSize) : (webRes.content ? webRes.content.length + ' chars' : '0 B') })}</div>
+              <pre class="web-response-body"><code>${Markdown.escapeHtml(responsePreview)}</code></pre>
+            </div>
+          </div>
+        `;
+
+        const cardDiv = document.createElement('div');
+        cardDiv.innerHTML = webCardHtml;
+        content.appendChild(cardDiv);
+        attachListeners(content);
+        if (turnFinalStats) updateStatsDisplay(turnFinalStats);
+        scrollToBottom();
+
+        chatHistory.push({
+          id: assistantMsgId,
+          role: 'assistant',
+          content: currentTurnText || null,
+          tool_calls: [tc]
+        });
+
+        chatHistory.push({
+          id: assistantMsgId,
+          role: 'tool',
+          tool_call_id: tc.id,
+          name: normName,
+          content: JSON.stringify({
+            success: webRes.success,
+            url: webRes.url || urlToFetch,
+            status: webRes.status || 200,
+            isPdf: isPdfResult,
+            content: webRes.content,
+            error: webRes.error
+          })
+        });
+
+        const toolMd = `> ${cardIcon} **${normName}** (${statusBadgeText})\n> URL: ${webRes.url || urlToFetch}\n> \`\`\`\n> ${(responsePreview || '').split('\n').join('\n> ')}\n> \`\`\``;
+        accumulatedConversationMarkdown += (currentTurnText ? currentTurnText + '\n\n' : '') + toolMd + '\n\n';
+
+        turnIndex++;
+        continue;
+      }
+
+      // 3. Búsqueda en Internet (search_web)
+      else if (normName === 'search_web') {
+        let queryToSearch = '';
+        try {
+          const parsed = typeof tc.function.arguments === 'object' ? tc.function.arguments : JSON.parse(tc.function.arguments || '{}');
+          queryToSearch = parsed.query || parsed.q || parsed.search || parsed.keyword || parsed.term || parsed.text || parsed.input || (typeof parsed === 'string' ? parsed : '');
+        } catch (e) {
+          queryToSearch = tc.function.arguments || '';
+        }
+
+        addDebugLog('tool', `search_web: "${queryToSearch}"`);
+        const searchRes = await (WebSearch.search ? WebSearch.search(queryToSearch, appConfig.language || 'es') : { success: false, query: queryToSearch, count: 0, results: [], markdown: 'Módulo de búsqueda no disponible', elapsedMs: 0 });
+        const statusBadgeText = `${searchRes.count} fuentes (${searchRes.elapsedMs || 0}ms)`;
+
+        addDebugLog('tool', `search_web (${searchRes.count} resultados) [${searchRes.elapsedMs || 0}ms]:\n${(searchRes.markdown || '').substring(0, 200)}...`);
+
+        let resultsHtml = '';
+        if (searchRes.results && searchRes.results.length > 0) {
+          resultsHtml = '<div class="search-results-list">' + searchRes.results.map(r => `
+            <div class="search-result-item">
+              <div><a href="${Markdown.escapeHtml(r.url)}" target="_blank" rel="noopener noreferrer">🔗 ${Markdown.escapeHtml(r.title)}</a> <small style="opacity:0.75;">(${Markdown.escapeHtml(r.source)})</small></div>
+              ${r.snippet ? `<div class="search-result-snippet">${Markdown.escapeHtml(r.snippet)}</div>` : ''}
+            </div>
+          `).join('') + '</div>';
+        } else {
+          resultsHtml = `<div class="search-result-snippet"><em>${t('tool_search_empty')}</em></div>`;
+        }
+
+        const searchCardHtml = `
+          <div class="web-search-card">
+            <div class="web-card-header">
+              <div class="web-card-title">
+                <span>🔍</span>
+                <span>${t('tool_search_title')}</span>
+              </div>
+              <span class="web-card-badge">${statusBadgeText}</span>
+            </div>
+            <div class="web-card-section">
+              <div class="section-label">${t('tool_search_query')}</div>
+              <div class="query-badge">"${Markdown.escapeHtml(queryToSearch)}"</div>
+            </div>
+            <div class="web-card-section">
+              <div class="section-label">${t('tool_search_results', { count: searchRes.count })}</div>
+              ${resultsHtml}
+            </div>
+          </div>
+        `;
+
+        const cardDiv = document.createElement('div');
+        cardDiv.innerHTML = searchCardHtml;
+        content.appendChild(cardDiv);
+        attachListeners(content);
+        if (turnFinalStats) updateStatsDisplay(turnFinalStats);
+        scrollToBottom();
+
+        chatHistory.push({
+          id: assistantMsgId,
+          role: 'assistant',
+          content: currentTurnText || null,
+          tool_calls: [tc]
+        });
+
+        chatHistory.push({
+          id: assistantMsgId,
+          role: 'tool',
+          tool_call_id: tc.id,
+          name: 'search_web',
+          content: searchRes.markdown
+        });
+
+        const toolMd = `> 🔍 **search_web** (${searchRes.count} fuentes)\n> Query: "${queryToSearch}"\n> \`\`\`markdown\n> ${(searchRes.markdown || '').split('\n').join('\n> ')}\n> \`\`\``;
+        accumulatedConversationMarkdown += (currentTurnText ? currentTurnText + '\n\n' : '') + toolMd + '\n\n';
+
+        turnIndex++;
+        continue;
+      }
     }
 
-    await runAgentTurn();
+    setDebugStatus('done', t('debug_status_done'));
+    finishGeneration();
   }
 
   function finishGeneration() {
