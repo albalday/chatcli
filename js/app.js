@@ -2410,62 +2410,120 @@
       .replace(/```[\s\S]*?```/g, ' [Bloque de código omitido] ')
       .replace(/`[^`]+`/g, ' ')
       .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-      .replace(/[#*>\-_~|]/g, ' ')
       .replace(/https?:\/\/\S+/g, ' enlace ')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/[#*>\-_~|]/g, ' ')
+      .replace(/[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}\u{2300}-\u{23FF}\u{2B50}\u{FE00}-\u{FE0F}]/gu, '')
       .replace(/\s+/g, ' ')
       .trim();
   }
 
-  function toggleSpeakMessage(text, buttonElement) {
-    if (!window.speechSynthesis) return;
+  let isSpeakingQueue = false;
 
-    if (window.speechSynthesis.speaking) {
-      window.speechSynthesis.cancel();
-      if (activeSpeakingButton) {
-        activeSpeakingButton.classList.remove('speaking');
-        activeSpeakingButton.innerHTML = `🔊 <span>${t('btn_speak')}</span>`;
-        activeSpeakingButton.title = t('btn_speak_title');
-      }
-      if (activeSpeakingButton === buttonElement) {
-        activeSpeakingButton = null;
-        return;
-      }
+  function stopAllSpeech() {
+    isSpeakingQueue = false;
+    if (window.speechSynthesis) {
+      try {
+        window.speechSynthesis.cancel();
+      } catch (e) {}
     }
+    if (activeSpeakingButton) {
+      activeSpeakingButton.classList.remove('speaking');
+      activeSpeakingButton.innerHTML = `🔊 <span>${t('btn_speak')}</span>`;
+      activeSpeakingButton.title = t('btn_speak_title');
+      activeSpeakingButton = null;
+    }
+  }
+
+  function toggleSpeakMessage(text, buttonElement) {
+    if (!window.speechSynthesis) {
+      if (typeof addDebugLog === 'function') {
+        addDebugLog('error', 'La síntesis de voz (Text-to-Speech) no está disponible en este navegador o sistema.');
+      }
+      return;
+    }
+
+    if (activeSpeakingButton === buttonElement) {
+      stopAllSpeech();
+      return;
+    }
+
+    stopAllSpeech();
 
     const clean = cleanTextForSpeech(text);
     if (!clean) return;
 
+    // Dividir en oraciones/fragmentos cortos (<200 caracteres) para evitar errores de buffer en Linux speech-dispatcher / WebSpeech
+    const rawSentences = clean.match(/[^.!?;\n]+[.!?;\n]*/g) || [clean];
+    const chunks = [];
+    let currentChunk = '';
+
+    for (let i = 0; i < rawSentences.length; i++) {
+      const s = rawSentences[i].trim();
+      if (!s) continue;
+      if ((currentChunk + ' ' + s).length < 200) {
+        currentChunk = currentChunk ? (currentChunk + ' ' + s) : s;
+      } else {
+        if (currentChunk) chunks.push(currentChunk);
+        currentChunk = s;
+      }
+    }
+    if (currentChunk) chunks.push(currentChunk);
+
+    if (chunks.length === 0) return;
+
+    activeSpeakingButton = buttonElement;
+    buttonElement.classList.add('speaking');
+    buttonElement.innerHTML = `⏹️ <span>${t('btn_stop_speak')}</span>`;
+    buttonElement.title = t('btn_stop_speak_title');
+
     const lang = appConfig.language || (I18n.getLanguage ? I18n.getLanguage() : 'es');
-    const utter = new SpeechSynthesisUtterance(clean);
-    utter.lang = (lang === 'en') ? 'en-US' : 'es-ES';
-    utter.rate = 1.0;
+    const targetLang = (lang === 'en') ? 'en-US' : 'es-ES';
 
-    const voices = window.speechSynthesis.getVoices();
-    const matchingVoice = voices.find(v => v.lang.startsWith(utter.lang.slice(0, 2)));
-    if (matchingVoice) utter.voice = matchingVoice;
+    let chunkIndex = 0;
+    isSpeakingQueue = true;
 
-    utter.onstart = function() {
-      activeSpeakingButton = buttonElement;
-      buttonElement.classList.add('speaking');
-      buttonElement.innerHTML = `⏹️ <span>${t('btn_stop_speak')}</span>`;
-      buttonElement.title = t('btn_stop_speak_title');
-    };
+    function speakNextChunk() {
+      if (!isSpeakingQueue || chunkIndex >= chunks.length || activeSpeakingButton !== buttonElement) {
+        stopAllSpeech();
+        return;
+      }
 
-    utter.onend = function() {
-      buttonElement.classList.remove('speaking');
-      buttonElement.innerHTML = `🔊 <span>${t('btn_speak')}</span>`;
-      buttonElement.title = t('btn_speak_title');
-      activeSpeakingButton = null;
-    };
+      const chunkText = chunks[chunkIndex++];
+      const utter = new SpeechSynthesisUtterance(chunkText);
+      utter.lang = targetLang;
+      utter.rate = 1.0;
+      utter.pitch = 1.0;
 
-    utter.onerror = function() {
-      buttonElement.classList.remove('speaking');
-      buttonElement.innerHTML = `🔊 <span>${t('btn_speak')}</span>`;
-      buttonElement.title = t('btn_speak_title');
-      activeSpeakingButton = null;
-    };
+      const voices = window.speechSynthesis.getVoices() || [];
+      const exactVoice = voices.find(v => v.lang === targetLang || v.lang === targetLang.replace('-', '_'));
+      const prefixVoice = voices.find(v => v.lang && v.lang.toLowerCase().startsWith(targetLang.slice(0, 2).toLowerCase()));
+      if (exactVoice) {
+        utter.voice = exactVoice;
+      } else if (prefixVoice) {
+        utter.voice = prefixVoice;
+      }
 
-    window.speechSynthesis.speak(utter);
+      utter.onend = function () {
+        if (isSpeakingQueue && activeSpeakingButton === buttonElement) {
+          speakNextChunk();
+        }
+      };
+
+      utter.onerror = function (err) {
+        console.warn('Speech synthesis utterance error:', err);
+        stopAllSpeech();
+      };
+
+      try {
+        window.speechSynthesis.speak(utter);
+      } catch (e) {
+        console.error('Error in window.speechSynthesis.speak:', e);
+        stopAllSpeech();
+      }
+    }
+
+    speakNextChunk();
   }
 
   // ==========================================================================
