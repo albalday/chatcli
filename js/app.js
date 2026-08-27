@@ -2453,6 +2453,17 @@
     const clean = cleanTextForSpeech(text);
     if (!clean) return;
 
+    const voices = window.speechSynthesis.getVoices() || [];
+    const isDummyOnly = voices.length > 0 && voices.every(v => !v.name || v.name.toLowerCase().includes('dummy'));
+    if (isDummyOnly) {
+      const errMsg = t('err_tts_dummy');
+      if (typeof addDebugLog === 'function') {
+        addDebugLog('error', errMsg);
+      }
+      alert(errMsg);
+      return;
+    }
+
     // Dividir en oraciones/fragmentos cortos (<200 caracteres) para evitar errores de buffer en Linux speech-dispatcher / WebSpeech
     const rawSentences = clean.match(/[^.!?;\n]+[.!?;\n]*/g) || [clean];
     const chunks = [];

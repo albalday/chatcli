@@ -204,6 +204,7 @@
       msg_models_success: '✅ <strong>{count} modelos detectados con éxito</strong> en <code>{endpoint}</code>.',
       err_api_connect: '❌ <strong>Error al conectar con la API:</strong> {err}',
       err_file_process: 'No se pudo procesar el archivo {name}: {err}',
+      err_tts_dummy: '⚠️ No hay voces de síntesis reales instaladas en el sistema operativo (solo está disponible el módulo de prueba "dummy" de speech-dispatcher). Para habilitar la voz en Linux, instala el paquete espeak-ng con: sudo zypper in espeak-ng speech-dispatcher-module-espeak-ng (o el equivalente de tu distribución).',
 
       // Markdown & Sandbox
       md_thought_title: '💭 Proceso de razonamiento',
@@ -442,6 +443,7 @@
       msg_models_success: '✅ <strong>{count} models detected successfully</strong> at <code>{endpoint}</code>.',
       err_api_connect: '❌ <strong>Error connecting to API:</strong> {err}',
       err_file_process: 'Could not process file {name}: {err}',
+      err_tts_dummy: '⚠️ No real speech synthesizer voices are installed on the OS (only the speech-dispatcher dummy module is present). To enable speech synthesis on Linux, install espeak-ng: sudo zypper in espeak-ng speech-dispatcher-module-espeak-ng (or your distro equivalent).',
 
       // Markdown & Sandbox
       md_thought_title: '💭 Reasoning process',
