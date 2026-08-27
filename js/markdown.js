@@ -442,6 +442,24 @@
         }
       });
     });
+
+    // 3. Botones de colapsar / minimizar tarjetas de herramientas
+    container.querySelectorAll('.btn-tool-collapse').forEach(function (button) {
+      if (button.dataset.listenerAttached) return;
+      button.dataset.listenerAttached = 'true';
+
+      button.addEventListener('click', function (e) {
+        e.stopPropagation();
+        const card = button.closest('.tool-execution-card, .web-request-card, .web-search-card, .chat-chart-card');
+        if (!card) return;
+        const isCollapsed = card.classList.toggle('collapsed');
+        const iconSpan = button.querySelector('span');
+        if (iconSpan) {
+          iconSpan.textContent = isCollapsed ? '▸' : '▾';
+        }
+        button.title = isCollapsed ? tr('tool_btn_expand', 'Expandir herramienta') : tr('tool_btn_collapse', 'Minimizar herramienta');
+      });
+    });
   }
 
   return {

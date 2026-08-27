@@ -1471,6 +1471,33 @@
           codeToRun = tc.function.arguments || '';
         }
 
+        // Crear e insertar de inmediato la tarjeta en la interfaz (aparece al momento de la llamada)
+        const cardDiv = document.createElement('div');
+        cardDiv.className = 'tool-card-wrapper';
+        cardDiv.innerHTML = `
+          <div class="tool-execution-card">
+            <div class="tool-card-header">
+              <div class="tool-card-title">
+                <span>⚡</span>
+                <span>${t('tool_js_title_running') || 'execute_javascript'}</span>
+              </div>
+              <div class="tool-card-header-actions">
+                <span class="tool-card-badge status-loading">⏳ ${t('tool_badge_executing') || 'Ejecutando...'}</span>
+                <button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Minimizar'}"><span>▾</span></button>
+              </div>
+            </div>
+            <div class="tool-card-collapsible-body">
+              <pre class="tool-card-code"><code>${Markdown.escapeHtml(codeToRun)}</code></pre>
+              <div class="tool-card-result">
+                <div class="tool-loading-placeholder">⏳ ${t('tool_loading_js') || 'Ejecutando código en sandbox local...'}</div>
+              </div>
+            </div>
+          </div>
+        `;
+        content.appendChild(cardDiv);
+        attachListeners(cardDiv);
+        scrollToBottom();
+
         addDebugLog('tool', `execute_javascript:\n${codeToRun}`);
         const toolExecRes = await (Sandbox.execute ? Sandbox.execute(codeToRun) : { success: false, error: 'Sandbox not available' });
         const outputText = toolExecRes.success
@@ -1479,20 +1506,21 @@
 
         addDebugLog('tool', `execute_javascript output (${toolExecRes.executionTimeMs || 0}ms):\n${outputText}`);
 
-        const toolCardHtml = `
-          <div class="tool-execution-card">
-            <div class="tool-card-header">
-              <span>${t('tool_js_title', { ms: toolExecRes.executionTimeMs || 0 })}</span>
-            </div>
-            <pre class="tool-card-code"><code>${Markdown.escapeHtml(codeToRun)}</code></pre>
-            <div class="tool-card-result"><strong>${t('tool_sandbox_output')}</strong>\n${Markdown.escapeHtml(outputText)}</div>
-          </div>
-        `;
-
-        const cardDiv = document.createElement('div');
-        cardDiv.innerHTML = toolCardHtml;
-        content.appendChild(cardDiv);
-        attachListeners(content);
+        // Rellenar dinámicamente el resultado en la tarjeta existente
+        const badgeEl = cardDiv.querySelector('.tool-card-badge');
+        if (badgeEl) {
+          badgeEl.className = 'tool-card-badge';
+          badgeEl.textContent = `${toolExecRes.executionTimeMs || 0}ms`;
+        }
+        const titleEl = cardDiv.querySelector('.tool-card-title span:last-child');
+        if (titleEl) {
+          titleEl.textContent = t('tool_js_title', { ms: toolExecRes.executionTimeMs || 0 });
+        }
+        const resultEl = cardDiv.querySelector('.tool-card-result');
+        if (resultEl) {
+          resultEl.innerHTML = `<strong>${t('tool_sandbox_output')}</strong>\n${Markdown.escapeHtml(outputText)}`;
+        }
+        attachListeners(cardDiv);
         if (turnFinalStats) updateStatsDisplay(turnFinalStats);
         scrollToBottom();
 
@@ -1535,6 +1563,40 @@
           urlToFetch = tc.function.arguments || '';
         }
 
+        const cardIcon = isPdfCall ? '📄' : '🌐';
+        const cardTitle = isPdfCall ? t('tool_pdf_title') : t('tool_web_title');
+
+        // Crear e insertar de inmediato la tarjeta en la interfaz (aparece al momento de la llamada)
+        const cardDiv = document.createElement('div');
+        cardDiv.className = 'tool-card-wrapper';
+        cardDiv.innerHTML = `
+          <div class="web-request-card ${isPdfCall ? 'pdf-request-card' : ''}">
+            <div class="web-card-header">
+              <div class="web-card-title">
+                <span>${cardIcon}</span>
+                <span>${cardTitle}</span>
+              </div>
+              <div class="tool-card-header-actions">
+                <span class="web-card-badge status-loading">⏳ ${isPdfCall ? (t('tool_badge_downloading') || 'Descargando...') : (t('tool_badge_fetching') || 'Consultando...')}</span>
+                <button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Minimizar'}"><span>▾</span></button>
+              </div>
+            </div>
+            <div class="tool-card-collapsible-body">
+              <div class="web-card-section web-request-section">
+                <div class="section-label">${t('tool_web_requested_url')}</div>
+                <div class="url-badge"><a href="${Markdown.escapeHtml(urlToFetch)}" target="_blank" rel="noopener noreferrer">${Markdown.escapeHtml(urlToFetch)}</a></div>
+              </div>
+              <div class="web-card-section web-response-section">
+                <div class="section-label section-response-label">${t('tool_web_receiving') || 'Recibiendo contenido...'}</div>
+                <div class="web-response-body tool-loading-placeholder">⏳ ${isPdfCall ? t('tool_loading_pdf') : t('tool_loading_web')}</div>
+              </div>
+            </div>
+          </div>
+        `;
+        content.appendChild(cardDiv);
+        attachListeners(cardDiv);
+        scrollToBottom();
+
         addDebugLog('tool', `${normName}: ${urlToFetch}`);
         const webRes = await (WebBrowser.fetchPage ? WebBrowser.fetchPage(urlToFetch) : { success: false, url: urlToFetch, content: '', error: 'Web module not available' });
         const isPdfResult = webRes.isPdf || isPdfCall;
@@ -1543,39 +1605,28 @@
           ? (isPdfResult ? `PDF (${webRes.byteSize ? FileParser.formatBytes(webRes.byteSize) : 'OK'}) [${webRes.elapsedMs || 0}ms]` : `HTTP ${webRes.status || 200} OK (${webRes.elapsedMs || 0}ms)`)
           : `Error (${webRes.elapsedMs || 0}ms)`;
 
-        const cardIcon = isPdfResult ? '📄' : '🌐';
-        const cardTitle = isPdfResult ? t('tool_pdf_title') : t('tool_web_title');
-
         const responsePreview = webRes.success
           ? (webRes.content || t('tool_web_empty'))
           : (webRes.error || t('tool_web_err_connect'));
 
         addDebugLog('tool', `${normName} (${statusBadgeText}) [${webRes.byteSize ? FileParser.formatBytes(webRes.byteSize) : '0 B'}]:\n${(responsePreview || '').substring(0, 200)}...`);
 
-        const webCardHtml = `
-          <div class="web-request-card ${isPdfResult ? 'pdf-request-card' : ''}">
-            <div class="web-card-header">
-              <div class="web-card-title">
-                <span>${cardIcon}</span>
-                <span>${cardTitle}</span>
-              </div>
-              <span class="web-card-badge">${statusBadgeText}</span>
-            </div>
-            <div class="web-card-section web-request-section">
-              <div class="section-label">${t('tool_web_requested_url')}</div>
-              <div class="url-badge"><a href="${Markdown.escapeHtml(webRes.url || urlToFetch)}" target="_blank" rel="noopener noreferrer">${Markdown.escapeHtml(webRes.url || urlToFetch)}</a></div>
-            </div>
-            <div class="web-card-section web-response-section">
-              <div class="section-label">${t('tool_web_content_received', { size: webRes.byteSize ? FileParser.formatBytes(webRes.byteSize) : (webRes.content ? webRes.content.length + ' chars' : '0 B') })}</div>
-              <pre class="web-response-body"><code>${Markdown.escapeHtml(responsePreview)}</code></pre>
-            </div>
-          </div>
-        `;
-
-        const cardDiv = document.createElement('div');
-        cardDiv.innerHTML = webCardHtml;
-        content.appendChild(cardDiv);
-        attachListeners(content);
+        // Rellenar dinámicamente la tarjeta con la respuesta obtenida
+        const badgeEl = cardDiv.querySelector('.web-card-badge');
+        if (badgeEl) {
+          badgeEl.className = 'web-card-badge';
+          badgeEl.textContent = statusBadgeText;
+        }
+        const respLabelEl = cardDiv.querySelector('.section-response-label');
+        if (respLabelEl) {
+          respLabelEl.textContent = t('tool_web_content_received', { size: webRes.byteSize ? FileParser.formatBytes(webRes.byteSize) : (webRes.content ? webRes.content.length + ' chars' : '0 B') });
+        }
+        const respBodyEl = cardDiv.querySelector('.web-response-body');
+        if (respBodyEl) {
+          respBodyEl.className = 'web-response-body';
+          respBodyEl.innerHTML = `<code>${Markdown.escapeHtml(responsePreview)}</code>`;
+        }
+        attachListeners(cardDiv);
         if (turnFinalStats) updateStatsDisplay(turnFinalStats);
         scrollToBottom();
 
@@ -1618,6 +1669,39 @@
           queryToSearch = tc.function.arguments || '';
         }
 
+        // Crear e insertar de inmediato la tarjeta en la interfaz (aparece al momento de la llamada)
+        const cardDiv = document.createElement('div');
+        cardDiv.className = 'tool-card-wrapper';
+        cardDiv.innerHTML = `
+          <div class="web-search-card">
+            <div class="web-card-header">
+              <div class="web-card-title">
+                <span>🔍</span>
+                <span>${t('tool_search_title')}</span>
+              </div>
+              <div class="tool-card-header-actions">
+                <span class="web-card-badge status-loading">⏳ ${t('tool_badge_searching') || 'Buscando...'}</span>
+                <button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Minimizar'}"><span>▾</span></button>
+              </div>
+            </div>
+            <div class="tool-card-collapsible-body">
+              <div class="web-card-section">
+                <div class="section-label">${t('tool_search_query')}</div>
+                <div class="query-badge">"${Markdown.escapeHtml(queryToSearch)}"</div>
+              </div>
+              <div class="web-card-section search-results-section">
+                <div class="section-label search-response-label">${t('tool_search_searching') || 'Buscando fuentes...'}</div>
+                <div class="search-results-container">
+                  <div class="tool-loading-placeholder">⏳ ${t('tool_loading_search')}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+        content.appendChild(cardDiv);
+        attachListeners(cardDiv);
+        scrollToBottom();
+
         addDebugLog('tool', `search_web: "${queryToSearch}"`);
         const searchRes = await (WebSearch.search ? WebSearch.search(queryToSearch, appConfig.language || 'es') : { success: false, query: queryToSearch, count: 0, results: [], markdown: 'Módulo de búsqueda no disponible', elapsedMs: 0 });
         const statusBadgeText = `${searchRes.count} fuentes (${searchRes.elapsedMs || 0}ms)`;
@@ -1636,30 +1720,21 @@
           resultsHtml = `<div class="search-result-snippet"><em>${t('tool_search_empty')}</em></div>`;
         }
 
-        const searchCardHtml = `
-          <div class="web-search-card">
-            <div class="web-card-header">
-              <div class="web-card-title">
-                <span>🔍</span>
-                <span>${t('tool_search_title')}</span>
-              </div>
-              <span class="web-card-badge">${statusBadgeText}</span>
-            </div>
-            <div class="web-card-section">
-              <div class="section-label">${t('tool_search_query')}</div>
-              <div class="query-badge">"${Markdown.escapeHtml(queryToSearch)}"</div>
-            </div>
-            <div class="web-card-section">
-              <div class="section-label">${t('tool_search_results', { count: searchRes.count })}</div>
-              ${resultsHtml}
-            </div>
-          </div>
-        `;
-
-        const cardDiv = document.createElement('div');
-        cardDiv.innerHTML = searchCardHtml;
-        content.appendChild(cardDiv);
-        attachListeners(content);
+        // Rellenar dinámicamente la tarjeta con los resultados encontrados
+        const badgeEl = cardDiv.querySelector('.web-card-badge');
+        if (badgeEl) {
+          badgeEl.className = 'web-card-badge';
+          badgeEl.textContent = statusBadgeText;
+        }
+        const respLabelEl = cardDiv.querySelector('.search-response-label');
+        if (respLabelEl) {
+          respLabelEl.textContent = t('tool_search_results', { count: searchRes.count });
+        }
+        const resultsContainer = cardDiv.querySelector('.search-results-container');
+        if (resultsContainer) {
+          resultsContainer.innerHTML = resultsHtml;
+        }
+        attachListeners(cardDiv);
         if (turnFinalStats) updateStatsDisplay(turnFinalStats);
         scrollToBottom();
 
@@ -1698,9 +1773,10 @@
 
         const chartHtml = (Charts.renderChartCard ? Charts.renderChartCard(chartArgs) : '<div class="chat-chart-card">Gráfico generado</div>');
         const cardDiv = document.createElement('div');
+        cardDiv.className = 'tool-card-wrapper';
         cardDiv.innerHTML = chartHtml;
         content.appendChild(cardDiv);
-        attachListeners(content);
+        attachListeners(cardDiv);
         if (turnFinalStats) updateStatsDisplay(turnFinalStats);
         scrollToBottom();
 

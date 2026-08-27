@@ -300,12 +300,17 @@
             <span>📊</span>
             <strong>${escapeHtml(title)}</strong>
           </div>
-          <span class="chat-chart-badge">${escapeHtml(type.toUpperCase())}</span>
+          <div class="tool-card-header-actions">
+            <span class="chat-chart-badge">${escapeHtml(type.toUpperCase())}</span>
+            <button type="button" class="btn-tool-collapse" title="Minimizar / Expandir gráfico"><span>▾</span></button>
+          </div>
         </div>
-        ${description ? `<div class="chat-chart-description">${escapeHtml(description)}</div>` : ''}
-        ${topLegend}
-        <div class="chat-chart-body">
-          ${chartSvg}
+        <div class="tool-card-collapsible-body">
+          ${description ? `<div class="chat-chart-description">${escapeHtml(description)}</div>` : ''}
+          ${topLegend}
+          <div class="chat-chart-body">
+            ${chartSvg}
+          </div>
         </div>
       </div>
     `;
