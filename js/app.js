@@ -46,6 +46,7 @@
     enableAgentWeb: true,
     enableAgentSearch: true,
     enableAgentChart: true,
+    enableContextCache: true,
     sendDateTime: true
   };
 
@@ -57,6 +58,10 @@
   // Estado de sesiones múltiples (Sidebar)
   let currentSessionId = 'session_' + Date.now();
   let savedSessions = [];
+
+  // Estado y control de Context Caching (Prompt Caching)
+  let sessionCacheInvalidated = false;
+  let sessionCacheRevision = Date.now();
 
   // Referencias al DOM
   let elements = {};
@@ -153,6 +158,7 @@
       settingEnableAgentWeb: document.getElementById('setting-enable-agent-web'),
       settingEnableAgentSearch: document.getElementById('setting-enable-agent-search'),
       settingEnableAgentChart: document.getElementById('setting-enable-agent-chart'),
+      settingEnableContextCache: document.getElementById('setting-enable-context-cache'),
       settingSendDateTime: document.getElementById('setting-send-datetime'),
     };
   }
@@ -992,6 +998,13 @@
       }
     }
 
+    // Invalidar y anular la caché de contexto del servidor tras la eliminación de mensajes
+    sessionCacheInvalidated = true;
+    sessionCacheRevision = Date.now();
+    if (typeof addDebugLog === 'function') {
+      addDebugLog('system', t('cache_invalidated_log'));
+    }
+
     const remainingMessages = elements.messagesList.querySelectorAll('.message-wrapper');
     if (remainingMessages.length === 0 && elements.welcomeBanner) {
       elements.messagesList.appendChild(elements.welcomeBanner);
@@ -1270,6 +1283,9 @@
     function updateStatsDisplay(stats) {
       if (!stats) return;
       statsContainer.style.display = 'inline-flex';
+      const cacheHtml = (stats.cachedTokens && stats.cachedTokens > 0)
+        ? `<span>•</span><span class="stat-item stat-item-cache" title="${t('stat_cache_title')}">${t('stat_cache_tokens', { tokens: stats.cachedTokens })}</span>`
+        : '';
       statsContainer.innerHTML = `
         <span class="stat-item" title="${t('stat_ttft_title')}">${t('stat_ttft', { sec: stats.ttftSec })}</span>
         <span>•</span>
@@ -1277,7 +1293,7 @@
         <span>•</span>
         <span class="stat-item" title="${t('stat_total_time_title')}">${t('stat_total_time', { sec: stats.totalSec })}</span>
         <span>•</span>
-        <span class="stat-item" title="${t('stat_tokens_title')}">${t('stat_tokens', { tokens: stats.tokens })}</span>
+        <span class="stat-item" title="${t('stat_tokens_title')}">${t('stat_tokens', { tokens: stats.tokens })}</span>${cacheHtml}
       `;
     }
 
@@ -1303,6 +1319,9 @@
       let turnFinalStats = null;
       let streamError = null;
 
+      const isFirstTurn = turnIndex === 0;
+      const currentCacheInvalidated = isFirstTurn && sessionCacheInvalidated;
+
       const streamResult = await API.streamChatCompletion({
         apiUrl: appConfig.apiUrl,
         apiType: appConfig.apiType,
@@ -1316,6 +1335,9 @@
         enableAgentWeb: appConfig.enableAgentWeb !== false,
         enableAgentSearch: appConfig.enableAgentSearch !== false,
         enableAgentChart: appConfig.enableAgentChart !== false,
+        enableContextCache: appConfig.enableContextCache !== false,
+        cacheInvalidated: currentCacheInvalidated,
+        cacheRevision: sessionCacheRevision,
         signal: currentAbortController.signal,
 
         onReasoningChunk: function (chunk) {
@@ -1347,6 +1369,10 @@
           streamError = error;
         }
       });
+
+      if (sessionCacheInvalidated) {
+        sessionCacheInvalidated = false;
+      }
 
       if (streamError) {
         if (currentAbortController && currentAbortController.signal.aborted) {
@@ -1778,6 +1804,9 @@
     if (elements.settingEnableAgentChart) {
       elements.settingEnableAgentChart.checked = appConfig.enableAgentChart !== false;
     }
+    if (elements.settingEnableContextCache) {
+      elements.settingEnableContextCache.checked = appConfig.enableContextCache !== false;
+    }
     if (elements.settingSendDateTime) {
       elements.settingSendDateTime.checked = appConfig.sendDateTime !== false;
     }
@@ -1816,6 +1845,7 @@
       enableAgentWeb: elements.settingEnableAgentWeb ? elements.settingEnableAgentWeb.checked : true,
       enableAgentSearch: elements.settingEnableAgentSearch ? elements.settingEnableAgentSearch.checked : true,
       enableAgentChart: elements.settingEnableAgentChart ? elements.settingEnableAgentChart.checked : true,
+      enableContextCache: elements.settingEnableContextCache ? elements.settingEnableContextCache.checked : true,
       sendDateTime: elements.settingSendDateTime ? elements.settingSendDateTime.checked : true
     };
 
@@ -1862,6 +1892,9 @@
       }
       if (elements.settingEnableAgentChart) {
         elements.settingEnableAgentChart.checked = defaults.enableAgentChart !== false;
+      }
+      if (elements.settingEnableContextCache) {
+        elements.settingEnableContextCache.checked = defaults.enableContextCache !== false;
       }
       if (elements.settingSendDateTime) {
         elements.settingSendDateTime.checked = defaults.sendDateTime !== false;

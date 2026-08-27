@@ -382,6 +382,11 @@ body {
   gap: 0.25rem;
 }
 
+.stat-item.stat-item-cache {
+  color: #0284c7;
+  font-weight: 600;
+}
+
 /* Acciones del mensaje (Copiar, Borrar) */
 .message-actions {
   display: inline-flex;

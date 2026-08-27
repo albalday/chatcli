@@ -80,7 +80,12 @@ Desde el diseño de la arquitectura por módulos, la creación de la interfaz HT
    - Botón directo `🧠` con niveles de pensamiento (`None`, `Low`, `Med`, `High`, `XHigh`).
    - Panel de logs en tiempo real con filtrado (`Todo`, `🧠 Razonamiento`, `⚙️ Herramientas`, `🌐 Red`).
 
-8. **Métricas de Rendimiento Precisas**:
+8. **Caché de Contexto Inteligente (Context / Prompt Caching)**:
+   - Optimización automática de latencia y costes reutilizando la memoria caché de contexto (KV Cache / Prompt Caching) en servidores compatibles (OpenAI, Claude, OpenRouter, Gemini, LM Studio, vLLM).
+   - **Auto-invalidación inteligente**: Si el usuario elimina preguntas o respuestas intermedias del chat, la aplicación anula la caché automáticamente y reconstruye un contexto limpio para evitar desincronizaciones o estados residuales en el servidor.
+   - **Métricas de caché en tiempo real**: Visualización de tokens leídos desde la caché (`💾 N cache`) directamente en las estadísticas de cada respuesta y en la consola de depuración.
+
+9. **Métricas de Rendimiento Precisas**:
    - Latencia al primer token (TTFT), velocidad (`⚡ tok/s`), tiempo total y conteo de tokens.
 
 ---

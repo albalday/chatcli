@@ -492,6 +492,9 @@
       enableAgentWeb = false,
       enableAgentSearch = false,
       enableAgentChart = false,
+      enableContextCache = true,
+      cacheInvalidated = false,
+      cacheRevision = null,
       signal,
       onChunk,
       onReasoningChunk,
@@ -602,10 +605,73 @@
       payload.tool_choice = 'auto';
     }
 
+    // Configuración y gestión de Context Caching / Prompt Caching
+    if (enableContextCache) {
+      if (cacheInvalidated) {
+        if (onLog) {
+          onLog({
+            type: 'info',
+            text: '🔄 Caché de contexto invalidada tras el borrado de mensajes. Se reconstruye un contexto limpio en el servidor.'
+          });
+        }
+      } else {
+        // Habilitar stream_options.include_usage para capturar prompt_tokens_details.cached_tokens (OpenAI / LM Studio / OpenRouter / DeepSeek)
+        payload.stream_options = { include_usage: true };
+
+        // Para Anthropic Claude y OpenRouter con Claude: inyectar cache_control en el mensaje de sistema y el último turno de usuario
+        if (detectedType === 'claude' || detectedType === 'openrouter') {
+          // A) Cache control en el último tool
+          if (toolsList.length > 0) {
+            toolsList[toolsList.length - 1].cache_control = { type: 'ephemeral' };
+          }
+
+          // B) Cache control en mensajes (system y último user)
+          formattedMessages = formattedMessages.map((m, idx, arr) => {
+            if (m.role === 'system') {
+              if (typeof m.content === 'string') {
+                return {
+                  ...m,
+                  content: [{ type: 'text', text: m.content, cache_control: { type: 'ephemeral' } }]
+                };
+              } else if (Array.isArray(m.content) && m.content.length > 0) {
+                const updatedContent = [...m.content];
+                updatedContent[updatedContent.length - 1] = {
+                  ...updatedContent[updatedContent.length - 1],
+                  cache_control: { type: 'ephemeral' }
+                };
+                return { ...m, content: updatedContent };
+              }
+            }
+
+            const isLastUser = m.role === 'user' && !arr.slice(idx + 1).some(nextM => nextM.role === 'user');
+            if (isLastUser) {
+              if (typeof m.content === 'string') {
+                return {
+                  ...m,
+                  content: [{ type: 'text', text: m.content, cache_control: { type: 'ephemeral' } }]
+                };
+              } else if (Array.isArray(m.content) && m.content.length > 0) {
+                const updatedContent = [...m.content];
+                updatedContent[updatedContent.length - 1] = {
+                  ...updatedContent[updatedContent.length - 1],
+                  cache_control: { type: 'ephemeral' }
+                };
+                return { ...m, content: updatedContent };
+              }
+            }
+
+            return m;
+          });
+
+          payload.messages = formattedMessages;
+        }
+      }
+    }
+
     if (onLog) {
       onLog({
         type: 'network',
-        text: `POST ${endpoint} [${detectedType.toUpperCase()}] | Modelo: ${model || '(no especificado)'} | Razonamiento: ${reasoningEffort || 'off'} | Temp: ${payload.temperature}`
+        text: `POST ${endpoint} [${detectedType.toUpperCase()}] | Modelo: ${model || '(no especificado)'} | Razonamiento: ${reasoningEffort || 'off'} | Temp: ${payload.temperature}${enableContextCache ? (cacheInvalidated ? ' | ContextCache: [INVALIDADA]' : ' | ContextCache: [ACTIVA]') : ''}`
       });
     }
 
@@ -614,6 +680,8 @@
     let accumulatedToolCalls = {};
     let chunkCount = 0;
     let isInsideThinkTag = false;
+    let serverCachedTokens = 0;
+    let serverCacheCreationTokens = 0;
     const requestStartTime = performance.now();
     let firstTokenTime = null;
 
@@ -633,7 +701,9 @@
           generationSec: generationElapsedSec.toFixed(2),
           totalSec: totalElapsedSec,
           tokens: tokens,
-          tokensPerSec: tokensPerSec
+          tokensPerSec: tokensPerSec,
+          cachedTokens: serverCachedTokens,
+          cacheCreationTokens: serverCacheCreationTokens
         };
       } else {
         return {
@@ -641,7 +711,9 @@
           generationSec: '0.00',
           totalSec: totalElapsedSec,
           tokens: 0,
-          tokensPerSec: '0.0'
+          tokensPerSec: '0.0',
+          cachedTokens: serverCachedTokens,
+          cacheCreationTokens: serverCacheCreationTokens
         };
       }
     }
@@ -763,9 +835,10 @@
               const stats = getStats();
               const toolCalls = getFinalToolCalls();
               if (onLog) {
+                const cacheInfo = stats.cachedTokens > 0 ? ` | ⚡ Cache: ${stats.cachedTokens} tok` : '';
                 onLog({
                   type: 'stats',
-                  text: `Streaming finalizado [DONE] | Total: ${stats.tokens} tokens | ${stats.tokensPerSec} t/s | TTFT: ${stats.ttftSec}s`
+                  text: `Streaming finalizado [DONE] | Total: ${stats.tokens} tokens | ${stats.tokensPerSec} t/s | TTFT: ${stats.ttftSec}s${cacheInfo}`
                 });
               }
               if (onDone) await onDone(accumulatedText, stats, toolCalls, accumulatedReasoning);
@@ -776,6 +849,15 @@
               const parsed = JSON.parse(dataStr);
 
               // 1. Formato Claude Anthropic
+              if (parsed.type === 'message_start' && parsed.message?.usage) {
+                if (parsed.message.usage.cache_read_input_tokens) {
+                  serverCachedTokens = parsed.message.usage.cache_read_input_tokens;
+                }
+                if (parsed.message.usage.cache_creation_input_tokens) {
+                  serverCacheCreationTokens = parsed.message.usage.cache_creation_input_tokens;
+                }
+              }
+
               if (parsed.type === 'content_block_delta') {
                 if (!firstTokenTime) firstTokenTime = performance.now();
                 if (parsed.delta?.type === 'thinking_delta' && parsed.delta?.thinking) {
@@ -886,13 +968,25 @@
                 }
               }
 
-              // D) Token usage si viene en stream_options
-              if (parsed.usage) {
+              // D) Token usage y Context Caching si viene en el stream
+              const streamUsage = parsed.usage || parsed.message?.usage;
+              if (streamUsage) {
+                if (streamUsage.prompt_tokens_details?.cached_tokens) {
+                  serverCachedTokens = streamUsage.prompt_tokens_details.cached_tokens;
+                }
+                if (streamUsage.cache_read_input_tokens) {
+                  serverCachedTokens = streamUsage.cache_read_input_tokens;
+                }
+                if (streamUsage.cache_creation_input_tokens) {
+                  serverCacheCreationTokens = streamUsage.cache_creation_input_tokens;
+                }
+
                 if (onLog) {
-                  const rTokens = parsed.usage.completion_tokens_details?.reasoning_tokens;
+                  const rTokens = streamUsage.completion_tokens_details?.reasoning_tokens;
+                  const cTokens = serverCachedTokens > 0 ? ` (⚡ Cache: ${serverCachedTokens} tok)` : '';
                   onLog({
                     type: 'stats',
-                    text: `Uso de tokens: Prompt=${parsed.usage.prompt_tokens || 0}, Respuesta=${parsed.usage.completion_tokens || 0}, Total=${parsed.usage.total_tokens || 0}${rTokens ? ` (Razonamiento: ${rTokens})` : ''}`
+                    text: `Uso de tokens: Prompt=${streamUsage.prompt_tokens || 0}, Respuesta=${streamUsage.completion_tokens || 0}, Total=${streamUsage.total_tokens || 0}${rTokens ? ` (Razonamiento: ${rTokens})` : ''}${cTokens}`
                   });
                 }
               }

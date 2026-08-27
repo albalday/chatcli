@@ -429,6 +429,21 @@
           <div class="setting-toggle-card">
             <div class="toggle-card-info">
               <div class="toggle-card-title">
+                <span data-i18n="agent_cache_title">⚡ Caché de Contexto (Context / Prompt Caching)</span>
+              </div>
+              <p class="toggle-card-desc" data-i18n="agent_cache_desc">
+                Reutiliza la memoria caché de contexto (KV Cache / Prompt Caching) en servidores compatibles (OpenAI, Claude, OpenRouter, Gemini, LM Studio, vLLM) reduciendo latencia y costes. Se invalida automáticamente al borrar mensajes del chat.
+              </p>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="setting-enable-context-cache" checked>
+              <span class="slider"></span>
+            </label>
+          </div>
+
+          <div class="setting-toggle-card">
+            <div class="toggle-card-info">
+              <div class="toggle-card-title">
                 <span data-i18n="agent_datetime_title">🕒 Enviar Fecha y Hora del Mundo Real</span>
               </div>
               <p class="toggle-card-desc" data-i18n="agent_datetime_desc">
