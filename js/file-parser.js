@@ -24,6 +24,11 @@
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
   }
 
+  function isPdfDelimiterOrWs(charCode) {
+    return charCode <= 32 || charCode === 40 || charCode === 41 || charCode === 60 || 
+           charCode === 62 || charCode === 91 || charCode === 93 || charCode === 47 || charCode === 37;
+  }
+
   function decodePdfString(rawStr) {
     if (!rawStr) return '';
     let str = rawStr;
@@ -54,65 +59,233 @@
     if (cleanHex.toUpperCase().startsWith('FEFF')) {
       for (let i = 4; i < cleanHex.length; i += 4) {
         const code = parseInt(cleanHex.substr(i, 4), 16);
-        if (!isNaN(code)) str += String.fromCharCode(code);
+        if (!isNaN(code) && code > 0) str += String.fromCharCode(code);
       }
       return str;
     }
 
     for (let i = 0; i < cleanHex.length; i += 2) {
       const code = parseInt(cleanHex.substr(i, 2), 16);
-      if (!isNaN(code)) str += String.fromCharCode(code);
+      if (!isNaN(code) && code >= 32) str += String.fromCharCode(code);
     }
     return str;
   }
 
-  function extractTextFromPdfStream(streamString) {
-    if (!streamString) return '';
-    let resultText = '';
+  function scanPdfLiteralString(stream, startIdx) {
+    let depth = 1;
+    let i = startIdx + 1;
+    let raw = '';
+    const len = stream.length;
 
-    // Bloques de texto delimitados por BT y ET
-    const btBlocks = streamString.match(/BT[\s\S]*?ET/g) || [streamString];
-
-    const tjArrayRegex = /\[((?:(?:\([^)]*\))|(?:<[^>]*>)|[^\]])*)\]\s*TJ/g;
-    const tjStringRegex = /\(([^)]*)\)\s*(?:Tj|'|")/g;
-    const tjHexRegex = /<([0-9a-fA-F]+)>\s*(?:Tj|'|")/g;
-
-    for (const block of btBlocks) {
-      let blockText = '';
-
-      // 1. Extraer arrays con TJ: [(Texto) 120 (más texto)] TJ
-      const arrayMatches = block.matchAll(tjArrayRegex);
-      for (const m of arrayMatches) {
-        const arrayContent = m[1];
-        const strParts = arrayContent.matchAll(/\(([^)]*)\)|<([0-9a-fA-F]+)>/g);
-        for (const sp of strParts) {
-          if (sp[1] !== undefined) {
-            blockText += decodePdfString(sp[1]);
-          } else if (sp[2] !== undefined) {
-            blockText += decodePdfHexString(sp[2]);
-          }
+    while (i < len && depth > 0) {
+      const ch = stream.charAt(i);
+      if (ch === '\\') {
+        if (i + 1 < len) {
+          raw += ch + stream.charAt(i + 1);
+          i += 2;
+          continue;
         }
-        blockText += ' ';
+      } else if (ch === '(') {
+        depth++;
+        raw += ch;
+      } else if (ch === ')') {
+        depth--;
+        if (depth === 0) {
+          i++;
+          break;
+        }
+        raw += ch;
+      } else {
+        raw += ch;
       }
-
-      // 2. Extraer cadenas simples con Tj / ' / "
-      const strMatches = block.matchAll(tjStringRegex);
-      for (const m of strMatches) {
-        blockText += decodePdfString(m[1]) + ' ';
-      }
-
-      // 3. Extraer cadenas hexadecimales <hex> Tj
-      const hexMatches = block.matchAll(tjHexRegex);
-      for (const m of hexMatches) {
-        blockText += decodePdfHexString(m[1]) + ' ';
-      }
-
-      if (blockText.trim()) {
-        resultText += blockText.trim() + '\n';
-      }
+      i++;
     }
 
-    return resultText;
+    return {
+      strVal: decodePdfString(raw),
+      nextIndex: i
+    };
+  }
+
+  function scanPdfHexString(stream, startIdx) {
+    let i = startIdx + 1;
+    let hex = '';
+    const len = stream.length;
+
+    while (i < len) {
+      const ch = stream.charAt(i);
+      if (ch === '>') {
+        i++;
+        break;
+      }
+      hex += ch;
+      i++;
+    }
+
+    return {
+      strVal: decodePdfHexString(hex),
+      nextIndex: i
+    };
+  }
+
+  function scanPdfArrayTJ(stream, startIdx) {
+    let i = startIdx + 1;
+    let extractedText = '';
+    const len = stream.length;
+
+    while (i < len) {
+      const c = stream.charCodeAt(i);
+      if (c === 93 /* ] */) {
+        i++;
+        break;
+      }
+
+      if (c === 40 /* ( */) {
+        const res = scanPdfLiteralString(stream, i);
+        extractedText += res.strVal;
+        i = res.nextIndex;
+        continue;
+      }
+
+      if (c === 60 /* < */) {
+        if (i + 1 < len && stream.charCodeAt(i + 1) === 60) {
+          i += 2;
+          continue;
+        }
+        const res = scanPdfHexString(stream, i);
+        extractedText += res.strVal;
+        i = res.nextIndex;
+        continue;
+      }
+
+      // Números de espaciado en arrays TJ (valores negativos grandes representan espacio entre palabras)
+      if ((c >= 48 && c <= 57) || c === 45 /* - */) {
+        let numStr = '';
+        while (i < len && ((stream.charCodeAt(i) >= 48 && stream.charCodeAt(i) <= 57) || stream.charCodeAt(i) === 45 || stream.charCodeAt(i) === 46)) {
+          numStr += stream.charAt(i);
+          i++;
+        }
+        const num = parseFloat(numStr);
+        if (!isNaN(num) && num < -100) {
+          extractedText += ' ';
+        }
+        continue;
+      }
+
+      i++;
+    }
+
+    // Comprobar operador TJ
+    let j = i;
+    while (j < len && stream.charCodeAt(j) <= 32) j++;
+    let hasTJ = false;
+    if (j + 1 < len && stream.charAt(j) === 'T' && stream.charAt(j + 1) === 'J') {
+      hasTJ = true;
+      i = j + 2;
+    }
+
+    return {
+      extractedText,
+      nextIndex: i,
+      hasTJ
+    };
+  }
+
+  function scanNextPdfOperator(stream, startIdx) {
+    let i = startIdx;
+    const len = stream.length;
+    while (i < len && stream.charCodeAt(i) <= 32) i++;
+    if (i >= len) return '';
+    if (i + 1 < len && stream.charAt(i) === 'T' && stream.charAt(i + 1) === 'j') return 'Tj';
+    if (stream.charAt(i) === "'" || stream.charAt(i) === '"') return stream.charAt(i);
+    return '';
+  }
+
+  function parsePdfStreamText(streamString) {
+    if (!streamString || typeof streamString !== 'string') return '';
+
+    let out = [];
+    let inTextObject = false;
+    const len = streamString.length;
+    let i = 0;
+
+    while (i < len) {
+      const c = streamString.charCodeAt(i);
+
+      // Check BT (Begin Text)
+      if (c === 66 /* B */ && i + 1 < len && streamString.charCodeAt(i + 1) === 84 /* T */) {
+        const prev = i > 0 ? streamString.charCodeAt(i - 1) : 32;
+        const next = i + 2 < len ? streamString.charCodeAt(i + 2) : 32;
+        if (isPdfDelimiterOrWs(prev) && isPdfDelimiterOrWs(next)) {
+          inTextObject = true;
+          i += 2;
+          continue;
+        }
+      }
+
+      // Check ET (End Text)
+      if (c === 69 /* E */ && i + 1 < len && streamString.charCodeAt(i + 1) === 84 /* T */) {
+        const prev = i > 0 ? streamString.charCodeAt(i - 1) : 32;
+        const next = i + 2 < len ? streamString.charCodeAt(i + 2) : 32;
+        if (isPdfDelimiterOrWs(prev) && isPdfDelimiterOrWs(next)) {
+          inTextObject = false;
+          out.push('\n');
+          i += 2;
+          continue;
+        }
+      }
+
+      // Literal string: (texto)
+      if (c === 40 /* ( */) {
+        const { strVal, nextIndex } = scanPdfLiteralString(streamString, i);
+        i = nextIndex;
+        const op = scanNextPdfOperator(streamString, i);
+        if (op === 'Tj' || op === "'" || op === '"' || inTextObject) {
+          if (strVal) out.push(strVal);
+          if (op === "'" || op === '"') out.push('\n');
+        }
+        continue;
+      }
+
+      // Hex string: <hex>
+      if (c === 60 /* < */) {
+        if (i + 1 < len && streamString.charCodeAt(i + 1) === 60) {
+          i += 2;
+          continue;
+        }
+        const { strVal, nextIndex } = scanPdfHexString(streamString, i);
+        i = nextIndex;
+        const op = scanNextPdfOperator(streamString, i);
+        if (op === 'Tj' || op === "'" || op === '"' || inTextObject) {
+          if (strVal) out.push(strVal);
+          if (op === "'" || op === '"') out.push('\n');
+        }
+        continue;
+      }
+
+      // Array TJ: [(str) num (str)] TJ
+      if (c === 91 /* [ */) {
+        const { extractedText, nextIndex } = scanPdfArrayTJ(streamString, i);
+        i = nextIndex;
+        if (extractedText) {
+          out.push(extractedText + ' ');
+        }
+        continue;
+      }
+
+      // Operadores de salto de línea T*, Td, TD
+      if (inTextObject && c === 84 /* T */) {
+        if (i + 1 < len && streamString.charCodeAt(i + 1) === 42 /* T* */) {
+          out.push('\n');
+          i += 2;
+          continue;
+        }
+      }
+
+      i++;
+    }
+
+    return out.join('').replace(/[ \t]+/g, ' ').replace(/\n\s*\n+/g, '\n\n').trim();
   }
 
   async function decompressDeflateData(uint8Array) {
@@ -150,69 +323,67 @@
   }
 
   /**
-   * Extrae el texto legible de un archivo PDF analizando sus streams y objetos.
+   * Extrae el texto legible de un archivo PDF analizando sus streams y objetos de forma iterativa y segura.
    */
   async function extractTextFromPdf(arrayBuffer) {
     const bytes = new Uint8Array(arrayBuffer);
     const decoder = new TextDecoder('latin1');
     const fullText = decoder.decode(bytes);
 
-    let extractedPages = [];
     let foundTextChunks = [];
+    let pos = 0;
+    const len = fullText.length;
 
-    // Buscar posiciones de inicio y fin de streams en el PDF
-    const streamRegex = /stream\r?\n/g;
-    const endStreamRegex = /\r?\nendstream/g;
+    while (pos < len) {
+      const streamIdx = fullText.indexOf('stream', pos);
+      if (streamIdx === -1) break;
 
-    let streamMatch;
-    const streamStarts = [];
-    while ((streamMatch = streamRegex.exec(fullText)) !== null) {
-      streamStarts.push({
-        start: streamMatch.index + streamMatch[0].length,
-        headerIndex: streamMatch.index
-      });
-    }
+      const prevChar = streamIdx > 0 ? fullText.charCodeAt(streamIdx - 1) : 32;
+      if (prevChar <= 32 || prevChar === 62 || prevChar === 47) {
+        let dataStart = streamIdx + 6;
+        if (dataStart < len && fullText.charCodeAt(dataStart) === 13) dataStart++;
+        if (dataStart < len && fullText.charCodeAt(dataStart) === 10) dataStart++;
 
-    let endMatch;
-    const streamEnds = [];
-    while ((endMatch = endStreamRegex.exec(fullText)) !== null) {
-      streamEnds.push(endMatch.index);
-    }
+        const endStreamIdx = fullText.indexOf('endstream', dataStart);
+        if (endStreamIdx !== -1) {
+          const dictStart = Math.max(0, streamIdx - 300);
+          const dictSlice = fullText.substring(dictStart, streamIdx);
+          const isFlate = dictSlice.includes('FlateDecode');
 
-    for (let i = 0; i < streamStarts.length; i++) {
-      const sStart = streamStarts[i].start;
-      // Encontrar el endstream correspondiente
-      const sEnd = streamEnds.find(endIdx => endIdx > sStart);
-      if (!sEnd) continue;
+          let rawEnd = endStreamIdx;
+          if (rawEnd > dataStart && (fullText.charCodeAt(rawEnd - 1) === 10 || fullText.charCodeAt(rawEnd - 1) === 13)) rawEnd--;
+          if (rawEnd > dataStart && (fullText.charCodeAt(rawEnd - 1) === 10 || fullText.charCodeAt(rawEnd - 1) === 13)) rawEnd--;
 
-      // Verificar si el stream está comprimido con FlateDecode
-      const precedingHeader = fullText.substring(Math.max(0, streamStarts[i].headerIndex - 200), streamStarts[i].headerIndex);
-      const isFlate = precedingHeader.includes('FlateDecode');
+          const rawStreamBytes = bytes.subarray(dataStart, rawEnd);
+          let streamString = '';
 
-      const rawStreamBytes = bytes.subarray(sStart, sEnd);
+          if (isFlate) {
+            const decompressed = await decompressDeflateData(rawStreamBytes);
+            if (decompressed) {
+              streamString = decoder.decode(decompressed);
+            }
+          } else {
+            streamString = decoder.decode(rawStreamBytes);
+          }
 
-      let streamString = '';
-      if (isFlate) {
-        const decompressed = await decompressDeflateData(rawStreamBytes);
-        if (decompressed) {
-          streamString = decoder.decode(decompressed);
-        }
-      } else {
-        streamString = decoder.decode(rawStreamBytes);
-      }
+          if (streamString) {
+            const parsed = parsePdfStreamText(streamString);
+            if (parsed && parsed.trim().length > 0) {
+              foundTextChunks.push(parsed.trim());
+            }
+          }
 
-      if (streamString) {
-        const parsed = extractTextFromPdfStream(streamString);
-        if (parsed.trim()) {
-          foundTextChunks.push(parsed.trim());
+          pos = endStreamIdx + 9;
+          continue;
         }
       }
+      pos = streamIdx + 6;
     }
 
-    // Fallback: si no se encontraron streams descomprimidos, buscar patrones BT...ET en todo el archivo
+    // Fallback: si no se encontraron streams comprimidos con texto, escanear texto directo
     if (foundTextChunks.length === 0) {
-      const directText = extractTextFromPdfStream(fullText);
-      if (directText.trim()) {
+      const directText = parsePdfStreamText(fullText);
+      if (directText && directText.trim().length > 0) {
         foundTextChunks.push(directText.trim());
       }
     }
