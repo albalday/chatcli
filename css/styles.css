@@ -490,6 +490,70 @@ body {
   color: white;
 }
 
+/* ==========================================================================
+   Tablas Markdown (GFM Tables)
+   ========================================================================== */
+.table-container {
+  width: 100%;
+  max-width: 100%;
+  margin: 0.85rem 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.markdown-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.markdown-table thead {
+  background-color: var(--bg-hover);
+  border-bottom: 2px solid var(--border-color);
+}
+
+.markdown-table th {
+  padding: 0.6rem 0.85rem;
+  font-weight: 600;
+  color: var(--text-main);
+  border-right: 1px solid var(--border-color);
+  white-space: nowrap;
+}
+
+.markdown-table th:last-child {
+  border-right: none;
+}
+
+.markdown-table td {
+  padding: 0.55rem 0.85rem;
+  border-top: 1px solid var(--border-color);
+  border-right: 1px solid var(--border-color);
+  color: var(--text-main);
+  vertical-align: top;
+}
+
+.markdown-table td:last-child {
+  border-right: none;
+}
+
+.markdown-table tbody tr:nth-child(even) {
+  background-color: rgba(0, 0, 0, 0.02);
+}
+
+[data-theme="dark"] .markdown-table tbody tr:nth-child(even) {
+  background-color: rgba(255, 255, 255, 0.02);
+}
+
+.markdown-table tbody tr:hover {
+  background-color: rgba(99, 102, 241, 0.06);
+}
+
 /* Bloques de código con cabecera y botón de copiar */
 .code-block-container {
   margin: 0.85rem 0;

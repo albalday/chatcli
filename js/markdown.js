@@ -38,6 +38,133 @@
       .replace(/'/g, '&#039;');
   }
 
+  function parseInlineMarkdown(text) {
+    if (!text) return '';
+    let p = text;
+    p = p.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+    p = p.replace(/\*\*\*(.*?)\*\*\*/g, '<strong><em>$1</em></strong>');
+    p = p.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    p = p.replace(/__(.*?)__/g, '<strong>$1</strong>');
+    p = p.replace(/\*([^\*\n]+)\*/g, '<em>$1</em>');
+    p = p.replace(/_([^_\n]+)_/g, '<em>$1</em>');
+    p = p.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+    return p;
+  }
+
+  function splitTableRow(rowStr) {
+    let raw = rowStr.trim();
+    if (raw.startsWith('|')) raw = raw.substring(1);
+    if (raw.endsWith('|')) raw = raw.substring(0, raw.length - 1);
+
+    const cells = [];
+    let current = '';
+    let inBacktick = false;
+
+    for (let i = 0; i < raw.length; i++) {
+      const ch = raw[i];
+      if (ch === '`') {
+        inBacktick = !inBacktick;
+        current += ch;
+      } else if (ch === '\\' && i + 1 < raw.length && raw[i + 1] === '|') {
+        current += '|';
+        i++;
+      } else if (ch === '|' && !inBacktick) {
+        cells.push(current.trim());
+        current = '';
+      } else {
+        current += ch;
+      }
+    }
+    cells.push(current.trim());
+    return cells;
+  }
+
+  function isTableDelimiterRow(rowStr) {
+    const trimmed = rowStr.trim();
+    if (!trimmed.includes('-')) return false;
+    const cells = splitTableRow(trimmed);
+    if (cells.length === 0) return false;
+    return cells.every(c => /^:?-+:?$/.test(c.trim()));
+  }
+
+  function parseAlignments(delimiterRowStr) {
+    const cells = splitTableRow(delimiterRowStr);
+    return cells.map(c => {
+      const trimmed = c.trim();
+      const left = trimmed.startsWith(':');
+      const right = trimmed.endsWith(':');
+      if (left && right) return 'center';
+      if (right) return 'right';
+      if (left) return 'left';
+      return '';
+    });
+  }
+
+  function renderTableHtml(headerRow, delimiterRow, bodyRows) {
+    const headerCells = splitTableRow(headerRow);
+    const aligns = parseAlignments(delimiterRow);
+    const numCols = Math.max(headerCells.length, aligns.length);
+
+    let html = '<div class="table-container"><table class="markdown-table"><thead><tr>';
+
+    for (let i = 0; i < numCols; i++) {
+      const cellText = headerCells[i] !== undefined ? headerCells[i] : '';
+      const align = aligns[i] ? ` style="text-align: ${aligns[i]};"` : '';
+      html += `<th${align}>${parseInlineMarkdown(cellText)}</th>`;
+    }
+
+    html += '</tr></thead>';
+
+    if (bodyRows && bodyRows.length > 0) {
+      html += '<tbody>';
+      for (const row of bodyRows) {
+        const cells = splitTableRow(row);
+        html += '<tr>';
+        for (let i = 0; i < numCols; i++) {
+          const cellText = cells[i] !== undefined ? cells[i] : '';
+          const align = aligns[i] ? ` style="text-align: ${aligns[i]};"` : '';
+          html += `<td${align}>${parseInlineMarkdown(cellText)}</td>`;
+        }
+        html += '</tr>';
+      }
+      html += '</tbody>';
+    }
+
+    html += '</table></div>';
+    return html;
+  }
+
+  function parseMarkdownTables(text) {
+    const lines = text.split('\n');
+    const result = [];
+    let i = 0;
+
+    while (i < lines.length) {
+      const line = lines[i];
+      const nextLine = (i + 1 < lines.length) ? lines[i + 1] : null;
+
+      if (line.includes('|') && nextLine && isTableDelimiterRow(nextLine)) {
+        const headerRow = line;
+        const delimiterRow = nextLine;
+        const bodyRows = [];
+        i += 2;
+
+        while (i < lines.length && lines[i].trim() !== '' && lines[i].includes('|')) {
+          bodyRows.push(lines[i]);
+          i++;
+        }
+
+        result.push(renderTableHtml(headerRow, delimiterRow, bodyRows));
+        continue;
+      }
+
+      result.push(line);
+      i++;
+    }
+
+    return result.join('\n');
+  }
+
   /**
    * Parsea segmentos de texto normales (fuera de bloques de código).
    */
@@ -72,20 +199,23 @@
       `;
     });
 
-    // 2. Código inline `código`
+    // 2. Tablas Markdown (GFM Tables)
+    p = parseMarkdownTables(p);
+
+    // 3. Código inline `código`
     p = p.replace(/`([^`\n]+)`/g, function (match, code) {
       return `<code>${code}</code>`;
     });
 
-    // 3. Encabezados (# Titulo)
+    // 4. Encabezados (# Titulo)
     p = p.replace(/^### (.*$)/gm, '<h3>$1</h3>');
     p = p.replace(/^## (.*$)/gm, '<h2>$1</h2>');
     p = p.replace(/^# (.*$)/gm, '<h1>$1</h1>');
 
-    // 4. Citas / Blockquotes (> texto)
+    // 5. Citas / Blockquotes (> texto)
     p = p.replace(/^> (.*$)/gm, '<blockquote>$1</blockquote>');
 
-    // 5. Listas no ordenadas (- item o * item)
+    // 6. Listas no ordenadas (- item o * item)
     p = p.replace(/(?:^[ \t]*[*-][ \t]+.+(?:\n|$))+/gm, function (match) {
       const lines = match.trim().split('\n');
       const listItems = lines.map(line => {
@@ -95,7 +225,7 @@
       return `<ul>${listItems}</ul>\n`;
     });
 
-    // 6. Listas ordenadas (1. item)
+    // 7. Listas ordenadas (1. item)
     p = p.replace(/(?:^[ \t]*\d+\.[ \t]+.+(?:\n|$))+/gm, function (match) {
       const lines = match.trim().split('\n');
       const listItems = lines.map(line => {
@@ -105,17 +235,17 @@
       return `<ol>${listItems}</ol>\n`;
     });
 
-    // 7. Negrita y cursiva
+    // 8. Negrita y cursiva
     p = p.replace(/\*\*\*(.*?)\*\*\*/g, '<strong><em>$1</em></strong>');
     p = p.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
     p = p.replace(/__(.*?)__/g, '<strong>$1</strong>');
     p = p.replace(/\*([^\*\n]+)\*/g, '<em>$1</em>');
     p = p.replace(/_([^_\n]+)_/g, '<em>$1</em>');
 
-    // 8. Enlaces [texto](url)
+    // 9. Enlaces [texto](url)
     p = p.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
 
-    // 9. Párrafos y saltos de línea
+    // 10. Párrafos y saltos de línea
     const chunks = p.split(/\n{2,}/);
     return chunks.map(chunk => {
       const trimmed = chunk.trim();
@@ -127,7 +257,8 @@
         trimmed.startsWith('<ul') ||
         trimmed.startsWith('<ol') ||
         trimmed.startsWith('<blockquote') ||
-        trimmed.startsWith('<details')
+        trimmed.startsWith('<details') ||
+        trimmed.startsWith('<div class="table-container"')
       ) {
         return trimmed;
       }
