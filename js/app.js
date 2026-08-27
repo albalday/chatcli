@@ -1029,10 +1029,6 @@
     const row = document.createElement('div');
     row.className = 'message-row user';
 
-    const avatar = document.createElement('div');
-    avatar.className = 'message-avatar';
-    avatar.textContent = t('user_avatar');
-
     const contentWrapper = document.createElement('div');
     contentWrapper.className = 'message-content-wrapper';
 
@@ -1093,7 +1089,6 @@
     contentWrapper.appendChild(content);
     contentWrapper.appendChild(footerRow);
 
-    row.appendChild(avatar);
     row.appendChild(contentWrapper);
     wrapper.appendChild(row);
 
@@ -1112,19 +1107,6 @@
 
     const row = document.createElement('div');
     row.className = 'message-row assistant';
-
-    const avatar = document.createElement('div');
-    avatar.className = 'message-avatar';
-    avatar.innerHTML = `
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M12 8V4H8"></path>
-        <rect width="16" height="12" x="4" y="8" rx="2"></rect>
-        <path d="M2 14h2"></path>
-        <path d="M20 14h2"></path>
-        <path d="M15 13v2"></path>
-        <path d="M9 13v2"></path>
-      </svg>
-    `;
 
     const contentWrapper = document.createElement('div');
     contentWrapper.className = 'message-content-wrapper';
@@ -1174,7 +1156,6 @@
     contentWrapper.appendChild(content);
     contentWrapper.appendChild(footerRow);
 
-    row.appendChild(avatar);
     row.appendChild(contentWrapper);
     wrapper.appendChild(row);
 
