@@ -2507,12 +2507,17 @@
       utter.pitch = 1.0;
 
       const voices = window.speechSynthesis.getVoices() || [];
-      const exactVoice = voices.find(v => v.lang === targetLang || v.lang === targetLang.replace('-', '_'));
-      const prefixVoice = voices.find(v => v.lang && v.lang.toLowerCase().startsWith(targetLang.slice(0, 2).toLowerCase()));
+      const nonDummyVoices = voices.filter(v => v.name && !v.name.toLowerCase().includes('dummy'));
+      const exactVoice = nonDummyVoices.find(v => v.lang === targetLang || v.lang === targetLang.replace('-', '_'));
+      const prefixVoice = nonDummyVoices.find(v => v.lang && v.lang.toLowerCase().startsWith(targetLang.slice(0, 2).toLowerCase()));
+      const nameVoice = nonDummyVoices.find(v => v.name && v.name.toLowerCase().includes(targetLang.startsWith('es') ? 'spanish' : 'english'));
+
       if (exactVoice) {
         utter.voice = exactVoice;
       } else if (prefixVoice) {
         utter.voice = prefixVoice;
+      } else if (nameVoice) {
+        utter.voice = nameVoice;
       }
 
       utter.onend = function () {
@@ -2567,6 +2572,16 @@
   // ==========================================================================
 
   function setupEventListeners() {
+    // Inicializar caché de voces Web Speech API
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      try {
+        window.speechSynthesis.onvoiceschanged = function () {
+          window.speechSynthesis.getVoices();
+        };
+        window.speechSynthesis.getVoices();
+      } catch (e) {}
+    }
+
     // Formulario de chat
     elements.chatForm.addEventListener('submit', function (e) {
       e.preventDefault();
