@@ -229,8 +229,11 @@
       btn_export_all: 'Exportar',
       btn_export_short: 'Exportar',
       btn_export_chat_title: 'Exportar conversación (Markdown, JSON, PDF)',
+      btn_delete_all_chats: 'Borrar todos',
+      btn_delete_all_chats_title: 'Eliminar todas las conversaciones guardadas',
       chat_untitled: 'Nueva conversación',
       chat_delete_confirm: '¿Seguro que deseas eliminar esta conversación?',
+      chat_delete_all_confirm: '¿Estás seguro de que deseas eliminar todas las conversaciones guardadas? Esta acción no se puede deshacer.',
       chat_imported_success: 'Conversación importada con éxito.',
 
       // Modal de Exportación
@@ -468,8 +471,11 @@
       btn_export_all: 'Export',
       btn_export_short: 'Export',
       btn_export_chat_title: 'Export conversation (Markdown, JSON, PDF)',
+      btn_delete_all_chats: 'Delete all',
+      btn_delete_all_chats_title: 'Delete all saved conversations',
       chat_untitled: 'New conversation',
       chat_delete_confirm: 'Are you sure you want to delete this conversation?',
+      chat_delete_all_confirm: 'Are you sure you want to delete all saved conversations? This action cannot be undone.',
       chat_imported_success: 'Conversation imported successfully.',
 
       // Export Modal

@@ -78,6 +78,7 @@
       btnImportChatFile: document.getElementById('btn-import-chat-file'),
       importJsonInput: document.getElementById('import-json-input'),
       btnOpenExportModal: document.getElementById('btn-open-export-modal'),
+      btnDeleteAllChats: document.getElementById('btn-delete-all-chats'),
       btnQuickExport: document.getElementById('btn-quick-export'),
 
       // Modal de exportación
@@ -2103,6 +2104,19 @@
     renderSidebarChats();
   }
 
+  function deleteAllSessions() {
+    if (!savedSessions || savedSessions.length === 0) return;
+    if (!confirm(t('chat_delete_all_confirm'))) return;
+
+    savedSessions = [];
+    try {
+      if (Storage.setStorageItem) Storage.setStorageItem('chat_sessions', JSON.stringify([]));
+      else localStorage.setItem('chat_sessions', JSON.stringify([]));
+    } catch (e) {}
+
+    createNewSession();
+  }
+
   function renameSession(sessionId, event) {
     if (event) event.stopPropagation();
     const sess = savedSessions.find(s => s.id === sessionId);
@@ -2519,7 +2533,6 @@
       } else if (nameVoice) {
         utter.voice = nameVoice;
       }
-
       utter.onend = function () {
         if (isSpeakingQueue && activeSpeakingButton === buttonElement) {
           speakNextChunk();
@@ -2643,6 +2656,9 @@
     if (elements.btnImportChatFile && elements.importJsonInput) {
       elements.btnImportChatFile.addEventListener('click', () => elements.importJsonInput.click());
       elements.importJsonInput.addEventListener('change', handleImportFileSelected);
+    }
+    if (elements.btnDeleteAllChats) {
+      elements.btnDeleteAllChats.addEventListener('click', deleteAllSessions);
     }
 
     // Modal de Exportación
