@@ -1,6 +1,6 @@
-# 💬 ChatCLI - Cliente Web Universal de Chat para IA (v3.0)
+# 💬 ChatCLI - Cliente Web Universal de Chat para IA (v3.1)
 
-[![Versión](https://img.shields.io/badge/versión-3.0-blue.svg)](chatcli.html)
+[![Versión](https://img.shields.io/badge/versión-3.1-blue.svg)](chatcli.html)
 [![Multi-Idioma](https://img.shields.io/badge/idiomas-ES%20%7C%20EN-orange.svg)](#-soporte-multi-idioma-internacionalizaci%C3%B3n-i18n)
 [![Licencia](https://img.shields.io/badge/licencia-MIT-green.svg)](LICENSE)
 [![Desarrollo](https://img.shields.io/badge/100%25-Antigravity%20AI-purple.svg)](#-desarrollo-100-con-antigravity)
@@ -44,12 +44,23 @@ Desde el diseño de la arquitectura por módulos, la creación de la interfaz HT
 
 ---
 
+## ✨ Novedades en la Versión 3.1
+
+- 📊 **Tablas Markdown GFM Nativas**: Parseador y renderizador completo de tablas GitHub Flavored Markdown con soporte de alineaciones (`:---`, `:---:`, `---:`), formato interno enriquecido y contenedor adaptativo con scroll horizontal.
+- ⚡ **Herramientas en Vivo (Live Tool Cards)**: Aparición instantánea de las tarjetas de herramientas (`search_web`, `fetch_web_page`, `download_pdf`, `execute_javascript`, `render_chart`) con animación de progreso y llenado dinámico de las respuestas en tiempo real.
+- ▾ **Minimizado/Expandido de Herramientas y Gráficos**: Botón interactivo para plegar y desplegar cualquier consulta a herramientas o gráfico para optimizar el espacio vertical.
+- 🗑️ **Borrado Total del Historial**: Botón *Borrar todos* en la barra lateral con diálogo de seguridad para limpiar todo el almacenamiento local y crear una sesión en blanco.
+- 📄 **Parseador Léxico Iterativo de PDF**: Motor de extracción $O(N)$ sin retroceso ni recursión para evitar errores de desbordamiento de pila (*too much recursion*) en documentos PDF complejos.
+- 🔊 **Compatibilidad TTS en Linux**: Limpieza inteligente de emojis, fragmentación de frases y adaptación para sintetizadores `speech-dispatcher` y `espeak-ng`.
+
+---
+
 ## ✨ Características Principales
 
 1. **Gestión Multi-Chat e Historial (Sidebar)**:
    - Barra lateral izquierda retráctil con lista de conversaciones guardadas en `localStorage`/`ChatStorage`.
    - Cambio dinámico e instantáneo entre hilos de conversación.
-   - Creación de nuevos chats dentro de la misma vista, renombrado inline y borrado individual.
+   - Creación de nuevos chats dentro de la misma vista, renombrado inline, borrado individual y borrado completo.
    - Buscador en tiempo real de conversaciones anteriores.
 
 2. **Herramientas Agénticas y Análisis Gráfico**:
@@ -97,7 +108,7 @@ chatcli/
 ├── chatcli.html        # 🚀 ARCHIVO AUTÓNOMO ÚNICO (Solo necesitas este archivo para usar el chat)
 ├── index.html          # Interfaz principal modular, sidebar y modales (<dialog>)
 ├── css/
-│   └── styles.css      # Estilos visuales modernos, sidebar, gráficos SVG, voz y tema print
+│   └── styles.css      # Estilos visuales modernos, tablas GFM, sidebar, gráficos SVG, voz y tema print
 ├── js/
 │   ├── app.js          # Controlador principal de la UI, multi-chat, eventos, voz y consola debug
 │   ├── i18n.js         # Módulo de Internacionalización y traducciones reactivas (ES/EN)
@@ -108,10 +119,7 @@ chatcli/
 │   ├── web-search.js   # Buscador web en tiempo real con DuckDuckGo y Wikipedia
 │   ├── web-browser.js  # Módulo de consulta de páginas web y descarga de PDFs en tiempo real
 │   ├── file-parser.js  # Extractor de texto para documentos PDF, código e imágenes
-│   └── markdown.js     # Parseador ligero de Markdown con soporte de bloques de código
-├── bundle.py           # Script generador del archivo autónomo chatcli.html
-├── LICENSE             # Licencia MIT
-├── .gitignore          # Filtros para Git
+│   └── markdown.js     # Parseador de Markdown con tablas GFM y ejecución sandbox JS
 ├── bundle.py           # Script generador del archivo autónomo chatcli.html
 ├── LICENSE             # Licencia MIT
 ├── .gitignore          # Filtros para Git
