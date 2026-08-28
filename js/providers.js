@@ -306,6 +306,350 @@
         description: this.description
       };
     }
+
+    /**
+     * Inspecciona y diagnostica el endpoint del proveedor para determinar sus capacidades reales.
+     * Distingue entre:
+     * - 'declared': Declarada por el ProviderAdapter.
+     * - 'inferred': Inferida por heurística de nombres de modelos / endpoints.
+     * - 'confirmed': Comprobada mediante una prueba HTTP/SSE activa ultra-ligera (max_tokens: 1).
+     * - 'unsupported': Rechazada explícitamente o no soportada.
+     * - 'unknown': No determinada.
+     */
+    async inspect(params = {}) {
+      const {
+        apiUrl = '',
+        apiKey = '',
+        model = '',
+        runProbes = true,
+        timeoutMs = 6000
+      } = params;
+
+      const startTime = typeof performance !== 'undefined' ? performance.now() : Date.now();
+      const normalizedEndpoint = this.normalizeEndpoint(apiUrl);
+      let cleanBase = (apiUrl || '').trim().replace(/\/+$/, '');
+      if (cleanBase.endsWith('/chat/completions')) cleanBase = cleanBase.replace(/\/chat\/completions$/, '');
+
+      const adapterCaps = this.getCapabilities(model);
+
+      // 1. Inicializar matriz de capacidades con el estado 'declared' o 'unsupported' según el adaptador
+      const capabilities = {
+        streaming: {
+          status: adapterCaps.streaming ? 'declared' : 'unsupported',
+          detail: adapterCaps.streaming ? 'Declarada en el adaptador' : 'No soportada según adaptador',
+          source: 'adapter'
+        },
+        tools: {
+          status: adapterCaps.tools ? 'declared' : 'unsupported',
+          detail: adapterCaps.tools ? 'Declarada en el adaptador' : 'No soportada según adaptador',
+          source: 'adapter'
+        },
+        vision: {
+          status: adapterCaps.vision ? 'declared' : 'unsupported',
+          detail: adapterCaps.vision ? 'Declarada en el adaptador' : 'No soportada según adaptador',
+          source: 'adapter'
+        },
+        reasoning: {
+          status: adapterCaps.reasoning ? 'declared' : 'unsupported',
+          detail: adapterCaps.reasoning ? 'Declarada en el adaptador' : 'No soportada según adaptador',
+          source: 'adapter'
+        },
+        jsonMode: {
+          status: adapterCaps.jsonMode ? 'declared' : 'unsupported',
+          detail: adapterCaps.jsonMode ? 'Declarada en el adaptador' : 'No soportada según adaptador',
+          source: 'adapter'
+        },
+        promptCaching: {
+          status: adapterCaps.promptCaching ? 'declared' : 'unknown',
+          detail: adapterCaps.promptCaching ? 'Declarada en el adaptador' : 'Soporte no determinado',
+          source: 'adapter'
+        },
+        embeddings: {
+          status: adapterCaps.embeddings ? 'declared' : 'unknown',
+          detail: adapterCaps.embeddings ? 'Declarada en el adaptador' : 'Soporte no determinado',
+          source: 'adapter'
+        },
+        modelListing: {
+          status: adapterCaps.modelListing ? 'declared' : 'unsupported',
+          detail: adapterCaps.modelListing ? 'Declarada en el adaptador' : 'No soportada según adaptador',
+          source: 'adapter'
+        }
+      };
+
+      let discoveredModels = [];
+      let modelListSuccess = false;
+
+      // 2. Comprobar listado de modelos y realizar inferencias
+      const modelEndpoints = this.getModelEndpoints(cleanBase);
+      const headers = this.buildHeaders(apiKey);
+
+      if (typeof fetch === 'function') {
+        for (const endpoint of modelEndpoints) {
+          try {
+            const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+            const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+            const res = await fetch(endpoint, {
+              method: 'GET',
+              headers: { Accept: 'application/json', ...headers },
+              signal: controller ? controller.signal : undefined
+            });
+            if (timer) clearTimeout(timer);
+
+            if (res.ok) {
+              const data = await res.json();
+              const parsed = this.parseModelsResponse(data);
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                discoveredModels = parsed;
+                modelListSuccess = true;
+                capabilities.modelListing = {
+                  status: 'confirmed',
+                  detail: `${parsed.length} modelo(s) descubierto(s) en ${endpoint}`,
+                  source: 'probe'
+                };
+                break;
+              }
+            }
+          } catch (e) {
+            // Ignorar y probar el siguiente endpoint candidato
+          }
+        }
+      }
+
+      if (!modelListSuccess && adapterCaps.modelListing) {
+        capabilities.modelListing = {
+          status: 'unknown',
+          detail: 'No se pudo consultar el listado de modelos en los endpoints estándar',
+          source: 'probe'
+        };
+      }
+
+      // Inferencias por nombre de modelo seleccionado o lista de modelos descubiertos
+      const targetModel = (model || (discoveredModels[0] && discoveredModels[0].id) || '').toLowerCase();
+      const allModelNames = discoveredModels.map(m => (m.id || m.name || '').toLowerCase()).join(' ');
+      const combinedModelContext = (targetModel + ' ' + allModelNames).trim();
+
+      if (combinedModelContext) {
+        // Inferencia de Visión
+        if (/(?:-vl|-vision|vision|4o|sonnet|opus|flash|pixtral|llava|cogvlm|gemini|qwen.*vl)/i.test(combinedModelContext)) {
+          capabilities.vision = {
+            status: 'inferred',
+            detail: 'Inferida por identificador multimodal detectado en los modelos',
+            source: 'model_name'
+          };
+        }
+
+        // Inferencia de Razonamiento
+        if (/(?:-r1|r1|qwq|o1|o3|reasoning|thinking|gemma-4|deepseek)/i.test(combinedModelContext)) {
+          capabilities.reasoning = {
+            status: 'inferred',
+            detail: 'Inferida por identificador de modelo con razonamiento/pensamiento',
+            source: 'model_name'
+          };
+        }
+
+        // Inferencia de Embeddings
+        if (/(?:embedding|embed|bge|nomic|e5|text-embedding)/i.test(combinedModelContext)) {
+          capabilities.embeddings = {
+            status: 'inferred',
+            detail: 'Inferida por modelos de embeddings presentes en el catálogo',
+            source: 'model_name'
+          };
+        }
+      }
+
+      // 3. Pruebas activas controladas (Micro-sondas seguras con max_tokens: 1)
+      const probeModel = model || (discoveredModels[0] && discoveredModels[0].id) || '';
+      let probesRun = false;
+
+      if (runProbes && typeof fetch === 'function') {
+        probesRun = true;
+
+        // Micro-sonda A: Streaming & Chat básico
+        try {
+          const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+          const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+          
+          const probePayload = this.buildPayload({
+            model: probeModel,
+            messages: [{ role: 'user', content: 'hi' }],
+            stream: true,
+            temperature: 0.1,
+            reasoningEffort: 'none',
+            enableContextCache: false
+          });
+          probePayload.max_tokens = 1;
+
+          const res = await fetch(normalizedEndpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...headers },
+            body: JSON.stringify(probePayload),
+            signal: controller ? controller.signal : undefined
+          });
+          if (timer) clearTimeout(timer);
+
+          if (res.ok) {
+            const contentType = res.headers && res.headers.get ? (res.headers.get('content-type') || '') : '';
+            if (contentType.includes('event-stream') || res.body) {
+              capabilities.streaming = {
+                status: 'confirmed',
+                detail: 'Respuesta de streaming SSE (HTTP 200) verificada exitosamente',
+                source: 'probe'
+              };
+            }
+          } else if (res.status === 400 || res.status === 404) {
+            const errText = await res.text().catch(() => '');
+            if (errText.toLowerCase().includes('stream')) {
+              capabilities.streaming = {
+                status: 'unsupported',
+                detail: `Servidor rechazó streaming: ${errText.substring(0, 80)}`,
+                source: 'probe'
+              };
+            }
+          }
+        } catch (probeErr) {
+          // Si timeout o error de red, mantener el estado previo
+        }
+
+        // Micro-sonda B: Tools / Function Calling
+        try {
+          const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+          const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+
+          const toolPayload = this.buildPayload({
+            model: probeModel,
+            messages: [{ role: 'user', content: 'hi' }],
+            stream: false,
+            toolsList: [{
+              type: 'function',
+              function: {
+                name: 'ping_test',
+                description: 'Inspector ping test',
+                parameters: { type: 'object', properties: {} }
+              }
+            }]
+          });
+          toolPayload.max_tokens = 1;
+          toolPayload.tool_choice = 'none';
+
+          const res = await fetch(normalizedEndpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...headers },
+            body: JSON.stringify(toolPayload),
+            signal: controller ? controller.signal : undefined
+          });
+          if (timer) clearTimeout(timer);
+
+          if (res.ok) {
+            capabilities.tools = {
+              status: 'confirmed',
+              detail: 'El servidor aceptó el esquema de tools/functions (HTTP 200)',
+              source: 'probe'
+            };
+          } else if (res.status === 400) {
+            const errText = await res.text().catch(() => '');
+            if (errText.toLowerCase().includes('tool') || errText.toLowerCase().includes('function') || errText.toLowerCase().includes('schema')) {
+              capabilities.tools = {
+                status: 'unsupported',
+                detail: `Servidor rechazó tools: ${errText.substring(0, 80)}`,
+                source: 'probe'
+              };
+            }
+          }
+        } catch (e) {}
+
+        // Micro-sonda C: JSON Mode
+        try {
+          const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+          const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+
+          const jsonPayload = this.buildPayload({
+            model: probeModel,
+            messages: [{ role: 'user', content: 'hi' }],
+            stream: false,
+            jsonMode: true
+          });
+          jsonPayload.max_tokens = 1;
+
+          const res = await fetch(normalizedEndpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...headers },
+            body: JSON.stringify(jsonPayload),
+            signal: controller ? controller.signal : undefined
+          });
+          if (timer) clearTimeout(timer);
+
+          if (res.ok) {
+            capabilities.jsonMode = {
+              status: 'confirmed',
+              detail: 'El servidor aceptó response_format: json_object (HTTP 200)',
+              source: 'probe'
+            };
+          } else if (res.status === 400) {
+            const errText = await res.text().catch(() => '');
+            if (errText.toLowerCase().includes('response_format') || errText.toLowerCase().includes('json')) {
+              capabilities.jsonMode = {
+                status: 'unsupported',
+                detail: `Servidor rechazó json_object: ${errText.substring(0, 80)}`,
+                source: 'probe'
+              };
+            }
+          }
+        } catch (e) {}
+
+        // Micro-sonda D: Embeddings endpoint check
+        try {
+          const embUrl = cleanBase.endsWith('/v1') ? `${cleanBase}/embeddings` : `${cleanBase}/v1/embeddings`;
+          const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+          const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+
+          const res = await fetch(embUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...headers },
+            body: JSON.stringify({ input: 'ping', model: probeModel }),
+            signal: controller ? controller.signal : undefined
+          });
+          if (timer) clearTimeout(timer);
+
+          if (res.ok) {
+            capabilities.embeddings = {
+              status: 'confirmed',
+              detail: `Endpoint ${embUrl} responde correctamente (HTTP 200)`,
+              source: 'probe'
+            };
+          } else if (res.status === 404) {
+            capabilities.embeddings = {
+              status: 'unsupported',
+              detail: `Endpoint ${embUrl} no encontrado (404)`,
+              source: 'probe'
+            };
+          }
+        } catch (e) {}
+      }
+
+      const endTime = typeof performance !== 'undefined' ? performance.now() : Date.now();
+
+      // Devolver resultado estructurado de la inspección SIN apiKey
+      return {
+        provider: {
+          id: this.id,
+          label: this.label,
+          description: this.description
+        },
+        endpoint: {
+          raw: apiUrl,
+          normalized: normalizedEndpoint,
+          base: cleanBase
+        },
+        model: {
+          selected: probeModel,
+          totalDiscovered: discoveredModels.length,
+          discovered: discoveredModels
+        },
+        capabilities: capabilities,
+        probesRun: probesRun,
+        inspectionTimeMs: Math.round(endTime - startTime)
+      };
+    }
   }
 
   /**
@@ -808,6 +1152,19 @@
         modes[id] = adapter.getReasoningConfig();
       }
       return modes;
+    }
+
+    /**
+     * Inspecciona y diagnostica el endpoint del proveedor delegando en el adaptador correspondiente.
+     */
+    async inspect(rawUrl, apiKey, model, explicitType, options = {}) {
+      const adapter = this.resolve(rawUrl, explicitType);
+      return adapter.inspect({
+        apiUrl: rawUrl,
+        apiKey: apiKey,
+        model: model,
+        ...options
+      });
     }
   }
 

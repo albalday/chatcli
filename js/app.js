@@ -159,6 +159,8 @@
       langButtons: document.querySelectorAll('.btn-lang-toggle'),
       modalTabs: document.querySelectorAll('.modal-tab-btn'),
       modalPanes: document.querySelectorAll('.modal-tab-pane'),
+      btnRunInspector: document.getElementById('btn-run-inspector'),
+      inspectorResults: document.getElementById('inspector-results'),
       settingEnableAgentJs: document.getElementById('setting-enable-agent-js'),
       settingEnableAgentWeb: document.getElementById('setting-enable-agent-web'),
       settingEnableAgentSearch: document.getElementById('setting-enable-agent-search'),
@@ -580,6 +582,156 @@
       elements.btnQueryServer.classList.remove('loading');
       if (queryText) queryText.textContent = t('btn_query_text');
     }
+  }
+
+  // ==========================================================================
+  // Provider Inspector (Diagnóstico de Capacidades)
+  // ==========================================================================
+
+  async function handleRunInspector() {
+    if (!elements.btnRunInspector || !elements.inspectorResults) return;
+
+    const apiUrl = elements.settingApiUrl ? elements.settingApiUrl.value.trim() : appConfig.apiUrl;
+    const apiType = elements.settingApiType ? elements.settingApiType.value : appConfig.apiType;
+    const apiKey = elements.settingApiKey ? elements.settingApiKey.value.trim() : appConfig.apiKey;
+    const model = elements.settingModel ? elements.settingModel.value.trim() : appConfig.model;
+
+    if (!apiUrl) {
+      alert(t('err_api_connect', { err: 'Por favor, introduce una URL de servidor válida.' }));
+      return;
+    }
+
+    elements.btnRunInspector.disabled = true;
+    const btnText = elements.btnRunInspector.querySelector('.inspector-btn-text');
+    const originalText = btnText ? btnText.textContent : '';
+    if (btnText) btnText.textContent = t('btn_running_inspector');
+
+    elements.inspectorResults.style.display = 'block';
+    elements.inspectorResults.innerHTML = `
+      <div style="padding: 1.5rem; text-align: center; color: var(--text-muted);">
+        <span class="query-icon" style="display:inline-block; font-size: 1.5rem; animation: spin 1s linear infinite;">⏳</span>
+        <p style="margin-top: 0.5rem; font-size: 0.85rem;">${t('btn_running_inspector')}</p>
+      </div>
+    `;
+
+    try {
+      if (!API.inspectProvider) {
+        throw new Error('Módulo de inspección no disponible.');
+      }
+
+      addDebugLog('network', `Ejecutando Provider Inspector en ${apiUrl} [${apiType}]`);
+      const report = await API.inspectProvider({ apiUrl, apiType, apiKey, model });
+
+      renderInspectorReport(report);
+    } catch (err) {
+      console.error('Error in Provider Inspector:', err);
+      elements.inspectorResults.innerHTML = `
+        <div class="server-query-status status-error" style="display: block;">
+          ${Markdown.escapeHtml ? Markdown.escapeHtml(err.message || String(err)) : String(err)}
+        </div>
+      `;
+    } finally {
+      elements.btnRunInspector.disabled = false;
+      if (btnText) btnText.textContent = originalText;
+    }
+  }
+
+  function renderInspectorReport(report) {
+    if (!elements.inspectorResults || !report) return;
+
+    const esc = (Markdown && Markdown.escapeHtml) ? Markdown.escapeHtml : function(s) { return String(s || '').replace(/[&<>"']/g, ''); };
+    const p = report.provider || {};
+    const ep = report.endpoint || {};
+    const m = report.model || {};
+    const caps = report.capabilities || {};
+
+    function getBadgeClass(status) {
+      switch (status) {
+        case 'confirmed': return 'cap-badge cap-badge-confirmed';
+        case 'inferred': return 'cap-badge cap-badge-inferred';
+        case 'declared': return 'cap-badge cap-badge-declared';
+        case 'unsupported': return 'cap-badge cap-badge-unsupported';
+        default: return 'cap-badge cap-badge-unknown';
+      }
+    }
+
+    function getBadgeIcon(status) {
+      switch (status) {
+        case 'confirmed': return '✓';
+        case 'inferred': return '✦';
+        case 'declared': return 'ℹ';
+        case 'unsupported': return '✕';
+        default: return '?';
+      }
+    }
+
+    function getStatusLabel(status) {
+      switch (status) {
+        case 'confirmed': return t('inspector_status_confirmed');
+        case 'inferred': return t('inspector_status_inferred');
+        case 'declared': return t('inspector_status_declared');
+        case 'unsupported': return t('inspector_status_unsupported');
+        default: return t('inspector_status_unknown');
+      }
+    }
+
+    const capKeys = [
+      { key: 'streaming', title: t('inspector_cap_streaming'), icon: '📡' },
+      { key: 'tools', title: t('inspector_cap_tools'), icon: '⚙️' },
+      { key: 'vision', title: t('inspector_cap_vision'), icon: '👁️' },
+      { key: 'reasoning', title: t('inspector_cap_reasoning'), icon: '🧠' },
+      { key: 'jsonMode', title: t('inspector_cap_jsonMode'), icon: '📋' },
+      { key: 'promptCaching', title: t('inspector_cap_promptCaching'), icon: '💾' },
+      { key: 'embeddings', title: t('inspector_cap_embeddings'), icon: '🔢' },
+      { key: 'modelListing', title: t('inspector_cap_modelListing'), icon: '🤖' }
+    ];
+
+    let cardsHtml = '';
+    capKeys.forEach(item => {
+      const c = caps[item.key] || { status: 'unknown', detail: '' };
+      const badgeCls = getBadgeClass(c.status);
+      const badgeIcon = getBadgeIcon(c.status);
+      const statusLabel = getStatusLabel(c.status);
+
+      cardsHtml += `
+        <div class="inspector-cap-card">
+          <div class="cap-card-header">
+            <span class="cap-card-title">${item.icon} ${item.title}</span>
+            <span class="${badgeCls}">${badgeIcon} ${statusLabel}</span>
+          </div>
+          <div class="cap-card-detail">${esc(c.detail || '')}</div>
+        </div>
+      `;
+    });
+
+    const modelInfoText = m.totalDiscovered > 0
+      ? `${m.totalDiscovered} modelo(s) descubierto(s)`
+      : (m.selected ? `Modelo: ${esc(m.selected)}` : 'Sin modelos listados');
+
+    elements.inspectorResults.innerHTML = `
+      <div class="inspector-header-meta">
+        <div class="inspector-meta-item">
+          <span class="meta-label">Proveedor</span>
+          <span class="meta-value">${esc(p.label || p.id || 'Desconocido')}</span>
+        </div>
+        <div class="inspector-meta-item">
+          <span class="meta-label">Endpoint Chat</span>
+          <span class="meta-value" style="font-family: monospace; font-size: 0.775rem;">${esc(ep.normalized || ep.raw || '')}</span>
+        </div>
+        <div class="inspector-meta-item">
+          <span class="meta-label">Modelos</span>
+          <span class="meta-value">${esc(modelInfoText)}</span>
+        </div>
+        <div class="inspector-meta-item">
+          <span class="meta-label">Latencia Diagnóstico</span>
+          <span class="meta-value">${report.inspectionTimeMs || 0} ms</span>
+        </div>
+      </div>
+
+      <div class="inspector-cap-grid">
+        ${cardsHtml}
+      </div>
+    `;
   }
 
   // ==========================================================================
@@ -2893,6 +3045,13 @@
       elements.btnQueryServer.addEventListener('click', (e) => {
         e.preventDefault();
         handleQueryServer();
+      });
+    }
+
+    if (elements.btnRunInspector) {
+      elements.btnRunInspector.addEventListener('click', (e) => {
+        e.preventDefault();
+        handleRunInspector();
       });
     }
 

@@ -272,6 +272,9 @@
       <button type="button" class="modal-tab-btn" data-tab="tab-model">
         <span data-i18n="tab_model">⚙️ Modelo y Prompt</span>
       </button>
+      <button type="button" class="modal-tab-btn" data-tab="tab-inspector">
+        <span data-i18n="tab_inspector">🔍 Inspector de Proveedor</span>
+      </button>
     </div>
 
     <form id="settings-form" class="settings-form-wrapper">
@@ -522,6 +525,29 @@
               <line x1="12" y1="8" x2="12.01" y2="8"></line>
             </svg>
             <span data-i18n-html="cookie_notice">Toda la configuración se almacena localmente de forma persistente (compatible tanto con <strong>file://</strong> como con servidores web).</span>
+          </div>
+        </div>
+
+        <!-- Pestaña 4: Inspector de Proveedor -->
+        <div id="tab-inspector" class="modal-tab-pane">
+          <div class="inspector-intro-card">
+            <div class="inspector-intro-header">
+              <span class="inspector-intro-icon">🔍</span>
+              <div>
+                <strong data-i18n="tab_inspector">Inspector de Proveedor</strong>
+                <p class="label-hint" style="margin-top: 0.2rem;" data-i18n="inspector_desc">
+                  Analiza el endpoint configurado para determinar con precisión qué capacidades soporta, distinguiendo entre capacidades declaradas, inferidas y comprobadas mediante pruebas activas seguras.
+                </p>
+              </div>
+            </div>
+            <button type="button" id="btn-run-inspector" class="btn-primary btn-inspector-run" style="margin-top: 0.85rem; width: 100%; display: flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 0.6rem;">
+              <span class="inspector-btn-icon">⚡</span>
+              <span class="inspector-btn-text" data-i18n="btn_run_inspector">Ejecutar Diagnóstico de Capacidades</span>
+            </button>
+          </div>
+
+          <div id="inspector-results" class="inspector-results-container" style="display: none; margin-top: 1rem;">
+            <!-- Renderizado dinámico de informe de capacidades -->
           </div>
         </div>
       </div>

@@ -791,6 +791,24 @@
     };
   }
 
+  /**
+   * Diagnostica el endpoint del proveedor y analiza sus capacidades declaradas, inferidas y comprobadas.
+   */
+  async function inspectProvider(config = {}, options = {}) {
+    const { apiUrl, apiType, apiKey, model } = config;
+    if (registry && registry.inspect) {
+      return registry.inspect(apiUrl, apiKey, model, apiType, options);
+    }
+    const adapter = registry ? registry.resolve(apiUrl, apiType) : null;
+    if (adapter && adapter.inspect) {
+      return adapter.inspect({ apiUrl, apiKey, model, ...options });
+    }
+    return {
+      success: false,
+      error: 'No se pudo inicializar el inspector de proveedores.'
+    };
+  }
+
   return {
     detectApiType,
     normalizeApiUrl,
@@ -802,6 +820,7 @@
     normalizeToolName,
     extractToolCallsFromText,
     getProviderCapabilities,
+    inspectProvider,
     registry
   };
 });
