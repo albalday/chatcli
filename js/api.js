@@ -433,18 +433,31 @@
     const headers = adapter ? adapter.buildHeaders(apiKey) : { 'Content-Type': 'application/json' };
 
     // Inyectar herramientas agénticas activadas si están disponibles
-    const toolsList = [];
-    const jsTool = Sandbox.JAVASCRIPT_TOOL_DEFINITION || (typeof window !== 'undefined' && window.ChatSandbox && window.ChatSandbox.JAVASCRIPT_TOOL_DEFINITION);
-    const webTool = WebBrowser.WEB_TOOL_DEFINITION || (typeof window !== 'undefined' && window.ChatWebBrowser && window.ChatWebBrowser.WEB_TOOL_DEFINITION);
-    const pdfTool = WebBrowser.PDF_TOOL_DEFINITION || (typeof window !== 'undefined' && window.ChatWebBrowser && window.ChatWebBrowser.PDF_TOOL_DEFINITION);
-    const searchTool = WebSearch.SEARCH_TOOL_DEFINITION || (typeof window !== 'undefined' && window.ChatWebSearch && window.ChatWebSearch.SEARCH_TOOL_DEFINITION);
-    const chartTool = (typeof window !== 'undefined' && window.ChatCharts && window.ChatCharts.CHART_TOOL_DEFINITION) || (typeof require !== 'undefined' ? (() => { try { return require('./charts.js').CHART_TOOL_DEFINITION; } catch(e){ return null; } })() : null);
+    let toolsList = [];
+    const AgentCore = typeof window !== 'undefined' ? window.ChatAgentCore : (typeof require !== 'undefined' ? (() => { try { return require('./agent-core.js'); } catch(e){ return null; } })() : null);
 
-    if (enableTools && enableAgentJs && jsTool) toolsList.push(jsTool);
-    if (enableTools && enableAgentWeb && webTool) toolsList.push(webTool);
-    if (enableTools && enableAgentWeb && pdfTool) toolsList.push(pdfTool);
-    if (enableTools && enableAgentSearch && searchTool) toolsList.push(searchTool);
-    if (enableTools && enableAgentChart && chartTool) toolsList.push(chartTool);
+    if (enableTools) {
+      if (AgentCore && AgentCore.registry) {
+        toolsList = AgentCore.registry.getDefinitions({
+          enableAgentJs,
+          enableAgentWeb,
+          enableAgentSearch,
+          enableAgentChart
+        });
+      } else {
+        const jsTool = Sandbox.JAVASCRIPT_TOOL_DEFINITION || (typeof window !== 'undefined' && window.ChatSandbox && window.ChatSandbox.JAVASCRIPT_TOOL_DEFINITION);
+        const webTool = WebBrowser.WEB_TOOL_DEFINITION || (typeof window !== 'undefined' && window.ChatWebBrowser && window.ChatWebBrowser.WEB_TOOL_DEFINITION);
+        const pdfTool = WebBrowser.PDF_TOOL_DEFINITION || (typeof window !== 'undefined' && window.ChatWebBrowser && window.ChatWebBrowser.PDF_TOOL_DEFINITION);
+        const searchTool = WebSearch.SEARCH_TOOL_DEFINITION || (typeof window !== 'undefined' && window.ChatWebSearch && window.ChatWebSearch.SEARCH_TOOL_DEFINITION);
+        const chartTool = (typeof window !== 'undefined' && window.ChatCharts && window.ChatCharts.CHART_TOOL_DEFINITION) || (typeof require !== 'undefined' ? (() => { try { return require('./charts.js').CHART_TOOL_DEFINITION; } catch(e){ return null; } })() : null);
+
+        if (enableAgentJs && jsTool) toolsList.push(jsTool);
+        if (enableAgentWeb && webTool) toolsList.push(webTool);
+        if (enableAgentWeb && pdfTool) toolsList.push(pdfTool);
+        if (enableAgentSearch && searchTool) toolsList.push(searchTool);
+        if (enableAgentChart && chartTool) toolsList.push(chartTool);
+      }
+    }
 
     // Construcción del payload mediante el adaptador
     const payload = adapter ? adapter.buildPayload({
@@ -752,6 +765,14 @@
           }
         }
       }
+
+      // Vaciar buffer residual de TextDecoder si quedaron bytes en streaming
+      try {
+        const flushText = decoder.decode();
+        if (flushText && onLog) {
+          onLog({ type: 'raw', subtype: 'incoming', text: flushText });
+        }
+      } catch (e) {}
 
       const finalStats = getStats();
       const finalToolCalls = getFinalToolCalls();

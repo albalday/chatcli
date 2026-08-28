@@ -1683,7 +1683,7 @@
         setDebugStatus('done', t('debug_status_done'));
 
         actions.style.display = 'inline-flex';
-        btnCopy.addEventListener('click', async () => {
+        btnCopy.onclick = async () => {
           try {
             const finalFullMarkdown = (accumulatedConversationMarkdown ? accumulatedConversationMarkdown : '') + currentTurnText;
             await navigator.clipboard.writeText(finalFullMarkdown);
@@ -1699,7 +1699,7 @@
           } catch (err) {
             console.error('Error copying composite response:', err);
           }
-        });
+        };
 
         finishGeneration();
         return;
@@ -2265,7 +2265,7 @@
       }
 
       actions.style.display = 'inline-flex';
-      btnCopy.addEventListener('click', async () => {
+      btnCopy.onclick = async () => {
         try {
           const finalFullMarkdown = (accumulatedConversationMarkdown ? accumulatedConversationMarkdown : '') + finalSynthText;
           await navigator.clipboard.writeText(finalFullMarkdown);
@@ -2280,7 +2280,7 @@
         } catch (err) {
           console.error('Error copying response:', err);
         }
-      });
+      };
     }
 
     setDebugStatus('done', t('debug_status_done'));
@@ -2786,7 +2786,7 @@
         content.innerHTML = renderedHtml || '<p><em>(Sin respuesta de texto)</em></p>';
 
         if (btnCopy) {
-          btnCopy.addEventListener('click', () => {
+          btnCopy.onclick = () => {
             if (navigator.clipboard) {
               navigator.clipboard.writeText(msg.content || content.innerText);
               btnCopy.innerHTML = `✅ <span>${t('btn_copied')}</span>`;
@@ -2794,7 +2794,7 @@
                 btnCopy.innerHTML = `📋 <span>${t('btn_copy')}</span>`;
               }, 2000);
             }
-          });
+          };
         }
 
         if (actions) actions.style.display = 'inline-flex';
