@@ -205,9 +205,9 @@
       agent_datetime_desc: 'Inyecta de forma explícita la fecha, hora y año actual del mundo real en el contexto del prompt para que el modelo no confunda el presente con una fecha futura.',
       agent_raw_logs_title: '📡 Captura de Tráfico Raw en Logs',
       agent_raw_logs_desc: 'Registra todo el tráfico de red entrante y saliente (solicitudes HTTP, chunks SSE crudos y llamadas de herramientas) en la pestaña dedicada Raw del panel de logs.',
-      field_system_prompt: 'Prompt del Sistema (System Prompt por defecto)',
-      field_system_prompt_hint: 'Instrucciones base que guían el comportamiento del asistente.',
-      field_system_prompt_placeholder: 'Eres un asistente útil, conciso y preciso...',
+      field_system_prompt: 'Prompt del Sistema (Opcional)',
+      field_system_prompt_hint: 'Instrucciones base personalizadas que guían el comportamiento del asistente (opcional).',
+      field_system_prompt_placeholder: 'Escribe aquí tus instrucciones personalizadas para el modelo (opcional)...',
       field_temperature: 'Temperatura: {val}',
       field_temperature_hint: 'Controla la creatividad de las respuestas (0 = determinista/preciso, 1 = creativo).',
       cookie_notice: 'Toda la configuración se almacena localmente de forma persistente (compatible tanto con <strong>file://</strong> como con servidores web).',
@@ -271,7 +271,7 @@
 
       // Contexto del sistema de fecha/hora del mundo real
       system_context_prefix: '\n\n[INFORMACIÓN TEMPORAL DEL MUNDO REAL]\n- Fecha y hora actual del mundo real: {datetime}.\n- Año presente en el mundo real: {year}.\n- Contexto temporal obligatorio: Esta es la fecha y hora REAL y PRESENTE del mundo físico en el que se produce esta conversación. No es una fecha hipotética, ni una simulación, ni una fecha futura. Todo acontecimiento anterior a este momento pertenece al pasado, y el año actual es {year}. Responde y razona siempre tomando esta fecha como el momento presente real de hoy.',
-      default_system_prompt: 'Eres un asistente de IA útil, conciso y preciso. Responde siempre con formato Markdown claro. Tienes disponibles capacidades agénticas en el navegador si están habilitadas (búsqueda en internet con search_web, consulta de páginas web con fetch_web_page, descarga y lectura de documentos PDF desde URLs con download_pdf, generación de gráficos interactivos con render_chart, y ejecución de JavaScript local con execute_javascript).'
+      default_system_prompt: ''
     },
 
     en: {
@@ -459,9 +459,9 @@
       agent_datetime_desc: 'Explicitly injects the current real-world date, time, and year into the prompt context so the model does not mistake the present for a future date.',
       agent_raw_logs_title: '📡 Capture Raw Traffic in Logs',
       agent_raw_logs_desc: 'Records all unmodified incoming and outgoing network traffic (HTTP requests, raw SSE chunks, and tool invocations) in the dedicated Raw tab of the logs panel.',
-      field_system_prompt: 'System Prompt (Default System Prompt)',
-      field_system_prompt_hint: 'Base instructions guiding the assistant behavior.',
-      field_system_prompt_placeholder: 'You are a helpful, concise and precise assistant...',
+      field_system_prompt: 'System Prompt (Optional)',
+      field_system_prompt_hint: 'Custom base instructions guiding the assistant behavior (optional).',
+      field_system_prompt_placeholder: 'Enter custom system instructions for the model (optional)...',
       field_temperature: 'Temperature: {val}',
       field_temperature_hint: 'Controls randomness/creativity (0 = deterministic/precise, 1 = creative).',
       cookie_notice: 'All settings are stored locally and persistently (compatible with both <strong>file://</strong> and web servers).',
@@ -525,7 +525,7 @@
 
       // Real-world temporal system context
       system_context_prefix: '\n\n[REAL-WORLD TEMPORAL INFORMATION]\n- Current real-world date and time: {datetime}.\n- Current real-world year: {year}.\n- Mandatory temporal context: This is the ACTUAL, REAL-WORLD PRESENT time of the physical world in which this conversation is occurring. It is NOT a hypothetical date, a simulation, or a future date. All events prior to this timestamp are in the past, and the current year is {year}. Always answer and reason taking this date and time as today\'s real-world present.',
-      default_system_prompt: 'You are a helpful, concise and precise AI assistant. Always respond with clear Markdown format. You have agentic capabilities available in the browser if enabled (internet search with search_web, web page fetching with fetch_web_page, downloading and reading PDF documents from URLs with download_pdf, interactive chart rendering with render_chart, and local JavaScript execution with execute_javascript).'
+      default_system_prompt: ''
     }
   };
 

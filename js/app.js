@@ -47,6 +47,7 @@
     enableAgentSearch: true,
     enableAgentChart: true,
     enableContextCache: true,
+    enableRawLogs: false,
     sendDateTime: true
   };
 
@@ -276,14 +277,14 @@
       }
     });
 
-    const defaultPrompt = t('default_system_prompt');
     let activePrompt = (appConfig.systemPrompt && appConfig.systemPrompt.trim() !== '')
-      ? appConfig.systemPrompt
-      : defaultPrompt;
+      ? appConfig.systemPrompt.trim()
+      : '';
 
     const toolsGuide = getToolsSystemPromptGuide();
+    let fullSystemPrompt = activePrompt;
     if (toolsGuide) {
-      activePrompt = activePrompt + '\n\n' + toolsGuide;
+      fullSystemPrompt = fullSystemPrompt ? (fullSystemPrompt + '\n\n' + toolsGuide) : toolsGuide;
     }
 
     if (appConfig.sendDateTime !== false) {
@@ -291,19 +292,19 @@
       const dtString = getFormattedDateTime();
       const currentYear = now.getFullYear();
       const timeContext = t('system_context_prefix', { datetime: dtString, year: currentYear });
+      fullSystemPrompt = fullSystemPrompt ? (fullSystemPrompt + '\n\n' + timeContext) : timeContext;
+    }
 
-      if (messages.length > 0 && messages[0].role === 'system') {
-        messages[0].content = (messages[0].content || '') + timeContext;
+    if (messages.length > 0 && messages[0].role === 'system') {
+      if (fullSystemPrompt) {
+        messages[0].content = fullSystemPrompt;
       } else {
-        messages.unshift({
-          role: 'system',
-          content: activePrompt + timeContext
-        });
+        messages.shift();
       }
-    } else if (messages.length === 0 || messages[0].role !== 'system') {
+    } else if (fullSystemPrompt) {
       messages.unshift({
         role: 'system',
-        content: activePrompt
+        content: fullSystemPrompt
       });
     }
 
@@ -383,9 +384,8 @@
       currentAbortController.abort();
     }
 
-    const defaultPrompt = t('default_system_prompt');
     chatHistory = [
-      { id: 'system_root', role: 'system', content: appConfig.systemPrompt || defaultPrompt }
+      { id: 'system_root', role: 'system', content: appConfig.systemPrompt || '' }
     ];
 
     // Limpiar sesión vacía previa y generar nuevo ID de sesión limpia
@@ -2013,7 +2013,7 @@
     appConfig = newConfig;
 
     if (chatHistory.length > 0 && chatHistory[0].role === 'system') {
-      chatHistory[0].content = appConfig.systemPrompt || t('default_system_prompt');
+      chatHistory[0].content = appConfig.systemPrompt || '';
     }
 
     updateUIFromConfig();
@@ -2086,9 +2086,8 @@
 
     // Siempre iniciar en un chat nuevo y vacío al abrir o recargar la página (F5 / Ctrl+F5)
     currentSessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
-    const defaultPrompt = t('default_system_prompt');
     chatHistory = [
-      { id: 'system_root', role: 'system', content: appConfig.systemPrompt || defaultPrompt }
+      { id: 'system_root', role: 'system', content: appConfig.systemPrompt || '' }
     ];
 
     renderSessionMessages(chatHistory);
@@ -2220,7 +2219,7 @@
 
     currentSessionId = target.id;
     chatHistory = target.history ? [...target.history] : [
-      { id: 'system_root', role: 'system', content: appConfig.systemPrompt || t('default_system_prompt') }
+      { id: 'system_root', role: 'system', content: appConfig.systemPrompt || '' }
     ];
 
     renderSessionMessages(chatHistory);
@@ -2235,9 +2234,8 @@
     saveCurrentSession();
 
     currentSessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
-    const defaultPrompt = t('default_system_prompt');
     chatHistory = [
-      { id: 'system_root', role: 'system', content: appConfig.systemPrompt || defaultPrompt }
+      { id: 'system_root', role: 'system', content: appConfig.systemPrompt || '' }
     ];
 
     renderSessionMessages(chatHistory);
@@ -2269,7 +2267,7 @@
       const next = savedSessions[0];
       currentSessionId = next.id;
       chatHistory = next.history ? [...next.history] : [
-        { id: 'system_root', role: 'system', content: appConfig.systemPrompt || t('default_system_prompt') }
+        { id: 'system_root', role: 'system', content: appConfig.systemPrompt || '' }
       ];
       renderSessionMessages(chatHistory);
     }

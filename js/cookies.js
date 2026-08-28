@@ -17,7 +17,7 @@
     apiType: 'openai', // 'openai' | 'ollama' | 'openrouter' | 'claude' | 'gemini' | 'custom'
     apiKey: '',
     model: '',
-    systemPrompt: 'Eres un asistente de IA útil, conciso y preciso. Responde siempre con formato Markdown claro. Tienes disponibles capacidades agénticas en el navegador si están habilitadas (búsqueda en internet con search_web, consulta de páginas web con fetch_web_page, descarga y lectura de documentos PDF desde URLs con download_pdf, y ejecución de JavaScript local con execute_javascript).',
+    systemPrompt: '',
     temperature: '0.7',
     reasoningEffort: 'none', // 'none' | 'low' | 'medium' | 'high'
     theme: 'light', // 'light' | 'dark'
@@ -172,12 +172,20 @@
 
     let effectiveApiType = (apiType && apiType !== 'auto') ? apiType : DEFAULT_CONFIG.apiType;
 
+    let effectiveSystemPrompt = systemPrompt !== null ? systemPrompt : DEFAULT_CONFIG.systemPrompt;
+    if (effectiveSystemPrompt && (
+      effectiveSystemPrompt.startsWith('Eres un asistente de IA útil') ||
+      effectiveSystemPrompt.startsWith('You are a helpful, concise and precise AI assistant')
+    )) {
+      effectiveSystemPrompt = '';
+    }
+
     return {
       apiUrl: effectiveApiUrl,
       apiType: effectiveApiType,
       apiKey: apiKey !== null ? apiKey : DEFAULT_CONFIG.apiKey,
       model: model !== null && model !== '' ? model : DEFAULT_CONFIG.model,
-      systemPrompt: systemPrompt !== null && systemPrompt !== '' ? systemPrompt : DEFAULT_CONFIG.systemPrompt,
+      systemPrompt: effectiveSystemPrompt,
       temperature: temperature !== null && temperature !== '' ? temperature : DEFAULT_CONFIG.temperature,
       reasoningEffort: (reasoningEffort === 'off' || reasoningEffort === 'none') ? 'none' : (reasoningEffort !== null && reasoningEffort !== '' ? reasoningEffort : DEFAULT_CONFIG.reasoningEffort),
       modelReasoningConfig: parsedReasoningConfig,
