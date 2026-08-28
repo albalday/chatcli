@@ -1,5 +1,5 @@
 /**
- * Módulo de Internacionalización y Multi-idioma (ChatI18n) para ChatCLI v3.1.
+ * Módulo de Internacionalización y Multi-idioma (ChatI18n) para ChatCLI v4.0.
  * Soporta Castellano (es) e Inglés (en).
  * - Detección automática del idioma del navegador (inglés si empieza por 'en', español por defecto).
  * - Persistencia de preferencia de idioma en ChatStorage.
@@ -22,7 +22,7 @@
   const TRANSLATIONS = {
     es: {
       // Metadatos y Encabezados
-      app_title: 'ChatCLI v3.1 - Cliente Web Universal de Chat para IA',
+      app_title: 'ChatCLI v4.0 - Cliente Web Universal de Chat para IA',
       app_description: 'Cliente de chat web universal, ligero y autosuficiente para modelos de lenguaje (LLMs)',
       
       // Bienvenida y Sugerencias
@@ -279,7 +279,7 @@
 
     en: {
       // Metadata & Headers
-      app_title: 'ChatCLI v3.1 - Universal AI Chat Web Client',
+      app_title: 'ChatCLI v4.0 - Universal AI Chat Web Client',
       app_description: 'Universal, lightweight, standalone web chat client for Large Language Models (LLMs)',
       
       // Bienvenida y Sugerencias

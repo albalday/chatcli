@@ -1,6 +1,6 @@
-# 💬 ChatCLI - Cliente Web Universal de Chat para IA (v3.1)
+# 💬 ChatCLI - Cliente Web Universal de Chat para IA (v4.0)
 
-[![Versión](https://img.shields.io/badge/versión-3.1-blue.svg)](chatcli.html)
+[![Versión](https://img.shields.io/badge/versión-4.0-blue.svg)](chatcli.html)
 [![Multi-Idioma](https://img.shields.io/badge/idiomas-ES%20%7C%20EN-orange.svg)](#-soporte-multi-idioma-internacionalizaci%C3%B3n-i18n)
 [![Licencia](https://img.shields.io/badge/licencia-MIT-green.svg)](LICENSE)
 [![Desarrollo](https://img.shields.io/badge/100%25-Antigravity%20AI-purple.svg)](#-desarrollo-100-con-antigravity)
@@ -41,6 +41,17 @@ A partir de la versión **v1.0**, ChatCLI cuenta con soporte completo y reactivo
 **Todo este proyecto ha sido concebido, programado, probado y empaquetado exclusivamente con Google Antigravity, sin que el autor haya tecleado manualmente una sola línea de código.**
 
 Desde el diseño de la arquitectura por módulos, la creación de la interfaz HTML5/CSS3 con temas claro y oscuro, el sistema de internacionalización i18n, el cliente de streaming por SSE, el soporte multi-endpoint, el parseador de documentos PDF en cliente, el sandbox de ejecución agéntica, hasta el empaquetador en Base64 en Python y las pruebas automatizadas: todo el ciclo de vida del software ha sido generado mediante programación en pareja (*pair programming*) con Antigravity.
+
+---
+
+## ✨ Novedades en la Versión 4.0
+
+- 📜 **Inspector de Logs Avanzado con Pestaña Raw e Interruptor**: Pestaña dedicada `📡 Raw` para tráfico de red crudo y llamadas de herramientas, con interruptor independiente de captura y aislamiento estricto de la pestaña `Todo`.
+- 🧠 **Flujo Limpio de Razonamiento**: Procesamiento continuo e ininterrumpido de tokens de pensamiento estructurados.
+- 🗑️ **Botón "Borrar todo" en Configuración**: Limpieza integral de cookies, almacenamiento local `localStorage`/`sessionStorage` y sesiones guardadas con reinicio limpio de la aplicación.
+- 📝 **Prompt del Sistema Vacío por Defecto**: Inicio limpio y neutral sin instrucciones preimpuestas, permitiendo total fidelidad al modelo.
+- 🗜️ **Compilador Minificador Autónomo**: Reducción superior al 50% en el peso de `chatcli.html` (~236 KB) mediante minificación JS/CSS sin dependencias pesadas.
+- 📱 **Optimizaciones Responsivas en Tablets y Móviles**: Adaptación de viewports dinámicos para teclado virtual en Android/iOS y posicionamiento inteligente de menús.
 
 ---
 
