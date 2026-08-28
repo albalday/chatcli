@@ -265,6 +265,34 @@ test('Capabilities - Utilización en buildPayload para filtrar parámetros no so
   assert.equal(textOnlyMessages[0].content, 'Descripción textual', 'Debe extraer sólo texto si vision=false');
 });
 
+test('GeminiAdapter - Normalización de endpoints, stripping de prefijo models/ y compatibilidad de payload', () => {
+  const adapter = new GeminiProviderAdapter();
+  assert.equal(adapter.normalizeEndpoint('https://generativelanguage.googleapis.com/v1beta/openai'), 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions');
+
+  // Parseo de lista de modelos de Gemini con prefijo models/
+  const parsedModels = adapter.parseModelsResponse({
+    models: [
+      { name: 'models/gemini-1.5-flash', displayName: 'Gemini 1.5 Flash' },
+      { name: 'models/gemini-2.0-flash', displayName: 'Gemini 2.0 Flash' },
+      { name: 'models/embedding-001', displayName: 'Embedding' }
+    ]
+  });
+  assert.equal(parsedModels.length, 2);
+  assert.equal(parsedModels[0].id, 'gemini-1.5-flash');
+  assert.equal(parsedModels[1].id, 'gemini-2.0-flash');
+
+  // Construcción de payload: debe quitar models/ y no inyectar reasoning_effort ni stream_options
+  const payload = adapter.buildPayload({
+    model: 'models/gemini-1.5-flash',
+    messages: [{ role: 'user', content: 'hola' }],
+    reasoningEffort: 'none',
+    enableContextCache: true
+  });
+  assert.equal(payload.model, 'gemini-1.5-flash');
+  assert.equal(payload.reasoning_effort, undefined, 'No debe inyectar reasoning_effort');
+  assert.equal(payload.stream_options, undefined, 'No debe inyectar stream_options');
+});
+
 test('ChatAPI.getProviderCapabilities - Consulta a través de ChatAPI', () => {
   const ChatAPI = require('../js/api.js');
   const claudeCaps = ChatAPI.getProviderCapabilities('https://api.anthropic.com/v1');
@@ -274,4 +302,8 @@ test('ChatAPI.getProviderCapabilities - Consulta a través de ChatAPI', () => {
   const ollamaCaps = ChatAPI.getProviderCapabilities('http://localhost:11434');
   assert.equal(ollamaCaps.promptCaching, false);
   assert.equal(ollamaCaps.streaming, true);
+
+  const geminiCaps = ChatAPI.getProviderCapabilities('https://generativelanguage.googleapis.com/v1beta/openai');
+  assert.equal(geminiCaps.reasoning, false);
+  assert.equal(geminiCaps.promptCaching, false);
 });

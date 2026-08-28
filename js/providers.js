@@ -99,7 +99,9 @@
     applyReasoning(payload, effortLevel) {
       let effort = String(effortLevel || 'none').toLowerCase().trim();
       if (effort === 'off') effort = 'none';
-      payload.reasoning_effort = effort;
+      if (effort !== 'none') {
+        payload.reasoning_effort = effort;
+      }
     }
 
     /**
@@ -480,15 +482,15 @@
       super({
         id: 'gemini',
         label: 'Google Gemini',
-        description: 'Estándar Gemini (thinking: none, low, medium, high, xhigh)',
-        reasoningLevels: ['none', 'low', 'medium', 'high', 'xhigh'],
+        description: 'Google Gemini (OpenAI compatible endpoint)',
+        reasoningLevels: ['none'],
         capabilities: {
           streaming: true,
           vision: true,
           tools: true,
-          reasoning: true,
+          reasoning: false,
           jsonMode: true,
-          promptCaching: true,
+          promptCaching: false,
           embeddings: true,
           modelListing: true
         }
@@ -506,6 +508,37 @@
     getModelEndpoints(cleanUrl) {
       const v1Url = cleanUrl.endsWith('/v1') ? cleanUrl : `${cleanUrl}/v1`;
       return [`${v1Url}/models`, `${cleanUrl}/models`];
+    }
+
+    parseModelsResponse(data) {
+      if (!data) return [];
+      let list = [];
+      if (Array.isArray(data.data)) {
+        list = data.data;
+      } else if (Array.isArray(data.models)) {
+        list = data.models;
+      }
+
+      return list
+        .map(m => {
+          let id = m.id || m.name || '';
+          if (id.startsWith('models/')) id = id.substring(7);
+          return {
+            id: id,
+            name: m.displayName || id,
+            description: m.description || ''
+          };
+        })
+        .filter(m => m.id && (m.id.includes('gemini') || m.id.includes('gemma')));
+    }
+
+    buildPayload(params) {
+      const payload = super.buildPayload(params);
+      // El endpoint OpenAI de Gemini requiere el nombre del modelo sin el prefijo "models/"
+      if (payload.model && payload.model.startsWith('models/')) {
+        payload.model = payload.model.substring(7);
+      }
+      return payload;
     }
   }
 
