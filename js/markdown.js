@@ -176,8 +176,8 @@
     const thoughtTitle = tr('md_thought_title', '💭 Proceso de razonamiento');
     const thoughtReasoning = tr('md_thought_reasoning', '💭 Razonando...');
 
-    // 1. Bloques de pensamiento <think>...</think>
-    p = p.replace(/&lt;think&gt;([\s\S]*?)&lt;\/think&gt;/gi, function (match, thought) {
+    // 1. Bloques de pensamiento <think>...</think>, <thought>...</thought>, <reasoning>...</reasoning>
+    p = p.replace(/&lt;(think|thought|reasoning)&gt;([\s\S]*?)&lt;\/\1&gt;/gi, function (match, tag, thought) {
       return `
         <details class="thought-block" open>
           <summary class="thought-summary">
@@ -188,7 +188,7 @@
       `;
     });
 
-    p = p.replace(/&lt;think&gt;([\s\S]*)$/gi, function (match, thought) {
+    p = p.replace(/&lt;(think|thought|reasoning)&gt;([\s\S]*)$/gi, function (match, tag, thought) {
       return `
         <details class="thought-block" open>
           <summary class="thought-summary">

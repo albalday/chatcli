@@ -684,7 +684,7 @@
     let accumulatedReasoning = '';
     let accumulatedToolCalls = {};
     let chunkCount = 0;
-    let isInsideThinkTag = false;
+    let activeReasoningTag = null;
     let serverCachedTokens = 0;
     let serverCacheCreationTokens = 0;
     const requestStartTime = performance.now();
@@ -907,59 +907,49 @@
                   if (onLog) onLog({ type: 'thinking', text: rChunk });
                 }
 
-                // B) Contenido textual normal (con soporte de etiquetas <think>...</think>)
+                // B) Contenido textual normal (con soporte de etiquetas de pensamiento: <think>, <thought>, <reasoning>)
                 const textChunk = delta.content || delta.text || '';
                 if (textChunk) {
                   if (!firstTokenTime) firstTokenTime = performance.now();
 
-                  if (textChunk.includes('<think>')) {
-                    isInsideThinkTag = true;
-                    const parts = textChunk.split('<think>');
-                    if (parts[0]) {
-                      accumulatedText += parts[0];
-                      chunkCount++;
-                      if (onChunk) onChunk(accumulatedText, parts[0], getStats());
-                    }
-                    if (parts[1]) {
-                      if (parts[1].includes('</think>')) {
-                        const thinkParts = parts[1].split('</think>');
-                        accumulatedReasoning += thinkParts[0];
-                        if (onReasoningChunk) onReasoningChunk(thinkParts[0], accumulatedReasoning);
-                        if (onLog) onLog({ type: 'thinking', text: thinkParts[0] });
-                        isInsideThinkTag = false;
-                        if (thinkParts[1]) {
-                          accumulatedText += thinkParts[1];
+                  let remaining = textChunk;
+                  while (remaining.length > 0) {
+                    if (!activeReasoningTag) {
+                      const openMatch = remaining.match(/<(think|thought|reasoning)>/i);
+                      if (openMatch) {
+                        const preText = remaining.slice(0, openMatch.index);
+                        if (preText) {
+                          accumulatedText += preText;
                           chunkCount++;
-                          if (onChunk) onChunk(accumulatedText, thinkParts[1], getStats());
+                          if (onChunk) onChunk(accumulatedText, preText, getStats());
                         }
+                        activeReasoningTag = openMatch[1].toLowerCase();
+                        remaining = remaining.slice(openMatch.index + openMatch[0].length);
                       } else {
-                        accumulatedReasoning += parts[1];
-                        if (onReasoningChunk) onReasoningChunk(parts[1], accumulatedReasoning);
-                        if (onLog) onLog({ type: 'thinking', text: parts[1] });
-                      }
-                    }
-                  } else if (isInsideThinkTag) {
-                    if (textChunk.includes('</think>')) {
-                      const parts = textChunk.split('</think>');
-                      accumulatedReasoning += parts[0];
-                      if (onReasoningChunk) onReasoningChunk(parts[0], accumulatedReasoning);
-                      if (onLog) onLog({ type: 'thinking', text: parts[0] });
-                      isInsideThinkTag = false;
-                      if (parts[1]) {
-                        accumulatedText += parts[1];
+                        accumulatedText += remaining;
                         chunkCount++;
-                        if (onChunk) onChunk(accumulatedText, parts[1], getStats());
+                        if (onChunk) onChunk(accumulatedText, remaining, getStats());
+                        remaining = '';
                       }
                     } else {
-                      accumulatedReasoning += textChunk;
-                      if (onReasoningChunk) onReasoningChunk(textChunk, accumulatedReasoning);
-                      if (onLog) onLog({ type: 'thinking', text: textChunk });
+                      const closeRegex = new RegExp(`<\/${activeReasoningTag}>`, 'i');
+                      const closeMatch = remaining.match(closeRegex);
+                      if (closeMatch) {
+                        const rText = remaining.slice(0, closeMatch.index);
+                        if (rText) {
+                          accumulatedReasoning += rText;
+                          if (onReasoningChunk) onReasoningChunk(rText, accumulatedReasoning);
+                          if (onLog) onLog({ type: 'thinking', text: rText });
+                        }
+                        activeReasoningTag = null;
+                        remaining = remaining.slice(closeMatch.index + closeMatch[0].length);
+                      } else {
+                        accumulatedReasoning += remaining;
+                        if (onReasoningChunk) onReasoningChunk(remaining, accumulatedReasoning);
+                        if (onLog) onLog({ type: 'thinking', text: remaining });
+                        remaining = '';
+                      }
                     }
-                  } else {
-                    accumulatedText += textChunk;
-                    chunkCount++;
-                    const stats = getStats();
-                    if (onChunk) onChunk(accumulatedText, textChunk, stats);
                   }
                 }
 
