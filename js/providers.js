@@ -99,9 +99,7 @@
     applyReasoning(payload, effortLevel) {
       let effort = String(effortLevel || 'none').toLowerCase().trim();
       if (effort === 'off') effort = 'none';
-      if (effort !== 'none') {
-        payload.reasoning_effort = effort;
-      }
+      payload.reasoning_effort = effort;
     }
 
     /**
@@ -539,8 +537,11 @@
     }
 
     formatMessages(messages, capabilities) {
-      return messages.map(m => {
-        if (m.role === 'assistant' && Array.isArray(m.tool_calls)) {
+      const formatted = [];
+      (messages || []).forEach(m => {
+        if (!m || !m.role) return;
+
+        if (m.role === 'assistant' && Array.isArray(m.tool_calls) && m.tool_calls.length > 0) {
           const cleanToolCalls = m.tool_calls.map(tc => {
             const out = {
               id: tc.id || `call_${Date.now()}`,
@@ -557,14 +558,47 @@
             if (tc.provider_specific_fields) out.provider_specific_fields = tc.provider_specific_fields;
             return out;
           });
-          return {
+          formatted.push({
             role: 'assistant',
             content: m.content || null,
             tool_calls: cleanToolCalls
-          };
+          });
+        } else if (m.role === 'tool') {
+          const toolCallId = m.tool_call_id || `call_${Date.now()}`;
+          const toolName = m.name || 'tool';
+          const toolContent = typeof m.content === 'object' ? JSON.stringify(m.content) : String(m.content !== undefined ? m.content : '');
+
+          // Validar que el mensaje previo sea un assistant con la llamada correspondiente
+          const prevMsg = formatted.length > 0 ? formatted[formatted.length - 1] : null;
+          const hasMatchingToolCall = prevMsg && prevMsg.role === 'assistant' && Array.isArray(prevMsg.tool_calls) &&
+            prevMsg.tool_calls.some(tc => tc.id === toolCallId || (tc.function && tc.function.name === toolName));
+
+          if (!hasMatchingToolCall) {
+            formatted.push({
+              role: 'assistant',
+              content: null,
+              tool_calls: [{
+                id: toolCallId,
+                type: 'function',
+                function: {
+                  name: toolName,
+                  arguments: '{}'
+                }
+              }]
+            });
+          }
+
+          formatted.push({
+            role: 'tool',
+            tool_call_id: toolCallId,
+            name: toolName,
+            content: toolContent
+          });
+        } else {
+          formatted.push(m);
         }
-        return m;
       });
+      return formatted;
     }
 
     buildPayload(params) {
