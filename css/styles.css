@@ -25,6 +25,7 @@
   --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
   --font-sans: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  --app-height: 100dvh;
 }
 
 /* ==========================================================================
@@ -61,6 +62,9 @@
 
 html, body {
   height: 100%;
+  height: 100dvh;
+  height: var(--app-height, 100dvh);
+  min-height: -webkit-fill-available;
   font-family: var(--font-sans);
   background-color: var(--bg-app);
   color: var(--text-main);
@@ -70,7 +74,10 @@ html, body {
 body {
   display: flex;
   flex-direction: row;
-  height: 100vh;
+  height: 100%;
+  height: 100dvh;
+  height: var(--app-height, 100dvh);
+  width: 100%;
   width: 100vw;
   overflow: hidden;
   position: relative;
@@ -154,23 +161,27 @@ body {
 }
 
 /* ==========================================================================
-   Contenedor Principal del Chat (Usa el 100% del alto de la ventana)
+   Contenedor Principal del Chat (Usa el 100% del alto disponible)
    ========================================================================== */
 .chat-container {
-  flex: 1;
+  flex: 1 1 0%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   max-width: 1300px;
   width: 100%;
   margin: 0 auto;
-  height: 100vh;
+  height: 100%;
+  max-height: 100%;
   position: relative;
   padding: 0 1rem;
 }
 
 .messages-list {
-  flex: 1;
+  flex: 1 1 0%;
+  min-height: 0;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   padding: 1.5rem 0.5rem 0.75rem 0.5rem;
   display: flex;
   flex-direction: column;
@@ -973,7 +984,10 @@ body {
    Barra de Entrada Inferior y Botones Compactos al lado del Prompt
    ========================================================================== */
 .chat-input-wrapper {
-  padding: 0.5rem 1rem 0.85rem 1rem;
+  flex-shrink: 0;
+  padding: 0.5rem 1rem max(0.85rem, env(safe-area-inset-bottom));
+  padding-left: max(1rem, env(safe-area-inset-left));
+  padding-right: max(1rem, env(safe-area-inset-right));
   background-color: var(--bg-app);
 }
 
@@ -984,6 +998,8 @@ body {
   justify-content: space-between;
   margin-bottom: 0.4rem;
   padding: 0 0.2rem;
+  flex-wrap: wrap;
+  gap: 0.35rem;
 }
 
 .toolbar-left,
@@ -1576,7 +1592,7 @@ body {
   color: var(--text-main);
   max-width: 580px;
   width: 92vw;
-  max-height: 88vh;
+  max-height: calc(var(--app-height, 100dvh) * 0.88);
   box-shadow: var(--shadow-lg);
   animation: modalScale 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -2644,7 +2660,10 @@ input:checked + .slider:before {
 .debug-panel {
   width: 440px;
   max-width: 45vw;
-  height: 100vh;
+  height: 100%;
+  height: 100dvh;
+  height: var(--app-height, 100dvh);
+  max-height: 100%;
   background-color: #090e1a;
   color: #f1f5f9;
   border-left: 1px solid #1e293b;
@@ -2933,6 +2952,9 @@ input:checked + .slider:before {
     top: 0;
     right: 0;
     bottom: 0;
+    height: 100%;
+    height: 100dvh;
+    height: var(--app-height, 100dvh);
     width: 92vw;
     max-width: 92vw;
     z-index: 1000;
@@ -2947,7 +2969,10 @@ input:checked + .slider:before {
   width: 280px;
   min-width: 280px;
   max-width: 320px;
-  height: 100vh;
+  height: 100%;
+  height: 100dvh;
+  height: var(--app-height, 100dvh);
+  max-height: 100%;
   background-color: var(--bg-surface);
   border-right: 1px solid var(--border-color);
   display: flex;
@@ -3151,6 +3176,9 @@ input:checked + .slider:before {
     top: 0;
     left: 0;
     bottom: 0;
+    height: 100%;
+    height: 100dvh;
+    height: var(--app-height, 100dvh);
     width: 85vw;
     max-width: 320px;
     box-shadow: 10px 0 30px rgba(0, 0, 0, 0.5);

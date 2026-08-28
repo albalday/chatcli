@@ -2429,10 +2429,48 @@
   }
 
   // ==========================================================================
+  // Ajuste Dinámico de Altura de Viewport (Android / Tablets / iOS / Teclados)
+  // ==========================================================================
+
+  function updateViewportHeight() {
+    let vh = window.innerHeight;
+    if (window.visualViewport) {
+      vh = window.visualViewport.height;
+    }
+    document.documentElement.style.setProperty('--app-height', `${vh}px`);
+  }
+
+  function setupViewportListeners() {
+    updateViewportHeight();
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', updateViewportHeight);
+      window.visualViewport.addEventListener('scroll', updateViewportHeight);
+    }
+    window.addEventListener('resize', updateViewportHeight);
+    window.addEventListener('orientationchange', () => {
+      setTimeout(updateViewportHeight, 100);
+      setTimeout(updateViewportHeight, 300);
+    });
+
+    if (elements.userInput) {
+      elements.userInput.addEventListener('focus', () => {
+        setTimeout(() => {
+          updateViewportHeight();
+          if (elements.userInput) {
+            elements.userInput.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+          }
+        }, 150);
+      });
+    }
+  }
+
+  // ==========================================================================
   // Escuchadores de Eventos
   // ==========================================================================
 
   function setupEventListeners() {
+    setupViewportListeners();
+
     // Formulario de chat
     elements.chatForm.addEventListener('submit', function (e) {
       e.preventDefault();
