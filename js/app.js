@@ -2740,6 +2740,215 @@
     }
   }
 
+  function renderStoredToolCard(tc, toolMsg) {
+    if (!tc || !tc.function) return null;
+    const rawFuncName = tc.function.name || '';
+    const normName = rawFuncName.toLowerCase().replace(/_/g, '');
+
+    let toolArgs = {};
+    try {
+      toolArgs = typeof tc.function.arguments === 'object' ? tc.function.arguments : JSON.parse(tc.function.arguments || '{}');
+    } catch (e) {
+      toolArgs = { input: tc.function.arguments || '' };
+    }
+
+    const cardDiv = document.createElement('div');
+    cardDiv.className = 'tool-card-wrapper';
+
+    // 1. Gráficos interactivos SVG (render_chart)
+    if (normName === 'renderchart') {
+      if (typeof Charts !== 'undefined' && Charts.renderChartCard) {
+        cardDiv.innerHTML = Charts.renderChartCard(toolArgs);
+      } else {
+        cardDiv.innerHTML = `<div class="chat-chart-card">📊 ${Markdown.escapeHtml(toolArgs.title || 'Gráfico')}</div>`;
+      }
+      return cardDiv;
+    }
+
+    // 2. Ejecución de JavaScript (execute_javascript)
+    if (normName === 'executejavascript') {
+      const codeToRun = toolArgs.code || toolArgs.javascript || toolArgs.js || toolArgs.script || toolArgs.input || '';
+      let outText = '';
+      if (toolMsg && toolMsg.content) {
+        try {
+          const parsedRes = JSON.parse(toolMsg.content);
+          outText = parsedRes.result || (parsedRes.logs && parsedRes.logs.length > 0 ? parsedRes.logs.join('\n') : (parsedRes.error ? `Error: ${parsedRes.error}` : toolMsg.content));
+        } catch (e) {
+          outText = toolMsg.content;
+        }
+      }
+
+      cardDiv.innerHTML = `
+        <div class="tool-execution-card">
+          <div class="tool-card-header">
+            <div class="tool-card-title">
+              <span>⚡</span>
+              <span>${t('tool_js_title_running') || 'execute_javascript'}</span>
+            </div>
+            <div class="tool-card-header-actions">
+              <span class="tool-card-badge status-success">✅ ${t('tool_status_success') || 'Completado'}</span>
+              <button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Minimizar'}"><span>▾</span></button>
+            </div>
+          </div>
+          <div class="tool-card-collapsible-body">
+            <pre class="tool-card-code"><code>${Markdown.escapeHtml(codeToRun)}</code></pre>
+            <div class="tool-card-result">
+              <div class="tool-result-label">${t('tool_sandbox_output') || 'Salida del Sandbox:'}</div>
+              <pre class="tool-result-pre"><code>${Markdown.escapeHtml(outText)}</code></pre>
+            </div>
+          </div>
+        </div>
+      `;
+      return cardDiv;
+    }
+
+    // 3. Búsqueda Web (search_web)
+    if (normName === 'searchweb') {
+      const queryToSearch = toolArgs.query || toolArgs.q || toolArgs.search || toolArgs.keyword || toolArgs.text || '';
+      let resultsHtml = '';
+
+      if (toolMsg && toolMsg.content) {
+        resultsHtml = `<div class="search-results-list"><div class="search-result-snippet">${Markdown.renderMarkdown ? Markdown.renderMarkdown(toolMsg.content) : Markdown.escapeHtml(toolMsg.content)}</div></div>`;
+      } else {
+        resultsHtml = `<div class="search-result-snippet"><em>${t('tool_search_empty') || 'Búsqueda completada'}</em></div>`;
+      }
+
+      cardDiv.innerHTML = `
+        <div class="web-search-card">
+          <div class="web-card-header">
+            <div class="web-card-title">
+              <span>🔍</span>
+              <span>${t('tool_search_title') || 'search_web'}</span>
+            </div>
+            <div class="web-card-header-actions">
+              <span class="web-card-badge status-success">✅ ${t('tool_status_success') || 'Completado'}</span>
+              <button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Minimizar'}"><span>▾</span></button>
+            </div>
+          </div>
+          <div class="tool-card-collapsible-body">
+            <div class="web-card-section">
+              <div class="section-label">${t('tool_search_query') || 'Consulta:'}</div>
+              <div class="query-badge">"${Markdown.escapeHtml(queryToSearch)}"</div>
+            </div>
+            <div class="web-card-section search-results-section">
+              <div class="search-results-container">${resultsHtml}</div>
+            </div>
+          </div>
+        </div>
+      `;
+      return cardDiv;
+    }
+
+    // 4. Navegador Web & PDF (fetch_web_page / download_pdf)
+    if (normName === 'fetchwebpage' || normName === 'downloadpdf') {
+      const urlToFetch = toolArgs.url || toolArgs.link || toolArgs.pdf_url || '';
+      const isPdf = normName === 'downloadpdf' || urlToFetch.toLowerCase().endsWith('.pdf');
+      const cardTitle = isPdf ? (t('tool_pdf_title') || 'download_pdf') : (t('tool_web_title') || 'fetch_web_page');
+      const cardIcon = isPdf ? '📄' : '🌐';
+      let contentSnippet = '';
+
+      if (toolMsg && toolMsg.content) {
+        try {
+          const parsed = JSON.parse(toolMsg.content);
+          contentSnippet = parsed.content || parsed.error || toolMsg.content;
+        } catch (e) {
+          contentSnippet = toolMsg.content;
+        }
+      }
+
+      cardDiv.innerHTML = `
+        <div class="web-search-card">
+          <div class="web-card-header">
+            <div class="web-card-title">
+              <span>${cardIcon}</span>
+              <span>${cardTitle}</span>
+            </div>
+            <div class="web-card-header-actions">
+              <span class="web-card-badge status-success">✅ ${t('tool_status_success') || 'Completado'}</span>
+              <button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Minimizar'}"><span>▾</span></button>
+            </div>
+          </div>
+          <div class="tool-card-collapsible-body">
+            <div class="web-card-section">
+              <div class="section-label">${t('tool_web_requested_url') || 'URL:'}</div>
+              <div class="url-badge"><a href="${Markdown.sanitizeUrl ? Markdown.sanitizeUrl(urlToFetch) : Markdown.escapeHtml(urlToFetch)}" target="_blank" rel="noopener noreferrer">${Markdown.escapeHtml(urlToFetch)}</a></div>
+            </div>
+            <div class="web-card-section web-content-section">
+              <div class="web-content-container">
+                <pre class="web-content-snippet"><code>${Markdown.escapeHtml((contentSnippet || '').substring(0, 1000) + (contentSnippet.length > 1000 ? '\n\n[... contenido restante ...]' : ''))}</code></pre>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+      return cardDiv;
+    }
+
+    // 5. Herramientas MCP y Genéricas
+    const AgentCore = window.ChatAgentCore;
+    const toolInstance = AgentCore?.registry?.getTool(rawFuncName);
+    const serverName = toolInstance?.metadata?.mcpServerName || 'Herramienta MCP / Externa';
+    const displayToolName = toolInstance?.metadata?.originalName || rawFuncName;
+    const outText = toolMsg ? (toolMsg.content || '') : '';
+
+    cardDiv.innerHTML = `
+      <div class="tool-execution-card mcp-tool-card">
+        <div class="tool-card-header">
+          <div class="tool-card-title">
+            <span>🔌</span>
+            <span><strong>MCP:</strong> ${Markdown.escapeHtml(displayToolName)} <small style="opacity:0.7;">(${Markdown.escapeHtml(serverName)})</small></span>
+          </div>
+          <div class="tool-card-header-actions">
+            <span class="tool-card-badge status-success">✅ ${t('tool_status_success') || 'Completado'}</span>
+            <button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Minimizar'}"><span>▾</span></button>
+          </div>
+        </div>
+        <div class="tool-card-collapsible-body">
+          <div class="tool-card-section">
+            <div class="section-label">${t('tool_js_code') || 'Argumentos'}</div>
+            <div class="code-preview-block"><pre><code>${Markdown.escapeHtml(JSON.stringify(toolArgs, null, 2))}</code></pre></div>
+          </div>
+          <div class="tool-card-section tool-result-section">
+            <div class="section-label">${t('tool_js_result') || 'Resultado'}</div>
+            <div class="tool-result-container">
+              <div class="result-text-block result-success"><pre><code>${Markdown.escapeHtml(outText)}</code></pre></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+    return cardDiv;
+  }
+
+  function attachListenersToContainer(container) {
+    if (!container) return;
+    if (Markdown.attachCopyCodeListeners) {
+      Markdown.attachCopyCodeListeners(container);
+    }
+    if (Markdown.attachRunJsListeners) {
+      Markdown.attachRunJsListeners(container, (code, outputEl) => {
+        if (Sandbox && Sandbox.execute) {
+          Sandbox.execute(code).then(res => {
+            if (outputEl) {
+              outputEl.textContent = res.success ? (res.result || res.logs.join('\n') || 'undefined') : `Error: ${res.error}`;
+            }
+          });
+        }
+      });
+    }
+    // Botones de colapso de tarjetas de herramientas
+    container.querySelectorAll('.btn-tool-collapse').forEach(btn => {
+      btn.onclick = () => {
+        const card = btn.closest('.tool-execution-card, .web-search-card');
+        if (card) {
+          card.classList.toggle('collapsed');
+          const span = btn.querySelector('span');
+          if (span) span.textContent = card.classList.contains('collapsed') ? '▸' : '▾';
+        }
+      };
+    });
+  }
+
   function renderSessionMessages(history) {
     if (!elements.messagesList) return;
     elements.messagesList.innerHTML = '';
@@ -2757,7 +2966,11 @@
       elements.welcomeBanner.style.display = 'none';
     }
 
-    validMessages.forEach(msg => {
+    // Agrupar mensajes en turnos: Usuario y Bloques del Asistente (incluyendo tool_calls y tools)
+    let i = 0;
+    while (i < validMessages.length) {
+      const msg = validMessages[i];
+
       if (msg.role === 'user') {
         let text = '';
         let images = msg.images || [];
@@ -2775,20 +2988,59 @@
           });
         }
         appendUserMessage(text, text, images, msg.id);
-      } else if (msg.role === 'assistant') {
-        const { content, actions, btnCopy } = createAssistantMessagePlaceholder(msg.id);
-        let renderedHtml = '';
+        i++;
+      } else {
+        // Bloque del Asistente (puede incluir múltiples turnos internos, llamadas a herramientas y resultados)
+        const assistantGroup = [];
+        const firstAssistantId = msg.id || ('msg_ast_' + Date.now());
 
-        if (msg.content) {
-          renderedHtml = Markdown.renderMarkdown ? Markdown.renderMarkdown(msg.content) : msg.content;
+        while (i < validMessages.length && validMessages[i].role !== 'user') {
+          assistantGroup.push(validMessages[i]);
+          i++;
         }
 
-        content.innerHTML = renderedHtml || '<p><em>(Sin respuesta de texto)</em></p>';
+        const { content, actions, btnCopy } = createAssistantMessagePlaceholder(firstAssistantId);
+        content.innerHTML = ''; // Limpiar el cursor inicial de streaming
 
+        let fullAssistantMarkdown = '';
+
+        for (let g = 0; g < assistantGroup.length; g++) {
+          const item = assistantGroup[g];
+
+          if (item.role === 'assistant') {
+            // 1. Si tiene contenido de texto (razonamiento, tablas markdown, texto normal)
+            if (item.content) {
+              const turnBlock = document.createElement('div');
+              turnBlock.className = 'agentic-turn-block';
+              turnBlock.innerHTML = Markdown.renderMarkdown ? Markdown.renderMarkdown(item.content) : item.content;
+              content.appendChild(turnBlock);
+              fullAssistantMarkdown += (fullAssistantMarkdown ? '\n\n' : '') + item.content;
+            }
+
+            // 2. Si tiene llamadas a herramientas (tool_calls)
+            if (Array.isArray(item.tool_calls) && item.tool_calls.length > 0) {
+              item.tool_calls.forEach(tc => {
+                // Buscar el mensaje 'tool' correspondiente
+                const toolMsg = assistantGroup.find(m => m.role === 'tool' && (m.tool_call_id === tc.id || m.name === tc.function?.name));
+                const cardEl = renderStoredToolCard(tc, toolMsg);
+                if (cardEl) {
+                  content.appendChild(cardEl);
+                }
+              });
+            }
+          }
+        }
+
+        // Si no se generó ningún contenido visual en el asistente
+        if (content.children.length === 0) {
+          content.innerHTML = '<p><em>(Sin respuesta de texto)</em></p>';
+        }
+
+        // Configurar botón de copia
         if (btnCopy) {
-          btnCopy.onclick = () => {
+          btnCopy.onclick = async () => {
             if (navigator.clipboard) {
-              navigator.clipboard.writeText(msg.content || content.innerText);
+              await navigator.clipboard.writeText(fullAssistantMarkdown || content.innerText);
               btnCopy.innerHTML = `✅ <span>${t('btn_copied')}</span>`;
               setTimeout(() => {
                 btnCopy.innerHTML = `📋 <span>${t('btn_copy')}</span>`;
@@ -2798,11 +3050,11 @@
         }
 
         if (actions) actions.style.display = 'inline-flex';
-        if (Markdown.attachCopyCodeListeners) {
-          Markdown.attachCopyCodeListeners(content);
-        }
+
+        // Adjuntar listeners de código, ejecución y minimizado de herramientas
+        attachListenersToContainer(content);
       }
-    });
+    }
 
     scrollToBottom();
   }
