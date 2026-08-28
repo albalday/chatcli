@@ -212,6 +212,9 @@
       field_temperature_hint: 'Controla la creatividad de las respuestas (0 = determinista/preciso, 1 = creativo).',
       cookie_notice: 'Toda la configuración se almacena localmente de forma persistente (compatible tanto con <strong>file://</strong> como con servidores web).',
       btn_reset: 'Restablecer valores',
+      btn_clear_all_data: '🗑️ Borrar todo',
+      btn_clear_all_data_title: 'Borrar todas las cookies, sesiones y configuraciones locales',
+      confirm_clear_all_data: '¿Estás seguro de que deseas borrar TODA la configuración, historial de chats, modelos y cookies locales?\n\nLa aplicación se reiniciará completamente limpia desde cero.',
       btn_cancel: 'Cancelar',
       btn_save: 'Guardar Configuración',
 
@@ -466,6 +469,9 @@
       field_temperature_hint: 'Controls randomness/creativity (0 = deterministic/precise, 1 = creative).',
       cookie_notice: 'All settings are stored locally and persistently (compatible with both <strong>file://</strong> and web servers).',
       btn_reset: 'Reset defaults',
+      btn_clear_all_data: '🗑️ Clear all data',
+      btn_clear_all_data_title: 'Wipe all cookies, chat sessions and local storage data',
+      confirm_clear_all_data: 'Are you sure you want to delete ALL settings, chat history, discovered models and local cookies?\n\nThe application will reload completely fresh from scratch.',
       btn_cancel: 'Cancel',
       btn_save: 'Save Settings',
 

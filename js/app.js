@@ -142,6 +142,7 @@
       btnCloseSettings: document.getElementById('btn-close-settings'),
       btnCancelSettings: document.getElementById('btn-cancel-settings'),
       btnResetSettings: document.getElementById('btn-reset-settings'),
+      btnClearAllData: document.getElementById('btn-clear-all-data'),
       btnToggleKey: document.getElementById('btn-toggle-key'),
       settingApiType: document.getElementById('setting-api-type'),
       settingApiUrl: document.getElementById('setting-api-url'),
@@ -2063,6 +2064,20 @@
     }
   }
 
+  function handleClearAllData() {
+    if (!confirm(t('confirm_clear_all_data'))) return;
+
+    if (Storage.clearAllStorage) {
+      Storage.clearAllStorage();
+    } else {
+      try { localStorage.clear(); } catch (e) {}
+      try { sessionStorage.clear(); } catch (e) {}
+    }
+
+    // Recargar la aplicación para iniciar completamente desde cero
+    window.location.reload();
+  }
+
   // ==========================================================================
   // Gestión de Múltiples Sesiones de Chat (Sidebar & Storage)
   // ==========================================================================
@@ -2794,6 +2809,9 @@
     elements.btnCancelSettings.addEventListener('click', closeSettingsModal);
     elements.settingsForm.addEventListener('submit', handleSaveSettings);
     elements.btnResetSettings.addEventListener('click', handleResetSettings);
+    if (elements.btnClearAllData) {
+      elements.btnClearAllData.addEventListener('click', handleClearAllData);
+    }
 
     if (elements.settingApiType) {
       elements.settingApiType.addEventListener('change', function () {

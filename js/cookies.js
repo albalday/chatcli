@@ -232,6 +232,44 @@
     return { ...DEFAULT_CONFIG };
   }
 
+  function clearAllStorage() {
+    if (hasLocalStorage) {
+      try {
+        const keysToRemove = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k && (k.startsWith(STORAGE_PREFIX) || k === 'chat_sessions' || k.startsWith('chatcli'))) {
+            keysToRemove.push(k);
+          }
+        }
+        keysToRemove.forEach(k => localStorage.removeItem(k));
+      } catch (e) {}
+    }
+
+    try {
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.clear();
+      }
+    } catch (e) {}
+
+    if (typeof document !== 'undefined') {
+      try {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+          const cookie = cookies[i];
+          const eqPos = cookie.indexOf('=');
+          const name = eqPos > -1 ? cookie.substr(0, eqPos).trim() : cookie.trim();
+          if (name) {
+            document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;SameSite=Lax`;
+            document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=;SameSite=Lax`;
+          }
+        }
+      } catch (e) {}
+    }
+
+    memoryStorage.clear();
+  }
+
   return {
     setStorageItem,
     getStorageItem,
@@ -242,6 +280,7 @@
     loadConfig,
     saveConfig,
     resetConfigToDefaults,
-    getDefaultConfig
+    getDefaultConfig,
+    clearAllStorage
   };
 });

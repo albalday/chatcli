@@ -527,7 +527,10 @@
 
       <!-- Pie del Modal FIJO con botones siempre visibles -->
       <div class="modal-footer">
-        <button type="button" id="btn-reset-settings" class="btn-secondary" data-i18n="btn_reset">Restablecer valores</button>
+        <div class="footer-actions-left">
+          <button type="button" id="btn-reset-settings" class="btn-secondary" data-i18n="btn_reset">Restablecer valores</button>
+          <button type="button" id="btn-clear-all-data" class="btn-danger-outline" data-i18n="btn_clear_all_data" data-i18n-title="btn_clear_all_data_title" title="Borrar todas las cookies, sesiones y datos locales">🗑️ Borrar todo</button>
+        </div>
         <div class="footer-actions-right">
           <button type="button" id="btn-cancel-settings" class="btn-secondary" data-i18n="btn_cancel">Cancelar</button>
           <button type="submit" class="btn-primary" data-i18n="btn_save">Guardar Configuración</button>
