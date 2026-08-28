@@ -619,7 +619,7 @@
 
   function toggleReasoningMenu() {
     if (!elements.reasoningMenu) return;
-    const isVisible = elements.reasoningMenu.style.display === 'block';
+    const isVisible = elements.reasoningMenu.style.display === 'flex' || elements.reasoningMenu.style.display === 'block';
     if (isVisible) {
       closeReasoningMenu();
     } else {
@@ -629,7 +629,7 @@
 
   function openReasoningMenu() {
     if (!elements.reasoningMenu) return;
-    elements.reasoningMenu.style.display = 'block';
+    elements.reasoningMenu.style.display = 'flex';
 
     const apiType = appConfig.apiType || (elements.settingApiType ? elements.settingApiType.value : 'openai');
     const reasoningConfig = API.getStandardReasoningOptions
@@ -642,6 +642,19 @@
     }
 
     renderReasoningMenuOptions(reasoningConfig, appConfig.reasoningEffort || 'off');
+
+    // Comprobación de límites en pantalla para evitar desbordamientos laterales
+    requestAnimationFrame(() => {
+      if (!elements.reasoningMenu) return;
+      const rect = elements.reasoningMenu.getBoundingClientRect();
+      if (rect.left < 8) {
+        elements.reasoningMenu.style.left = '0px';
+        elements.reasoningMenu.style.right = 'auto';
+      } else if (rect.right > window.innerWidth - 8) {
+        elements.reasoningMenu.style.left = 'auto';
+        elements.reasoningMenu.style.right = '0px';
+      }
+    });
   }
 
   function selectReasoningLevel(level) {
@@ -696,6 +709,8 @@
   function closeReasoningMenu() {
     if (elements.reasoningMenu) {
       elements.reasoningMenu.style.display = 'none';
+      elements.reasoningMenu.style.left = '0px';
+      elements.reasoningMenu.style.right = 'auto';
     }
   }
 
