@@ -393,13 +393,10 @@
     if (Array.isArray(savedSessions)) {
       savedSessions = savedSessions.filter(s => s.id !== currentSessionId);
     }
+    if (Storage.deleteConversation) {
+      Storage.deleteConversation(currentSessionId);
+    }
     currentSessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
-
-    try {
-      const serialized = JSON.stringify(savedSessions || []);
-      if (Storage.setStorageItem) Storage.setStorageItem('chat_sessions', serialized);
-      else localStorage.setItem('chat_sessions', serialized);
-    } catch (e) {}
 
     if (elements.messagesList) {
       elements.messagesList.innerHTML = '';
@@ -2079,23 +2076,26 @@
   }
 
   // ==========================================================================
-  // Gestión de Múltiples Sesiones de Chat (Sidebar & Storage)
+  // Gestión de Múltiples Sesiones de Chat (Sidebar & IndexedDB Storage)
   // ==========================================================================
 
-  function loadSessionsFromStorage() {
+  async function loadSessionsFromStorage() {
     try {
-      const raw = Storage.getStorageItem ? Storage.getStorageItem('chat_sessions') : localStorage.getItem('chat_sessions');
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          savedSessions = parsed.filter(s => s && Array.isArray(s.history) && s.history.some(m => m && m.role !== 'system'));
-        }
+      if (Storage.initDB) {
+        await Storage.initDB();
+      }
+      if (Storage.getConversationsList) {
+        savedSessions = await Storage.getConversationsList();
+      } else {
+        const raw = Storage.getStorageItem ? Storage.getStorageItem('chat_sessions') : localStorage.getItem('chat_sessions');
+        savedSessions = raw ? JSON.parse(raw) : [];
       }
     } catch (e) {
       console.warn('Error al cargar sesiones de chat:', e);
+      savedSessions = [];
     }
 
-    if (!savedSessions) {
+    if (!Array.isArray(savedSessions)) {
       savedSessions = [];
     }
 
@@ -2109,36 +2109,41 @@
     renderSidebarChats();
   }
 
-  function saveCurrentSession() {
+  async function saveCurrentSession() {
     const hasMessages = Array.isArray(chatHistory) && chatHistory.some(m => m && m.role !== 'system');
     
     // Si la conversación está vacía (o se han borrado todos los mensajes), no guardarla como sesión activa
     if (!hasMessages) {
       if (Array.isArray(savedSessions)) {
         savedSessions = savedSessions.filter(s => s.id !== currentSessionId);
-        try {
-          const serialized = JSON.stringify(savedSessions);
-          if (Storage.setStorageItem) Storage.setStorageItem('chat_sessions', serialized);
-          else localStorage.setItem('chat_sessions', serialized);
-        } catch (e) {}
+        if (Storage.deleteConversation) {
+          await Storage.deleteConversation(currentSessionId);
+        } else {
+          try {
+            const serialized = JSON.stringify(savedSessions);
+            if (Storage.setStorageItem) Storage.setStorageItem('chat_sessions', serialized);
+            else localStorage.setItem('chat_sessions', serialized);
+          } catch (e) {}
+        }
       }
       renderSidebarChats();
       return;
     }
 
     let sess = savedSessions.find(s => s.id === currentSessionId);
+    const now = Date.now();
     if (!sess) {
       sess = {
         id: currentSessionId,
-        title: t('chat_untitled'),
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-        history: [...chatHistory]
+        title: t('chat_untitled') || 'Nueva conversación',
+        createdAt: now,
+        updatedAt: now,
+        messageCount: chatHistory.length
       };
       savedSessions.unshift(sess);
     } else {
-      sess.history = [...chatHistory];
-      sess.updatedAt = Date.now();
+      sess.updatedAt = now;
+      sess.messageCount = chatHistory.length;
     }
 
     // Auto-generar título si es el título genérico por defecto
@@ -2158,11 +2163,15 @@
       }
     }
 
-    try {
-      const serialized = JSON.stringify(savedSessions);
-      if (Storage.setStorageItem) Storage.setStorageItem('chat_sessions', serialized);
-      else localStorage.setItem('chat_sessions', serialized);
-    } catch (e) {}
+    if (Storage.saveConversation) {
+      await Storage.saveConversation(sess, chatHistory);
+    } else {
+      try {
+        const serialized = JSON.stringify(savedSessions);
+        if (Storage.setStorageItem) Storage.setStorageItem('chat_sessions', serialized);
+        else localStorage.setItem('chat_sessions', serialized);
+      } catch (e) {}
+    }
 
     renderSidebarChats();
   }
@@ -2225,15 +2234,24 @@
     });
   }
 
-  function switchToSession(sessionId) {
+  async function switchToSession(sessionId) {
     if (sessionId === currentSessionId) return;
-    saveCurrentSession();
+    await saveCurrentSession();
 
-    const target = savedSessions.find(s => s.id === sessionId);
-    if (!target) return;
+    let targetConv = null;
+    if (Storage.getConversation) {
+      targetConv = await Storage.getConversation(sessionId);
+    }
 
-    currentSessionId = target.id;
-    chatHistory = target.history ? [...target.history] : [
+    if (!targetConv) {
+      const found = savedSessions.find(s => s.id === sessionId);
+      if (found && found.history) targetConv = found;
+    }
+
+    if (!targetConv) return;
+
+    currentSessionId = targetConv.id;
+    chatHistory = targetConv.history && targetConv.history.length > 0 ? [...targetConv.history] : [
       { id: 'system_root', role: 'system', content: appConfig.systemPrompt || '' }
     ];
 
@@ -2245,8 +2263,8 @@
     }
   }
 
-  function createNewSession() {
-    saveCurrentSession();
+  async function createNewSession() {
+    await saveCurrentSession();
 
     currentSessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
     chatHistory = [
@@ -2267,7 +2285,7 @@
     }
   }
 
-  function deleteSession(sessionId, event) {
+  async function deleteSession(sessionId, event) {
     if (event) event.stopPropagation();
     if (!confirm(t('chat_delete_confirm'))) return;
 
@@ -2276,40 +2294,44 @@
 
     savedSessions.splice(idx, 1);
 
-    if (savedSessions.length === 0) {
-      createNewSession();
-    } else if (currentSessionId === sessionId) {
-      const next = savedSessions[0];
-      currentSessionId = next.id;
-      chatHistory = next.history ? [...next.history] : [
-        { id: 'system_root', role: 'system', content: appConfig.systemPrompt || '' }
-      ];
-      renderSessionMessages(chatHistory);
+    if (Storage.deleteConversation) {
+      await Storage.deleteConversation(sessionId);
+    } else {
+      try {
+        const serialized = JSON.stringify(savedSessions);
+        if (Storage.setStorageItem) Storage.setStorageItem('chat_sessions', serialized);
+        else localStorage.setItem('chat_sessions', serialized);
+      } catch (e) {}
     }
 
-    try {
-      const serialized = JSON.stringify(savedSessions);
-      if (Storage.setStorageItem) Storage.setStorageItem('chat_sessions', serialized);
-      else localStorage.setItem('chat_sessions', serialized);
-    } catch (e) {}
-
-    renderSidebarChats();
+    if (savedSessions.length === 0) {
+      await createNewSession();
+    } else if (currentSessionId === sessionId) {
+      const next = savedSessions[0];
+      await switchToSession(next.id);
+    } else {
+      renderSidebarChats();
+    }
   }
 
-  function deleteAllSessions() {
+  async function deleteAllSessions() {
     if (!savedSessions || savedSessions.length === 0) return;
     if (!confirm(t('chat_delete_all_confirm'))) return;
 
     savedSessions = [];
-    try {
-      if (Storage.setStorageItem) Storage.setStorageItem('chat_sessions', JSON.stringify([]));
-      else localStorage.setItem('chat_sessions', JSON.stringify([]));
-    } catch (e) {}
+    if (Storage.deleteAllConversations) {
+      await Storage.deleteAllConversations();
+    } else {
+      try {
+        if (Storage.setStorageItem) Storage.setStorageItem('chat_sessions', JSON.stringify([]));
+        else localStorage.setItem('chat_sessions', JSON.stringify([]));
+      } catch (e) {}
+    }
 
-    createNewSession();
+    await createNewSession();
   }
 
-  function renameSession(sessionId, event) {
+  async function renameSession(sessionId, event) {
     if (event) event.stopPropagation();
     const sess = savedSessions.find(s => s.id === sessionId);
     if (!sess) return;
@@ -2317,7 +2339,10 @@
     const newTitle = prompt('Nombre de la conversación:', sess.title || '');
     if (newTitle !== null && newTitle.trim() !== '') {
       sess.title = newTitle.trim();
-      saveCurrentSession();
+      if (Storage.renameConversation) {
+        await Storage.renameConversation(sessionId, sess.title);
+      }
+      renderSidebarChats();
     }
   }
 
