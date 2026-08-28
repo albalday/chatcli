@@ -172,7 +172,7 @@
           i++;
         }
 
-        result.push(renderTableHtml(headerRow, delimiterRow, bodyRows));
+        result.push('\n' + renderTableHtml(headerRow, delimiterRow, bodyRows) + '\n');
         continue;
       }
 
@@ -484,6 +484,7 @@
     escapeHtml,
     sanitizeUrl,
     parseMarkdown,
+    renderMarkdown: parseMarkdown,
     attachCopyCodeListeners
   };
 });
