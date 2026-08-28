@@ -231,9 +231,9 @@
     if (tools.length === 0) return '';
 
     if (isEs) {
-      return `[HERRAMIENTAS Y FUNCIONES DISPONIBLES]:\nTienes disponibles las siguientes herramientas. Si necesitas consultar URLs, buscar en la web, leer documentos PDF o calcular, invoca la herramienta adecuada con sus parámetros obligatorios:\n${tools.join('\n')}\n*Instrucción de flujo:* Cuando obtengas el resultado de una herramienta, utilízalo para responder o invoca otra herramienta si necesitas más información.`;
+      return `[HERRAMIENTAS Y FUNCIONES DISPONIBLES]:\nTienes disponibles las siguientes herramientas. Si necesitas consultar URLs, buscar en la web, leer documentos PDF o calcular, invoca la herramienta adecuada con sus parámetros obligatorios:\n${tools.join('\n')}\n*Instrucción de flujo:* Cuando obtengas el resultado de una herramienta, utilízalo para responder al usuario con una síntesis o resumen completo y estructurado, citando las fuentes consultadas. No invoques herramientas adicionales si la información obtenida ya es suficiente para responder.`;
     } else {
-      return `[AVAILABLE TOOLS AND FUNCTIONS]:\nYou have the following tools available. If you need to fetch URLs, search the web, read PDF documents, or calculate, call the appropriate tool with its required parameters:\n${tools.join('\n')}\n*Workflow instruction:* Once you receive a tool's output, use it to answer the user or call another tool if you need more information.`;
+      return `[AVAILABLE TOOLS AND FUNCTIONS]:\nYou have the following tools available. If you need to fetch URLs, search the web, read PDF documents, or calculate, call the appropriate tool with its required parameters:\n${tools.join('\n')}\n*Workflow instruction:* Once you receive a tool's output, use it to answer the user with a comprehensive and well-structured summary, citing sources. Do not invoke further tools if the gathered information is already sufficient to answer.`;
     }
   }
 
@@ -2103,7 +2103,78 @@
 
         turnIndex++;
         continue;
+    }
+
+    // Si se agotaron los turnos máximos y el último mensaje fue de una herramienta (role: 'tool'),
+    // realizar una última petición de síntesis al modelo con enableTools: false para garantizar el resumen final.
+    if (turnIndex >= maxAgentTurns && chatHistory.length > 0 && chatHistory[chatHistory.length - 1].role === 'tool' && !(currentAbortController && currentAbortController.signal.aborted)) {
+      const finalSynthBlock = document.createElement('div');
+      finalSynthBlock.className = 'agentic-turn-block';
+      content.appendChild(finalSynthBlock);
+
+      let finalSynthText = '';
+      let finalSynthStats = null;
+
+      await API.streamChatCompletion({
+        apiUrl: appConfig.apiUrl,
+        apiType: appConfig.apiType,
+        apiKey: appConfig.apiKey,
+        model: appConfig.model,
+        messages: buildEffectiveMessages(),
+        temperature: appConfig.temperature,
+        reasoningEffort: appConfig.reasoningEffort || 'none',
+        enableTools: false, // Forzar al modelo a redactar la síntesis final sin invocar más herramientas
+        enableContextCache: appConfig.enableContextCache !== false,
+        signal: currentAbortController ? currentAbortController.signal : undefined,
+
+        onReasoningChunk: function (chunk) {
+          addDebugLog('thinking', chunk);
+          setDebugStatus('streaming', t('debug_status_thinking'));
+        },
+        onLog: function (logData) {
+          if (logData && logData.type !== 'thinking') addDebugLog(logData.type, logData.text);
+        },
+        onChunk: function (fullTextSoFar, delta, stats) {
+          finalSynthText = fullTextSoFar;
+          finalSynthBlock.innerHTML = injectStreamingCursor(parseMd(finalSynthText));
+          attachListeners(finalSynthBlock);
+          if (stats) updateStatsDisplay(stats);
+          scrollToBottom();
+        },
+        onDone: function (finalText, stats) {
+          finalSynthText = finalText || finalSynthText;
+          finalSynthStats = stats;
+        }
+      });
+
+      if (finalSynthText) {
+        finalSynthBlock.innerHTML = parseMd(finalSynthText);
+        attachListeners(finalSynthBlock);
+        chatHistory.push({
+          id: `${assistantMsgId}_final`,
+          role: 'assistant',
+          content: finalSynthText
+        });
+        if (finalSynthStats) updateStatsDisplay(finalSynthStats);
       }
+
+      actions.style.display = 'inline-flex';
+      btnCopy.addEventListener('click', async () => {
+        try {
+          const finalFullMarkdown = (accumulatedConversationMarkdown ? accumulatedConversationMarkdown : '') + finalSynthText;
+          await navigator.clipboard.writeText(finalFullMarkdown);
+          const span = btnCopy.querySelector('span');
+          const originalText = span.textContent;
+          span.textContent = t('copied_text');
+          btnCopy.classList.add('copied');
+          setTimeout(() => {
+            span.textContent = originalText;
+            btnCopy.classList.remove('copied');
+          }, 2000);
+        } catch (err) {
+          console.error('Error copying response:', err);
+        }
+      });
     }
 
     setDebugStatus('done', t('debug_status_done'));

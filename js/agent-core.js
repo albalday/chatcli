@@ -729,6 +729,39 @@
         turnIndex++;
       }
 
+      // Si se alcanzó el límite máximo de iteraciones y el último mensaje fue de una herramienta,
+      // realizar una petición final de síntesis forzada (con enableTools: false) para que el modelo resuma.
+      if (workingMessages.length > 0 && workingMessages[workingMessages.length - 1].role === 'tool' && (!signal || !signal.aborted)) {
+        try {
+          const synthResult = await API.streamChatCompletion({
+            apiUrl,
+            apiType,
+            apiKey,
+            model,
+            messages: workingMessages,
+            temperature,
+            reasoningEffort,
+            enableTools: false,
+            enableContextCache,
+            signal,
+            onChunk: (fullTextSoFar, delta, stats) => {
+              finalAccumulatedText = fullTextSoFar;
+              if (callbacks.onChunk) callbacks.onChunk(fullTextSoFar, delta, stats);
+            },
+            onDone: (finalText, stats) => {
+              finalAccumulatedText = finalText || finalAccumulatedText;
+              lastStats = stats || lastStats;
+            }
+          });
+          if (synthResult) {
+            finalAccumulatedText = synthResult.accumulatedText || finalAccumulatedText;
+            lastStats = synthResult.stats || lastStats;
+          }
+        } catch (e) {
+          console.warn('Error en turno de síntesis final:', e);
+        }
+      }
+
       // Si se alcanzó el límite máximo de iteraciones
       if (callbacks.onDone) {
         callbacks.onDone(finalAccumulatedText, lastStats, turnIndex);
@@ -761,3 +794,4 @@
     agent: globalAgent
   };
 });
+

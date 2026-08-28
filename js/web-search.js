@@ -100,8 +100,8 @@
       });
 
       md += isEn
-        ? `> *Assistant Note:* If you need to read the full content of a web page call \`fetch_web_page\`, or if it is a PDF document call \`download_pdf\` with the corresponding URL.`
-        : `> *Nota para el asistente:* Si necesitas leer el contenido completo de una página web invoca \`fetch_web_page\`, y si se trata de un documento PDF invoca \`download_pdf\` pasando la URL correspondiente.`;
+        ? `> *Assistant Note:* Use these search results to synthesize and answer the user's request, citing relevant sources. Only call \`fetch_web_page\` if you strictly need to deep-dive into the complete full text of a specific URL.`
+        : `> *Nota para el asistente:* Utiliza estos resultados de búsqueda para responder y sintetizar la información solicitada por el usuario, citando las fuentes. Solo invoca \`fetch_web_page\` si es estrictamente necesario profundizar en el texto íntegro de una URL concreta.`;
 
       return md;
     }
