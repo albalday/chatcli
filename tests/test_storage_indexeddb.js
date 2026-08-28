@@ -134,3 +134,42 @@ test('Storage IndexedDB - Migración automática desde localStorage (formato leg
   // Verificar que la clave legacy fue limpiada para evitar re-migraciones
   assert.equal(Storage.getStorageItem('chat_sessions'), null);
 });
+
+test('Storage IndexedDB - Preservación íntegra de turnos del asistente y herramientas', async () => {
+  const sessionId = 'test_agentic_turn_session';
+  const sessionMeta = { id: sessionId, title: 'Chat con herramientas' };
+
+  const history = [
+    { id: 'u1', role: 'user', content: 'Grafica esto' },
+    {
+      id: 'a1_turn_0_assistant',
+      role: 'assistant',
+      content: null,
+      tool_calls: [{ id: 'call_123', type: 'function', function: { name: 'render_chart', arguments: '{"type":"bar"}' } }]
+    },
+    {
+      id: 'a1_turn_0_tool_call_123',
+      role: 'tool',
+      tool_call_id: 'call_123',
+      name: 'render_chart',
+      content: '{"success":true}'
+    },
+    {
+      id: 'a1_final',
+      role: 'assistant',
+      content: 'Aquí tienes el gráfico generado.'
+    }
+  ];
+
+  await Storage.saveConversation(sessionMeta, history);
+  const loaded = await Storage.getConversation(sessionId);
+
+  assert.ok(loaded);
+  assert.equal(loaded.history.length, 4, 'No debe sobreescribir ningún mensaje de turno');
+  assert.equal(loaded.history[0].role, 'user');
+  assert.equal(loaded.history[1].role, 'assistant');
+  assert.ok(Array.isArray(loaded.history[1].tool_calls));
+  assert.equal(loaded.history[2].role, 'tool');
+  assert.equal(loaded.history[3].role, 'assistant');
+  assert.equal(loaded.history[3].content, 'Aquí tienes el gráfico generado.');
+});

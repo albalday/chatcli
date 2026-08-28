@@ -567,19 +567,27 @@
             cursor.delete();
             cursor.continue();
           } else {
-            // Insertar mensajes actualizados
+            // Insertar mensajes actualizados garantizando IDs únicos por mensaje
+            const seenMsgIds = new Set();
             messages.forEach((m, idx) => {
+              let msgId = m.id;
+              if (!msgId || seenMsgIds.has(msgId)) {
+                msgId = `msg_${sessionId}_${idx}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+              }
+              seenMsgIds.add(msgId);
+
               const msgRecord = {
-                id: m.id || `msg_${sessionId}_${idx}_${Date.now()}`,
+                id: msgId,
                 conversationId: sessionId,
                 role: m.role || 'user',
-                content: m.content || '',
+                content: m.content !== undefined ? m.content : '',
                 tool_calls: m.tool_calls || null,
                 tool_call_id: m.tool_call_id || null,
                 name: m.name || null,
                 stats: m.stats || null,
                 createdAt: m.createdAt || (conversationRecord.createdAt + idx * 10)
               };
+              if (m.images) msgRecord.images = m.images;
               msgStore.put(msgRecord);
             });
           }

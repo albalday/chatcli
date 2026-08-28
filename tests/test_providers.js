@@ -284,13 +284,22 @@ test('GeminiAdapter - Normalización de endpoints, stripping de prefijo models/ 
   // Construcción de payload: debe quitar models/ y no inyectar reasoning_effort ni stream_options
   const payload = adapter.buildPayload({
     model: 'models/gemini-1.5-flash',
-    messages: [{ role: 'user', content: 'hola' }],
+    messages: [
+      { role: 'user', content: 'hola' },
+      // Simular un mensaje tool huérfano
+      { role: 'tool', tool_call_id: 'call_999', name: 'render_chart', content: '{"success":true}' }
+    ],
     reasoningEffort: 'none',
     enableContextCache: true
   });
   assert.equal(payload.model, 'gemini-1.5-flash');
   assert.equal(payload.reasoning_effort, undefined, 'No debe inyectar reasoning_effort');
   assert.equal(payload.stream_options, undefined, 'No debe inyectar stream_options');
+  // Debe haber insertado el mensaje assistant previo para evitar error 400 en Gemini
+  assert.equal(payload.messages.length, 3);
+  assert.equal(payload.messages[1].role, 'assistant');
+  assert.ok(payload.messages[1].tool_calls);
+  assert.equal(payload.messages[2].role, 'tool');
 });
 
 test('ChatAPI.getProviderCapabilities - Consulta a través de ChatAPI', () => {

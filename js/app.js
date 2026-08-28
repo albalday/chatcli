@@ -267,11 +267,35 @@
         }
         messages.push(item);
       } else if (m.role === 'tool') {
+        const toolCallId = m.tool_call_id || `call_${Date.now()}`;
+        const toolName = m.name || 'tool';
+        const toolContent = typeof m.content === 'object' ? JSON.stringify(m.content) : String(m.content !== undefined ? m.content : '');
+
+        // Validar que el mensaje previo sea un assistant con el tool_call correspondiente
+        const prevMsg = messages.length > 0 ? messages[messages.length - 1] : null;
+        const hasMatchingToolCall = prevMsg && prevMsg.role === 'assistant' && Array.isArray(prevMsg.tool_calls) &&
+          prevMsg.tool_calls.some(tc => tc.id === toolCallId || (tc.function && tc.function.name === toolName));
+
+        if (!hasMatchingToolCall) {
+          messages.push({
+            role: 'assistant',
+            content: null,
+            tool_calls: [{
+              id: toolCallId,
+              type: 'function',
+              function: {
+                name: toolName,
+                arguments: '{}'
+              }
+            }]
+          });
+        }
+
         messages.push({
           role: 'tool',
-          tool_call_id: m.tool_call_id || `call_${Date.now()}`,
-          name: m.name || 'tool',
-          content: typeof m.content === 'object' ? JSON.stringify(m.content) : String(m.content || '')
+          tool_call_id: toolCallId,
+          name: toolName,
+          content: toolContent
         });
       } else if (m.role === 'system') {
         messages.push({ role: 'system', content: m.content || '' });
@@ -1487,7 +1511,11 @@
       if (!turnToolCalls || turnToolCalls.length === 0) {
         turnBlock.innerHTML = parseMd(currentTurnText || t('empty_response'));
         attachListeners(turnBlock);
-        chatHistory.push({ id: assistantMsgId, role: 'assistant', content: currentTurnText });
+        chatHistory.push({
+          id: `${assistantMsgId}_final`,
+          role: 'assistant',
+          content: currentTurnText
+        });
 
         if (turnFinalStats) updateStatsDisplay(turnFinalStats);
         setDebugStatus('done', t('debug_status_done'));
@@ -1614,14 +1642,14 @@
         scrollToBottom();
 
         chatHistory.push({
-          id: assistantMsgId,
+          id: `${assistantMsgId}_turn_${turnIndex}_assistant`,
           role: 'assistant',
           content: currentTurnText || null,
           tool_calls: [tc]
         });
 
         chatHistory.push({
-          id: assistantMsgId,
+          id: `${assistantMsgId}_turn_${turnIndex}_tool_${tc.id || 'res'}`,
           role: 'tool',
           tool_call_id: tc.id,
           name: 'execute_javascript',
@@ -1722,14 +1750,14 @@
         scrollToBottom();
 
         chatHistory.push({
-          id: assistantMsgId,
+          id: `${assistantMsgId}_turn_${turnIndex}_assistant`,
           role: 'assistant',
           content: currentTurnText || null,
           tool_calls: [tc]
         });
 
         chatHistory.push({
-          id: assistantMsgId,
+          id: `${assistantMsgId}_turn_${turnIndex}_tool_${tc.id || 'res'}`,
           role: 'tool',
           tool_call_id: tc.id,
           name: normName,
@@ -1832,14 +1860,14 @@
         scrollToBottom();
 
         chatHistory.push({
-          id: assistantMsgId,
+          id: `${assistantMsgId}_turn_${turnIndex}_assistant`,
           role: 'assistant',
           content: currentTurnText || null,
           tool_calls: [tc]
         });
 
         chatHistory.push({
-          id: assistantMsgId,
+          id: `${assistantMsgId}_turn_${turnIndex}_tool_${tc.id || 'res'}`,
           role: 'tool',
           tool_call_id: tc.id,
           name: 'search_web',
@@ -1875,14 +1903,14 @@
         scrollToBottom();
 
         chatHistory.push({
-          id: assistantMsgId,
+          id: `${assistantMsgId}_turn_${turnIndex}_assistant`,
           role: 'assistant',
           content: currentTurnText || null,
           tool_calls: [tc]
         });
 
         chatHistory.push({
-          id: assistantMsgId,
+          id: `${assistantMsgId}_turn_${turnIndex}_tool_${tc.id || 'res'}`,
           role: 'tool',
           tool_call_id: tc.id,
           name: 'render_chart',
