@@ -220,6 +220,18 @@
       <button type="button" class="debug-tab" data-debug-tab="raw" data-i18n="debug_tab_raw">📡 Raw</button>
     </div>
 
+    <!-- Sub-barra de control de Raw -->
+    <div id="debug-raw-bar" class="debug-raw-bar" style="display: none;">
+      <div class="debug-raw-toggle-wrapper">
+        <label class="switch switch-sm" data-i18n-title="debug_raw_capture_title" title="Activar/Desactivar captura de tráfico Raw">
+          <input type="checkbox" id="chk-enable-raw" checked>
+          <span class="slider"></span>
+        </label>
+        <span class="raw-toggle-label" data-i18n="raw_capture_label">Capturar tráfico crudo</span>
+      </div>
+      <span id="raw-status-badge" class="raw-status-badge active">ACTIVO</span>
+    </div>
+
     <!-- Contenedor del Log Monospace -->
     <div id="debug-log-content" class="debug-log-content" tabindex="0">
       <div class="debug-entry debug-entry-system" data-type="system">
@@ -452,6 +464,21 @@
             </div>
             <label class="switch">
               <input type="checkbox" id="setting-send-datetime" checked>
+              <span class="slider"></span>
+            </label>
+          </div>
+
+          <div class="setting-toggle-card">
+            <div class="toggle-card-info">
+              <div class="toggle-card-title">
+                <span data-i18n="agent_raw_logs_title">📡 Captura de Tráfico Raw en Logs</span>
+              </div>
+              <p class="toggle-card-desc" data-i18n="agent_raw_logs_desc">
+                Registra todo el tráfico de red entrante y saliente (solicitudes HTTP, chunks SSE crudos y llamadas de herramientas) en la pestaña dedicada Raw del panel de logs.
+              </p>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="setting-enable-raw-logs" checked>
               <span class="slider"></span>
             </label>
           </div>

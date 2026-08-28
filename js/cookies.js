@@ -27,6 +27,7 @@
     enableAgentSearch: true,
     enableAgentChart: true,
     enableContextCache: true,
+    enableRawLogs: true,
     sendDateTime: true
   };
 
@@ -136,6 +137,9 @@
     const enableAgentJs = getStorageItem('enableAgentJs');
     const enableAgentWeb = getStorageItem('enableAgentWeb');
     const enableAgentSearch = getStorageItem('enableAgentSearch');
+    const enableAgentChart = getStorageItem('enableAgentChart');
+    const enableContextCache = getStorageItem('enableContextCache');
+    const enableRawLogs = getStorageItem('enableRawLogs');
     const sendDateTime = getStorageItem('sendDateTime');
     const modelReasoningConfigRaw = getStorageItem('modelReasoningConfig');
 
@@ -182,6 +186,9 @@
       enableAgentJs: parseBool(enableAgentJs, DEFAULT_CONFIG.enableAgentJs),
       enableAgentWeb: parseBool(enableAgentWeb, DEFAULT_CONFIG.enableAgentWeb),
       enableAgentSearch: parseBool(enableAgentSearch, DEFAULT_CONFIG.enableAgentSearch),
+      enableAgentChart: parseBool(enableAgentChart, DEFAULT_CONFIG.enableAgentChart),
+      enableContextCache: parseBool(enableContextCache, DEFAULT_CONFIG.enableContextCache),
+      enableRawLogs: parseBool(enableRawLogs, DEFAULT_CONFIG.enableRawLogs),
       sendDateTime: parseBool(sendDateTime, DEFAULT_CONFIG.sendDateTime)
     };
   }
@@ -202,6 +209,9 @@
     if (config.enableAgentJs !== undefined) setStorageItem('enableAgentJs', String(config.enableAgentJs));
     if (config.enableAgentWeb !== undefined) setStorageItem('enableAgentWeb', String(config.enableAgentWeb));
     if (config.enableAgentSearch !== undefined) setStorageItem('enableAgentSearch', String(config.enableAgentSearch));
+    if (config.enableAgentChart !== undefined) setStorageItem('enableAgentChart', String(config.enableAgentChart));
+    if (config.enableContextCache !== undefined) setStorageItem('enableContextCache', String(config.enableContextCache));
+    if (config.enableRawLogs !== undefined) setStorageItem('enableRawLogs', String(config.enableRawLogs));
     if (config.sendDateTime !== undefined) setStorageItem('sendDateTime', String(config.sendDateTime));
   }
 

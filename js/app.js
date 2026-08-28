@@ -126,6 +126,9 @@
       btnCloseDebug: document.getElementById('btn-close-debug'),
       debugLogContent: document.getElementById('debug-log-content'),
       debugTabs: document.querySelectorAll('.debug-tab'),
+      debugRawBar: document.getElementById('debug-raw-bar'),
+      chkEnableRaw: document.getElementById('chk-enable-raw'),
+      rawStatusBadge: document.getElementById('raw-status-badge'),
 
       // Adjuntos
       btnAttachFile: document.getElementById('btn-attach-file'),
@@ -159,6 +162,7 @@
       settingEnableAgentSearch: document.getElementById('setting-enable-agent-search'),
       settingEnableAgentChart: document.getElementById('setting-enable-agent-chart'),
       settingEnableContextCache: document.getElementById('setting-enable-context-cache'),
+      settingEnableRawLogs: document.getElementById('setting-enable-raw-logs'),
       settingSendDateTime: document.getElementById('setting-send-datetime'),
     };
   }
@@ -810,6 +814,37 @@
   function addDebugLog(type, text, rawData) {
     if (!elements.debugLogContent) return;
 
+    // 1. Logs de tipo RAW (Tráfico de red y herramientas sin procesar)
+    if (type === 'raw') {
+      if (appConfig.enableRawLogs === false) return;
+
+      const entry = document.createElement('div');
+      const isOutgoing = (rawData && rawData.subtype === 'outgoing') || String(text).startsWith('>>>');
+      entry.className = `debug-entry debug-entry-raw ${isOutgoing ? 'raw-outgoing' : 'raw-incoming'}`;
+      entry.setAttribute('data-type', 'raw');
+
+      entry.innerHTML = `
+        <div class="debug-entry-header">
+          <span class="debug-time">[${getFormattedTime()}]</span>
+          <span class="debug-tag raw">${isOutgoing ? '📤 RAW OUT' : '📥 RAW IN'}</span>
+        </div>
+        <div class="debug-msg">${Markdown.escapeHtml(text)}</div>
+      `;
+
+      // Los logs RAW NUNCA se muestran en 'all', 'thinking', 'tool' o 'network'. Únicamente en 'raw'.
+      if (activeDebugFilter !== 'raw') {
+        entry.style.display = 'none';
+      }
+
+      elements.debugLogContent.appendChild(entry);
+
+      if (isDebugAutoscroll) {
+        elements.debugLogContent.scrollTop = elements.debugLogContent.scrollHeight;
+      }
+      return; // IMPORTANTE: no reinicia activeThinkingBlock
+    }
+
+    // 2. Logs de tipo RAZONAMIENTO / THINKING (Texto puro parseado de pensamiento)
     if (type === 'thinking') {
       if (!activeThinkingBlock) {
         const entry = document.createElement('div');
@@ -840,33 +875,8 @@
       return;
     }
 
+    // 3. Cualquier otro tipo de log (network, stats, tool, error, system, info):
     activeThinkingBlock = null;
-
-    if (type === 'raw') {
-      const entry = document.createElement('div');
-      const isOutgoing = (rawData && rawData.subtype === 'outgoing') || String(text).startsWith('>>>');
-      entry.className = `debug-entry debug-entry-raw ${isOutgoing ? 'raw-outgoing' : 'raw-incoming'}`;
-      entry.setAttribute('data-type', 'raw');
-
-      entry.innerHTML = `
-        <div class="debug-entry-header">
-          <span class="debug-time">[${getFormattedTime()}]</span>
-          <span class="debug-tag raw">${isOutgoing ? '📤 RAW OUT' : '📥 RAW IN'}</span>
-        </div>
-        <div class="debug-msg">${Markdown.escapeHtml(text)}</div>
-      `;
-
-      if (activeDebugFilter !== 'all' && activeDebugFilter !== 'raw') {
-        entry.style.display = 'none';
-      }
-
-      elements.debugLogContent.appendChild(entry);
-
-      if (isDebugAutoscroll) {
-        elements.debugLogContent.scrollTop = elements.debugLogContent.scrollHeight;
-      }
-      return;
-    }
 
     const entry = document.createElement('div');
     entry.className = `debug-entry debug-entry-${type || 'info'}`;
@@ -874,12 +884,10 @@
 
     let tagLabel = t('debug_tag_info');
     if (type === 'network') tagLabel = t('debug_tag_network');
-    else if (type === 'thinking') tagLabel = t('debug_tag_thinking');
     else if (type === 'tool') tagLabel = t('debug_tag_tool');
     else if (type === 'stats') tagLabel = t('debug_tag_stats');
     else if (type === 'error') tagLabel = t('debug_tag_error');
     else if (type === 'system') tagLabel = t('debug_tag_system');
-    else if (type === 'raw') tagLabel = t('debug_tag_raw');
 
     entry.innerHTML = `
       <div class="debug-entry-header">
@@ -889,8 +897,12 @@
       <div class="debug-msg">${Markdown.escapeHtml(text)}</div>
     `;
 
-    if (activeDebugFilter !== 'all') {
-      const match = (activeDebugFilter === type) || (activeDebugFilter === 'tool' && type === 'tool') || (activeDebugFilter === 'network' && (type === 'network' || type === 'stats' || type === 'error')) || (activeDebugFilter === 'raw' && type === 'raw');
+    if (activeDebugFilter === 'raw') {
+      entry.style.display = 'none';
+    } else if (activeDebugFilter !== 'all') {
+      const match = (activeDebugFilter === type) ||
+                    (activeDebugFilter === 'tool' && type === 'tool') ||
+                    (activeDebugFilter === 'network' && (type === 'network' || type === 'stats' || type === 'error'));
       if (!match) entry.style.display = 'none';
     }
 
@@ -905,19 +917,26 @@
     activeDebugFilter = tabId;
     if (!elements.debugLogContent) return;
 
+    if (elements.debugRawBar) {
+      elements.debugRawBar.style.display = (tabId === 'raw') ? 'flex' : 'none';
+    }
+
     const entries = elements.debugLogContent.querySelectorAll('.debug-entry');
     entries.forEach(entry => {
       const type = entry.getAttribute('data-type');
       if (tabId === 'all') {
-        entry.style.display = 'flex';
+        // En 'Todo' se muestran todos los logs regulares pero NUNCA el tráfico raw
+        entry.style.display = (type === 'raw') ? 'none' : 'flex';
       } else if (tabId === 'thinking') {
-        entry.style.display = type === 'thinking' ? 'flex' : 'none';
+        // En 'Razonamiento' se muestra exclusivamente el contenido de pensamiento
+        entry.style.display = (type === 'thinking') ? 'flex' : 'none';
       } else if (tabId === 'tool') {
-        entry.style.display = type === 'tool' ? 'flex' : 'none';
+        entry.style.display = (type === 'tool') ? 'flex' : 'none';
       } else if (tabId === 'network') {
         entry.style.display = (type === 'network' || type === 'stats' || type === 'error') ? 'flex' : 'none';
       } else if (tabId === 'raw') {
-        entry.style.display = type === 'raw' ? 'flex' : 'none';
+        // En 'Raw' se muestra exclusivamente el tráfico crudo
+        entry.style.display = (type === 'raw') ? 'flex' : 'none';
       }
     });
   }
@@ -947,6 +966,18 @@
     updateReasoningUI(appConfig.reasoningEffort || 'none');
     applyTheme(appConfig.theme || 'light');
     applyLanguage(appConfig.language || 'es');
+
+    const isRawEnabled = appConfig.enableRawLogs !== false;
+    if (elements.chkEnableRaw) {
+      elements.chkEnableRaw.checked = isRawEnabled;
+    }
+    if (elements.rawStatusBadge) {
+      elements.rawStatusBadge.className = isRawEnabled ? 'raw-status-badge active' : 'raw-status-badge';
+      elements.rawStatusBadge.textContent = isRawEnabled ? t('raw_status_active') : t('raw_status_inactive');
+    }
+    if (elements.settingEnableRawLogs) {
+      elements.settingEnableRawLogs.checked = isRawEnabled;
+    }
   }
 
   function autoResizeTextarea() {
@@ -1930,6 +1961,9 @@
     if (elements.settingEnableContextCache) {
       elements.settingEnableContextCache.checked = appConfig.enableContextCache !== false;
     }
+    if (elements.settingEnableRawLogs) {
+      elements.settingEnableRawLogs.checked = appConfig.enableRawLogs !== false;
+    }
     if (elements.settingSendDateTime) {
       elements.settingSendDateTime.checked = appConfig.sendDateTime !== false;
     }
@@ -1969,6 +2003,7 @@
       enableAgentSearch: elements.settingEnableAgentSearch ? elements.settingEnableAgentSearch.checked : true,
       enableAgentChart: elements.settingEnableAgentChart ? elements.settingEnableAgentChart.checked : true,
       enableContextCache: elements.settingEnableContextCache ? elements.settingEnableContextCache.checked : true,
+      enableRawLogs: elements.settingEnableRawLogs ? elements.settingEnableRawLogs.checked : true,
       sendDateTime: elements.settingSendDateTime ? elements.settingSendDateTime.checked : true
     };
 
@@ -2018,6 +2053,9 @@
       }
       if (elements.settingEnableContextCache) {
         elements.settingEnableContextCache.checked = defaults.enableContextCache !== false;
+      }
+      if (elements.settingEnableRawLogs) {
+        elements.settingEnableRawLogs.checked = defaults.enableRawLogs !== false;
       }
       if (elements.settingSendDateTime) {
         elements.settingSendDateTime.checked = defaults.sendDateTime !== false;
@@ -2698,6 +2736,29 @@
           const filter = tab.getAttribute('data-debug-tab') || 'all';
           filterDebugLogs(filter);
         });
+      });
+    }
+
+    function syncRawLogsState(enabled) {
+      appConfig.enableRawLogs = enabled;
+      if (elements.chkEnableRaw) elements.chkEnableRaw.checked = enabled;
+      if (elements.settingEnableRawLogs) elements.settingEnableRawLogs.checked = enabled;
+      if (elements.rawStatusBadge) {
+        elements.rawStatusBadge.className = enabled ? 'raw-status-badge active' : 'raw-status-badge';
+        elements.rawStatusBadge.textContent = enabled ? t('raw_status_active') : t('raw_status_inactive');
+      }
+      if (Storage.saveConfig) Storage.saveConfig(appConfig);
+    }
+
+    if (elements.chkEnableRaw) {
+      elements.chkEnableRaw.addEventListener('change', () => {
+        syncRawLogsState(elements.chkEnableRaw.checked);
+      });
+    }
+
+    if (elements.settingEnableRawLogs) {
+      elements.settingEnableRawLogs.addEventListener('change', () => {
+        syncRawLogsState(elements.settingEnableRawLogs.checked);
       });
     }
 
