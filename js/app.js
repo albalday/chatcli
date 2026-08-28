@@ -103,7 +103,6 @@
       userInput: document.getElementById('user-input'),
       btnSend: document.getElementById('btn-send'),
       btnStopStream: document.getElementById('btn-stop-stream'),
-      btnVoiceInput: document.getElementById('btn-voice-input'),
 
       // Sugerencias
       sugCardExplain: document.getElementById('sug-card-explain'),
@@ -1133,13 +1132,6 @@
     btnCopy.innerHTML = `📋 <span>${t('btn_copy')}</span>`;
     btnCopy.title = t('btn_copy_title');
 
-    const btnSpeak = document.createElement('button');
-    btnSpeak.type = 'button';
-    btnSpeak.className = 'btn-msg-action btn-msg-speak';
-    btnSpeak.innerHTML = `🔊 <span>${t('btn_speak')}</span>`;
-    btnSpeak.title = t('btn_speak_title');
-    btnSpeak.addEventListener('click', () => toggleSpeakMessage(content.innerText || content.textContent, btnSpeak));
-
     const btnDelete = document.createElement('button');
     btnDelete.type = 'button';
     btnDelete.className = 'btn-msg-action btn-delete';
@@ -1148,7 +1140,6 @@
     btnDelete.addEventListener('click', () => removeMessage(wrapper));
 
     actions.appendChild(btnCopy);
-    actions.appendChild(btnSpeak);
     actions.appendChild(btnDelete);
 
     footerRow.appendChild(statsContainer);
@@ -2413,225 +2404,6 @@
   }
 
   // ==========================================================================
-  // Dictado por Voz (Speech-to-Text) y Lectura en Voz Alta (Text-to-Speech)
-  // ==========================================================================
-
-  let speechRecognition = null;
-  let isListening = false;
-  let activeSpeakingButton = null;
-
-  function setupVoiceInput() {
-    const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRec) {
-      if (elements.btnVoiceInput) {
-        elements.btnVoiceInput.style.opacity = '0.5';
-        elements.btnVoiceInput.title = t('voice_not_supported');
-      }
-      return;
-    }
-
-    speechRecognition = new SpeechRec();
-    speechRecognition.continuous = false;
-    speechRecognition.interimResults = true;
-
-    speechRecognition.onstart = function() {
-      isListening = true;
-      if (elements.btnVoiceInput) {
-        elements.btnVoiceInput.classList.add('recording');
-        const icon = elements.btnVoiceInput.querySelector('.voice-mic-icon');
-        if (icon) icon.textContent = '🔴';
-      }
-    };
-
-    speechRecognition.onresult = function(event) {
-      let transcript = '';
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        transcript += event.results[i][0].transcript;
-      }
-      if (transcript && elements.userInput) {
-        elements.userInput.value = (elements.userInput.value ? elements.userInput.value + ' ' : '') + transcript;
-        autoResizeTextarea();
-      }
-    };
-
-    speechRecognition.onerror = function() {
-      stopVoiceInput();
-    };
-
-    speechRecognition.onend = function() {
-      stopVoiceInput();
-    };
-
-    if (elements.btnVoiceInput) {
-      elements.btnVoiceInput.addEventListener('click', () => {
-        if (isListening) {
-          stopVoiceInput();
-        } else {
-          startVoiceInput();
-        }
-      });
-    }
-  }
-
-  function startVoiceInput() {
-    if (!speechRecognition) return;
-    const lang = appConfig.language || (I18n.getLanguage ? I18n.getLanguage() : 'es');
-    speechRecognition.lang = (lang === 'en') ? 'en-US' : 'es-ES';
-    try {
-      speechRecognition.start();
-    } catch (e) {}
-  }
-
-  function stopVoiceInput() {
-    isListening = false;
-    if (speechRecognition) {
-      try { speechRecognition.stop(); } catch(e) {}
-    }
-    if (elements.btnVoiceInput) {
-      elements.btnVoiceInput.classList.remove('recording');
-      const icon = elements.btnVoiceInput.querySelector('.voice-mic-icon');
-      if (icon) icon.textContent = '🎙️';
-    }
-  }
-
-  function cleanTextForSpeech(raw) {
-    if (!raw) return '';
-    return raw
-      .replace(/```[\s\S]*?```/g, ' [Bloque de código omitido] ')
-      .replace(/`[^`]+`/g, ' ')
-      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-      .replace(/https?:\/\/\S+/g, ' enlace ')
-      .replace(/<[^>]+>/g, ' ')
-      .replace(/[#*>\-_~|]/g, ' ')
-      .replace(/[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}\u{2300}-\u{23FF}\u{2B50}\u{FE00}-\u{FE0F}]/gu, '')
-      .replace(/\s+/g, ' ')
-      .trim();
-  }
-
-  let isSpeakingQueue = false;
-
-  function stopAllSpeech() {
-    isSpeakingQueue = false;
-    if (window.speechSynthesis) {
-      try {
-        window.speechSynthesis.cancel();
-      } catch (e) {}
-    }
-    if (activeSpeakingButton) {
-      activeSpeakingButton.classList.remove('speaking');
-      activeSpeakingButton.innerHTML = `🔊 <span>${t('btn_speak')}</span>`;
-      activeSpeakingButton.title = t('btn_speak_title');
-      activeSpeakingButton = null;
-    }
-  }
-
-  function toggleSpeakMessage(text, buttonElement) {
-    if (!window.speechSynthesis) {
-      if (typeof addDebugLog === 'function') {
-        addDebugLog('error', 'La síntesis de voz (Text-to-Speech) no está disponible en este navegador o sistema.');
-      }
-      return;
-    }
-
-    if (activeSpeakingButton === buttonElement) {
-      stopAllSpeech();
-      return;
-    }
-
-    stopAllSpeech();
-
-    const clean = cleanTextForSpeech(text);
-    if (!clean) return;
-
-    const voices = window.speechSynthesis.getVoices() || [];
-    const isDummyOnly = voices.length > 0 && voices.every(v => !v.name || v.name.toLowerCase().includes('dummy'));
-    if (isDummyOnly) {
-      const errMsg = t('err_tts_dummy');
-      if (typeof addDebugLog === 'function') {
-        addDebugLog('error', errMsg);
-      }
-      alert(errMsg);
-      return;
-    }
-
-    // Dividir en oraciones/fragmentos cortos (<200 caracteres) para evitar errores de buffer en Linux speech-dispatcher / WebSpeech
-    const rawSentences = clean.match(/[^.!?;\n]+[.!?;\n]*/g) || [clean];
-    const chunks = [];
-    let currentChunk = '';
-
-    for (let i = 0; i < rawSentences.length; i++) {
-      const s = rawSentences[i].trim();
-      if (!s) continue;
-      if ((currentChunk + ' ' + s).length < 200) {
-        currentChunk = currentChunk ? (currentChunk + ' ' + s) : s;
-      } else {
-        if (currentChunk) chunks.push(currentChunk);
-        currentChunk = s;
-      }
-    }
-    if (currentChunk) chunks.push(currentChunk);
-
-    if (chunks.length === 0) return;
-
-    activeSpeakingButton = buttonElement;
-    buttonElement.classList.add('speaking');
-    buttonElement.innerHTML = `⏹️ <span>${t('btn_stop_speak')}</span>`;
-    buttonElement.title = t('btn_stop_speak_title');
-
-    const lang = appConfig.language || (I18n.getLanguage ? I18n.getLanguage() : 'es');
-    const targetLang = (lang === 'en') ? 'en-US' : 'es-ES';
-
-    let chunkIndex = 0;
-    isSpeakingQueue = true;
-
-    function speakNextChunk() {
-      if (!isSpeakingQueue || chunkIndex >= chunks.length || activeSpeakingButton !== buttonElement) {
-        stopAllSpeech();
-        return;
-      }
-
-      const chunkText = chunks[chunkIndex++];
-      const utter = new SpeechSynthesisUtterance(chunkText);
-      utter.lang = targetLang;
-      utter.rate = 1.0;
-      utter.pitch = 1.0;
-
-      const voices = window.speechSynthesis.getVoices() || [];
-      const nonDummyVoices = voices.filter(v => v.name && !v.name.toLowerCase().includes('dummy'));
-      const exactVoice = nonDummyVoices.find(v => v.lang === targetLang || v.lang === targetLang.replace('-', '_'));
-      const prefixVoice = nonDummyVoices.find(v => v.lang && v.lang.toLowerCase().startsWith(targetLang.slice(0, 2).toLowerCase()));
-      const nameVoice = nonDummyVoices.find(v => v.name && v.name.toLowerCase().includes(targetLang.startsWith('es') ? 'spanish' : 'english'));
-
-      if (exactVoice) {
-        utter.voice = exactVoice;
-      } else if (prefixVoice) {
-        utter.voice = prefixVoice;
-      } else if (nameVoice) {
-        utter.voice = nameVoice;
-      }
-      utter.onend = function () {
-        if (isSpeakingQueue && activeSpeakingButton === buttonElement) {
-          speakNextChunk();
-        }
-      };
-
-      utter.onerror = function (err) {
-        console.warn('Speech synthesis utterance error:', err);
-        stopAllSpeech();
-      };
-
-      try {
-        window.speechSynthesis.speak(utter);
-      } catch (e) {
-        console.error('Error in window.speechSynthesis.speak:', e);
-        stopAllSpeech();
-      }
-    }
-
-    speakNextChunk();
-  }
-
-  // ==========================================================================
   // Pegado de Imágenes desde el Portapapeles (Ctrl + V)
   // ==========================================================================
 
@@ -2661,16 +2433,6 @@
   // ==========================================================================
 
   function setupEventListeners() {
-    // Inicializar caché de voces Web Speech API
-    if (typeof window !== 'undefined' && window.speechSynthesis) {
-      try {
-        window.speechSynthesis.onvoiceschanged = function () {
-          window.speechSynthesis.getVoices();
-        };
-        window.speechSynthesis.getVoices();
-      } catch (e) {}
-    }
-
     // Formulario de chat
     elements.chatForm.addEventListener('submit', function (e) {
       e.preventDefault();
@@ -2979,7 +2741,6 @@
     cacheDomElements();
     loadCachedModels();
     updateUIFromConfig();
-    setupVoiceInput();
     loadSessionsFromStorage();
     setupEventListeners();
 
@@ -3000,7 +2761,7 @@
       exportConversationAsPrint
     };
 
-    console.log('💬 ChatCLI v3.1 initialized successfully with Multi-chat Sidebar, GFM Tables, SVG Charts, Voice STT/TTS, Context Caching and Live Tools.');
+    console.log('💬 ChatCLI v3.1 initialized successfully with Multi-chat Sidebar, GFM Tables, SVG Charts, Context Caching and Live Tools.');
   }
 
   if (document.readyState === 'loading') {

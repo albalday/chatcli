@@ -51,7 +51,6 @@ Desde el diseño de la arquitectura por módulos, la creación de la interfaz HT
 - ▾ **Minimizado/Expandido de Herramientas y Gráficos**: Botón interactivo para plegar y desplegar cualquier consulta a herramientas o gráfico para optimizar el espacio vertical.
 - 🗑️ **Borrado Total del Historial**: Botón *Borrar todos* en la barra lateral con diálogo de seguridad para limpiar todo el almacenamiento local y crear una sesión en blanco.
 - 📄 **Parseador Léxico Iterativo de PDF**: Motor de extracción $O(N)$ sin retroceso ni recursión para evitar errores de desbordamiento de pila (*too much recursion*) en documentos PDF complejos.
-- 🔊 **Compatibilidad TTS en Linux**: Limpieza inteligente de emojis, fragmentación de frases y adaptación para sintetizadores `speech-dispatcher` y `espeak-ng`.
 
 ---
 
@@ -70,33 +69,29 @@ Desde el diseño de la arquitectura por módulos, la creación de la interfaz HT
    - **`search_web`**: Motor de búsqueda real en internet con DuckDuckGo (CORS bypass con Jina Reader) y Wikipedia.
    - **`execute_javascript`**: Sandbox seguro para cálculos matemáticos y procesamiento de datos.
 
-3. **Interacción por Voz (Voz a Texto / Texto a Voz)**:
-   - **Dictado por voz (Speech-to-Text)**: Botón de micrófono `🎙️` con reconocimiento continuo mediante Web Speech API adaptado al idioma activo (ES/EN).
-   - **Lectura en voz alta (Text-to-Speech)**: Botón `🔊 Escuchar` en cada respuesta del asistente con limpieza inteligente de markdown y selección de voz del sistema.
-
-4. **Exportación e Importación Completa**:
+3. **Exportación e Importación Completa**:
    - Descarga de conversaciones en formato **Markdown limpio (`.md`)**.
    - Exportación de la sesión completa en **JSON estructurado (`.json`)** e importación directa para restaurar el chat.
    - Modo de impresión y **Guardar como PDF** maquetado profesionalmente sin elementos de la interfaz.
 
-5. **Adjuntos Multimodales y Pegado de Imágenes**:
+4. **Adjuntos Multimodales y Pegado de Imágenes**:
    - Soporte para adjuntar imágenes (`.png`, `.jpg`, `.webp`) y **pegado directo desde el portapapeles (`Ctrl + V`)**.
    - Formateo multimodal estándar (OpenAI `image_url` y Claude `base64`).
    - Soporte de documentos PDF y archivos de código/texto con Drag & Drop.
 
-6. **Compatibilidad Universal Multi-Endpoint**:
+5. **Compatibilidad Universal Multi-Endpoint**:
    - **LM Studio** (`http://localhost:1234/v1`), **Ollama** (`http://localhost:11434`), **OpenAI**, **Claude**, **Gemini**, **OpenRouter**, **vLLM** y **LocalAI**.
 
-7. **Control de Razonamiento (Thinking / CoT) y Consola en Vivo**:
+6. **Control de Razonamiento (Thinking / CoT) y Consola en Vivo**:
    - Botón directo `🧠` con niveles de pensamiento (`None`, `Low`, `Med`, `High`, `XHigh`).
    - Panel de logs en tiempo real con filtrado (`Todo`, `🧠 Razonamiento`, `⚙️ Herramientas`, `🌐 Red`).
 
-8. **Caché de Contexto Inteligente (Context / Prompt Caching)**:
+7. **Caché de Contexto Inteligente (Context / Prompt Caching)**:
    - Optimización automática de latencia y costes reutilizando la memoria caché de contexto (KV Cache / Prompt Caching) en servidores compatibles (OpenAI, Claude, OpenRouter, Gemini, LM Studio, vLLM).
    - **Auto-invalidación inteligente**: Si el usuario elimina preguntas o respuestas intermedias del chat, la aplicación anula la caché automáticamente y reconstruye un contexto limpio para evitar desincronizaciones o estados residuales en el servidor.
    - **Métricas de caché en tiempo real**: Visualización de tokens leídos desde la caché (`💾 N cache`) directamente en las estadísticas de cada respuesta y en la consola de depuración.
 
-9. **Métricas de Rendimiento Precisas**:
+8. **Métricas de Rendimiento Precisas**:
    - Latencia al primer token (TTFT), velocidad (`⚡ tok/s`), tiempo total y conteo de tokens.
 
 ---
@@ -108,9 +103,9 @@ chatcli/
 ├── chatcli.html        # 🚀 ARCHIVO AUTÓNOMO ÚNICO (Solo necesitas este archivo para usar el chat)
 ├── index.html          # Interfaz principal modular, sidebar y modales (<dialog>)
 ├── css/
-│   └── styles.css      # Estilos visuales modernos, tablas GFM, sidebar, gráficos SVG, voz y tema print
+│   └── styles.css      # Estilos visuales modernos, tablas GFM, sidebar, gráficos SVG y tema print
 ├── js/
-│   ├── app.js          # Controlador principal de la UI, multi-chat, eventos, voz y consola debug
+│   ├── app.js          # Controlador principal de la UI, multi-chat, eventos y consola debug
 │   ├── i18n.js         # Módulo de Internacionalización y traducciones reactivas (ES/EN)
 │   ├── api.js          # Cliente SSE universal, streaming, herramientas y protocolos multi-endpoint
 │   ├── charts.js       # Motor de renderizado de gráficos SVG nativos interactivos

@@ -3247,51 +3247,6 @@ input:checked + .slider:before {
 }
 
 /* ==========================================================================
-   Controles de Voz: Dictado (STT) y Lectura (TTS)
-   ========================================================================== */
-.btn-voice-input {
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  color: var(--text-muted);
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-md);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.1rem;
-  transition: all 0.2s ease;
-}
-
-.btn-voice-input:hover {
-  background-color: var(--bg-hover);
-  color: var(--text-main);
-}
-
-.btn-voice-input.recording {
-  background-color: #fee2e2;
-  color: #ef4444;
-  animation: voicePulse 1.2s infinite ease-in-out;
-}
-
-@keyframes voicePulse {
-  0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
-  50% { transform: scale(1.1); box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
-  100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
-}
-
-.btn-msg-speak {
-  color: var(--text-muted);
-}
-
-.btn-msg-speak.speaking {
-  color: #3b82f6;
-  background-color: rgba(59, 130, 246, 0.12);
-  border-color: rgba(59, 130, 246, 0.3);
-}
-
-/* ==========================================================================
    Modal de Opciones de Exportación
    ========================================================================== */
 .export-options-grid {
