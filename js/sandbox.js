@@ -1,9 +1,15 @@
 /**
  * Módulo de ejecución de JavaScript local en entorno aislado (ChatSandbox).
- * - Entorno seguro sin acceso a red (sin fetch, XMLHttpRequest, WebSocket) ni archivos ni almacenamiento.
- * - Captura de console.log y valores de retorno.
- * - Límite de tiempo de ejecución (timeout) para evitar bucles infinitos.
- * - Compatible con file:// y http://.
+ * - Aislamiento mediante Web Worker en hilo independiente cuando está disponible (evita bloqueos del hilo principal).
+ * - Límite de tiempo real (Timeout) con terminación forzada del Worker (worker.terminate()).
+ * - Control estricto de salida máxima (truncamiento de texto y límite de logs de consola).
+ * - APIs restringidas (sin acceso a red, almacenamiento ni DOM principal).
+ * - Fallback controlado para entornos sin soporte nativo de Web Worker.
+ * 
+ * NOTA DE SEGURIDAD:
+ * Este módulo proporciona aislamiento de ejecución, control de recursos y prevención de bucles
+ * infinitos para proteger la fluidez de la aplicación. No debe considerarse un sandbox de aislamiento
+ * a nivel de kernel/sistema operativo.
  */
 
 (function (root, factory) {
@@ -16,31 +22,16 @@
   'use strict';
 
   const DEFAULT_TIMEOUT_MS = 2500;
+  const MAX_OUTPUT_LENGTH = 30000;
+  const MAX_LOG_ENTRIES = 200;
 
   /**
-   * Ejecuta código JavaScript de forma aislada y controlada.
-   * @param {string} code - Código a ejecutar
-   * @param {number} timeoutMs - Tiempo máximo en ms
-   * @returns {Promise<{ success: boolean, result: string, logs: string[], executionTimeMs: number, error?: string }>}
+   * Código fuente del Worker aislado empaquetado como texto estático.
    */
-  async function execute(code, timeoutMs = DEFAULT_TIMEOUT_MS) {
-    if (!code || typeof code !== 'string') {
-      return {
-        success: false,
-        result: '',
-        logs: [],
-        executionTimeMs: 0,
-        error: 'No se proporcionó código JavaScript para ejecutar.'
-      };
-    }
-
+  const WORKER_CODE = `
+  self.onmessage = function(e) {
+    const { id, code, maxOutputLength, maxLogEntries } = e.data;
     const logs = [];
-    const customConsole = {
-      log: (...args) => logs.push(args.map(formatValue).join(' ')),
-      info: (...args) => logs.push('[INFO] ' + args.map(formatValue).join(' ')),
-      warn: (...args) => logs.push('[WARN] ' + args.map(formatValue).join(' ')),
-      error: (...args) => logs.push('[ERROR] ' + args.map(formatValue).join(' '))
-    };
 
     function formatValue(v) {
       if (v === null) return 'null';
@@ -48,19 +39,217 @@
       if (typeof v === 'object') {
         try {
           return JSON.stringify(v, null, 2);
-        } catch (e) {
+        } catch (err) {
           return String(v);
         }
       }
       return String(v);
     }
 
-    const startTime = performance.now();
+    function addLog(prefix, args) {
+      if (logs.length >= maxLogEntries) return;
+      let text = args.map(formatValue).join(' ');
+      if (prefix) text = '[' + prefix + '] ' + text;
+      if (text.length > maxOutputLength) {
+        text = text.substring(0, maxOutputLength) + '... [Salida truncada]';
+      }
+      logs.push(text);
+    }
 
+    const customConsole = {
+      log: (...args) => addLog('', args),
+      info: (...args) => addLog('INFO', args),
+      warn: (...args) => addLog('WARN', args),
+      error: (...args) => addLog('ERROR', args)
+    };
+
+    try {
+      const blockedGlobals = [
+        'fetch', 'XMLHttpRequest', 'WebSocket', 'EventSource',
+        'importScripts', 'indexedDB', 'location', 'navigator',
+        'Worker', 'SharedWorker', 'ServiceWorker',
+        'FileReader', 'DecompressionStream', 'CompressionStream',
+        'postMessage', 'addEventListener', 'removeEventListener'
+      ];
+
+      const paramNames = ['console', ...blockedGlobals];
+      const paramValues = [customConsole, ...blockedGlobals.map(() => undefined)];
+
+      const trimmed = (code || '').trim();
+      let wrappedBody;
+      if (!trimmed.includes('return') && !trimmed.includes(';') && !trimmed.includes('\\n')) {
+        wrappedBody = '"use strict"; return (' + trimmed + ');';
+      } else {
+        wrappedBody = '"use strict";\\n' + trimmed;
+      }
+
+      const runner = new Function(...paramNames, wrappedBody);
+      const rawResult = runner.apply(null, paramValues);
+
+      let formattedResult = rawResult !== undefined ? formatValue(rawResult) : (logs.length > 0 ? logs.join('\\n') : 'undefined');
+      if (formattedResult && formattedResult.length > maxOutputLength) {
+        formattedResult = formattedResult.substring(0, maxOutputLength) + '... [Salida truncada por límite de tamaño]';
+      }
+
+      self.postMessage({
+        id: id,
+        success: true,
+        result: formattedResult,
+        logs: logs
+      });
+    } catch (err) {
+      self.postMessage({
+        id: id,
+        success: false,
+        result: '',
+        logs: logs,
+        error: err.toString()
+      });
+    }
+  };
+  `;
+
+  /**
+   * Ejecuta código JavaScript utilizando un Web Worker en un hilo independiente.
+   */
+  function executeWithWorker(code, timeoutMs) {
     return new Promise((resolve) => {
+      let workerUrl = null;
+      let worker = null;
+      let isResolved = false;
+      const startTime = performance.now();
+
+      function cleanup() {
+        if (worker) {
+          try {
+            worker.terminate();
+          } catch (e) {}
+          worker = null;
+        }
+        if (workerUrl && typeof URL !== 'undefined' && URL.revokeObjectURL) {
+          try {
+            URL.revokeObjectURL(workerUrl);
+          } catch (e) {}
+          workerUrl = null;
+        }
+      }
+
+      const timer = setTimeout(() => {
+        if (!isResolved) {
+          isResolved = true;
+          cleanup();
+          const elapsed = (performance.now() - startTime).toFixed(2);
+          resolve({
+            success: false,
+            result: '',
+            logs: [],
+            executionTimeMs: parseFloat(elapsed),
+            error: `Tiempo de ejecución excedido (Timeout de ${timeoutMs}ms). El Worker fue terminado forzosamente.`
+          });
+        }
+      }, timeoutMs);
+
+      try {
+        const blob = new Blob([WORKER_CODE], { type: 'application/javascript' });
+        workerUrl = URL.createObjectURL(blob);
+        worker = new Worker(workerUrl);
+
+        worker.onmessage = function (e) {
+          if (!isResolved) {
+            isResolved = true;
+            clearTimeout(timer);
+            const data = e.data || {};
+            cleanup();
+            const elapsed = (performance.now() - startTime).toFixed(2);
+            resolve({
+              success: Boolean(data.success),
+              result: data.result || '',
+              logs: data.logs || [],
+              executionTimeMs: parseFloat(elapsed),
+              error: data.error
+            });
+          }
+        };
+
+        worker.onerror = function (err) {
+          if (!isResolved) {
+            isResolved = true;
+            clearTimeout(timer);
+            cleanup();
+            const elapsed = (performance.now() - startTime).toFixed(2);
+            resolve({
+              success: false,
+              result: '',
+              logs: [],
+              executionTimeMs: parseFloat(elapsed),
+              error: (err && err.message) || String(err)
+            });
+          }
+        };
+
+        worker.postMessage({
+          id: Date.now(),
+          code: code,
+          maxOutputLength: MAX_OUTPUT_LENGTH,
+          maxLogEntries: MAX_LOG_ENTRIES
+        });
+      } catch (err) {
+        if (!isResolved) {
+          isResolved = true;
+          clearTimeout(timer);
+          cleanup();
+          const elapsed = (performance.now() - startTime).toFixed(2);
+          resolve({
+            success: false,
+            result: '',
+            logs: [],
+            executionTimeMs: parseFloat(elapsed),
+            error: err.toString()
+          });
+        }
+      }
+    });
+  }
+
+  /**
+   * Fallback de ejecución controlada para entornos donde Web Worker no esté disponible.
+   */
+  function executeWithFallback(code, timeoutMs) {
+    return new Promise((resolve) => {
+      const logs = [];
+      const startTime = performance.now();
       let isResolved = false;
 
-      // Temporizador de corte para evitar bloqueos por bucles infinitos
+      function formatValue(v) {
+        if (v === null) return 'null';
+        if (v === undefined) return 'undefined';
+        if (typeof v === 'object') {
+          try {
+            return JSON.stringify(v, null, 2);
+          } catch (e) {
+            return String(v);
+          }
+        }
+        return String(v);
+      }
+
+      function addLog(prefix, args) {
+        if (logs.length >= MAX_LOG_ENTRIES) return;
+        let text = args.map(formatValue).join(' ');
+        if (prefix) text = '[' + prefix + '] ' + text;
+        if (text.length > MAX_OUTPUT_LENGTH) {
+          text = text.substring(0, MAX_OUTPUT_LENGTH) + '... [Salida truncada]';
+        }
+        logs.push(text);
+      }
+
+      const customConsole = {
+        log: (...args) => addLog('', args),
+        info: (...args) => addLog('INFO', args),
+        warn: (...args) => addLog('WARN', args),
+        error: (...args) => addLog('ERROR', args)
+      };
+
       const timer = setTimeout(() => {
         if (!isResolved) {
           isResolved = true;
@@ -70,13 +259,12 @@
             result: '',
             logs: logs,
             executionTimeMs: parseFloat(elapsed),
-            error: `Tiempo de ejecución excedido (Timeout de ${timeoutMs}ms). El código fue interrumpido.`
+            error: `Tiempo de ejecución excedido (Timeout de ${timeoutMs}ms).`
           });
         }
       }, timeoutMs);
 
       try {
-        // Creación de función aislada bloqueando APIs de red, almacenamiento y DOM
         const blockedGlobals = [
           'window', 'document', 'fetch', 'XMLHttpRequest', 'WebSocket', 'EventSource',
           'localStorage', 'sessionStorage', 'indexedDB', 'cookie', 'location', 'navigator',
@@ -85,15 +273,11 @@
           'open', 'close', 'postMessage', 'importScripts'
         ];
 
-        // Lista de parámetros bloqueados que reciben undefined
         const paramNames = ['console', ...blockedGlobals];
         const paramValues = [customConsole, ...blockedGlobals.map(() => undefined)];
 
-        // Preparar el cuerpo del código para capturar expresiones directas o retornos
-        const trimmedCode = code.trim();
+        const trimmedCode = (code || '').trim();
         let wrappedBody;
-
-        // Si el código no contiene 'return' explícito y no es una declaración de múltiples sentencias, intentar retornar la última expresión
         if (!trimmedCode.includes('return') && !trimmedCode.includes(';') && !trimmedCode.includes('\n')) {
           wrappedBody = `"use strict"; return (${trimmedCode});`;
         } else {
@@ -107,9 +291,13 @@
         if (!isResolved) {
           isResolved = true;
           const elapsed = (performance.now() - startTime).toFixed(2);
+          let formattedResult = rawResult !== undefined ? formatValue(rawResult) : (logs.length > 0 ? logs.join('\n') : 'undefined');
+          if (formattedResult && formattedResult.length > MAX_OUTPUT_LENGTH) {
+            formattedResult = formattedResult.substring(0, MAX_OUTPUT_LENGTH) + '... [Salida truncada por límite de tamaño]';
+          }
           resolve({
             success: true,
-            result: rawResult !== undefined ? formatValue(rawResult) : (logs.length > 0 ? logs.join('\n') : 'undefined'),
+            result: formattedResult,
             logs: logs,
             executionTimeMs: parseFloat(elapsed)
           });
@@ -132,7 +320,38 @@
   }
 
   /**
-   * Definición estándar de herramienta (Tool/Function Calling) para OpenAI.
+   * Ejecuta código JavaScript de forma aislada.
+   * Utiliza Web Worker cuando está disponible; en caso contrario, recurre al fallback controlado.
+   * 
+   * @param {string} code - Código JS a ejecutar
+   * @param {number} timeoutMs - Límite de tiempo máximo en ms
+   * @returns {Promise<{ success: boolean, result: string, logs: string[], executionTimeMs: number, error?: string }>}
+   */
+  async function execute(code, timeoutMs = DEFAULT_TIMEOUT_MS) {
+    if (!code || typeof code !== 'string') {
+      return {
+        success: false,
+        result: '',
+        logs: [],
+        executionTimeMs: 0,
+        error: 'No se proporcionó código JavaScript para ejecutar.'
+      };
+    }
+
+    const isWorkerSupported = typeof Worker !== 'undefined' &&
+                              typeof Blob !== 'undefined' &&
+                              typeof URL !== 'undefined' &&
+                              typeof URL.createObjectURL === 'function';
+
+    if (isWorkerSupported) {
+      return executeWithWorker(code, timeoutMs);
+    } else {
+      return executeWithFallback(code, timeoutMs);
+    }
+  }
+
+  /**
+   * Definición estándar de herramienta (Tool/Function Calling) para modelos LLM.
    */
   const JAVASCRIPT_TOOL_DEFINITION = {
     type: 'function',
@@ -154,7 +373,11 @@
 
   return {
     execute,
-    JAVASCRIPT_TOOL_DEFINITION
+    executeWithWorker,
+    executeWithFallback,
+    JAVASCRIPT_TOOL_DEFINITION,
+    MAX_OUTPUT_LENGTH,
+    MAX_LOG_ENTRIES
   };
 });
 
