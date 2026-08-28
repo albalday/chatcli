@@ -967,7 +967,7 @@
     applyTheme(appConfig.theme || 'light');
     applyLanguage(appConfig.language || 'es');
 
-    const isRawEnabled = appConfig.enableRawLogs !== false;
+    const isRawEnabled = appConfig.enableRawLogs === true;
     if (elements.chkEnableRaw) {
       elements.chkEnableRaw.checked = isRawEnabled;
     }
@@ -1962,7 +1962,7 @@
       elements.settingEnableContextCache.checked = appConfig.enableContextCache !== false;
     }
     if (elements.settingEnableRawLogs) {
-      elements.settingEnableRawLogs.checked = appConfig.enableRawLogs !== false;
+      elements.settingEnableRawLogs.checked = appConfig.enableRawLogs === true;
     }
     if (elements.settingSendDateTime) {
       elements.settingSendDateTime.checked = appConfig.sendDateTime !== false;
@@ -2003,7 +2003,7 @@
       enableAgentSearch: elements.settingEnableAgentSearch ? elements.settingEnableAgentSearch.checked : true,
       enableAgentChart: elements.settingEnableAgentChart ? elements.settingEnableAgentChart.checked : true,
       enableContextCache: elements.settingEnableContextCache ? elements.settingEnableContextCache.checked : true,
-      enableRawLogs: elements.settingEnableRawLogs ? elements.settingEnableRawLogs.checked : true,
+      enableRawLogs: elements.settingEnableRawLogs ? elements.settingEnableRawLogs.checked : false,
       sendDateTime: elements.settingSendDateTime ? elements.settingSendDateTime.checked : true
     };
 
@@ -2055,7 +2055,7 @@
         elements.settingEnableContextCache.checked = defaults.enableContextCache !== false;
       }
       if (elements.settingEnableRawLogs) {
-        elements.settingEnableRawLogs.checked = defaults.enableRawLogs !== false;
+        elements.settingEnableRawLogs.checked = defaults.enableRawLogs === true;
       }
       if (elements.settingSendDateTime) {
         elements.settingSendDateTime.checked = defaults.sendDateTime !== false;

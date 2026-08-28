@@ -27,7 +27,7 @@
     enableAgentSearch: true,
     enableAgentChart: true,
     enableContextCache: true,
-    enableRawLogs: true,
+    enableRawLogs: false,
     sendDateTime: true
   };
 
