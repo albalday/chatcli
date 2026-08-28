@@ -30,12 +30,26 @@
 
   function escapeHtml(str) {
     if (!str) return '';
-    return str
+    return String(str)
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#039;');
+  }
+
+  /**
+   * Sanitiza URLs para prevenir ataques XSS vía javascript:, data:, vbscript: o URLs maliciosas.
+   * @param {string} rawUrl - URL sin procesar
+   * @returns {string} - URL segura o '#' si es inválida
+   */
+  function sanitizeUrl(rawUrl) {
+    if (!rawUrl || typeof rawUrl !== 'string') return '#';
+    const trimmed = rawUrl.trim();
+    if (/^(?:https?:\/\/|mailto:|tel:)/i.test(trimmed)) {
+      return escapeHtml(trimmed);
+    }
+    return '#';
   }
 
   function parseInlineMarkdown(text) {
@@ -47,7 +61,11 @@
     p = p.replace(/__(.*?)__/g, '<strong>$1</strong>');
     p = p.replace(/\*([^\*\n]+)\*/g, '<em>$1</em>');
     p = p.replace(/_([^_\n]+)_/g, '<em>$1</em>');
-    p = p.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+    p = p.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, function (match, linkText, url) {
+      const safeHref = sanitizeUrl(url);
+      if (safeHref === '#') return linkText;
+      return `<a href="${safeHref}" target="_blank" rel="noopener noreferrer">${linkText}</a>`;
+    });
     return p;
   }
 
@@ -464,6 +482,7 @@
 
   return {
     escapeHtml,
+    sanitizeUrl,
     parseMarkdown,
     attachCopyCodeListeners
   };

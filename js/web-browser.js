@@ -69,6 +69,45 @@
   }
 
   /**
+   * Valida la URL de destino para prevenir SSRF en servicios de metadatos o esquemas no seguros.
+   */
+  function validateUrlForFetch(rawUrl) {
+    if (!rawUrl || typeof rawUrl !== 'string') {
+      return { valid: false, error: 'No se proporcionó una URL válida.' };
+    }
+
+    let url = rawUrl.trim();
+    // Comprobar si contiene un esquema explícito (ej: file:, javascript:, data:, http:, https:)
+    const schemeMatch = url.match(/^([a-zA-Z][a-zA-Z0-9+.-]*):/);
+    if (schemeMatch) {
+      const scheme = schemeMatch[1].toLowerCase();
+      if (scheme !== 'http' && scheme !== 'https') {
+        return { valid: false, error: `Protocolo no permitido: ${scheme}:. Solo se admiten http:// y https://.` };
+      }
+    } else {
+      // Si no tiene esquema, anteponer https://
+      url = 'https://' + url;
+    }
+
+    try {
+      const parsed = new URL(url);
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        return { valid: false, error: `Protocolo no permitido: ${parsed.protocol}. Solo se admiten http:// y https://.` };
+      }
+
+      const hostname = parsed.hostname.toLowerCase();
+      // Bloquear accesos a endpoints de metadatos de proveedores Cloud (AWS/GCP/Azure/DigitalOcean)
+      if (hostname === '169.254.169.254' || hostname === 'metadata.google.internal' || hostname === 'instance-data') {
+        return { valid: false, error: 'Acceso bloqueado: intento de acceso a servicios de metadatos de infraestructura (169.254.169.254).' };
+      }
+
+      return { valid: true, url: parsed.toString(), hostname: hostname };
+    } catch (e) {
+      return { valid: false, error: 'Formato de URL inválido.' };
+    }
+  }
+
+  /**
    * Realiza un fetch con timeout controlado.
    */
   async function fetchWithTimeout(url, options = {}, timeoutMs = TIMEOUT_MS) {
@@ -94,24 +133,20 @@
    * @returns {Promise<{ success: boolean, url: string, content: string, byteSize?: number, status?: number, elapsedMs: number, isPdf?: boolean, error?: string }>}
    */
   async function fetchPage(rawUrl) {
-    let url = (rawUrl || '').trim();
-    if (!url) {
+    const validation = validateUrlForFetch(rawUrl);
+    if (!validation.valid) {
       return {
         success: false,
-        url: '',
+        url: rawUrl || '',
         content: '',
         elapsedMs: 0,
-        error: 'No se proporcionó una URL válida.'
+        error: validation.error
       };
     }
 
-    // Normalizar protocolo
-    if (!/^https?:\/\//i.test(url)) {
-      url = 'https://' + url;
-    }
-
+    const url = validation.url;
     const startTime = performance.now();
-    const isLocalUrl = /^(https?:\/\/)?(localhost|127\.0\.0\.1|192\.168\.|10\.|0\.0\.0\.0)/i.test(url);
+    const isLocalUrl = /^(localhost|127\.0\.0\.1|192\.168\.|10\.|0\.0\.0\.0)/i.test(validation.hostname);
     const isPdfUrl = /\.pdf(\?|#|$)/i.test(url);
     const FileParser = getFileParser();
 
@@ -337,6 +372,7 @@
   return {
     fetchPage,
     downloadPdf: fetchPage,
+    validateUrlForFetch,
     WEB_TOOL_DEFINITION,
     PDF_TOOL_DEFINITION
   };

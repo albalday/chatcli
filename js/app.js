@@ -1676,7 +1676,7 @@
             <div class="tool-card-collapsible-body">
               <div class="web-card-section web-request-section">
                 <div class="section-label">${t('tool_web_requested_url')}</div>
-                <div class="url-badge"><a href="${Markdown.escapeHtml(urlToFetch)}" target="_blank" rel="noopener noreferrer">${Markdown.escapeHtml(urlToFetch)}</a></div>
+                <div class="url-badge"><a href="${Markdown.sanitizeUrl ? Markdown.sanitizeUrl(urlToFetch) : Markdown.escapeHtml(urlToFetch)}" target="_blank" rel="noopener noreferrer">${Markdown.escapeHtml(urlToFetch)}</a></div>
               </div>
               <div class="web-card-section web-response-section">
                 <div class="section-label section-response-label">${t('tool_web_receiving') || 'Recibiendo contenido...'}</div>
@@ -1808,7 +1808,7 @@
         if (searchRes.results && searchRes.results.length > 0) {
           resultsHtml = '<div class="search-results-list">' + searchRes.results.map(r => `
             <div class="search-result-item">
-              <div><a href="${Markdown.escapeHtml(r.url)}" target="_blank" rel="noopener noreferrer">🔗 ${Markdown.escapeHtml(r.title)}</a> <small style="opacity:0.75;">(${Markdown.escapeHtml(r.source)})</small></div>
+              <div><a href="${Markdown.sanitizeUrl ? Markdown.sanitizeUrl(r.url) : Markdown.escapeHtml(r.url)}" target="_blank" rel="noopener noreferrer">🔗 ${Markdown.escapeHtml(r.title)}</a> <small style="opacity:0.75;">(${Markdown.escapeHtml(r.source)})</small></div>
               ${r.snippet ? `<div class="search-result-snippet">${Markdown.escapeHtml(r.snippet)}</div>` : ''}
             </div>
           `).join('') + '</div>';
