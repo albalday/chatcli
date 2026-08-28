@@ -1,11 +1,7 @@
 /**
- * Módulo para interactuar con la API compatible de OpenAI (ChatAPI).
- * Compatible con file:// y http://.
- * Incluye:
- * - Soporte para Tool Calling agentico (execute_javascript).
- * - Soporte para nivel de razonamiento (reasoning_effort: low, medium, high).
- * - Streaming en tiempo real vía Server-Sent Events (SSE).
- * - Medición precisa de TTFT y velocidad desde el primer token.
+ * Módulo para interactuar con la API compatible de OpenAI, Claude, Gemini, Ollama y OpenRouter (ChatAPI).
+ * Actúa como orquestador común de transporte HTTP/SSE delegando las particularidades en los adaptadores (ChatProviders).
+ * Compatible con file://, http:// y Node.js.
  */
 
 (function (root, factory) {
@@ -20,10 +16,11 @@
   const Sandbox = typeof window !== 'undefined' ? (window.ChatSandbox || {}) : {};
   const WebBrowser = typeof window !== 'undefined' ? (window.ChatWebBrowser || {}) : {};
   const WebSearch = typeof window !== 'undefined' ? (window.ChatWebSearch || {}) : {};
+  const ProvidersModule = typeof window !== 'undefined' ? (window.ChatProviders || {}) : (typeof require !== 'undefined' ? (() => { try { return require('./providers.js'); } catch(e) { return {}; } })() : {});
+  const registry = ProvidersModule.registry || (ProvidersModule.ProviderRegistry ? new ProvidersModule.ProviderRegistry() : null);
 
   /**
-   * Normaliza los nombres de las herramientas admitiendo variaciones con y sin guiones bajos
-   * (ej. 'downloadpdf', 'download_pdf', 'fetchwebpage', 'fetch_web_page', 'searchweb', etc.).
+   * Normaliza los nombres de las herramientas admitiendo variaciones con y sin guiones bajos.
    */
   function normalizeToolName(rawName) {
     if (!rawName) return '';
@@ -133,10 +130,6 @@
     const trimmed = text.trim();
 
     // 1. Limpieza y soporte de sintaxis especial de Llama 3 / Hermes / Mistral / Command-R
-    // Ejemplos:
-    // <|toolcall>call:fetchwebpage{url:<|"|>https://samplelib.com/pdf/sample-scanned.pdf<|"|>}<toolcall|>
-    // <|tool_call|>call:download_pdf{url:"..."}<|tool_call|>
-    // [TOOL_CALLS] call:search_web{query:"..."}
     const cleaned = trimmed
       .replace(/<\|"\|>/g, '"')
       .replace(/<\|/g, '')
@@ -226,7 +219,7 @@
       try {
         const parsed = JSON.parse(trimmed);
         const normName = normalizeToolName(parsed.name || parsed.function?.name || parsed.tool);
-        if (normName && (normName === 'download_pdf' || normName === 'fetch_web_page' || normName === 'search_web' || normName === 'execute_javascript')) {
+        if (normName && (normName === 'download_pdf' || normName === 'fetch_web_page' || normName === 'search_web' || normName === 'execute_javascript' || normName === 'render_chart')) {
           const rawArgs = parsed.arguments !== undefined ? parsed.arguments : (parsed.parameters !== undefined ? parsed.parameters : (parsed.input !== undefined ? parsed.input : parsed));
           return [{
             id: `call_${Date.now()}_json`,
@@ -240,7 +233,7 @@
       } catch (e) {}
     }
 
-    // 6. Sintaxis directa: download_pdf("url") o download_pdf(url="...") o fetch_web_page("url")
+    // 6. Sintaxis directa: download_pdf("url") o search_web("query") o execute_javascript("code")
     const fnMatch = trimmed.match(/^(download_pdf|downloadpdf|fetch_pdf|fetch_web_page|fetchwebpage|fetch_web|search_web|searchweb|execute_javascript|executejs|execute_js)\s*\(\s*(?:(?:url|query|code)\s*=\s*)?["'`]([\s\S]*?)["'`]\s*\)$/i);
     if (fnMatch) {
       const normName = normalizeToolName(fnMatch[1]);
@@ -263,10 +256,14 @@
     return null;
   }
 
+  /**
+   * Detecta el tipo de API adecuado según la URL o tipo explícito.
+   */
   function detectApiType(rawUrl, explicitType) {
-    if (explicitType && explicitType !== 'auto') {
-      return explicitType;
+    if (registry) {
+      return registry.detect(rawUrl, explicitType);
     }
+    if (explicitType && explicitType !== 'auto') return explicitType;
     const url = (rawUrl || '').toLowerCase().trim();
     if (url.includes('11434') || url.includes('ollama')) return 'ollama';
     if (url.includes('openrouter.ai')) return 'openrouter';
@@ -275,36 +272,35 @@
     return 'openai';
   }
 
+  /**
+   * Normaliza la URL base al endpoint de chat del proveedor resuelto.
+   */
   function normalizeApiUrl(rawUrl, explicitType) {
-    let url = (rawUrl || 'http://localhost:1234/v1').trim();
-    if (url.endsWith('/')) {
-      url = url.slice(0, -1);
+    if (registry) {
+      const adapter = registry.resolve(rawUrl, explicitType);
+      return adapter.normalizeEndpoint(rawUrl);
     }
-
+    let url = (rawUrl || 'http://localhost:1234/v1').trim();
+    if (url.endsWith('/')) url = url.slice(0, -1);
     const type = detectApiType(url, explicitType);
-
     if (type === 'ollama') {
       if (url.endsWith('/api/chat') || url.endsWith('/chat/completions')) return url;
       if (url.endsWith('/v1')) return `${url}/chat/completions`;
       return `${url}/v1/chat/completions`;
     }
-
     if (type === 'claude') {
       if (url.endsWith('/v1/messages') || url.endsWith('/messages') || url.endsWith('/chat/completions')) return url;
       if (url.endsWith('/v1')) return `${url}/messages`;
       return `${url}/v1/messages`;
     }
-
-    // Default: OpenAI, LM Studio, OpenRouter, Gemini
-    if (url.endsWith('/chat/completions')) {
-      return url;
-    }
-    if (url.endsWith('/v1')) {
-      return `${url}/chat/completions`;
-    }
+    if (url.endsWith('/chat/completions')) return url;
+    if (url.endsWith('/v1')) return `${url}/chat/completions`;
     return `${url}/v1/chat/completions`;
   }
 
+  /**
+   * Estimación aproximada de tokens para textos.
+   */
   function estimateTokens(text, chunkCount) {
     if (!text) return 0;
     if (chunkCount && chunkCount > 0) {
@@ -314,40 +310,36 @@
   }
 
   /**
-   * Consulta los modelos disponibles en el servidor según el tipo de interfaz configurado.
+   * Modos de razonamiento estándar organizados por proveedor.
+   */
+  const STANDARD_REASONING_MODES = registry ? registry.getReasoningModes() : {
+    openai: { type: 'openai', label: 'OpenAI / LM Studio', levels: ['none', 'low', 'medium', 'high', 'xhigh'], description: 'Estándar OpenAI / LM Studio' },
+    ollama: { type: 'ollama', label: 'Ollama', levels: ['none', 'low', 'medium', 'high', 'xhigh'], description: 'Estándar Ollama' },
+    openrouter: { type: 'openrouter', label: 'OpenRouter', levels: ['none', 'low', 'medium', 'high', 'xhigh'], description: 'Estándar OpenRouter' },
+    claude: { type: 'claude', label: 'Anthropic Claude', levels: ['none', 'low', 'medium', 'high', 'xhigh'], description: 'Estándar Claude' },
+    gemini: { type: 'gemini', label: 'Google Gemini', levels: ['none', 'low', 'medium', 'high', 'xhigh'], description: 'Estándar Gemini' },
+    custom: { type: 'custom', label: 'Personalizado', levels: ['none', 'low', 'medium', 'high', 'xhigh'], description: 'Personalizado' }
+  };
+
+  function getStandardReasoningOptions(explicitType, rawUrl) {
+    if (registry) {
+      const adapter = registry.resolve(rawUrl, explicitType);
+      return adapter.getReasoningConfig();
+    }
+    const type = detectApiType(rawUrl, explicitType);
+    return STANDARD_REASONING_MODES[type] || STANDARD_REASONING_MODES.openai;
+  }
+
+  /**
+   * Consulta los modelos disponibles en el servidor delegando en el adaptador.
    */
   async function fetchServerModels(rawUrl, apiKey, explicitType) {
     let cleanUrl = (rawUrl || 'http://localhost:1234/v1').trim();
-    if (cleanUrl.endsWith('/')) {
-      cleanUrl = cleanUrl.slice(0, -1);
-    }
-    if (cleanUrl.endsWith('/chat/completions')) {
-      cleanUrl = cleanUrl.replace(/\/chat\/completions$/, '');
-    }
+    if (cleanUrl.endsWith('/')) cleanUrl = cleanUrl.slice(0, -1);
+    if (cleanUrl.endsWith('/chat/completions')) cleanUrl = cleanUrl.replace(/\/chat\/completions$/, '');
 
-    const type = detectApiType(cleanUrl, explicitType);
-    const candidateEndpoints = [];
-
-    if (type === 'ollama') {
-      const baseWithoutV1 = cleanUrl.replace(/\/v1$/, '');
-      candidateEndpoints.push(`${baseWithoutV1}/api/tags`);
-      const v1Url = cleanUrl.endsWith('/v1') ? cleanUrl : `${cleanUrl}/v1`;
-      candidateEndpoints.push(`${v1Url}/models`);
-    } else if (type === 'openrouter') {
-      const v1Url = cleanUrl.endsWith('/v1') ? cleanUrl : `${cleanUrl}/v1`;
-      candidateEndpoints.push(`${v1Url}/models`);
-    } else if (type === 'claude') {
-      const v1Url = cleanUrl.endsWith('/v1') ? cleanUrl : `${cleanUrl}/v1`;
-      candidateEndpoints.push(`${v1Url}/models`);
-    } else {
-      // OpenAI / LM Studio / LocalAI / vLLM
-      // En LM Studio y OpenAI el endpoint estándar de modelos es /v1/models o /api/v0/models
-      const v1Url = cleanUrl.endsWith('/v1') ? cleanUrl : `${cleanUrl}/v1`;
-      const baseWithoutV1 = cleanUrl.replace(/\/v1$/, '');
-
-      candidateEndpoints.push(`${v1Url}/models`);
-      candidateEndpoints.push(`${baseWithoutV1}/api/v0/models`);
-    }
+    const adapter = registry ? registry.resolve(cleanUrl, explicitType) : null;
+    const candidateEndpoints = adapter ? adapter.getModelEndpoints(cleanUrl) : [`${cleanUrl}/v1/models`];
 
     const headers = { 'Accept': 'application/json' };
     if (apiKey && apiKey.trim() !== '') {
@@ -374,47 +366,10 @@
         }
 
         const data = await response.json();
-        let extractedModels = [];
+        const extractedModels = adapter ? adapter.parseModelsResponse(data) : (Array.isArray(data.data) ? data.data : []);
 
-        // 1. Formato estándar OpenAI / LM Studio / vLLM / OpenRouter: { object: 'list', data: [...] }
-        if (data && Array.isArray(data.data)) {
-          extractedModels = data.data.map(item => {
-            if (typeof item === 'string') return { id: item, name: item };
-            return {
-              id: item.id || item.name || '',
-              name: item.id || item.name || '',
-              owned_by: item.owned_by,
-              details: item
-            };
-          }).filter(m => !!m.id);
-        }
-        // 2. Formato Ollama (/api/tags): { models: [ { name: 'llama3:latest', ... } ] }
-        else if (data && Array.isArray(data.models)) {
-          extractedModels = data.models.map(item => {
-            if (typeof item === 'string') return { id: item, name: item };
-            return {
-              id: item.name || item.model || item.id || '',
-              name: item.name || item.model || item.id || '',
-              details: item
-            };
-          }).filter(m => !!m.id);
-        }
-        // 3. Array directo de modelos: [ { id: '...' } ] o [ 'model1', 'model2' ]
-        else if (Array.isArray(data)) {
-          extractedModels = data.map(item => {
-            if (typeof item === 'string') return { id: item, name: item };
-            return {
-              id: item.id || item.name || '',
-              name: item.id || item.name || '',
-              details: item
-            };
-          }).filter(m => !!m.id);
-        }
-
-        if (extractedModels.length > 0) {
-          // Ordenar alfabéticamente
+        if (extractedModels && extractedModels.length > 0) {
           extractedModels.sort((a, b) => a.id.localeCompare(b.id));
-
           return {
             success: true,
             endpoint: endpoint,
@@ -434,50 +389,9 @@
     };
   }
 
-  const STANDARD_REASONING_MODES = {
-    openai: {
-      type: 'openai',
-      label: 'OpenAI / LM Studio',
-      levels: ['none', 'low', 'medium', 'high', 'xhigh'],
-      description: 'Estándar OpenAI / LM Studio (reasoning_effort: none, low, medium, high, xhigh)'
-    },
-    ollama: {
-      type: 'ollama',
-      label: 'Ollama',
-      levels: ['none', 'low', 'medium', 'high', 'xhigh'],
-      description: 'Estándar Ollama (reasoning_effort: none, low, medium, high, xhigh)'
-    },
-    openrouter: {
-      type: 'openrouter',
-      label: 'OpenRouter',
-      levels: ['none', 'low', 'medium', 'high', 'xhigh'],
-      description: 'Estándar OpenRouter (reasoning.effort: none, low, medium, high, xhigh)'
-    },
-    claude: {
-      type: 'claude',
-      label: 'Anthropic Claude',
-      levels: ['none', 'low', 'medium', 'high', 'xhigh'],
-      description: 'Estándar Claude (thinking budget: disabled, 1k, 2k, 4k, 8k tokens)'
-    },
-    gemini: {
-      type: 'gemini',
-      label: 'Google Gemini',
-      levels: ['none', 'low', 'medium', 'high', 'xhigh'],
-      description: 'Estándar Gemini (thinking: none, low, medium, high, xhigh)'
-    },
-    custom: {
-      type: 'custom',
-      label: 'Personalizado',
-      levels: ['none', 'low', 'medium', 'high', 'xhigh'],
-      description: 'Modos de razonamiento: none, low, medium, high, xhigh'
-    }
-  };
-
-  function getStandardReasoningOptions(explicitType, rawUrl) {
-    const type = detectApiType(rawUrl, explicitType);
-    return STANDARD_REASONING_MODES[type] || STANDARD_REASONING_MODES.openai;
-  }
-
+  /**
+   * Orquestador común de streaming HTTP/SSE.
+   */
   async function streamChatCompletion(params) {
     const {
       apiUrl,
@@ -504,89 +418,12 @@
       onError
     } = params;
 
-    const endpoint = normalizeApiUrl(apiUrl, apiType);
-    const detectedType = detectApiType(apiUrl, apiType);
+    const adapter = registry ? registry.resolve(apiUrl, apiType) : null;
+    const endpoint = adapter ? adapter.normalizeEndpoint(apiUrl) : normalizeApiUrl(apiUrl, apiType);
+    const detectedType = adapter ? adapter.id : detectApiType(apiUrl, apiType);
+    const headers = adapter ? adapter.buildHeaders(apiKey) : { 'Content-Type': 'application/json' };
 
-    const headers = {
-      'Content-Type': 'application/json'
-    };
-
-    if (apiKey && apiKey.trim() !== '') {
-      headers['Authorization'] = `Bearer ${apiKey.trim()}`;
-    }
-
-    // Formateo de mensajes multimodales (OpenAI image_url vs Claude image source)
-    let formattedMessages = messages;
-    if (detectedType === 'claude') {
-      formattedMessages = messages.map(m => {
-        if (Array.isArray(m.content)) {
-          const claudeParts = m.content.map(part => {
-            if (part.type === 'image_url' && part.image_url && part.image_url.url) {
-              const match = part.image_url.url.match(/^data:([^;]+);base64,(.+)$/);
-              if (match) {
-                return {
-                  type: 'image',
-                  source: {
-                    type: 'base64',
-                    media_type: match[1],
-                    data: match[2]
-                  }
-                };
-              }
-            }
-            return part;
-          });
-          return { ...m, content: claudeParts };
-        }
-        return m;
-      });
-    }
-
-    const payload = {
-      model: (model || '').trim(),
-      messages: formattedMessages,
-      stream: true,
-      temperature: parseFloat(temperature) || 0.7
-    };
-
-    // Configuración del JSON y razonamiento según el tipo de endpoint (usa 'none' para desactivado)
-    let effortLower = String(reasoningEffort || 'none').toLowerCase().trim();
-    if (effortLower === 'off') effortLower = 'none';
-
-    if (detectedType === 'claude') {
-      if (effortLower !== 'none') {
-        // Anthropic Claude Thinking Budget (tokens)
-        let budget = 2048;
-        if (effortLower === 'low' || effortLower === 'minimal') budget = 1024;
-        else if (effortLower === 'medium') budget = 2048;
-        else if (effortLower === 'high') budget = 4096;
-        else if (effortLower === 'xhigh') budget = 8192;
-
-        payload.thinking = {
-          type: 'enabled',
-          budget_tokens: budget
-        };
-        // En Claude con thinking habilitado la temperatura debe ser 1.0
-        payload.temperature = 1.0;
-        payload.max_tokens = Math.max(4096, budget + 1024);
-      } else {
-        // En Claude cuando está desactivado se envía thinking: { type: 'disabled' }
-        payload.thinking = {
-          type: 'disabled'
-        };
-      }
-    } else if (detectedType === 'openrouter') {
-      // OpenRouter admite reasoning.effort y reasoning_effort ('none', 'low', 'medium', 'high')
-      payload.reasoning = {
-        effort: effortLower
-      };
-      payload.reasoning_effort = effortLower;
-    } else {
-      // OpenAI / LM Studio / Ollama / Gemini / Custom (estándar reasoning_effort: 'none', 'low', 'medium', 'high')
-      payload.reasoning_effort = effortLower;
-    }
-
-    // Inyectar herramientas agénticas activadas (JS / Web / PDF / Search / Charts) si están disponibles
+    // Inyectar herramientas agénticas activadas si están disponibles
     const toolsList = [];
     const jsTool = Sandbox.JAVASCRIPT_TOOL_DEFINITION || (typeof window !== 'undefined' && window.ChatSandbox && window.ChatSandbox.JAVASCRIPT_TOOL_DEFINITION);
     const webTool = WebBrowser.WEB_TOOL_DEFINITION || (typeof window !== 'undefined' && window.ChatWebBrowser && window.ChatWebBrowser.WEB_TOOL_DEFINITION);
@@ -600,72 +437,26 @@
     if (enableTools && enableAgentSearch && searchTool) toolsList.push(searchTool);
     if (enableTools && enableAgentChart && chartTool) toolsList.push(chartTool);
 
-    if (toolsList.length > 0) {
-      payload.tools = toolsList;
-      payload.tool_choice = 'auto';
-    }
+    // Construcción del payload mediante el adaptador
+    const payload = adapter ? adapter.buildPayload({
+      model,
+      messages,
+      temperature,
+      reasoningEffort,
+      toolsList,
+      enableContextCache: enableContextCache && !cacheInvalidated
+    }) : {
+      model: (model || '').trim(),
+      messages,
+      stream: true,
+      temperature: parseFloat(temperature) || 0.7
+    };
 
-    // Configuración y gestión de Context Caching / Prompt Caching
-    if (enableContextCache) {
-      if (cacheInvalidated) {
-        if (onLog) {
-          onLog({
-            type: 'info',
-            text: '🔄 Caché de contexto invalidada tras el borrado de mensajes. Se reconstruye un contexto limpio en el servidor.'
-          });
-        }
-      } else {
-        // Habilitar stream_options.include_usage para capturar prompt_tokens_details.cached_tokens (OpenAI / LM Studio / OpenRouter / DeepSeek)
-        payload.stream_options = { include_usage: true };
-
-        // Para Anthropic Claude y OpenRouter con Claude: inyectar cache_control en el mensaje de sistema y el último turno de usuario
-        if (detectedType === 'claude' || detectedType === 'openrouter') {
-          // A) Cache control en el último tool
-          if (toolsList.length > 0) {
-            toolsList[toolsList.length - 1].cache_control = { type: 'ephemeral' };
-          }
-
-          // B) Cache control en mensajes (system y último user)
-          formattedMessages = formattedMessages.map((m, idx, arr) => {
-            if (m.role === 'system') {
-              if (typeof m.content === 'string') {
-                return {
-                  ...m,
-                  content: [{ type: 'text', text: m.content, cache_control: { type: 'ephemeral' } }]
-                };
-              } else if (Array.isArray(m.content) && m.content.length > 0) {
-                const updatedContent = [...m.content];
-                updatedContent[updatedContent.length - 1] = {
-                  ...updatedContent[updatedContent.length - 1],
-                  cache_control: { type: 'ephemeral' }
-                };
-                return { ...m, content: updatedContent };
-              }
-            }
-
-            const isLastUser = m.role === 'user' && !arr.slice(idx + 1).some(nextM => nextM.role === 'user');
-            if (isLastUser) {
-              if (typeof m.content === 'string') {
-                return {
-                  ...m,
-                  content: [{ type: 'text', text: m.content, cache_control: { type: 'ephemeral' } }]
-                };
-              } else if (Array.isArray(m.content) && m.content.length > 0) {
-                const updatedContent = [...m.content];
-                updatedContent[updatedContent.length - 1] = {
-                  ...updatedContent[updatedContent.length - 1],
-                  cache_control: { type: 'ephemeral' }
-                };
-                return { ...m, content: updatedContent };
-              }
-            }
-
-            return m;
-          });
-
-          payload.messages = formattedMessages;
-        }
-      }
+    if (enableContextCache && cacheInvalidated && onLog) {
+      onLog({
+        type: 'info',
+        text: '🔄 Caché de contexto invalidada tras el borrado de mensajes. Se reconstruye un contexto limpio en el servidor.'
+      });
     }
 
     if (onLog) {
@@ -751,7 +542,6 @@
         signal: signal
       });
 
-      // Si la respuesta no es OK (ej. 400 Bad Request por parámetro no soportado por un modelo específico)
       if (!response.ok) {
         let serverErrorMsg = '';
         try {
@@ -766,16 +556,16 @@
           serverErrorMsg = response.statusText;
         }
 
-        const errLower = serverErrorMsg.toLowerCase();
-
-        // 1. Auto-recuperación si el servidor rechaza específicamente el parámetro de razonamiento
-        if (response.status === 400 && (payload.reasoning_effort || payload.thinking || payload.reasoning)) {
-          if (errLower.includes('reasoning') || errLower.includes('thinking') || errLower.includes('unexpected') || errLower.includes('unrecognized') || errLower.includes('extra') || errLower.includes('unknown')) {
-            if (onLog) onLog({ type: 'error', text: `HTTP 400: Servidor rechazó parámetro de razonamiento (${serverErrorMsg}). Reintentando sin él...` });
-            delete payload.reasoning_effort;
-            delete payload.thinking;
-            delete payload.reasoning;
-
+        // Auto-recuperación delegando en el adaptador
+        if (adapter) {
+          const recovery = adapter.handleHttpError(response.status, serverErrorMsg, payload);
+          if (recovery && recovery.retry) {
+            if (onLog) {
+              onLog({
+                type: 'error',
+                text: `HTTP 400: Servidor rechazó parámetro (${recovery.reason || 'parámetro incompatible'}). Reintentando sin él...`
+              });
+            }
             response = await fetch(endpoint, {
               method: 'POST',
               headers: headers,
@@ -785,22 +575,6 @@
           }
         }
 
-        // 2. Auto-recuperación de tools si no son soportadas
-        if (!response.ok && response.status === 400 && payload.tools) {
-          if (errLower.includes('tool') || errLower.includes('function') || errLower.includes('unexpected') || errLower.includes('unrecognized')) {
-            if (onLog) onLog({ type: 'error', text: `HTTP 400: Servidor no admite herramientas agénticas. Reintentando sin tools...` });
-            delete payload.tools;
-            delete payload.tool_choice;
-            response = await fetch(endpoint, {
-              method: 'POST',
-              headers: headers,
-              body: JSON.stringify(payload),
-              signal: signal
-            });
-          }
-        }
-
-        // Si después de reintentos aún no es OK, lanzar el error formateado
         if (!response.ok) {
           let errorMessage = serverErrorMsg || `Error HTTP ${response.status}: ${response.statusText}`;
           if (response.status === 401) {
@@ -866,139 +640,99 @@
 
             try {
               const parsed = JSON.parse(dataStr);
+              const chunkData = adapter ? adapter.parseStreamChunk(parsed, { firstTokenTime, accumulatedReasoning, accumulatedText }) : { textChunk: parsed.choices?.[0]?.delta?.content || '' };
 
-              // 1. Formato Claude Anthropic
-              if (parsed.type === 'message_start' && parsed.message?.usage) {
-                if (parsed.message.usage.cache_read_input_tokens) {
-                  serverCachedTokens = parsed.message.usage.cache_read_input_tokens;
-                }
-                if (parsed.message.usage.cache_creation_input_tokens) {
-                  serverCacheCreationTokens = parsed.message.usage.cache_creation_input_tokens;
-                }
-              }
+              if (chunkData.cachedTokens > 0) serverCachedTokens = chunkData.cachedTokens;
+              if (chunkData.cacheCreationTokens > 0) serverCacheCreationTokens = chunkData.cacheCreationTokens;
 
-              if (parsed.type === 'content_block_delta') {
+              // Tokens de razonamiento específicos
+              if (chunkData.reasoningChunk) {
                 if (!firstTokenTime) firstTokenTime = performance.now();
-                if (parsed.delta?.type === 'thinking_delta' && parsed.delta?.thinking) {
-                  const rChunk = parsed.delta.thinking;
-                  accumulatedReasoning += rChunk;
-                  if (onReasoningChunk) onReasoningChunk(rChunk, accumulatedReasoning);
-                  if (onLog) onLog({ type: 'thinking', text: rChunk });
-                } else if (parsed.delta?.type === 'text_delta' && parsed.delta?.text) {
-                  const tChunk = parsed.delta.text;
-                  accumulatedText += tChunk;
-                  chunkCount++;
-                  const stats = getStats();
-                  if (onChunk) onChunk(accumulatedText, tChunk, stats);
-                }
+                accumulatedReasoning += chunkData.reasoningChunk;
+                if (onReasoningChunk) onReasoningChunk(chunkData.reasoningChunk, accumulatedReasoning);
+                if (onLog) onLog({ type: 'thinking', text: chunkData.reasoningChunk });
               }
 
-              // 2. Formato OpenAI / LM Studio / Ollama / OpenRouter
-              const choice = parsed.choices?.[0];
-              const delta = choice?.delta;
+              // Contenido textual con soporte de etiquetas <think>, <thought>, <reasoning>
+              const textChunk = chunkData.textChunk;
+              if (textChunk) {
+                if (!firstTokenTime) firstTokenTime = performance.now();
 
-              if (delta) {
-                // A) Tokens de razonamiento específicos
-                const rChunk = delta.reasoning_content || delta.reasoning || delta.thinking || delta.thought || '';
-                if (rChunk) {
-                  if (!firstTokenTime) firstTokenTime = performance.now();
-                  accumulatedReasoning += rChunk;
-                  if (onReasoningChunk) onReasoningChunk(rChunk, accumulatedReasoning);
-                  if (onLog) onLog({ type: 'thinking', text: rChunk });
-                }
-
-                // B) Contenido textual normal (con soporte de etiquetas de pensamiento: <think>, <thought>, <reasoning>)
-                const textChunk = delta.content || delta.text || '';
-                if (textChunk) {
-                  if (!firstTokenTime) firstTokenTime = performance.now();
-
-                  let remaining = textChunk;
-                  while (remaining.length > 0) {
-                    if (!activeReasoningTag) {
-                      const openMatch = remaining.match(/<(think|thought|reasoning)>/i);
-                      if (openMatch) {
-                        const preText = remaining.slice(0, openMatch.index);
-                        if (preText) {
-                          accumulatedText += preText;
-                          chunkCount++;
-                          if (onChunk) onChunk(accumulatedText, preText, getStats());
-                        }
-                        activeReasoningTag = openMatch[1].toLowerCase();
-                        remaining = remaining.slice(openMatch.index + openMatch[0].length);
-                      } else {
-                        accumulatedText += remaining;
+                let remaining = textChunk;
+                while (remaining.length > 0) {
+                  if (!activeReasoningTag) {
+                    const openMatch = remaining.match(/<(think|thought|reasoning)>/i);
+                    if (openMatch) {
+                      const preText = remaining.slice(0, openMatch.index);
+                      if (preText) {
+                        accumulatedText += preText;
                         chunkCount++;
-                        if (onChunk) onChunk(accumulatedText, remaining, getStats());
-                        remaining = '';
+                        if (onChunk) onChunk(accumulatedText, preText, getStats());
                       }
+                      activeReasoningTag = openMatch[1].toLowerCase();
+                      remaining = remaining.slice(openMatch.index + openMatch[0].length);
                     } else {
-                      const closeRegex = new RegExp(`<\/${activeReasoningTag}>`, 'i');
-                      const closeMatch = remaining.match(closeRegex);
-                      if (closeMatch) {
-                        const rText = remaining.slice(0, closeMatch.index);
-                        if (rText) {
-                          accumulatedReasoning += rText;
-                          if (onReasoningChunk) onReasoningChunk(rText, accumulatedReasoning);
-                          if (onLog) onLog({ type: 'thinking', text: rText });
-                        }
-                        activeReasoningTag = null;
-                        remaining = remaining.slice(closeMatch.index + closeMatch[0].length);
-                      } else {
-                        accumulatedReasoning += remaining;
-                        if (onReasoningChunk) onReasoningChunk(remaining, accumulatedReasoning);
-                        if (onLog) onLog({ type: 'thinking', text: remaining });
-                        remaining = '';
+                      accumulatedText += remaining;
+                      chunkCount++;
+                      if (onChunk) onChunk(accumulatedText, remaining, getStats());
+                      remaining = '';
+                    }
+                  } else {
+                    const closeRegex = new RegExp(`<\/${activeReasoningTag}>`, 'i');
+                    const closeMatch = remaining.match(closeRegex);
+                    if (closeMatch) {
+                      const rText = remaining.slice(0, closeMatch.index);
+                      if (rText) {
+                        accumulatedReasoning += rText;
+                        if (onReasoningChunk) onReasoningChunk(rText, accumulatedReasoning);
+                        if (onLog) onLog({ type: 'thinking', text: rText });
                       }
+                      activeReasoningTag = null;
+                      remaining = remaining.slice(closeMatch.index + closeMatch[0].length);
+                    } else {
+                      accumulatedReasoning += remaining;
+                      if (onReasoningChunk) onReasoningChunk(remaining, accumulatedReasoning);
+                      if (onLog) onLog({ type: 'thinking', text: remaining });
+                      remaining = '';
                     }
                   }
                 }
-
-                // C) Tool calls
-                if (delta.tool_calls && Array.isArray(delta.tool_calls)) {
-                  if (!firstTokenTime) firstTokenTime = performance.now();
-                  delta.tool_calls.forEach(tc => {
-                    const idx = tc.index ?? 0;
-                    if (!accumulatedToolCalls[idx]) {
-                      accumulatedToolCalls[idx] = {
-                        id: tc.id || `call_${Date.now()}_${idx}`,
-                        type: 'function',
-                        function: {
-                          name: tc.function?.name || '',
-                          arguments: ''
-                        }
-                      };
-                    }
-                    if (tc.id) accumulatedToolCalls[idx].id = tc.id;
-                    if (tc.function?.name) accumulatedToolCalls[idx].function.name = tc.function.name;
-                    if (tc.function?.arguments) accumulatedToolCalls[idx].function.arguments += tc.function.arguments;
-
-                    if (onToolCallDelta) onToolCallDelta(accumulatedToolCalls[idx]);
-                  });
-                }
               }
 
-              // D) Token usage y Context Caching si viene en el stream
-              const streamUsage = parsed.usage || parsed.message?.usage;
-              if (streamUsage) {
-                if (streamUsage.prompt_tokens_details?.cached_tokens) {
-                  serverCachedTokens = streamUsage.prompt_tokens_details.cached_tokens;
-                }
-                if (streamUsage.cache_read_input_tokens) {
-                  serverCachedTokens = streamUsage.cache_read_input_tokens;
-                }
-                if (streamUsage.cache_creation_input_tokens) {
-                  serverCacheCreationTokens = streamUsage.cache_creation_input_tokens;
-                }
+              // Tool Call Deltas
+              if (chunkData.toolCallDeltas && chunkData.toolCallDeltas.length > 0) {
+                if (!firstTokenTime) firstTokenTime = performance.now();
+                chunkData.toolCallDeltas.forEach(tc => {
+                  const idx = tc.index ?? 0;
+                  if (!accumulatedToolCalls[idx]) {
+                    accumulatedToolCalls[idx] = {
+                      id: tc.id || `call_${Date.now()}_${idx}`,
+                      type: 'function',
+                      function: {
+                        name: tc.function?.name || '',
+                        arguments: ''
+                      }
+                    };
+                  }
+                  if (tc.id) accumulatedToolCalls[idx].id = tc.id;
+                  if (tc.function?.name) accumulatedToolCalls[idx].function.name = tc.function.name;
+                  if (tc.function?.arguments) accumulatedToolCalls[idx].function.arguments += tc.function.arguments;
 
-                if (onLog) {
-                  const rTokens = streamUsage.completion_tokens_details?.reasoning_tokens;
-                  const cTokens = serverCachedTokens > 0 ? ` (⚡ Cache: ${serverCachedTokens} tok)` : '';
-                  onLog({
-                    type: 'stats',
-                    text: `Uso de tokens: Prompt=${streamUsage.prompt_tokens || 0}, Respuesta=${streamUsage.completion_tokens || 0}, Total=${streamUsage.total_tokens || 0}${rTokens ? ` (Razonamiento: ${rTokens})` : ''}${cTokens}`
-                  });
-                }
+                  if (onToolCallDelta) onToolCallDelta(accumulatedToolCalls[idx]);
+                });
               }
+
+              // Usage logging si viene en el chunk
+              if (chunkData.usage && onLog) {
+                const streamUsage = chunkData.usage;
+                const rTokens = streamUsage.completion_tokens_details?.reasoning_tokens;
+                const cTokens = serverCachedTokens > 0 ? ` (⚡ Cache: ${serverCachedTokens} tok)` : '';
+                onLog({
+                  type: 'stats',
+                  text: `Uso de tokens: Prompt=${streamUsage.prompt_tokens || 0}, Respuesta=${streamUsage.completion_tokens || 0}, Total=${streamUsage.total_tokens || 0}${rTokens ? ` (Razonamiento: ${rTokens})` : ''}${cTokens}`
+                });
+              }
+
             } catch (jsonErr) {}
           }
         }
@@ -1032,6 +766,7 @@
     streamChatCompletion,
     estimateTokens,
     normalizeToolName,
-    extractToolCallsFromText
+    extractToolCallsFromText,
+    registry
   };
 });

@@ -100,6 +100,7 @@ def build_standalone_html() -> bool:
         "web-browser.js",
         "web-search.js",
         "markdown.js",
+        "providers.js",
         "api.js",
         "file-parser.js",
         "app.js"
