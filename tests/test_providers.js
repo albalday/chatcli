@@ -300,6 +300,20 @@ test('GeminiAdapter - Normalización de endpoints, stripping de prefijo models/ 
   assert.equal(payload.messages[1].role, 'assistant');
   assert.ok(payload.messages[1].tool_calls);
   assert.equal(payload.messages[2].role, 'tool');
+
+  // Si el historial comienza con un mensaje assistant tras system, debe insertar user antes
+  const leadingAssistantPayload = adapter.buildPayload({
+    model: 'gemini-2.0-flash',
+    messages: [
+      { role: 'system', content: 'system prompt' },
+      { role: 'assistant', content: null, tool_calls: [{ id: 'call_1', function: { name: 'search_web', arguments: '{}' } }] },
+      { role: 'tool', tool_call_id: 'call_1', name: 'search_web', content: 'results' }
+    ]
+  });
+  assert.equal(leadingAssistantPayload.messages[0].role, 'system');
+  assert.equal(leadingAssistantPayload.messages[1].role, 'user', 'Debe insertar un turno user antes del assistant con tools');
+  assert.equal(leadingAssistantPayload.messages[2].role, 'assistant');
+  assert.equal(leadingAssistantPayload.messages[3].role, 'tool');
 });
 
 test('ChatAPI.getProviderCapabilities - Consulta a través de ChatAPI', () => {

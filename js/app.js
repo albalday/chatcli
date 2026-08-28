@@ -335,6 +335,15 @@
       });
     }
 
+    // Asegurar que la conversación comience con un turno de usuario válido tras el mensaje del sistema
+    const firstNonSysIdx = messages.findIndex(m => m.role !== 'system');
+    if (firstNonSysIdx !== -1 && messages[firstNonSysIdx].role === 'assistant') {
+      messages.splice(firstNonSysIdx, 0, {
+        role: 'user',
+        content: 'Continuar'
+      });
+    }
+
     return messages;
   }
 

@@ -902,6 +902,13 @@
             if (tc.provider_specific_fields) out.provider_specific_fields = tc.provider_specific_fields;
             return out;
           });
+
+          // Regla Gemini: Un turno assistant con tool_calls NUNCA puede ir inmediatamente después de system
+          const prevMsg = formatted.length > 0 ? formatted[formatted.length - 1] : null;
+          if (!prevMsg || prevMsg.role === 'system') {
+            formatted.push({ role: 'user', content: 'Continuar' });
+          }
+
           formatted.push({
             role: 'assistant',
             content: m.content || null,
@@ -913,11 +920,15 @@
           const toolContent = typeof m.content === 'object' ? JSON.stringify(m.content) : String(m.content !== undefined ? m.content : '');
 
           // Validar que el mensaje previo sea un assistant con la llamada correspondiente
-          const prevMsg = formatted.length > 0 ? formatted[formatted.length - 1] : null;
+          let prevMsg = formatted.length > 0 ? formatted[formatted.length - 1] : null;
           const hasMatchingToolCall = prevMsg && prevMsg.role === 'assistant' && Array.isArray(prevMsg.tool_calls) &&
             prevMsg.tool_calls.some(tc => tc.id === toolCallId || (tc.function && tc.function.name === toolName));
 
           if (!hasMatchingToolCall) {
+            // Si el mensaje anterior a este asistente autogenerado es system, insertar user primero
+            if (!prevMsg || prevMsg.role === 'system') {
+              formatted.push({ role: 'user', content: 'Continuar' });
+            }
             formatted.push({
               role: 'assistant',
               content: null,
@@ -938,6 +949,13 @@
             name: toolName,
             content: toolContent
           });
+        } else if (m.role === 'assistant') {
+          // Si el mensaje es assistant (texto) y va inmediatamente después de system, insertar user antes
+          const prevMsg = formatted.length > 0 ? formatted[formatted.length - 1] : null;
+          if (!prevMsg || prevMsg.role === 'system') {
+            formatted.push({ role: 'user', content: 'Continuar' });
+          }
+          formatted.push(m);
         } else {
           formatted.push(m);
         }
