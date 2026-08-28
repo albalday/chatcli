@@ -165,10 +165,10 @@
 
       // Modal de Configuración
       modal_title: 'Configuración del Chat',
-      tab_general: '🌐 General y Servidor',
-      tab_agent: '🤖 Agente y Fecha',
-      tab_model: '⚙️ Modelo y Prompt',
-      tab_inspector: '🔍 Inspector de Proveedor',
+      tab_general: '🌐 General',
+      tab_agent: '🤖 Agente',
+      tab_model: '⚙️ Modelo',
+      tab_inspector: '🔍 Inspector',
       inspector_desc: 'Analiza el endpoint configurado para determinar con precisión qué capacidades soporta, distinguiendo entre capacidades declaradas, inferidas y comprobadas mediante pruebas activas seguras.',
       btn_run_inspector: 'Ejecutar Diagnóstico de Capacidades',
       btn_running_inspector: 'Diagnosticando endpoint...',
@@ -440,10 +440,10 @@
 
       // Modal de Configuración
       modal_title: 'Chat Settings',
-      tab_general: '🌐 General & Server',
-      tab_agent: '🤖 Agent & Date',
-      tab_model: '⚙️ Model & Prompt',
-      tab_inspector: '🔍 Provider Inspector',
+      tab_general: '🌐 General',
+      tab_agent: '🤖 Agent',
+      tab_model: '⚙️ Model',
+      tab_inspector: '🔍 Inspector',
       inspector_desc: 'Analyzes the configured endpoint to determine which capabilities are supported, distinguishing between declared, inferred, and confirmed capabilities via safe active probes.',
       btn_run_inspector: 'Run Capability Diagnostics',
       btn_running_inspector: 'Diagnosing endpoint...',
