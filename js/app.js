@@ -2112,6 +2112,7 @@
 
         turnIndex++;
         continue;
+      }
     }
 
     // Si se agotaron los turnos máximos y el último mensaje fue de una herramienta (role: 'tool'),
