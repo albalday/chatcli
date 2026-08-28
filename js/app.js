@@ -617,6 +617,38 @@
     });
   }
 
+  function positionReasoningMenu() {
+    if (!elements.reasoningMenu || !elements.btnReasoning) return;
+    if (elements.reasoningMenu.style.display === 'none') return;
+
+    const btnRect = elements.btnReasoning.getBoundingClientRect();
+    const viewportHeight = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+    const viewportWidth = window.innerWidth;
+
+    const spaceAbove = btnRect.top;
+    const menuWidth = Math.min(290, viewportWidth - 16);
+
+    let leftPos = btnRect.left;
+    if (leftPos + menuWidth > viewportWidth - 8) {
+      leftPos = viewportWidth - menuWidth - 8;
+    }
+    if (leftPos < 8) {
+      leftPos = 8;
+    }
+
+    elements.reasoningMenu.style.position = 'fixed';
+    elements.reasoningMenu.style.left = `${Math.round(leftPos)}px`;
+    elements.reasoningMenu.style.width = `${Math.round(menuWidth)}px`;
+
+    // Posicionamiento estricto por encima del botón
+    const bottomPos = Math.max(8, viewportHeight - btnRect.top + 8);
+    const maxHeight = Math.max(140, Math.min(380, spaceAbove - 16));
+
+    elements.reasoningMenu.style.bottom = `${Math.round(bottomPos)}px`;
+    elements.reasoningMenu.style.top = 'auto';
+    elements.reasoningMenu.style.maxHeight = `${Math.round(maxHeight)}px`;
+  }
+
   function toggleReasoningMenu() {
     if (!elements.reasoningMenu) return;
     const isVisible = elements.reasoningMenu.style.display === 'flex' || elements.reasoningMenu.style.display === 'block';
@@ -642,19 +674,7 @@
     }
 
     renderReasoningMenuOptions(reasoningConfig, appConfig.reasoningEffort || 'off');
-
-    // Comprobación de límites en pantalla para evitar desbordamientos laterales
-    requestAnimationFrame(() => {
-      if (!elements.reasoningMenu) return;
-      const rect = elements.reasoningMenu.getBoundingClientRect();
-      if (rect.left < 8) {
-        elements.reasoningMenu.style.left = '0px';
-        elements.reasoningMenu.style.right = 'auto';
-      } else if (rect.right > window.innerWidth - 8) {
-        elements.reasoningMenu.style.left = 'auto';
-        elements.reasoningMenu.style.right = '0px';
-      }
-    });
+    positionReasoningMenu();
   }
 
   function selectReasoningLevel(level) {
@@ -2458,19 +2478,29 @@
   function setupViewportListeners() {
     updateViewportHeight();
     if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', updateViewportHeight);
-      window.visualViewport.addEventListener('scroll', updateViewportHeight);
+      window.visualViewport.addEventListener('resize', () => {
+        updateViewportHeight();
+        positionReasoningMenu();
+      });
+      window.visualViewport.addEventListener('scroll', () => {
+        updateViewportHeight();
+        positionReasoningMenu();
+      });
     }
-    window.addEventListener('resize', updateViewportHeight);
+    window.addEventListener('resize', () => {
+      updateViewportHeight();
+      positionReasoningMenu();
+    });
     window.addEventListener('orientationchange', () => {
-      setTimeout(updateViewportHeight, 100);
-      setTimeout(updateViewportHeight, 300);
+      setTimeout(() => { updateViewportHeight(); positionReasoningMenu(); }, 100);
+      setTimeout(() => { updateViewportHeight(); positionReasoningMenu(); }, 300);
     });
 
     if (elements.userInput) {
       elements.userInput.addEventListener('focus', () => {
         setTimeout(() => {
           updateViewportHeight();
+          positionReasoningMenu();
           if (elements.userInput) {
             elements.userInput.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
           }
@@ -2584,8 +2614,12 @@
     }
 
     document.addEventListener('click', (e) => {
-      if (elements.reasoningMenu && !elements.reasoningMenu.contains(e.target) && e.target !== elements.btnReasoning) {
-        closeReasoningMenu();
+      if (elements.reasoningMenu && elements.reasoningMenu.style.display !== 'none') {
+        const isClickInsideMenu = elements.reasoningMenu.contains(e.target);
+        const isClickInsideButton = elements.btnReasoning && elements.btnReasoning.contains(e.target);
+        if (!isClickInsideMenu && !isClickInsideButton) {
+          closeReasoningMenu();
+        }
       }
     });
 
