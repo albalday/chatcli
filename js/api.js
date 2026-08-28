@@ -339,6 +339,15 @@
     if (cleanUrl.endsWith('/chat/completions')) cleanUrl = cleanUrl.replace(/\/chat\/completions$/, '');
 
     const adapter = registry ? registry.resolve(cleanUrl, explicitType) : null;
+    if (adapter) {
+      const caps = adapter.getCapabilities();
+      if (caps && caps.modelListing === false) {
+        return {
+          success: false,
+          error: 'El proveedor configurado no admite descubrimiento automático de modelos.'
+        };
+      }
+    }
     const candidateEndpoints = adapter ? adapter.getModelEndpoints(cleanUrl) : [`${cleanUrl}/v1/models`];
 
     const headers = { 'Accept': 'application/json' };
@@ -757,6 +766,25 @@
     }
   }
 
+  /**
+   * Obtiene las capacidades del proveedor resuelto para una URL o tipo de API.
+   */
+  function getProviderCapabilities(rawUrl, explicitType, model) {
+    if (registry) {
+      return registry.getCapabilities(rawUrl, model, explicitType);
+    }
+    return {
+      streaming: true,
+      vision: true,
+      tools: true,
+      reasoning: true,
+      jsonMode: true,
+      promptCaching: true,
+      embeddings: true,
+      modelListing: true
+    };
+  }
+
   return {
     detectApiType,
     normalizeApiUrl,
@@ -767,6 +795,7 @@
     estimateTokens,
     normalizeToolName,
     extractToolCallsFromText,
+    getProviderCapabilities,
     registry
   };
 });

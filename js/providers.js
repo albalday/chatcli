@@ -1,7 +1,7 @@
 /**
- * Módulo de Adaptadores de Proveedores LLM (ChatProviders).
+ * Módulo de Adaptadores y Capacidades de Proveedores LLM (ChatProviders).
  * Separa la lógica específica de cada proveedor (OpenAI, Claude, Gemini, Ollama, OpenRouter, Custom)
- * de la capa común de transporte HTTP/SSE.
+ * de la capa común de transporte HTTP/SSE mediante un sistema declarativo de capacidades (Capabilities).
  * Compatible con file://, http:// y Node.js.
  */
 
@@ -15,6 +15,20 @@
   'use strict';
 
   /**
+   * Esquema estándar de capacidades soportadas por adaptadores de modelos LLM.
+   */
+  const DEFAULT_CAPABILITIES = {
+    streaming: true,      // Soporte para streaming de respuestas vía SSE
+    vision: true,         // Soporte para procesamiento de imágenes multimodales
+    tools: true,          // Soporte para Function / Tool Calling
+    reasoning: true,      // Soporte para control de razonamiento (thinking / reasoning_effort)
+    jsonMode: true,       // Soporte para structured outputs / response_format: { type: "json_object" }
+    promptCaching: true,  // Soporte para Context / Prompt Caching efímero o persistente
+    embeddings: true,     // Soporte para endpoints de generación de embeddings
+    modelListing: true    // Soporte para descubrimiento automático de modelos (/models, /api/tags)
+  };
+
+  /**
    * Adaptador Base genérico (compatible con OpenAI, LM Studio, vLLM, LocalAI, DeepSeek).
    */
   class BaseProviderAdapter {
@@ -23,6 +37,17 @@
       this.label = options.label || 'OpenAI / LM Studio';
       this.description = options.description || 'Estándar OpenAI / LM Studio (reasoning_effort: none, low, medium, high, xhigh)';
       this.reasoningLevels = options.reasoningLevels || ['none', 'low', 'medium', 'high', 'xhigh'];
+      this.capabilities = {
+        ...DEFAULT_CAPABILITIES,
+        ...(options.capabilities || {})
+      };
+    }
+
+    /**
+     * Obtiene el conjunto de capacidades del adaptador, permitiendo ajustes según el modelo.
+     */
+    getCapabilities(model) {
+      return { ...this.capabilities };
     }
 
     /**
@@ -48,10 +73,24 @@
     }
 
     /**
-     * Adapta y formatea la lista de mensajes (ej: multimodal / imágenes).
+     * Adapta y formatea la lista de mensajes (filtrando imágenes si vision está deshabilitado).
      */
-    formatMessages(messages) {
-      return messages;
+    formatMessages(messages, capabilities) {
+      const caps = capabilities || this.getCapabilities();
+      if (caps.vision) {
+        return messages;
+      }
+      // Si el proveedor no soporta visión, degradar imágenes a texto plano
+      return messages.map(m => {
+        if (Array.isArray(m.content)) {
+          const textOnly = m.content
+            .filter(part => part.type === 'text')
+            .map(part => part.text)
+            .join('\n');
+          return { ...m, content: textOnly };
+        }
+        return m;
+      });
     }
 
     /**
@@ -71,6 +110,13 @@
     }
 
     /**
+     * Aplica el modo de respuesta estructurada en formato JSON.
+     */
+    applyJsonMode(payload) {
+      payload.response_format = { type: 'json_object' };
+    }
+
+    /**
      * Inyecta las definiciones de herramientas agénticas.
      */
     applyTools(payload, toolsList) {
@@ -81,7 +127,7 @@
     }
 
     /**
-     * Construye el payload completo para la petición POST.
+     * Construye el payload completo para la petición POST respetando las capacidades declaradas.
      */
     buildPayload(params) {
       const {
@@ -90,25 +136,38 @@
         temperature = 0.7,
         reasoningEffort = 'none',
         toolsList = [],
-        enableContextCache = true
+        enableContextCache = true,
+        jsonMode = false,
+        stream = true
       } = params;
 
-      const formattedMessages = this.formatMessages(messages);
+      const capabilities = this.getCapabilities(model);
+      const formattedMessages = this.formatMessages(messages, capabilities);
+
       const payload = {
         model: (model || '').trim(),
         messages: formattedMessages,
-        stream: true,
         temperature: parseFloat(temperature) || 0.7
       };
 
-      this.applyReasoning(payload, reasoningEffort);
+      if (capabilities.streaming && stream !== false) {
+        payload.stream = true;
+      }
 
-      if (toolsList && toolsList.length > 0) {
+      if (capabilities.reasoning) {
+        this.applyReasoning(payload, reasoningEffort);
+      }
+
+      if (capabilities.tools && toolsList && toolsList.length > 0) {
         this.applyTools(payload, toolsList);
       }
 
-      if (enableContextCache) {
+      if (capabilities.promptCaching && enableContextCache) {
         this.applyContextCache(payload, { toolsList, messages: formattedMessages });
+      }
+
+      if (capabilities.jsonMode && jsonMode) {
+        this.applyJsonMode(payload);
       }
 
       return payload;
@@ -252,7 +311,17 @@
         id: 'claude',
         label: 'Anthropic Claude',
         description: 'Estándar Claude (thinking budget: disabled, 1k, 2k, 4k, 8k tokens)',
-        reasoningLevels: ['none', 'low', 'medium', 'high', 'xhigh']
+        reasoningLevels: ['none', 'low', 'medium', 'high', 'xhigh'],
+        capabilities: {
+          streaming: true,
+          vision: true,
+          tools: true,
+          reasoning: true,
+          jsonMode: false,
+          promptCaching: true,
+          embeddings: false,
+          modelListing: true
+        }
       });
     }
 
@@ -264,11 +333,12 @@
       return `${url}/v1/messages`;
     }
 
-    formatMessages(messages) {
+    formatMessages(messages, capabilities) {
+      const caps = capabilities || this.getCapabilities();
       return messages.map(m => {
         if (Array.isArray(m.content)) {
           const claudeParts = m.content.map(part => {
-            if (part.type === 'image_url' && part.image_url && part.image_url.url) {
+            if (caps.vision && part.type === 'image_url' && part.image_url && part.image_url.url) {
               const match = part.image_url.url.match(/^data:([^;]+);base64,(.+)$/);
               if (match) {
                 return {
@@ -282,7 +352,7 @@
               }
             }
             return part;
-          });
+          }).filter(part => caps.vision || part.type !== 'image');
           return { ...m, content: claudeParts };
         }
         return m;
@@ -411,7 +481,17 @@
         id: 'gemini',
         label: 'Google Gemini',
         description: 'Estándar Gemini (thinking: none, low, medium, high, xhigh)',
-        reasoningLevels: ['none', 'low', 'medium', 'high', 'xhigh']
+        reasoningLevels: ['none', 'low', 'medium', 'high', 'xhigh'],
+        capabilities: {
+          streaming: true,
+          vision: true,
+          tools: true,
+          reasoning: true,
+          jsonMode: true,
+          promptCaching: true,
+          embeddings: true,
+          modelListing: true
+        }
       });
     }
 
@@ -438,7 +518,17 @@
         id: 'ollama',
         label: 'Ollama',
         description: 'Estándar Ollama (reasoning_effort: none, low, medium, high, xhigh)',
-        reasoningLevels: ['none', 'low', 'medium', 'high', 'xhigh']
+        reasoningLevels: ['none', 'low', 'medium', 'high', 'xhigh'],
+        capabilities: {
+          streaming: true,
+          vision: true,
+          tools: true,
+          reasoning: true,
+          jsonMode: true,
+          promptCaching: false,
+          embeddings: true,
+          modelListing: true
+        }
       });
     }
 
@@ -480,7 +570,17 @@
         id: 'openrouter',
         label: 'OpenRouter',
         description: 'Estándar OpenRouter (reasoning.effort: none, low, medium, high, xhigh)',
-        reasoningLevels: ['none', 'low', 'medium', 'high', 'xhigh']
+        reasoningLevels: ['none', 'low', 'medium', 'high', 'xhigh'],
+        capabilities: {
+          streaming: true,
+          vision: true,
+          tools: true,
+          reasoning: true,
+          jsonMode: true,
+          promptCaching: true,
+          embeddings: false,
+          modelListing: true
+        }
       });
     }
 
@@ -590,6 +690,14 @@
     }
 
     /**
+     * Obtiene las capacidades de un proveedor o modelo dado.
+     */
+    getCapabilities(rawUrlOrType, model, explicitType) {
+      const adapter = this.resolve(rawUrlOrType, explicitType);
+      return adapter.getCapabilities(model);
+    }
+
+    /**
      * Obtiene todos los modos de razonamiento registrados para la UI.
      */
     getReasoningModes() {
@@ -604,6 +712,7 @@
   const registry = new ProviderRegistry();
 
   return {
+    DEFAULT_CAPABILITIES,
     BaseProviderAdapter,
     ClaudeProviderAdapter,
     GeminiProviderAdapter,

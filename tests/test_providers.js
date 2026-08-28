@@ -177,3 +177,101 @@ test('OpenRouterAdapter - Configuración de razonamiento y endpoints', () => {
   assert.deepEqual(payload.reasoning, { effort: 'high' });
   assert.equal(payload.reasoning_effort, 'high');
 });
+
+test('Capabilities - Declaración estándar y por proveedor', () => {
+  const baseAdapter = new BaseProviderAdapter();
+  const baseCaps = baseAdapter.getCapabilities();
+  assert.equal(baseCaps.streaming, true);
+  assert.equal(baseCaps.vision, true);
+  assert.equal(baseCaps.tools, true);
+  assert.equal(baseCaps.reasoning, true);
+  assert.equal(baseCaps.jsonMode, true);
+  assert.equal(baseCaps.promptCaching, true);
+  assert.equal(baseCaps.embeddings, true);
+  assert.equal(baseCaps.modelListing, true);
+
+  const claudeAdapter = new ClaudeProviderAdapter();
+  const claudeCaps = claudeAdapter.getCapabilities();
+  assert.equal(claudeCaps.jsonMode, false);
+  assert.equal(claudeCaps.embeddings, false);
+  assert.equal(claudeCaps.promptCaching, true);
+
+  const ollamaAdapter = new OllamaProviderAdapter();
+  const ollamaCaps = ollamaAdapter.getCapabilities();
+  assert.equal(ollamaCaps.promptCaching, false);
+  assert.equal(ollamaCaps.tools, true);
+
+  const openrouterAdapter = new OpenRouterProviderAdapter();
+  const openrouterCaps = openrouterAdapter.getCapabilities();
+  assert.equal(openrouterCaps.embeddings, false);
+  assert.equal(openrouterCaps.promptCaching, true);
+});
+
+test('Capabilities - Utilización en buildPayload para filtrar parámetros no soportados', () => {
+  // 1. Proveedor sin soporte de Prompt Caching (ej: Ollama) no debe inyectar stream_options.include_usage
+  const ollamaAdapter = new OllamaProviderAdapter();
+  const ollamaPayload = ollamaAdapter.buildPayload({
+    model: 'llama3:latest',
+    messages: [{ role: 'user', content: 'test' }],
+    enableContextCache: true
+  });
+  assert.equal(ollamaPayload.stream_options, undefined, 'Ollama no debe tener stream_options');
+
+  // 2. Proveedor con capability tools: false no debe inyectar tools
+  const noToolsAdapter = new BaseProviderAdapter({
+    capabilities: { tools: false }
+  });
+  const noToolsPayload = noToolsAdapter.buildPayload({
+    model: 'simple-model',
+    messages: [{ role: 'user', content: 'test' }],
+    toolsList: [{ type: 'function', function: { name: 'search_web' } }]
+  });
+  assert.equal(noToolsPayload.tools, undefined, 'No debe inyectar tools si tools=false');
+  assert.equal(noToolsPayload.tool_choice, undefined);
+
+  // 3. Proveedor con capability reasoning: false no debe inyectar reasoning_effort
+  const noReasoningAdapter = new BaseProviderAdapter({
+    capabilities: { reasoning: false }
+  });
+  const noReasoningPayload = noReasoningAdapter.buildPayload({
+    model: 'simple-model',
+    messages: [{ role: 'user', content: 'test' }],
+    reasoningEffort: 'high'
+  });
+  assert.equal(noReasoningPayload.reasoning_effort, undefined, 'No debe inyectar reasoning si reasoning=false');
+
+  // 4. Proveedor con capability jsonMode: true y jsonMode solicitado
+  const jsonAdapter = new BaseProviderAdapter();
+  const jsonPayload = jsonAdapter.buildPayload({
+    model: 'gpt-4o',
+    messages: [{ role: 'user', content: 'test' }],
+    jsonMode: true
+  });
+  assert.deepEqual(jsonPayload.response_format, { type: 'json_object' });
+
+  // 5. Proveedor con vision: false debe filtrar o degradar imágenes
+  const noVisionAdapter = new BaseProviderAdapter({
+    capabilities: { vision: false }
+  });
+  const textOnlyMessages = noVisionAdapter.formatMessages([
+    {
+      role: 'user',
+      content: [
+        { type: 'text', text: 'Descripción textual' },
+        { type: 'image_url', image_url: { url: 'data:image/png;base64,123' } }
+      ]
+    }
+  ]);
+  assert.equal(textOnlyMessages[0].content, 'Descripción textual', 'Debe extraer sólo texto si vision=false');
+});
+
+test('ChatAPI.getProviderCapabilities - Consulta a través de ChatAPI', () => {
+  const ChatAPI = require('../js/api.js');
+  const claudeCaps = ChatAPI.getProviderCapabilities('https://api.anthropic.com/v1');
+  assert.equal(claudeCaps.jsonMode, false);
+  assert.equal(claudeCaps.promptCaching, true);
+
+  const ollamaCaps = ChatAPI.getProviderCapabilities('http://localhost:11434');
+  assert.equal(ollamaCaps.promptCaching, false);
+  assert.equal(ollamaCaps.streaming, true);
+});
