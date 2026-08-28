@@ -208,6 +208,12 @@
         if (delta.tool_calls && Array.isArray(delta.tool_calls)) {
           result.toolCallDeltas = delta.tool_calls;
         }
+
+        // Thought signature de Gemini / Google
+        const sig = delta.thought_signature || delta.extra_content?.google?.thought_signature || choice?.thought_signature || parsed.thought_signature;
+        if (sig) {
+          result.thoughtSignature = sig;
+        }
       }
 
       // Usage / Context Caching
@@ -530,6 +536,35 @@
           };
         })
         .filter(m => m.id && (m.id.includes('gemini') || m.id.includes('gemma')));
+    }
+
+    formatMessages(messages, capabilities) {
+      return messages.map(m => {
+        if (m.role === 'assistant' && Array.isArray(m.tool_calls)) {
+          const cleanToolCalls = m.tool_calls.map(tc => {
+            const out = {
+              id: tc.id || `call_${Date.now()}`,
+              type: 'function',
+              function: {
+                name: tc.function?.name || tc.name || '',
+                arguments: typeof tc.function?.arguments === 'string'
+                  ? tc.function.arguments
+                  : JSON.stringify(tc.function?.arguments || {})
+              }
+            };
+            if (tc.thought_signature) out.thought_signature = tc.thought_signature;
+            if (tc.extra_content) out.extra_content = tc.extra_content;
+            if (tc.provider_specific_fields) out.provider_specific_fields = tc.provider_specific_fields;
+            return out;
+          });
+          return {
+            role: 'assistant',
+            content: m.content || null,
+            tool_calls: cleanToolCalls
+          };
+        }
+        return m;
+      });
     }
 
     buildPayload(params) {

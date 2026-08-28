@@ -726,6 +726,12 @@
                   if (tc.id) accumulatedToolCalls[idx].id = tc.id;
                   if (tc.function?.name) accumulatedToolCalls[idx].function.name = tc.function.name;
                   if (tc.function?.arguments) accumulatedToolCalls[idx].function.arguments += tc.function.arguments;
+                  if (tc.thought_signature) accumulatedToolCalls[idx].thought_signature = tc.thought_signature;
+                  if (tc.extra_content) accumulatedToolCalls[idx].extra_content = tc.extra_content;
+                  if (tc.provider_specific_fields) accumulatedToolCalls[idx].provider_specific_fields = tc.provider_specific_fields;
+                  if (chunkData.thoughtSignature && !accumulatedToolCalls[idx].thought_signature) {
+                    accumulatedToolCalls[idx].thought_signature = chunkData.thoughtSignature;
+                  }
 
                   if (onToolCallDelta) onToolCallDelta(accumulatedToolCalls[idx]);
                 });
