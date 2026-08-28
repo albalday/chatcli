@@ -103,6 +103,7 @@ def build_standalone_html() -> bool:
         "providers.js",
         "api.js",
         "file-parser.js",
+        "agent-core.js",
         "app.js"
     ]
 

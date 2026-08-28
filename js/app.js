@@ -1545,6 +1545,7 @@
     const maxAgentTurns = 5;
     let turnIndex = 0;
     let accumulatedConversationMarkdown = '';
+    const toolCallSignatures = [];
 
     while (turnIndex < maxAgentTurns) {
       if (currentAbortController && currentAbortController.signal.aborted) {
@@ -1699,6 +1700,30 @@
       const tc = turnToolCalls[0];
       const rawFuncName = tc.function?.name || '';
       const normName = API.normalizeToolName ? API.normalizeToolName(rawFuncName) : rawFuncName.toLowerCase().replace(/_/g, '');
+
+      // Protección contra Bucles Infinitos: Detectar repetición idéntica de llamadas
+      const callFingerprint = `${normName}:${typeof tc.function.arguments === 'object' ? JSON.stringify(tc.function.arguments) : String(tc.function.arguments || '').trim()}`;
+      const identicalCount = toolCallSignatures.filter(sig => sig === callFingerprint).length;
+      if (identicalCount >= 2) {
+        addDebugLog('error', `[Protección Bucle Infinito]: Herramienta '${normName}' invocada repetidamente con los mismos argumentos. Interrumpiendo ciclo agéntico.`);
+        const loopWarning = `\n\n> ⚠️ *[Protección de Bucle Infinito]*: La herramienta \`${normName}\` fue invocada repetidamente con los mismos parámetros sin progreso. Se finaliza la iteración.`;
+        currentTurnText = (currentTurnText || '') + loopWarning;
+        turnBlock.innerHTML = parseMd(currentTurnText);
+        attachListeners(turnBlock);
+
+        chatHistory.push({
+          id: `${assistantMsgId}_final`,
+          role: 'assistant',
+          content: currentTurnText
+        });
+
+        if (turnFinalStats) updateStatsDisplay(turnFinalStats);
+        setDebugStatus('done', t('debug_status_done'));
+        actions.style.display = 'inline-flex';
+        finishGeneration();
+        return;
+      }
+      toolCallSignatures.push(callFingerprint);
 
       // Limpiar llamadas a herramientas emitidas como texto crudo en la UI
       const trimmedAcc = (currentTurnText || '').trim();
