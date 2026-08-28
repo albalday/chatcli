@@ -526,7 +526,10 @@
         throw new Error('API query function not available.');
       }
 
+      addDebugLog('network', `Consultando modelos en ${apiUrl} [${apiType}]`);
+      addDebugLog('raw', `>>> OUTGOING GET/POST ${apiUrl} (fetchServerModels)`);
       const res = await API.fetchServerModels(apiUrl, apiKey, apiType);
+      addDebugLog('raw', `<<< INCOMING (fetchServerModels):\n${JSON.stringify(res, null, 2)}`);
 
       if (res.success && res.models && res.models.length > 0) {
         saveCachedModels(res.models);
@@ -839,6 +842,32 @@
 
     activeThinkingBlock = null;
 
+    if (type === 'raw') {
+      const entry = document.createElement('div');
+      const isOutgoing = (rawData && rawData.subtype === 'outgoing') || String(text).startsWith('>>>');
+      entry.className = `debug-entry debug-entry-raw ${isOutgoing ? 'raw-outgoing' : 'raw-incoming'}`;
+      entry.setAttribute('data-type', 'raw');
+
+      entry.innerHTML = `
+        <div class="debug-entry-header">
+          <span class="debug-time">[${getFormattedTime()}]</span>
+          <span class="debug-tag raw">${isOutgoing ? '📤 RAW OUT' : '📥 RAW IN'}</span>
+        </div>
+        <div class="debug-msg">${Markdown.escapeHtml(text)}</div>
+      `;
+
+      if (activeDebugFilter !== 'all' && activeDebugFilter !== 'raw') {
+        entry.style.display = 'none';
+      }
+
+      elements.debugLogContent.appendChild(entry);
+
+      if (isDebugAutoscroll) {
+        elements.debugLogContent.scrollTop = elements.debugLogContent.scrollHeight;
+      }
+      return;
+    }
+
     const entry = document.createElement('div');
     entry.className = `debug-entry debug-entry-${type || 'info'}`;
     entry.setAttribute('data-type', type || 'info');
@@ -850,6 +879,7 @@
     else if (type === 'stats') tagLabel = t('debug_tag_stats');
     else if (type === 'error') tagLabel = t('debug_tag_error');
     else if (type === 'system') tagLabel = t('debug_tag_system');
+    else if (type === 'raw') tagLabel = t('debug_tag_raw');
 
     entry.innerHTML = `
       <div class="debug-entry-header">
@@ -860,7 +890,7 @@
     `;
 
     if (activeDebugFilter !== 'all') {
-      const match = (activeDebugFilter === type) || (activeDebugFilter === 'tool' && type === 'tool') || (activeDebugFilter === 'network' && (type === 'network' || type === 'stats'));
+      const match = (activeDebugFilter === type) || (activeDebugFilter === 'tool' && type === 'tool') || (activeDebugFilter === 'network' && (type === 'network' || type === 'stats' || type === 'error')) || (activeDebugFilter === 'raw' && type === 'raw');
       if (!match) entry.style.display = 'none';
     }
 
@@ -885,7 +915,9 @@
       } else if (tabId === 'tool') {
         entry.style.display = type === 'tool' ? 'flex' : 'none';
       } else if (tabId === 'network') {
-        entry.style.display = (type === 'network' || type === 'stats') ? 'flex' : 'none';
+        entry.style.display = (type === 'network' || type === 'stats' || type === 'error') ? 'flex' : 'none';
+      } else if (tabId === 'raw') {
+        entry.style.display = type === 'raw' ? 'flex' : 'none';
       }
     });
   }
@@ -1525,12 +1557,14 @@
         scrollToBottom();
 
         addDebugLog('tool', `execute_javascript:\n${codeToRun}`);
+        addDebugLog('raw', `>>> TOOL CALL execute_javascript:\n${codeToRun}`);
         const toolExecRes = await (Sandbox.execute ? Sandbox.execute(codeToRun) : { success: false, error: 'Sandbox not available' });
         const outputText = toolExecRes.success
           ? (toolExecRes.result || (toolExecRes.logs && toolExecRes.logs.length > 0 ? toolExecRes.logs.join('\n') : 'undefined'))
           : `Error: ${toolExecRes.error}`;
 
         addDebugLog('tool', `execute_javascript output (${toolExecRes.executionTimeMs || 0}ms):\n${outputText}`);
+        addDebugLog('raw', `<<< TOOL RESULT execute_javascript (${toolExecRes.executionTimeMs || 0}ms):\n${JSON.stringify(toolExecRes, null, 2)}`);
 
         // Rellenar dinámicamente el resultado en la tarjeta existente
         const badgeEl = cardDiv.querySelector('.tool-card-badge');
@@ -1624,6 +1658,7 @@
         scrollToBottom();
 
         addDebugLog('tool', `${normName}: ${urlToFetch}`);
+        addDebugLog('raw', `>>> TOOL CALL ${normName}: ${urlToFetch}`);
         const webRes = await (WebBrowser.fetchPage ? WebBrowser.fetchPage(urlToFetch) : { success: false, url: urlToFetch, content: '', error: 'Web module not available' });
         const isPdfResult = webRes.isPdf || isPdfCall;
 
@@ -1636,6 +1671,7 @@
           : (webRes.error || t('tool_web_err_connect'));
 
         addDebugLog('tool', `${normName} (${statusBadgeText}) [${webRes.byteSize ? FileParser.formatBytes(webRes.byteSize) : '0 B'}]:\n${(responsePreview || '').substring(0, 200)}...`);
+        addDebugLog('raw', `<<< TOOL RESULT ${normName} (${statusBadgeText}):\n${responsePreview || ''}`);
 
         // Rellenar dinámicamente la tarjeta con la respuesta obtenida
         const badgeEl = cardDiv.querySelector('.web-card-badge');
@@ -1729,10 +1765,12 @@
         scrollToBottom();
 
         addDebugLog('tool', `search_web: "${queryToSearch}"`);
+        addDebugLog('raw', `>>> TOOL CALL search_web:\nQuery: "${queryToSearch}"`);
         const searchRes = await (WebSearch.search ? WebSearch.search(queryToSearch, appConfig.language || 'es') : { success: false, query: queryToSearch, count: 0, results: [], markdown: 'Módulo de búsqueda no disponible', elapsedMs: 0 });
         const statusBadgeText = `${searchRes.count} fuentes (${searchRes.elapsedMs || 0}ms)`;
 
         addDebugLog('tool', `search_web (${searchRes.count} resultados) [${searchRes.elapsedMs || 0}ms]:\n${(searchRes.markdown || '').substring(0, 200)}...`);
+        addDebugLog('raw', `<<< TOOL RESULT search_web (${searchRes.count} resultados):\n${searchRes.markdown || ''}`);
 
         let resultsHtml = '';
         if (searchRes.results && searchRes.results.length > 0) {
@@ -1796,6 +1834,7 @@
         }
 
         addDebugLog('tool', `render_chart (${chartArgs.type || 'bar'}): "${chartArgs.title || 'Gráfico'}"`);
+        addDebugLog('raw', `>>> TOOL CALL render_chart:\n${JSON.stringify(chartArgs, null, 2)}`);
 
         const chartHtml = (Charts.renderChartCard ? Charts.renderChartCard(chartArgs) : '<div class="chat-chart-card">Gráfico generado</div>');
         const cardDiv = document.createElement('div');

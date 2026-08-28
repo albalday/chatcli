@@ -673,6 +673,11 @@
         type: 'network',
         text: `POST ${endpoint} [${detectedType.toUpperCase()}] | Modelo: ${model || '(no especificado)'} | Razonamiento: ${reasoningEffort || 'off'} | Temp: ${payload.temperature}${enableContextCache ? (cacheInvalidated ? ' | ContextCache: [INVALIDADA]' : ' | ContextCache: [ACTIVA]') : ''}`
       });
+      onLog({
+        type: 'raw',
+        subtype: 'outgoing',
+        text: `>>> OUTGOING POST ${endpoint}\n${JSON.stringify(payload, null, 2)}`
+      });
     }
 
     let accumulatedText = '';
@@ -803,7 +808,10 @@
           } else if (response.status === 404) {
             errorMessage = `Endpoint no encontrado (404). Verifica la URL del servidor: ${endpoint}`;
           }
-          if (onLog) onLog({ type: 'error', text: errorMessage });
+          if (onLog) {
+            onLog({ type: 'error', text: errorMessage });
+            onLog({ type: 'raw', subtype: 'incoming', text: `<<< INCOMING HTTP ${response.status} ${response.statusText}\n${serverErrorMsg || errorMessage}` });
+          }
           throw new Error(errorMessage);
         }
       }
@@ -825,8 +833,19 @@
         buffer = lines.pop() || '';
 
         for (let i = 0; i < lines.length; i++) {
-          const trimmedLine = lines[i].trim();
-          if (!trimmedLine || trimmedLine.startsWith(':')) continue;
+          const rawLine = lines[i];
+          const trimmedLine = rawLine.trim();
+          if (!trimmedLine) continue;
+
+          if (onLog) {
+            onLog({
+              type: 'raw',
+              subtype: 'incoming',
+              text: rawLine
+            });
+          }
+
+          if (trimmedLine.startsWith(':')) continue;
 
           if (trimmedLine.startsWith('data: ')) {
             const dataStr = trimmedLine.substring(6).trim();

@@ -120,8 +120,8 @@
             <span data-i18n="btn_clear_chat">Limpiar</span>
           </button>
 
-          <button type="button" id="btn-toggle-debug" class="btn-tool-mini btn-debug-toggle" data-i18n-title="btn_logs_title" title="Abrir/Cerrar panel lateral de razonamiento y logs">
-            <span class="debug-toggle-icon">🧠</span>
+          <button type="button" id="btn-toggle-debug" class="btn-tool-mini btn-debug-toggle" data-i18n-title="btn_logs_title" title="Abrir/Cerrar panel lateral de logs y razonamiento">
+            <span class="debug-toggle-icon">📜</span>
             <span data-i18n="btn_logs">Logs</span>
           </button>
           <button type="button" id="btn-open-settings" class="btn-tool-mini btn-config-mini" data-i18n-title="btn_settings_title" title="Abrir configuración de API y Modelo">
@@ -199,8 +199,8 @@
   <aside id="debug-panel" class="debug-panel" style="display: none;">
     <div class="debug-panel-header">
       <div class="debug-title">
-        <span class="debug-badge-icon">🧠</span>
-        <span class="debug-badge-text" data-i18n="debug_panel_title">Razonamiento & Logs</span>
+        <span class="debug-badge-icon">📜</span>
+        <span class="debug-badge-text" data-i18n="debug_panel_title">Logs & Razonamiento</span>
         <span id="debug-status-indicator" class="debug-status-indicator idle">Inactivo</span>
       </div>
       <div class="debug-actions">
@@ -217,6 +217,7 @@
       <button type="button" class="debug-tab" data-debug-tab="thinking" data-i18n="debug_tab_thinking">🧠 Razonamiento</button>
       <button type="button" class="debug-tab" data-debug-tab="tool" data-i18n="debug_tab_tool">⚙️ Herramientas</button>
       <button type="button" class="debug-tab" data-debug-tab="network" data-i18n="debug_tab_network">🌐 Red</button>
+      <button type="button" class="debug-tab" data-debug-tab="raw" data-i18n="debug_tab_raw">📡 Raw</button>
     </div>
 
     <!-- Contenedor del Log Monospace -->
