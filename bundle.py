@@ -104,6 +104,7 @@ def build_standalone_html() -> bool:
         "api.js",
         "file-parser.js",
         "agent-core.js",
+        "mcp.js",
         "app.js"
     ]
 

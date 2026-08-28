@@ -2113,6 +2113,102 @@
         turnIndex++;
         continue;
       }
+
+      // 5. Herramientas MCP y Herramientas Genéricas Registradas en AgentCore
+      else {
+        const AgentCore = window.ChatAgentCore;
+        const toolInstance = AgentCore?.registry?.getTool(rawFuncName);
+        const serverName = toolInstance?.metadata?.mcpServerName || 'Herramienta Externa';
+        const displayToolName = toolInstance?.metadata?.originalName || rawFuncName;
+
+        let toolArgs = {};
+        try {
+          toolArgs = typeof tc.function.arguments === 'object' ? tc.function.arguments : JSON.parse(tc.function.arguments || '{}');
+        } catch (e) {
+          toolArgs = { input: tc.function.arguments || '' };
+        }
+
+        const cardDiv = document.createElement('div');
+        cardDiv.className = 'tool-card-wrapper';
+        cardDiv.innerHTML = `
+          <div class="tool-execution-card mcp-tool-card">
+            <div class="tool-card-header">
+              <div class="tool-card-title">
+                <span>🔌</span>
+                <span><strong>MCP:</strong> ${Markdown.escapeHtml(displayToolName)} <small style="opacity:0.7;">(${Markdown.escapeHtml(serverName)})</small></span>
+              </div>
+              <div class="tool-card-header-actions">
+                <span class="tool-card-badge status-running">⏳ ${t('tool_running') || 'Ejecutando...'}</span>
+                <button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Minimizar'}"><span>▾</span></button>
+              </div>
+            </div>
+            <div class="tool-card-collapsible-body">
+              <div class="tool-card-section">
+                <div class="section-label">${t('tool_js_code') || 'Argumentos'}</div>
+                <div class="code-preview-block"><pre><code>${Markdown.escapeHtml(JSON.stringify(toolArgs, null, 2))}</code></pre></div>
+              </div>
+              <div class="tool-card-section tool-result-section">
+                <div class="section-label">${t('tool_js_result') || 'Resultado'}</div>
+                <div class="tool-result-container">
+                  <div class="tool-loading-placeholder">⏳ Ejecutando en servidor MCP...</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+        content.appendChild(cardDiv);
+        attachListeners(cardDiv);
+        scrollToBottom();
+
+        addDebugLog('tool', `MCP Tool [${serverName}]: ${displayToolName}`);
+        addDebugLog('raw', `>>> TOOL CALL ${rawFuncName}:\n${JSON.stringify(toolArgs, null, 2)}`);
+
+        const execResult = AgentCore
+          ? await AgentCore.executor.executeToolCall(tc, { signal: currentAbortController ? currentAbortController.signal : undefined })
+          : { success: false, error: 'AgentCore no disponible' };
+
+        const badgeEl = cardDiv.querySelector('.tool-card-badge');
+        const resContainer = cardDiv.querySelector('.tool-result-container');
+
+        if (badgeEl) {
+          badgeEl.className = execResult.success ? 'tool-card-badge status-success' : 'tool-card-badge status-error';
+          badgeEl.textContent = execResult.success
+            ? `${t('tool_status_success') || 'Éxito'} (${execResult.executionTimeMs || 0}ms)`
+            : (t('tool_status_error') || 'Error');
+        }
+
+        const outText = execResult.success
+          ? (execResult.result?.content || (typeof execResult.result === 'object' ? JSON.stringify(execResult.result, null, 2) : String(execResult.result || '')))
+          : (execResult.error || 'Error desconocido');
+
+        if (resContainer) {
+          resContainer.innerHTML = `<div class="result-text-block ${execResult.success ? 'result-success' : 'result-error'}"><pre><code>${Markdown.escapeHtml(outText)}</code></pre></div>`;
+        }
+
+        addDebugLog('tool', `MCP Result [${displayToolName}]: ${outText.substring(0, 200)}...`);
+        addDebugLog('raw', `<<< TOOL RESULT ${rawFuncName}:\n${outText}`);
+
+        chatHistory.push({
+          id: `${assistantMsgId}_turn_${turnIndex}_assistant`,
+          role: 'assistant',
+          content: currentTurnText || null,
+          tool_calls: [tc]
+        });
+
+        chatHistory.push({
+          id: `${assistantMsgId}_turn_${turnIndex}_tool_${tc.id || 'res'}`,
+          role: 'tool',
+          tool_call_id: tc.id,
+          name: rawFuncName,
+          content: outText
+        });
+
+        const toolMd = `> 🔌 **MCP: ${displayToolName}** (*${serverName}*)\n> \`\`\`json\n> ${JSON.stringify(toolArgs, null, 2).split('\n').join('\n> ')}\n> \`\`\`\n> \`\`\`\n> ${String(outText).split('\n').join('\n> ')}\n> \`\`\`\n\n`;
+        accumulatedConversationMarkdown += (currentTurnText ? currentTurnText + '\n\n' : '') + toolMd + '\n\n';
+
+        turnIndex++;
+        continue;
+      }
     }
 
     // Si se agotaron los turnos máximos y el último mensaje fue de una herramienta (role: 'tool'),
