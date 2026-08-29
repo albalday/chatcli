@@ -1416,6 +1416,7 @@
     let accumulatedText = '';
     let accumulatedConversationMarkdown = '';
     let turnIndex = 0;
+    const toolCallSignatures = [];
     const parseMd = Markdown.parseMarkdown || function(txt) { return txt; };
     const attachListeners = Markdown.attachCopyCodeListeners || function() {};
 
@@ -2136,7 +2137,95 @@
         continue;
       }
 
-      // 5. Herramientas MCP y Herramientas Genéricas Registradas en AgentCore
+      // 5. Base de Conocimiento RAG (read_chapter_content)
+      else if (normName === 'read_chapter_content' || normName === 'readchaptercontent' || normName === 'readchapter') {
+        let ragArgs = {};
+        try {
+          ragArgs = typeof tc.function.arguments === 'object' ? tc.function.arguments : JSON.parse(tc.function.arguments || '{}');
+        } catch (e) {
+          ragArgs = { docId: '', chapterId: 1 };
+        }
+
+        const docId = ragArgs.docId || ragArgs.doc_id || '';
+        const chapterId = typeof ragArgs.chapterId === 'number' ? ragArgs.chapterId : parseInt(ragArgs.chapter_id || ragArgs.chapterId || 1, 10);
+
+        const cardDiv = document.createElement('div');
+        cardDiv.className = 'tool-card-wrapper';
+        cardDiv.innerHTML = `
+          <div class="tool-execution-card rag-execution-card">
+            <div class="tool-card-header">
+              <div class="tool-card-title">
+                <span>📖</span>
+                <span>Base de Conocimiento (RAG)</span>
+              </div>
+              <div class="tool-card-header-actions">
+                <span class="tool-card-badge status-loading">⏳ Consultando doc "${Markdown.escapeHtml(docId)}", Cap ${Markdown.escapeHtml(String(chapterId))}...</span>
+                <button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Minimizar'}"><span>▾</span></button>
+              </div>
+            </div>
+            <div class="tool-card-collapsible-body">
+              <div class="tool-card-result">
+                <div class="tool-loading-placeholder">⏳ Recuperando contenido del capítulo desde IndexedDB...</div>
+              </div>
+            </div>
+          </div>
+        `;
+        content.appendChild(cardDiv);
+        attachListeners(cardDiv);
+        scrollToBottom();
+
+        addDebugLog('tool', `read_chapter_content: Doc [${docId}], Cap [${chapterId}]`);
+        addDebugLog('raw', `>>> TOOL CALL read_chapter_content:\n${JSON.stringify(ragArgs, null, 2)}`);
+
+        const ragService = window.ChatTreeRagService || (typeof require !== 'undefined' ? require('./chatService.js') : null);
+        const ragRes = ragService && ragService.resolveChapterToolCall
+          ? await ragService.resolveChapterToolCall(ragArgs)
+          : { success: false, error: 'Servicio de RAG no disponible' };
+
+        const badgeEl = cardDiv.querySelector('.tool-card-badge');
+        const resContainer = cardDiv.querySelector('.tool-card-result');
+
+        if (badgeEl) {
+          badgeEl.className = ragRes.success ? 'tool-card-badge status-success' : 'tool-card-badge status-error';
+          badgeEl.textContent = ragRes.success
+            ? `Capítulo ${chapterId} (${FileParser.formatBytes ? FileParser.formatBytes(ragRes.charCount || 0) : (ragRes.charCount || 0) + ' chars'})`
+            : 'Error al recuperar';
+        }
+
+        const outText = ragRes.success
+          ? (ragRes.content || '')
+          : (ragRes.error || 'No se encontró el capítulo.');
+
+        if (resContainer) {
+          resContainer.innerHTML = `<div class="result-text-block ${ragRes.success ? 'result-success' : 'result-error'}"><pre><code>${Markdown.escapeHtml(outText)}</code></pre></div>`;
+        }
+
+        addDebugLog('tool', `read_chapter_content Result: ${outText.substring(0, 200)}...`);
+        addDebugLog('raw', `<<< TOOL RESULT read_chapter_content:\n${outText}`);
+
+        chatHistory.push({
+          id: `${assistantMsgId}_turn_${turnIndex}_assistant`,
+          role: 'assistant',
+          content: currentTurnText || null,
+          tool_calls: [tc]
+        });
+
+        chatHistory.push({
+          id: `${assistantMsgId}_turn_${turnIndex}_tool_${tc.id || 'res'}`,
+          role: 'tool',
+          tool_call_id: tc.id,
+          name: 'read_chapter_content',
+          content: outText
+        });
+
+        const toolMd = `> 📖 **read_chapter_content** (Doc: \`${docId}\`, Cap: \`${chapterId}\`)\n> \`\`\`text\n> ${String(outText).split('\n').join('\n> ')}\n> \`\`\`\n\n`;
+        accumulatedConversationMarkdown += (currentTurnText ? currentTurnText + '\n\n' : '') + toolMd + '\n\n';
+
+        turnIndex++;
+        continue;
+      }
+
+      // 6. Herramientas MCP y Herramientas Genéricas Registradas en AgentCore
       else {
         const AgentCore = window.ChatAgentCore;
         const toolInstance = AgentCore?.registry?.getTool(rawFuncName);
