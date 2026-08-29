@@ -181,7 +181,9 @@
           totalSize += (d.fileSize || 0);
         });
 
-        const descHtml = branch.description ? `<p class="rag-branch-toggle-desc">${getMarkdown().escapeHtml(branch.description)}</p>` : '';
+        const descInlineHtml = branch.description 
+          ? `<span class="rag-branch-inline-desc">— ${getMarkdown().escapeHtml(branch.description)}</span>` 
+          : '';
 
         const card = document.createElement('div');
         card.className = `rag-branch-toggle-card ${isCurrentActive ? 'is-active-chat' : ''}`;
@@ -193,12 +195,12 @@
             </label>
           </div>
           <div class="rag-branch-toggle-info">
-            <div class="rag-branch-toggle-title">
-              <span>📁 ${getMarkdown().escapeHtml(branch.name)}</span>
+            <div class="rag-branch-header-line">
+              <span class="rag-branch-name-text">📁 ${getMarkdown().escapeHtml(branch.name)}</span>
+              ${descInlineHtml}
               ${branchActivePill}
             </div>
             <div class="rag-branch-info-frame">
-              ${descHtml}
               <div class="rag-branch-meta-badges">
                 <span class="rag-meta-badge">📄 <strong>${docs.length}</strong> documentos</span>
                 <span class="rag-meta-badge">📑 <strong>${totalChapters}</strong> capítulos</span>

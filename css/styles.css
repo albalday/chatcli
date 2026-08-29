@@ -4047,10 +4047,13 @@ input:checked + .slider:before {
 
 /* 2. Modal de Gestión de Ramas (Tree RAG Modal) */
 .tree-rag-modal {
-  max-width: 980px;
-  height: 84vh;
+  max-width: 1140px;
+  width: 95vw;
+  height: 85vh;
   max-height: calc(var(--app-height, 100dvh) * 0.9);
 }
+
+.rag-header-icon {
   font-size: 1.25rem;
 }
 
@@ -4074,6 +4077,7 @@ input:checked + .slider:before {
   border-radius: var(--radius-md);
   border: 1px solid var(--border-color);
   background-color: var(--bg-surface);
+  padding: 1rem 1.15rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -4089,6 +4093,8 @@ input:checked + .slider:before {
 
 .rag-branch-toggle-card {
   display: flex;
+  align-items: center;
+  gap: 1.15rem;
   padding: 1rem 1.25rem;
   background: var(--bg-surface);
   border: 1px solid var(--border-color);
@@ -4097,53 +4103,112 @@ input:checked + .slider:before {
   transition: all 0.18s ease;
 }
 
+.rag-branch-toggle-card:hover {
+  border-color: var(--primary-color);
+  box-shadow: var(--shadow-md);
 }
 
 .rag-branch-toggle-card.is-active-chat {
   border-color: #10b981;
   background-color: rgba(16, 185, 129, 0.04);
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.12);
 }
 
 .rag-branch-toggle-switch-wrapper {
-  padding-top: 0.15rem;
+  flex-shrink: 0;
 }
 
 .rag-branch-toggle-info {
   flex: 1;
   min-width: 0;
-  gap: 0.45rem;
-}
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  background-color: var(--bg-app);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  padding: 0.65rem 0.85rem;
   flex-direction: column;
   gap: 0.45rem;
 }
 
+.rag-branch-header-line {
+  display: flex;
+  align-items: baseline;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.rag-branch-name-text {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-main);
+  white-space: nowrap;
+}
+
+.rag-branch-inline-desc {
+  font-size: 0.825rem;
+  font-weight: 400;
+  color: var(--text-muted);
+  line-height: 1.35;
+  flex: 1 1 auto;
+}
+
+.rag-branch-info-frame {
+  background-color: var(--bg-app);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 0.45rem 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.rag-branch-toggle-card.is-active-chat .rag-branch-info-frame {
+  background-color: var(--bg-surface);
+  border-color: rgba(16, 185, 129, 0.35);
 }
 
 .rag-branch-meta-badges {
   display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
 .rag-meta-badge {
   display: inline-flex;
+  align-items: center;
   gap: 0.3rem;
   font-size: 0.74rem;
+  padding: 0.2rem 0.55rem;
   background-color: var(--bg-surface);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
   color: var(--text-main);
+}
 
 .rag-branch-toggle-card.is-active-chat .rag-meta-badge {
   background-color: rgba(16, 185, 129, 0.08);
   border-color: rgba(16, 185, 129, 0.25);
 }
 
+.rag-active-pill {
+  font-size: 0.65rem;
   font-weight: 700;
   padding: 0.15rem 0.45rem;
+  border-radius: var(--radius-sm);
+  background-color: #10b981;
+  color: #fff;
+  letter-spacing: 0.03em;
+}
+
+/* Pestaña 2: Barra de Gestión de Ramas */
+.rag-manage-toolbar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.85rem;
+  padding-bottom: 0.85rem;
+  border-bottom: 1px solid var(--border-color);
+  flex-wrap: wrap;
+}
+
 .rag-manage-branch-field {
   flex: 1 1 200px;
   margin-bottom: 0 !important;
