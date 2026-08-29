@@ -59,6 +59,10 @@
     activeRagBranchId: ''
   };
 
+  if (typeof window !== 'undefined') {
+    window.appConfig = appConfig;
+  }
+
   let currentRagSystemContext = '';
   let chatHistory = [];
   let currentAbortController = null;
@@ -1410,6 +1414,8 @@
     const { wrapper, row, content, actions, btnCopy, statsContainer, msgId: assistantMsgId } = createAssistantMessagePlaceholder();
 
     let accumulatedText = '';
+    let accumulatedConversationMarkdown = '';
+    let turnIndex = 0;
     const parseMd = Markdown.parseMarkdown || function(txt) { return txt; };
     const attachListeners = Markdown.attachCopyCodeListeners || function() {};
 
