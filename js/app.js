@@ -2571,7 +2571,8 @@
       enableAgentSearch: elements.settingEnableAgentSearch ? elements.settingEnableAgentSearch.checked : true,
       enableAgentChart: elements.settingEnableAgentChart ? elements.settingEnableAgentChart.checked : true,
       enableContextCache: elements.settingEnableContextCache ? elements.settingEnableContextCache.checked : true,
-      enableRawLogs: elements.settingEnableRawLogs ? elements.settingEnableRawLogs.checked : false,
+      enableRawLogs: elements.settingEnableRawLogs ? elements.settingEnableRawLogs.checked : Boolean(appConfig.enableRawLogs),
+      enableDebugMessages: Boolean(appConfig.enableDebugMessages),
       sendDateTime: elements.settingSendDateTime ? elements.settingSendDateTime.checked : true
     };
 

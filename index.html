@@ -388,10 +388,25 @@
           </div>
         </div>
 
-        <!-- Pestaña 2: Modo Agente y Fecha -->
+        <!-- Pestaña 2: Modo Agente y Herramientas -->
         <div id="tab-agent" class="modal-tab-pane">
           <div class="settings-section-intro">
             <p data-i18n="agent_intro">Configura las herramientas agénticas y el contexto temporal que se transmiten al modelo.</p>
+          </div>
+
+          <div class="setting-toggle-card">
+            <div class="toggle-card-info">
+              <div class="toggle-card-title">
+                <span data-i18n="agent_datetime_title">🕒 Informar Fecha y Hora al Iniciar Chat</span>
+              </div>
+              <p class="toggle-card-desc" data-i18n="agent_datetime_desc">
+                Inserta automáticamente la fecha y hora actual como primer mensaje de la conversación (con respuesta 'OK') para informar al modelo sin invalidar la caché de contexto en las siguientes peticiones.
+              </p>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="setting-send-datetime" checked>
+              <span class="slider"></span>
+            </label>
           </div>
 
           <div class="setting-toggle-card">
@@ -412,21 +427,6 @@
           <div class="setting-toggle-card">
             <div class="toggle-card-info">
               <div class="toggle-card-title">
-                <span data-i18n="agent_js_title">⚡ Ejecución de JavaScript Local (Sandbox)</span>
-              </div>
-              <p class="toggle-card-desc" data-i18n="agent_js_desc">
-                Permite al modelo invocar <code>execute_javascript</code> para calcular, procesar datos o validar algoritmos en un entorno seguro en el navegador.
-              </p>
-            </div>
-            <label class="switch">
-              <input type="checkbox" id="setting-enable-agent-js" checked>
-              <span class="slider"></span>
-            </label>
-          </div>
-
-          <div class="setting-toggle-card">
-            <div class="toggle-card-info">
-              <div class="toggle-card-title">
                 <span data-i18n="agent_web_title">🌐 Navegación Web y Descarga de Documentos PDF</span>
               </div>
               <p class="toggle-card-desc" data-i18n="agent_web_desc">
@@ -435,6 +435,21 @@
             </div>
             <label class="switch">
               <input type="checkbox" id="setting-enable-agent-web" checked>
+              <span class="slider"></span>
+            </label>
+          </div>
+
+          <div class="setting-toggle-card">
+            <div class="toggle-card-info">
+              <div class="toggle-card-title">
+                <span data-i18n="agent_js_title">⚡ Ejecución de JavaScript Local (Sandbox)</span>
+              </div>
+              <p class="toggle-card-desc" data-i18n="agent_js_desc">
+                Permite al modelo invocar <code>execute_javascript</code> para calcular, procesar datos o validar algoritmos en un entorno seguro en el navegador.
+              </p>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="setting-enable-agent-js" checked>
               <span class="slider"></span>
             </label>
           </div>
@@ -465,36 +480,6 @@
             </div>
             <label class="switch">
               <input type="checkbox" id="setting-enable-context-cache" checked>
-              <span class="slider"></span>
-            </label>
-          </div>
-
-          <div class="setting-toggle-card">
-            <div class="toggle-card-info">
-              <div class="toggle-card-title">
-                <span data-i18n="agent_datetime_title">🕒 Informar Fecha y Hora al Iniciar Chat</span>
-              </div>
-              <p class="toggle-card-desc" data-i18n="agent_datetime_desc">
-                Inserta automáticamente la fecha y hora actual como primer mensaje de la conversación (con respuesta 'OK') para informar al modelo sin invalidar la caché de contexto en las siguientes peticiones.
-              </p>
-            </div>
-            <label class="switch">
-              <input type="checkbox" id="setting-send-datetime" checked>
-              <span class="slider"></span>
-            </label>
-          </div>
-
-          <div class="setting-toggle-card">
-            <div class="toggle-card-info">
-              <div class="toggle-card-title">
-                <span data-i18n="agent_raw_logs_title">📡 Captura de Tráfico Raw en Logs</span>
-              </div>
-              <p class="toggle-card-desc" data-i18n="agent_raw_logs_desc">
-                Registra todo el tráfico de red entrante y saliente (solicitudes HTTP, chunks SSE crudos y llamadas de herramientas) en la pestaña dedicada Raw del panel de logs.
-              </p>
-            </div>
-            <label class="switch">
-              <input type="checkbox" id="setting-enable-raw-logs">
               <span class="slider"></span>
             </label>
           </div>
