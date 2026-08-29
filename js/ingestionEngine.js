@@ -657,8 +657,9 @@ Tu misión es responder EXCLUSIVAMENTE con un objeto JSON válido con la siguien
 }
 Sé absolutamente escueto y directo. No uses prefacios, explicaciones ni palabras de relleno.`;
 
-    // Si el texto es de longitud moderada (<= 12.000 caracteres / ~3.000 tokens)
-    if (cleanText.length <= 12000) {
+    // Si el texto es ultra-breve (un solo fragmento sin páginas ni secciones, <= 2.500 caracteres)
+    const hasMultiplePagesOrSections = cleanText.includes('--- Página') || cleanText.includes('[Página') || cleanText.length > 2500;
+    if (!hasMultiplePagesOrSections) {
       const summaryCleanText = prepareTextForSummarization(cleanText);
       const prompt = `Analiza el documento "${filename}" y divide su contenido en capítulos estructurados con resúmenes telegráficos ultra-escuetos (1 sola frase por capítulo):\n\n---\n${summaryCleanText}\n---`;
 
@@ -666,7 +667,6 @@ Sé absolutamente escueto y directo. No uses prefacios, explicaciones ni palabra
         let responseText = await callLLM(llmClient, prompt, SYSTEM_PROMPT);
         let parsed = extractJsonFromResponse(responseText);
 
-        // Auto-reintento (máximo 1 reintento) si el primer intento no es JSON estructurado válido
         if (!parsed || !Array.isArray(parsed.chapters) || parsed.chapters.length === 0) {
           try {
             const retryPrompt = `La respuesta anterior no era un JSON válido. Devuelve ÚNICAMENTE el objeto JSON estructurado con "globalSummary" (1-2 frases) y "chapters" (1 frase telegráfica cada uno) para "${filename}":\n\n---\n${summaryCleanText}\n---`;
@@ -675,9 +675,7 @@ Sé absolutamente escueto y directo. No uses prefacios, explicaciones ni palabra
             if (retryParsed && Array.isArray(retryParsed.chapters) && retryParsed.chapters.length > 0) {
               parsed = retryParsed;
             }
-          } catch (retryErr) {
-            // Continuar al particionador heurístico
-          }
+          } catch (retryErr) {}
         }
 
         if (parsed && Array.isArray(parsed.chapters) && parsed.chapters.length > 0) {

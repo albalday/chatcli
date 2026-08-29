@@ -233,7 +233,7 @@
     });
   }
 
-  function parseCMaps(fullText, bytes, objOffsets) {
+  async function parseCMaps(fullText, bytes, objOffsets) {
     const cmap = new Map();
     const toUnicodeRegex = /\/ToUnicode\s+(\d+)\s+\d+\s+R/g;
     let m;
@@ -249,7 +249,7 @@
           if (fullText.charCodeAt(dataStart) === 10) dataStart++;
           try {
             const rawBytes = bytes.subarray(dataStart, endStreamIdx);
-            const decomp = decompressDeflateSync(rawBytes);
+            const decomp = await decompressDeflateData(rawBytes);
             if (decomp) {
               const text = new TextDecoder('latin1').decode(decomp);
               
@@ -290,22 +290,6 @@
       }
     }
     return cmap;
-  }
-
-  function decompressDeflateSync(uint8Array) {
-    if (!uint8Array || uint8Array.length === 0) return null;
-    if (typeof require !== 'undefined') {
-      try {
-        const zlib = require('zlib');
-        return zlib.inflateSync(uint8Array);
-      } catch (e) {
-        try {
-          const zlib = require('zlib');
-          return zlib.inflateRawSync(uint8Array);
-        } catch (e2) {}
-      }
-    }
-    return null;
   }
 
   function isReadablePdfText(str) {
@@ -569,7 +553,7 @@
     }
 
     // 2. Extracción de CMaps / ToUnicode
-    const cmap = parseCMaps(fullText, bytes, objOffsets);
+    const cmap = await parseCMaps(fullText, bytes, objOffsets);
 
     function getObjectBody(objNum) {
       const offset = objOffsets.get(String(objNum));
