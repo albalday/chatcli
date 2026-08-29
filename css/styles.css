@@ -4103,10 +4103,10 @@ input:checked + .slider:before {
 
 /* 2. Modal de Gestión de Ramas (Tree RAG Modal) */
 .tree-rag-modal {
-  max-width: 1140px;
-  width: 95vw;
-  height: 85vh;
-  max-height: calc(var(--app-height, 100dvh) * 0.9);
+  max-width: 1180px;
+  width: 96vw;
+  height: 88vh;
+  max-height: calc(var(--app-height, 100dvh) * 0.92);
 }
 
 .rag-header-icon {
@@ -4124,7 +4124,7 @@ input:checked + .slider:before {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 1.25rem;
+  padding: 1.25rem 2rem;
 }
 
 /* Pestaña 1: Selector y Control de Rama Activa */
@@ -4472,17 +4472,12 @@ input:checked + .slider:before {
 }
 
 /* Lista de Documentos */
-.rag-docs-section-header h4 {
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: var(--text-main);
-  margin: 0 0 0.5rem 0;
 .rag-docs-section-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.6rem;
   flex-wrap: wrap;
 }
 
@@ -4528,8 +4523,8 @@ input:checked + .slider:before {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.6rem;
-  padding: 0.45rem 0.75rem;
+  gap: 0.75rem;
+  padding: 0.5rem 0.85rem;
   background-color: var(--bg-surface);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
@@ -4551,7 +4546,7 @@ input:checked + .slider:before {
 .rag-doc-item-left {
   display: flex;
   align-items: center;
-  gap: 0.55rem;
+  gap: 0.6rem;
   min-width: 0;
   flex: 1;
 }
@@ -4562,12 +4557,13 @@ input:checked + .slider:before {
 }
 
 .rag-doc-item-title {
-  font-size: 0.85rem;
+  font-size: 0.84rem;
   font-weight: 500;
   color: var(--text-main);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  cursor: pointer;
 }
 
 .rag-doc-item:hover .rag-doc-item-title {
@@ -4577,7 +4573,7 @@ input:checked + .slider:before {
 .rag-doc-item-right {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.4rem;
   flex-shrink: 0;
 }
 
@@ -4589,18 +4585,6 @@ input:checked + .slider:before {
   border: 1px solid var(--border-color);
   border-radius: 4px;
   color: var(--text-muted);
-}
-
-.rag-doc-item-arrow {
-  font-size: 1rem;
-  color: var(--text-muted);
-  margin-left: 0.2rem;
-  transition: transform 0.15s;
-}
-
-.rag-doc-item:hover .rag-doc-item-arrow {
-  color: var(--primary-color);
-  transform: translateX(2px);
 }
 
 .rag-empty-state, .rag-empty-workspace, .rag-no-docs-message {
@@ -4625,10 +4609,10 @@ input:checked + .slider:before {
 
 /* 3. Visor de Estructura / Capítulos (rag-structure-modal) */
 .rag-structure-modal {
-  max-width: 1020px !important;
-  width: 94vw !important;
-  max-height: 90vh !important;
-  height: 86vh;
+  max-width: 1100px !important;
+  width: 95vw !important;
+  max-height: 88vh !important;
+  height: 88vh;
 }
 
 .rag-structure-doc-toolbar {
@@ -4636,7 +4620,7 @@ input:checked + .slider:before {
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  padding: 0.4rem 0.65rem;
+  padding: 0.45rem 0.75rem;
   background-color: var(--bg-surface);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
@@ -4647,8 +4631,8 @@ input:checked + .slider:before {
 .rag-structure-doc-meta {
   display: flex;
   align-items: center;
-  gap: 0.55rem;
-  font-size: 0.74rem;
+  gap: 0.6rem;
+  font-size: 0.75rem;
   color: var(--text-muted);
   flex-wrap: wrap;
 }
@@ -4656,20 +4640,38 @@ input:checked + .slider:before {
 .rag-doc-meta-item {
   display: inline-flex;
   align-items: center;
-  gap: 0.2rem;
+  gap: 0.25rem;
 }
 
 .rag-structure-body {
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
-  padding: 1rem 1.25rem;
-  overflow-y: auto;
-  flex: 1;
+  padding: 1.25rem 2rem !important;
+  overflow-y: scroll !important;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.rag-structure-body::-webkit-scrollbar {
+  width: 8px;
+}
+
+.rag-structure-body::-webkit-scrollbar-track {
+  background: var(--bg-app);
+}
+
+.rag-structure-body::-webkit-scrollbar-thumb {
+  background-color: var(--border-color);
+  border-radius: 4px;
+}
+
+.rag-structure-body::-webkit-scrollbar-thumb:hover {
+  background-color: var(--text-muted);
 }
 
 .rag-structure-summary-card {
-  padding: 0.75rem 0.9rem;
+  padding: 0.8rem 1rem;
   border-radius: var(--radius-sm);
   background-color: var(--bg-app);
   border: 1px solid var(--border-color);
@@ -4677,7 +4679,7 @@ input:checked + .slider:before {
 }
 
 .rag-structure-summary-card h4, .rag-structure-chapters-section h4 {
-  font-size: 0.8rem;
+  font-size: 0.82rem;
   font-weight: 600;
   color: var(--text-main);
   margin: 0 0 0.35rem 0;
@@ -4692,20 +4694,20 @@ input:checked + .slider:before {
 .rag-structure-chapters-section {
   display: flex;
   flex-direction: column;
-  gap: 0.45rem;
+  gap: 0.5rem;
   flex: 1;
 }
 
 .rag-structure-chapters-list {
   display: flex;
   flex-direction: column;
-  gap: 0.45rem;
+  gap: 0.5rem;
 }
 
 .rag-chapter-card {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
-  padding: 0.55rem 0.75rem;
+  padding: 0.6rem 0.85rem;
   background-color: var(--bg-surface);
   display: flex;
   flex-direction: column;
@@ -4727,7 +4729,7 @@ input:checked + .slider:before {
 .rag-chapter-title-group {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.45rem;
   min-width: 0;
   flex: 1;
 }
@@ -4774,7 +4776,7 @@ input:checked + .slider:before {
 
 .rag-chapter-content-preview {
   margin-top: 0.35rem;
-  padding: 0.5rem 0.65rem;
+  padding: 0.6rem 0.75rem;
   background-color: var(--bg-app);
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-color);
