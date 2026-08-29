@@ -351,6 +351,18 @@
 
     const headingRegex = /^(?:#{1,6}\s+|--- (?:Página|Page)\s+\d+\s+---|\[(?:Página|Page)\s+\d+\]|\b(?:Capítulo|Capitulo|Sección|Seccion|Tema|Módulo|Modulo|Module|Section|Chapter|Parte|Part)\s+[0-9A-Za-zIVXLCDM]+[:.]?|\b(?:Overview|Quick Start|Specifications|Special Features|Rear I\/O Panel|Component Overview|CPU Socket|DIMM Slots|PCI_E|M\.?2 Slots|SATA|Front Panel|Power Connectors|Fan Headers|Audio|JRGB|JARGB|EZ Debug|BIOS Setup|RAID Configuration|Driver|Troubleshooting|Safety Information|Package Contents|Block Diagram|Hardware Setup|Software Description|Appendix)\b|^[0-9]+(?:\.[0-9]+)*\s+[A-ZÁÉÍÓÚÑ])/i;
 
+    const headingKeywords = [
+      'Quick Start', 'Safety Information', 'Specifications', 'Special Features',
+      'Rear I/O Panel', 'Component Overview', 'CPU Socket', 'DIMM Slots', 'PCI_E1~4', 'PCIe Expansion Slots',
+      'M2_1~4', 'M.2 Slots', 'SATA1~6', 'SATA 6Gb/s Connectors', 'Power Connectors', 'Fan Connectors',
+      'Front Panel Connectors', 'EZ Debug LED', 'Installing OS', 'MSI Center', 'UEFI BIOS', 'BIOS Setup',
+      'Resetting BIOS', 'Updating BIOS', 'RAID Configuration', 'Troubleshooting', 'Regulatory Notices',
+      'Package Contents', 'Block Diagram', 'Hardware Setup', 'Software Description', 'Connecting Peripheral Devices',
+      'Installing DDR5 memory', 'Connecting the Power Connectors', 'Installing a Graphics Card', 'Case stand-off',
+      'Inhalt', 'Lieferumfang', 'Spezifikationen', 'Übersicht der Komponenten', 'Rückseite I/O',
+      'Table des matières', 'Contenu', 'Spécifications', 'Vue d\'ensemble des composants', 'Panneau arrière E/S'
+    ];
+
     // 1. Detección de páginas completas (para PDFs o documentos paginados)
     const pageSplitRegex = /(?:^|\n)(?=--- (?:Página|Page)\s+\d+\s+---|\[(?:Página|Page)\s+\d+\])/i;
     const rawPages = text.split(pageSplitRegex).map(p => p.trim()).filter(p => p.length > 0);
@@ -362,7 +374,8 @@
       let curChapterTitle = '';
       let startPage = 1;
       let curPageNum = 1;
-      const minPageChapterSize = Math.max(1000, Math.floor(maxChapterSize * 0.3));
+      const maxPagesPerChapter = 20;
+      const minPageChapterSize = Math.min(3000, Math.floor(maxChapterSize * 0.1));
 
       for (let i = 0; i < rawPages.length; i++) {
         const pageText = rawPages[i];
@@ -375,17 +388,25 @@
 
         const lines = pageText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
         let pageHeading = '';
-        for (const line of lines.slice(0, 5)) {
+        for (const line of lines.slice(0, 8)) {
           let clean = line.replace(/^---.*?---|\[.*?\]/g, '').replace(/https?:\/\/[^\s]+/g, '').replace(/[•·*ᨀ࢈㍭\s]+/g, ' ').trim();
           clean = clean.replace(/^\d+([A-ZÁÉÍÓÚÑa-z])/, '$1').replace(/^\d+[\s.:-]+/, '').trim();
-          if (clean.length > 2 && clean.length < 80 && headingRegex.test(clean)) {
+          for (const kw of headingKeywords) {
+            if (clean.toLowerCase().includes(kw.toLowerCase())) {
+              pageHeading = kw;
+              break;
+            }
+          }
+          if (!pageHeading && clean.length > 2 && clean.length < 80 && headingRegex.test(clean)) {
             pageHeading = clean.replace(/^#+\s*/, '').trim();
             break;
           }
+          if (pageHeading) break;
         }
 
-        const shouldSplitByHeading = pageHeading && curChapterLen >= minPageChapterSize;
-        const shouldSplitBySize = (curChapterLen + pageText.length > maxChapterSize) && curPages.length > 0;
+        const isNewHeading = pageHeading && pageHeading !== curChapterTitle;
+        const shouldSplitByHeading = isNewHeading && (curChapterLen >= minPageChapterSize || curPages.length >= 3);
+        const shouldSplitBySize = (curPages.length >= maxPagesPerChapter || curChapterLen + pageText.length > maxChapterSize) && curPages.length > 0;
 
         if ((shouldSplitBySize || shouldSplitByHeading) && curPages.length > 0) {
           const endPage = curPageNum > startPage ? curPageNum - 1 : startPage;
