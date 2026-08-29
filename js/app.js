@@ -30,6 +30,7 @@
   const Attachments = window.ChatAttachments || {};
   const Export = window.ChatExport || {};
   const State = window.ChatState || {};
+  const ContextManager = window.ChatContextManager || {};
 
   function t(key, params) {
     if (I18n.t) return I18n.t(key, params);
@@ -370,6 +371,20 @@
         role: 'user',
         content: 'Continuar'
       });
+    }
+
+    // Optimización dinámica de contexto, presupuesto de tokens y ventana deslizante
+    if (ContextManager.buildOptimizedContext) {
+      const optimization = ContextManager.buildOptimizedContext(messages, {
+        model: appConfig.model,
+        providerType: appConfig.apiType,
+        ...options
+      });
+      const diag = optimization.diagnostics;
+      if (diag && (diag.excludedCount > 0 || diag.prunedToolsCount > 0) && typeof addDebugLog === 'function') {
+        addDebugLog('stats', `[ContextManager]: ${diag.totalTokens} tokens estimados | Presupuesto: ${diag.budget} | ${diag.includedCount} incluidos, ${diag.excludedCount} excluidos, ${diag.prunedToolsCount} tools podadas.`);
+      }
+      return optimization.messages;
     }
 
     return messages;

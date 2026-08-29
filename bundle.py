@@ -41,6 +41,7 @@ JS_MODULE_FILES = [
     "attachments.js",
     "export.js",
     "state.js",
+    "context-manager.js",
     "app.js"
 ]
 
@@ -61,7 +62,8 @@ CORE_EXPORT_SYMBOLS = [
     "ChatToolCards",
     "ChatAttachments",
     "ChatExport",
-    "ChatState"
+    "ChatState",
+    "ChatContextManager"
 ]
 
 
