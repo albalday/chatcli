@@ -216,6 +216,98 @@
     return btoa(binary);
   }
 
+  function decodePdfEscapes(str) {
+    if (!str) return '';
+    return str.replace(/\\([0-7]{1,3})/g, (m, oct) => {
+      const code = parseInt(oct, 8);
+      return String.fromCharCode(code);
+    }).replace(/\\([nrtbf\\()])/g, (m, esc) => {
+      switch (esc) {
+        case 'n': return '\n';
+        case 'r': return '\r';
+        case 't': return '\t';
+        case 'b': return '\b';
+        case 'f': return '\f';
+        default: return esc;
+      }
+    });
+  }
+
+  function parseCMaps(fullText, bytes, objOffsets) {
+    const cmap = new Map();
+    const toUnicodeRegex = /\/ToUnicode\s+(\d+)\s+\d+\s+R/g;
+    let m;
+    while ((m = toUnicodeRegex.exec(fullText)) !== null) {
+      const objNum = m[1];
+      const offset = objOffsets.get(String(objNum));
+      if (offset !== undefined) {
+        const streamIdx = fullText.indexOf('stream', offset);
+        const endStreamIdx = fullText.indexOf('endstream', streamIdx);
+        if (streamIdx !== -1 && endStreamIdx !== -1) {
+          let dataStart = streamIdx + 6;
+          if (fullText.charCodeAt(dataStart) === 13) dataStart++;
+          if (fullText.charCodeAt(dataStart) === 10) dataStart++;
+          try {
+            const rawBytes = bytes.subarray(dataStart, endStreamIdx);
+            const decomp = decompressDeflateSync(rawBytes);
+            if (decomp) {
+              const text = new TextDecoder('latin1').decode(decomp);
+              
+              const bfcharRegex = /<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>/g;
+              let cm;
+              while ((cm = bfcharRegex.exec(text)) !== null) {
+                const src = cm[1].toLowerCase();
+                const dstHex = cm[2];
+                let dstChar = '';
+                for (let k = 0; k < dstHex.length; k += 4) {
+                  const code = parseInt(dstHex.substr(k, 4), 16);
+                  if (!isNaN(code)) dstChar += String.fromCharCode(code);
+                }
+                if (dstChar) {
+                  cmap.set(src, dstChar);
+                  if (src.length === 2) cmap.set('00' + src, dstChar);
+                  if (src.startsWith('00') && src.length === 4) cmap.set(src.substring(2), dstChar);
+                }
+              }
+
+              const bfrangeRegex = /<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>/g;
+              while ((cm = bfrangeRegex.exec(text)) !== null) {
+                const start = parseInt(cm[1], 16);
+                const end = parseInt(cm[2], 16);
+                const destStart = parseInt(cm[3], 16);
+                const len = cm[1].length;
+                for (let s = start; s <= end; s++) {
+                  const srcHex = s.toString(16).padStart(len, '0').toLowerCase();
+                  const dstCode = destStart + (s - start);
+                  cmap.set(srcHex, String.fromCharCode(dstCode));
+                  if (srcHex.length === 2) cmap.set('00' + srcHex, String.fromCharCode(dstCode));
+                  if (srcHex.startsWith('00') && srcHex.length === 4) cmap.set(srcHex.substring(2), String.fromCharCode(dstCode));
+                }
+              }
+            }
+          } catch (e) {}
+        }
+      }
+    }
+    return cmap;
+  }
+
+  function decompressDeflateSync(uint8Array) {
+    if (!uint8Array || uint8Array.length === 0) return null;
+    if (typeof require !== 'undefined') {
+      try {
+        const zlib = require('zlib');
+        return zlib.inflateSync(uint8Array);
+      } catch (e) {
+        try {
+          const zlib = require('zlib');
+          return zlib.inflateRawSync(uint8Array);
+        } catch (e2) {}
+      }
+    }
+    return null;
+  }
+
   function isReadablePdfText(str) {
     if (!str || str.length < 3) return false;
     let printable = 0;
@@ -227,10 +319,10 @@
     }
     const ratio = printable / str.length;
     if (/SF\d{6}|afii\d+|upblock|dnblock|triagup|dmacron/.test(str)) return false;
-    return ratio >= 0.80;
+    return ratio >= 0.70;
   }
 
-  function parsePdfStreamText(streamString) {
+  function parsePdfStreamText(streamString, cmap = new Map()) {
     if (!streamString || typeof streamString !== 'string') return '';
 
     let out = [];
@@ -271,11 +363,26 @@
 
       // Literal string: (texto)
       if (c === 40 /* ( */) {
-        const { strVal, nextIndex } = scanPdfLiteralString(streamString, i);
-        i = nextIndex;
-        const op = scanNextPdfOperator(streamString, i);
-        if (strVal) out.push(strVal);
-        if (op === "'" || op === '"') out.push('\n');
+        let depth = 1;
+        let j = i + 1;
+        let lit = '';
+        while (j < len && depth > 0) {
+          const sc = streamString.charCodeAt(j);
+          if (sc === 92 /* \ */) {
+            lit += streamString.charAt(j) + (j + 1 < len ? streamString.charAt(j + 1) : '');
+            j += 2;
+            continue;
+          }
+          if (sc === 40 /* ( */) depth++;
+          else if (sc === 41 /* ) */) {
+            depth--;
+            if (depth === 0) { j++; break; }
+          }
+          lit += streamString.charAt(j);
+          j++;
+        }
+        if (lit) out.push(decodePdfEscapes(lit));
+        i = j;
         continue;
       }
 
@@ -285,21 +392,99 @@
           i += 2;
           continue;
         }
-        const { strVal, nextIndex } = scanPdfHexString(streamString, i);
-        i = nextIndex;
-        const op = scanNextPdfOperator(streamString, i);
-        if (strVal) out.push(strVal);
-        if (op === "'" || op === '"') out.push('\n');
+        let j = i + 1;
+        let hex = '';
+        while (j < len && streamString.charCodeAt(j) !== 62 /* > */) {
+          const hc = streamString.charCodeAt(j);
+          if ((hc >= 48 && hc <= 57) || (hc >= 65 && hc <= 70) || (hc >= 97 && hc <= 102)) {
+            hex += streamString.charAt(j);
+          }
+          j++;
+        }
+        if (j < len && streamString.charCodeAt(j) === 62) j++;
+        let decoded = '';
+        for (let k = 0; k < hex.length; k += 4) {
+          const chunk = hex.substr(k, 4).toLowerCase();
+          if (cmap.has(chunk)) decoded += cmap.get(chunk);
+          else {
+            const sub2 = hex.substr(k, 2).toLowerCase();
+            if (cmap.has(sub2)) { decoded += cmap.get(sub2); k -= 2; }
+            else {
+              const code = parseInt(chunk, 16);
+              if (!isNaN(code) && code >= 32 && code < 127) decoded += String.fromCharCode(code);
+            }
+          }
+        }
+        if (decoded) out.push(decoded);
+        i = j;
         continue;
       }
 
       // Array TJ: [(str) num (str)] TJ
       if (c === 91 /* [ */) {
-        const { extractedText, nextIndex } = scanPdfArrayTJ(streamString, i);
-        i = nextIndex;
-        if (extractedText) {
-          out.push(extractedText + ' ');
+        let j = i + 1;
+        let arrText = '';
+        while (j < len && streamString.charCodeAt(j) !== 93 /* ] */) {
+          const ac = streamString.charCodeAt(j);
+          if (ac === 40 /* ( */) {
+            let depth = 1;
+            let k = j + 1;
+            let lit = '';
+            while (k < len && depth > 0) {
+              const sc = streamString.charCodeAt(k);
+              if (sc === 92) {
+                lit += streamString.charAt(k) + (k + 1 < len ? streamString.charAt(k + 1) : '');
+                k += 2;
+                continue;
+              }
+              if (sc === 40) depth++;
+              else if (sc === 41) {
+                depth--;
+                if (depth === 0) { k++; break; }
+              }
+              lit += streamString.charAt(k);
+              k++;
+            }
+            arrText += decodePdfEscapes(lit);
+            j = k;
+            continue;
+          } else if (ac === 60 /* < */) {
+            if (j + 1 < len && streamString.charCodeAt(j + 1) === 60) { j += 2; continue; }
+            let k = j + 1;
+            let hex = '';
+            while (k < len && streamString.charCodeAt(k) !== 62) {
+              const hc = streamString.charCodeAt(k);
+              if ((hc >= 48 && hc <= 57) || (hc >= 65 && hc <= 70) || (hc >= 97 && hc <= 102)) {
+                hex += streamString.charAt(k);
+              }
+              k++;
+            }
+            if (k < len && streamString.charCodeAt(k) === 62) k++;
+            for (let m = 0; m < hex.length; m += 4) {
+              const chunk = hex.substr(m, 4).toLowerCase();
+              if (cmap.has(chunk)) arrText += cmap.get(chunk);
+              else {
+                const sub2 = hex.substr(m, 2).toLowerCase();
+                if (cmap.has(sub2)) { arrText += cmap.get(sub2); m -= 2; }
+              }
+            }
+            j = k;
+            continue;
+          } else if ((ac >= 48 && ac <= 57) || ac === 45 /* - */) {
+            let numStr = '';
+            while (j < len && ((streamString.charCodeAt(j) >= 48 && streamString.charCodeAt(j) <= 57) || streamString.charCodeAt(j) === 45 || streamString.charCodeAt(j) === 46)) {
+              numStr += streamString.charAt(j);
+              j++;
+            }
+            const num = parseFloat(numStr);
+            if (!isNaN(num) && num < -100) arrText += ' ';
+            continue;
+          }
+          j++;
         }
+        if (j < len && streamString.charCodeAt(j) === 93) j++;
+        if (arrText) out.push(arrText + ' ');
+        i = j;
         continue;
       }
 
@@ -320,7 +505,7 @@
     }
 
     const res = out.join('').replace(/[ \t]+/g, ' ').replace(/\n\s*\n+/g, '\n\n').trim();
-    return isReadablePdfText(res) ? res : '';
+    return res;
   }
 
   async function decompressDeflateData(uint8Array) {
@@ -368,94 +553,195 @@
   }
 
   /**
-   * Extrae el texto legible y esquemas/imágenes de un archivo PDF analizando streams y objetos por páginas completas.
+   * Extrae el texto legible y esquemas/imágenes de un archivo PDF analizando el árbol de páginas (Page Tree) y mapas CMap.
    */
   async function extractTextFromPdf(arrayBuffer) {
     const bytes = new Uint8Array(arrayBuffer);
     const decoder = new TextDecoder('latin1');
     const fullText = decoder.decode(bytes);
 
-    let pages = [];
-    let currentPageItems = [];
-    let pageNum = 1;
-    let imgCounter = 0;
-    let pos = 0;
-    const len = fullText.length;
-
-    while (pos < len) {
-      const streamIdx = fullText.indexOf('stream', pos);
-      if (streamIdx === -1) break;
-
-      const prevChar = streamIdx > 0 ? fullText.charCodeAt(streamIdx - 1) : 32;
-      if (prevChar <= 32 || prevChar === 62 || prevChar === 47) {
-        let dataStart = streamIdx + 6;
-        if (dataStart < len && fullText.charCodeAt(dataStart) === 13) dataStart++;
-        if (dataStart < len && fullText.charCodeAt(dataStart) === 10) dataStart++;
-
-        const endStreamIdx = fullText.indexOf('endstream', dataStart);
-        if (endStreamIdx !== -1) {
-          const dictStart = Math.max(0, streamIdx - 400);
-          const dictSlice = fullText.substring(dictStart, streamIdx);
-          const isFontOrMeta = /FontFile|Type1|CIDFont|XRef|ObjStm|Metadata|JavaScript|FontDescriptor|CharProcs/i.test(dictSlice);
-          const isDCT = dictSlice.includes('DCTDecode');
-          const isFlate = dictSlice.includes('FlateDecode');
-
-          let rawEnd = endStreamIdx;
-          if (rawEnd > dataStart && (fullText.charCodeAt(rawEnd - 1) === 10 || fullText.charCodeAt(rawEnd - 1) === 13)) rawEnd--;
-          if (rawEnd > dataStart && (fullText.charCodeAt(rawEnd - 1) === 10 || fullText.charCodeAt(rawEnd - 1) === 13)) rawEnd--;
-
-          const rawStreamBytes = bytes.subarray(dataStart, rawEnd);
-
-          // 1. Extracción de imágenes JPEG (esquemas, diagramas de placa)
-          if (isDCT && rawStreamBytes.length > 2048 && rawStreamBytes[0] === 0xFF && rawStreamBytes[1] === 0xD8) {
-            imgCounter++;
-            const b64 = uint8ToBase64(rawStreamBytes);
-            if (b64) {
-              currentPageItems.push(`\n![Diagrama / Esquema (Pág. ${pageNum}) #img_${pageNum}_${imgCounter}](data:image/jpeg;base64,${b64})\n`);
-            }
-          }
-          // 2. Extracción de streams de texto (filtrando fuentes y metadatos)
-          else if (!isFontOrMeta) {
-            let streamString = '';
-            if (isFlate) {
-              const decompressed = await decompressDeflateData(rawStreamBytes);
-              if (decompressed) {
-                streamString = decoder.decode(decompressed);
-              }
-            } else if (!isDCT) {
-              streamString = decoder.decode(rawStreamBytes);
-            }
-
-            if (streamString) {
-              const parsed = parsePdfStreamText(streamString);
-              if (parsed && parsed.trim().length > 0) {
-                currentPageItems.push(parsed.trim());
-              }
-            }
-          }
-
-          // Si se han acumulado elementos significativos en la página
-          if (currentPageItems.length >= 3) {
-            const pageText = currentPageItems.join('\n\n').trim();
-            if (pageText.length > 0) {
-              pages.push(`--- Página ${pageNum} ---\n${pageText}`);
-              pageNum++;
-              currentPageItems = [];
-            }
-          }
-
-          pos = endStreamIdx + 9;
-          continue;
-        }
-      }
-      pos = streamIdx + 6;
+    // 1. Mapeo de offsets de objetos PDF
+    const objOffsets = new Map();
+    const objRegex = /(\d+)\s+(\d+)\s+obj/g;
+    let m;
+    while ((m = objRegex.exec(fullText)) !== null) {
+      objOffsets.set(m[1], m.index);
     }
 
-    // Volcar cualquier contenido restante en la última página
-    if (currentPageItems.length > 0) {
-      const pageText = currentPageItems.join('\n\n').trim();
-      if (pageText.length > 0) {
-        pages.push(`--- Página ${pageNum} ---\n${pageText}`);
+    // 2. Extracción de CMaps / ToUnicode
+    const cmap = parseCMaps(fullText, bytes, objOffsets);
+
+    function getObjectBody(objNum) {
+      const offset = objOffsets.get(String(objNum));
+      if (offset === undefined) return null;
+      const endObj = fullText.indexOf('endobj', offset);
+      if (endObj === -1) return null;
+      return fullText.substring(offset, endObj + 6);
+    }
+
+    // 3. Resolución del árbol jerárquico de páginas (Page Tree)
+    const pagesList = [];
+    const rootMatch = fullText.match(/\/Root\s+(\d+)\s+\d+\s+R/);
+    if (rootMatch) {
+      const catalogBody = getObjectBody(rootMatch[1]);
+      const pagesMatch = catalogBody ? catalogBody.match(/\/Pages\s+(\d+)\s+\d+\s+R/) : null;
+      if (pagesMatch) {
+        function traverse(nodeObjNum) {
+          const body = getObjectBody(nodeObjNum);
+          if (!body) return;
+          if (/\/Type\s*\/Page\b/i.test(body) && !/\/Type\s*\/Pages\b/i.test(body)) {
+            pagesList.push(nodeObjNum);
+            return;
+          }
+          const kidsMatch = body.match(/\/Kids\s*\[([\s\S]*?)\]/);
+          if (kidsMatch) {
+            const refs = kidsMatch[1].match(/(\d+)\s+\d+\s+R/g) || [];
+            for (const ref of refs) {
+              const kidNum = ref.match(/^(\d+)/)[1];
+              traverse(kidNum);
+            }
+          }
+        }
+        traverse(pagesMatch[1]);
+      }
+    }
+
+    let pages = [];
+    let pageNum = 1;
+    let imgCounter = 0;
+
+    // A. Extracción secuencial basada en el Page Tree
+    if (pagesList.length > 0) {
+      for (const pageObjNum of pagesList) {
+        const body = getObjectBody(pageObjNum);
+        if (!body) continue;
+
+        const contentsMatch = body.match(/\/Contents\s+(?:\[([\s\S]*?)\]|(\d+)\s+\d+\s+R)/);
+        let contentObjs = [];
+        if (contentsMatch) {
+          if (contentsMatch[1]) {
+            contentObjs = (contentsMatch[1].match(/(\d+)\s+\d+\s+R/g) || []).map(r => r.match(/^(\d+)/)[1]);
+          } else if (contentsMatch[2]) {
+            contentObjs = [contentsMatch[2]];
+          }
+        }
+
+        let pageItems = [];
+
+        // Extraer contenido de streams de texto de la página
+        for (const cNum of contentObjs) {
+          const offset = objOffsets.get(String(cNum));
+          if (offset !== undefined) {
+            const streamIdx = fullText.indexOf('stream', offset);
+            const endStreamIdx = fullText.indexOf('endstream', streamIdx);
+            if (streamIdx !== -1 && endStreamIdx !== -1) {
+              let dataStart = streamIdx + 6;
+              if (fullText.charCodeAt(dataStart) === 13) dataStart++;
+              if (fullText.charCodeAt(dataStart) === 10) dataStart++;
+              let rawEnd = endStreamIdx;
+              if (rawEnd > dataStart && (fullText.charCodeAt(rawEnd - 1) === 10 || fullText.charCodeAt(rawEnd - 1) === 13)) rawEnd--;
+              if (rawEnd > dataStart && (fullText.charCodeAt(rawEnd - 1) === 10 || fullText.charCodeAt(rawEnd - 1) === 13)) rawEnd--;
+
+              const rawBytes = bytes.subarray(dataStart, rawEnd);
+              try {
+                const decompressed = await decompressDeflateData(rawBytes);
+                if (decompressed) {
+                  const streamString = decoder.decode(decompressed);
+                  const parsed = parsePdfStreamText(streamString, cmap);
+                  if (parsed && parsed.length > 0) {
+                    pageItems.push(parsed);
+                  }
+                }
+              } catch (e) {}
+            }
+          }
+        }
+
+        const pageText = pageItems.join('\n\n').replace(/[ \t]+/g, ' ').trim();
+        if (pageText.length > 0) {
+          pages.push(`--- Página ${pageNum} ---\n${pageText}`);
+        }
+        pageNum++;
+      }
+    }
+
+    // B. Fallback a escaneo lineal si el árbol de páginas no produjo resultados
+    if (pages.length === 0) {
+      let currentPageItems = [];
+      let pos = 0;
+      const len = fullText.length;
+      pageNum = 1;
+
+      while (pos < len) {
+        const streamIdx = fullText.indexOf('stream', pos);
+        if (streamIdx === -1) break;
+
+        const prevChar = streamIdx > 0 ? fullText.charCodeAt(streamIdx - 1) : 32;
+        if (prevChar <= 32 || prevChar === 62 || prevChar === 47) {
+          let dataStart = streamIdx + 6;
+          if (dataStart < len && fullText.charCodeAt(dataStart) === 13) dataStart++;
+          if (dataStart < len && fullText.charCodeAt(dataStart) === 10) dataStart++;
+
+          const endStreamIdx = fullText.indexOf('endstream', dataStart);
+          if (endStreamIdx !== -1) {
+            const dictStart = Math.max(0, streamIdx - 400);
+            const dictSlice = fullText.substring(dictStart, streamIdx);
+            const isFontOrMeta = /FontFile|Type1|CIDFont|XRef|ObjStm|Metadata|JavaScript|FontDescriptor|CharProcs/i.test(dictSlice);
+            const isDCT = dictSlice.includes('DCTDecode');
+            const isFlate = dictSlice.includes('FlateDecode');
+
+            let rawEnd = endStreamIdx;
+            if (rawEnd > dataStart && (fullText.charCodeAt(rawEnd - 1) === 10 || fullText.charCodeAt(rawEnd - 1) === 13)) rawEnd--;
+            if (rawEnd > dataStart && (fullText.charCodeAt(rawEnd - 1) === 10 || fullText.charCodeAt(rawEnd - 1) === 13)) rawEnd--;
+
+            const rawStreamBytes = bytes.subarray(dataStart, rawEnd);
+
+            if (isDCT && rawStreamBytes.length > 2048 && rawStreamBytes[0] === 0xFF && rawStreamBytes[1] === 0xD8) {
+              imgCounter++;
+              const b64 = uint8ToBase64(rawStreamBytes);
+              if (b64) {
+                currentPageItems.push(`\n![Diagrama / Esquema (Pág. ${pageNum}) #img_${pageNum}_${imgCounter}](data:image/jpeg;base64,${b64})\n`);
+              }
+            } else if (!isFontOrMeta) {
+              let streamString = '';
+              if (isFlate) {
+                const decompressed = await decompressDeflateData(rawStreamBytes);
+                if (decompressed) {
+                  streamString = decoder.decode(decompressed);
+                }
+              } else if (!isDCT) {
+                streamString = decoder.decode(rawStreamBytes);
+              }
+
+              if (streamString) {
+                const parsed = parsePdfStreamText(streamString, cmap);
+                if (parsed && parsed.trim().length > 0) {
+                  currentPageItems.push(parsed.trim());
+                }
+              }
+            }
+
+            if (currentPageItems.length >= 4) {
+              const pageText = currentPageItems.join('\n\n').trim();
+              if (pageText.length > 0) {
+                pages.push(`--- Página ${pageNum} ---\n${pageText}`);
+                pageNum++;
+                currentPageItems = [];
+              }
+            }
+
+            pos = endStreamIdx + 9;
+            continue;
+          }
+        }
+        pos = streamIdx + 6;
+      }
+
+      if (currentPageItems.length > 0) {
+        const pageText = currentPageItems.join('\n\n').trim();
+        if (pageText.length > 0) {
+          pages.push(`--- Página ${pageNum} ---\n${pageText}`);
+        }
       }
     }
 

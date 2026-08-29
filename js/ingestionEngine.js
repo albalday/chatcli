@@ -375,10 +375,11 @@
 
         const lines = pageText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
         let pageHeading = '';
-        for (const line of lines.slice(0, 3)) {
-          const clean = line.replace(/^---.*?---|\[.*?\]/g, '').trim();
+        for (const line of lines.slice(0, 5)) {
+          let clean = line.replace(/^---.*?---|\[.*?\]/g, '').replace(/https?:\/\/[^\s]+/g, '').replace(/[•·*ᨀ࢈㍭\s]+/g, ' ').trim();
+          clean = clean.replace(/^\d+([A-ZÁÉÍÓÚÑa-z])/, '$1').replace(/^\d+[\s.:-]+/, '').trim();
           if (clean.length > 2 && clean.length < 80 && headingRegex.test(clean)) {
-            pageHeading = clean.replace(/^#+\s*/, '');
+            pageHeading = clean.replace(/^#+\s*/, '').trim();
             break;
           }
         }
