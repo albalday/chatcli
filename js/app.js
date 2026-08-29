@@ -365,11 +365,19 @@
       isNativeToolsSupported = caps ? (caps.tools !== false) : true;
     }
 
-    // Solo se inyecta la descripción textual de herramientas en el System Prompt si las herramientas están activadas
-    // Y el servidor/modelo NO soporta Function Calling nativo en JSON (modo fallback de texto para servidores locales/modelos sin tools).
-    const needsSystemPromptGuide = isToolsEnabled && (!isNativeToolsSupported || options.forceSystemPromptGuide);
+    // Instrucción de flujo para herramientas
+    let toolsGuide = '';
+    if (isToolsEnabled) {
+      if (!isNativeToolsSupported || options.forceSystemPromptGuide) {
+        toolsGuide = getToolsSystemPromptGuide();
+      } else {
+        const lang = appConfig.language || 'es';
+        toolsGuide = (lang === 'en')
+          ? `*Workflow instruction:* Once you receive tool results in the conversation, synthesize the findings and write a comprehensive, well-structured final answer to the user, citing sources. Do not stop without providing a complete summary.`
+          : `*Instrucción de flujo:* Una vez recibidos los resultados de las herramientas en la conversación, sintetiza los hallazgos y redacta una respuesta final completa, bien estructurada y detallada para el usuario, citando las fuentes consultadas. No finalices la respuesta sin proporcionar el resumen completo.`;
+      }
+    }
 
-    const toolsGuide = needsSystemPromptGuide ? getToolsSystemPromptGuide() : '';
     let fullSystemPrompt = activePrompt;
     if (toolsGuide) {
       fullSystemPrompt = fullSystemPrompt ? (fullSystemPrompt + '\n\n' + toolsGuide) : toolsGuide;
@@ -1585,8 +1593,54 @@
         }
       }
 
-      // Si no hay herramientas para ejecutar, es la respuesta final -> salir del bucle
+      // Si no hay herramientas para ejecutar, es la respuesta final o requiere síntesis
       if (!turnToolCalls || turnToolCalls.length === 0) {
+        // Si el modelo devolvió un texto vacío tras haber ejecutado herramientas en turnos anteriores (común en Gemini cuando tool_choice es auto),
+        // solicitar inmediatamente un turno de síntesis forzado (enableTools: false) para que el modelo redacte el resumen.
+        if ((!currentTurnText || currentTurnText.trim() === '') && turnIndex > 0 && chatHistory.length > 0 && chatHistory[chatHistory.length - 1].role === 'tool' && !(currentAbortController && currentAbortController.signal.aborted)) {
+          addDebugLog('info', 'El modelo finalizó el turno de herramientas sin texto. Solicitando síntesis final obligatoria...');
+
+          let synthText = '';
+          let synthStats = null;
+
+          await API.streamChatCompletion({
+            apiUrl: appConfig.apiUrl,
+            apiType: appConfig.apiType,
+            apiKey: appConfig.apiKey,
+            model: appConfig.model,
+            messages: buildEffectiveMessages({ enableTools: false }),
+            temperature: appConfig.temperature,
+            reasoningEffort: appConfig.reasoningEffort || 'none',
+            enableTools: false, // Forzar al modelo a redactar la síntesis final sin invocar más herramientas
+            enableContextCache: appConfig.enableContextCache !== false,
+            signal: currentAbortController ? currentAbortController.signal : undefined,
+
+            onReasoningChunk: function (chunk) {
+              addDebugLog('thinking', chunk);
+              setDebugStatus('streaming', t('debug_status_thinking'));
+            },
+            onLog: function (logData) {
+              if (logData && logData.type !== 'thinking') addDebugLog(logData.type, logData.text);
+            },
+            onChunk: function (fullTextSoFar, delta, stats) {
+              synthText = fullTextSoFar;
+              turnBlock.innerHTML = injectStreamingCursor(parseMd(synthText));
+              attachListeners(turnBlock);
+              if (stats) updateStatsDisplay(stats);
+              scrollToBottom();
+            },
+            onDone: function (finalText, stats) {
+              synthText = finalText || synthText;
+              synthStats = stats;
+            }
+          });
+
+          if (synthText && synthText.trim() !== '') {
+            currentTurnText = synthText;
+            if (synthStats) turnFinalStats = synthStats;
+          }
+        }
+
         turnBlock.innerHTML = parseMd(currentTurnText || t('empty_response'));
         attachListeners(turnBlock);
         chatHistory.push({
