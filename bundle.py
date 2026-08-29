@@ -25,6 +25,7 @@ from typing import Dict, List, Optional, Tuple
 
 JS_MODULE_FILES = [
     "cookies.js",
+    "ragStorage.js",
     "i18n.js",
     "sandbox.js",
     "charts.js",
@@ -47,6 +48,7 @@ JS_MODULE_FILES = [
 
 CORE_EXPORT_SYMBOLS = [
     "ChatStorage",
+    "ChatRagStorage",
     "ChatI18n",
     "ChatSandbox",
     "ChatCharts",
