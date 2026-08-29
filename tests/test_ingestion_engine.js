@@ -296,3 +296,50 @@ Coloque los módulos en las ranuras DIMMA2 y DIMMB2 para activar Dual Channel.
   const chapters1M = IngestionEngine.partitionTextIntoHeuristicChapters(docWithImages, 1024);
   assert.ok(chapters1M.length >= 1, 'Debe soportar 1M tokens');
 });
+
+test('IngestionEngine - prepareTextForSummarization extrae contexto de 10 líneas y omite base64 pesado', () => {
+  const textWithImages = `
+Línea 1: Manual de instalación del hardware.
+Línea 2: Desconecte la alimentación eléctrica.
+Línea 3: Conecte el cable de 24 pines ATX.
+Línea 4: Esquema detallado del panel frontal y conectores JFP1:
+![Diagrama JFP1](data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=)
+Línea 5: El LED positivo corresponde al pin 1.
+Línea 6: El interruptor de encendido va en pines 6 y 8.
+Línea 7: Verifique la polaridad antes de encender.
+  `.trim();
+
+  const prepared = IngestionEngine.prepareTextForSummarization(textWithImages);
+  assert.ok(!prepared.includes('data:image/jpeg;base64'), 'No debe incluir la cadena base64 en el texto del resumen');
+  assert.ok(prepared.includes('[IMAGEN / ESQUEMA: "Diagrama JFP1"'), 'Debe incluir la etiqueta referencial de la imagen');
+  assert.ok(prepared.includes('Esquema detallado del panel frontal'), 'Debe incluir las líneas de contexto anterior');
+  assert.ok(prepared.includes('El LED positivo corresponde al pin 1'), 'Debe incluir las líneas de contexto posterior');
+});
+
+test('IngestionEngine - Partición de PDF por páginas completas', () => {
+  const paginatedPdfText = `
+--- Página 1 ---
+# Overview & Specifications
+Especificaciones técnicas de la placa base Z790.
+Soporta procesadores Intel Core 14th Gen y memoria DDR5.
+
+--- Página 2 ---
+## Panel de E/S Trasero
+Puertos USB 3.2 Gen 2x2, HDMI 2.1 y DisplayPort 1.4.
+
+--- Página 3 ---
+## Ranuras PCIe y M.2
+Ranura PCIe 5.0 x16 reforzada y 4 ranuras M.2 Shield Frozr.
+
+--- Página 4 ---
+## Configuración de BIOS UEFI
+Instrucciones para actualizar BIOS con M-Flash.
+  `.trim();
+
+  const chapters = IngestionEngine.partitionTextIntoHeuristicChapters(paginatedPdfText, 16);
+  assert.ok(chapters.length >= 1, 'Debe generar capítulos por páginas');
+  chapters.forEach(chap => {
+    assert.ok(chap.pageRange, 'Cada capítulo debe tener su rango de páginas asignado');
+    assert.ok(chap.title.includes('Pág'), 'El título debe indicar las páginas comprendidas');
+  });
+});

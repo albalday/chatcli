@@ -293,23 +293,138 @@
         if (!inside) bestBreak = lastDot + 2;
       }
     }
-
     return bestBreak !== -1 ? bestBreak : safeIndex;
   }
 
   /**
-   * Divide un documento extenso en fragmentos/capítulos candidatos coherentes por títulos o páginas,
-   * unificando subsecciones pequeñas y delimitando el tamaño máximo según el límite de contexto configurado (K).
+   * Prepara el texto para el LLM durante la fase de resumen, extrayendo el contexto relevante
+   * de las imágenes (~10 líneas antes y después) y eliminando las cadenas base64 pesadas.
+   */
+  function prepareTextForSummarization(text) {
+    if (!text) return '';
+    const lines = text.split('\n');
+    const resultLines = [];
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const imgMatch = line.match(/!\[([^\]]*)\]\(data:image\/[^)]+\)/i) ||
+                       line.match(/<img\b[^>]*alt=["']([^"']*)["'][^>]*\/?>/i);
+      if (imgMatch) {
+        const label = (imgMatch[1] || 'Diagrama / Esquema').trim();
+        const before = lines.slice(Math.max(0, i - 10), i)
+          .filter(l => !l.includes('data:image'))
+          .map(l => l.trim())
+          .filter(l => l.length > 0)
+          .join(' ');
+        const after = lines.slice(i + 1, Math.min(lines.length, i + 11))
+          .filter(l => !l.includes('data:image'))
+          .map(l => l.trim())
+          .filter(l => l.length > 0)
+          .join(' ');
+        const contextSnippet = (before + ' ' + after).slice(0, 350).trim();
+        resultLines.push(`[IMAGEN / ESQUEMA: "${label}" | Referencia de contenido (contexto): ${contextSnippet || 'Sin texto explicativo adyacente'}]`);
+      } else {
+        resultLines.push(line);
+      }
+    }
+    return resultLines.join('\n');
+  }
+
+  /**
+   * Divide un documento extenso en fragmentos/capítulos candidatos coherentes.
+   * Si es un PDF/documento paginado, realiza el corte ESTRICTAMENTE por páginas completas.
+   * En otros documentos, particiona por secciones y protege bloques atómicos respetando el límite K.
    */
   function partitionTextIntoHeuristicChapters(text, maxCharsOrLimitK = 16) {
     if (!text) return [];
 
+    let maxChapterSize = 256000;
+    if (typeof maxCharsOrLimitK === 'number') {
+      if (maxCharsOrLimitK <= 2048) {
+        // En unidades de K tokens (1K tokens ~ 4.000 caracteres)
+        const kTokens = Math.min(1024, Math.max(16, maxCharsOrLimitK));
+        maxChapterSize = kTokens * 4000;
+      } else {
+        maxChapterSize = maxCharsOrLimitK;
+      }
+    }
+
+    const headingRegex = /^(?:#{1,6}\s+|--- (?:Página|Page)\s+\d+\s+---|\[(?:Página|Page)\s+\d+\]|\b(?:Capítulo|Capitulo|Sección|Seccion|Tema|Módulo|Modulo|Module|Section|Chapter|Parte|Part)\s+[0-9A-Za-zIVXLCDM]+[:.]?|\b(?:Overview|Quick Start|Specifications|Special Features|Rear I\/O Panel|Component Overview|CPU Socket|DIMM Slots|PCI_E|M\.?2 Slots|SATA|Front Panel|Power Connectors|Fan Headers|Audio|JRGB|JARGB|EZ Debug|BIOS Setup|RAID Configuration|Driver|Troubleshooting|Safety Information|Package Contents|Block Diagram|Hardware Setup|Software Description|Appendix)\b|^[0-9]+(?:\.[0-9]+)*\s+[A-ZÁÉÍÓÚÑ])/i;
+
+    // 1. Detección de páginas completas (para PDFs o documentos paginados)
+    const pageSplitRegex = /(?:^|\n)(?=--- (?:Página|Page)\s+\d+\s+---|\[(?:Página|Page)\s+\d+\])/i;
+    const rawPages = text.split(pageSplitRegex).map(p => p.trim()).filter(p => p.length > 0);
+
+    if (rawPages.length > 1) {
+      const chapters = [];
+      let curPages = [];
+      let curChapterLen = 0;
+      let curChapterTitle = '';
+      let startPage = 1;
+      let curPageNum = 1;
+      const minPageChapterSize = Math.max(1000, Math.floor(maxChapterSize * 0.3));
+
+      for (let i = 0; i < rawPages.length; i++) {
+        const pageText = rawPages[i];
+        const pageMatch = pageText.match(/(?:--- (?:Página|Page)\s+(\d+)\s+---|\[(?:Página|Page)\s+(\d+)\])/i);
+        if (pageMatch) {
+          curPageNum = parseInt(pageMatch[1] || pageMatch[2], 10);
+        } else {
+          curPageNum = i + 1;
+        }
+
+        const lines = pageText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+        let pageHeading = '';
+        for (const line of lines.slice(0, 3)) {
+          const clean = line.replace(/^---.*?---|\[.*?\]/g, '').trim();
+          if (clean.length > 2 && clean.length < 80 && headingRegex.test(clean)) {
+            pageHeading = clean.replace(/^#+\s*/, '');
+            break;
+          }
+        }
+
+        const shouldSplitByHeading = pageHeading && curChapterLen >= minPageChapterSize;
+        const shouldSplitBySize = (curChapterLen + pageText.length > maxChapterSize) && curPages.length > 0;
+
+        if ((shouldSplitBySize || shouldSplitByHeading) && curPages.length > 0) {
+          const endPage = curPageNum > startPage ? curPageNum - 1 : startPage;
+          const pageRange = startPage === endPage ? `Pág. ${startPage}` : `Págs. ${startPage}-${endPage}`;
+          chapters.push({
+            title: curChapterTitle ? `${curChapterTitle} (${pageRange})` : `Capítulo ${chapters.length + 1} (${pageRange})`,
+            content: curPages.join('\n\n').trim(),
+            pageRange: { start: startPage, end: endPage }
+          });
+          curPages = [pageText];
+          curChapterLen = pageText.length;
+          startPage = curPageNum;
+          curChapterTitle = pageHeading || '';
+        } else {
+          if (!curChapterTitle && pageHeading) {
+            curChapterTitle = pageHeading;
+          }
+          curPages.push(pageText);
+          curChapterLen += pageText.length;
+        }
+      }
+
+      if (curPages.length > 0) {
+        const endPage = curPageNum;
+        const pageRange = startPage === endPage ? `Pág. ${startPage}` : `Págs. ${startPage}-${endPage}`;
+        chapters.push({
+          title: curChapterTitle ? `${curChapterTitle} (${pageRange})` : `Capítulo ${chapters.length + 1} (${pageRange})`,
+          content: curPages.join('\n\n').trim(),
+          pageRange: { start: startPage, end: endPage }
+        });
+      }
+
+      return chapters.filter(c => c.content.length > 0);
+    }
+
+    // 2. Particionado por encabezados y bloques atómicos (documentos no paginados)
     const lines = text.split('\n');
     const rawSections = [];
     let currentTitle = 'Introducción / Información General';
     let currentLines = [];
-
-    const headingRegex = /^(?:#{1,6}\s+|--- Página \d+ ---|\[(?:Página|Page)\s+\d+\]|\b(?:Capítulo|Capitulo|Sección|Seccion|Tema|Módulo|Modulo|Module|Section|Chapter|Parte|Part)\s+[0-9A-Za-zIVXLCDM]+[:.]?|\b(?:Overview|Quick Start|Specifications|Special Features|Rear I\/O Panel|Component Overview|CPU Socket|DIMM Slots|PCI_E|M\.?2 Slots|SATA|Front Panel|Power Connectors|Fan Headers|Audio|JRGB|JARGB|EZ Debug|BIOS Setup|RAID Configuration|Driver|Troubleshooting|Safety Information|Package Contents|Block Diagram|Hardware Setup|Software Description|Appendix)\b|^[0-9]+(?:\.[0-9]+)*\s+[A-ZÁÉÍÓÚÑ])/i;
 
     for (const rawLine of lines) {
       const line = rawLine.trim();
@@ -341,22 +456,8 @@
       });
     }
 
-    const totalLen = text.length;
-    let maxChapterSize = 256000;
-    if (typeof maxCharsOrLimitK === 'number') {
-      if (maxCharsOrLimitK <= 2048) {
-        // En unidades de K tokens (1K tokens ~ 4.000 caracteres)
-        // Rango de 16K a 1024K (1M) tokens
-        const kTokens = Math.min(1024, Math.max(16, maxCharsOrLimitK));
-        maxChapterSize = kTokens * 4000;
-      } else {
-        // En caracteres directos (ej: 2000, 5000, 25000)
-        maxChapterSize = maxCharsOrLimitK;
-      }
-    }
-
     const minSize = Math.max(500, Math.floor(maxChapterSize * 0.25));
-    const targetChapters = Math.max(8, Math.ceil(totalLen / maxChapterSize));
+    const targetChapters = Math.max(8, Math.ceil(text.length / maxChapterSize));
 
     let sectionsToProcess = rawSections;
 
@@ -523,9 +624,10 @@
   }
 
   /**
-   * Analiza la estructura del documento y genera el resumen global y los micro-resúmenes de capítulos.
-   * Cuenta con auto-reintento (1 reintento) si la respuesta inicial no es JSON estructurado válido.
-   * @param {string} text - Texto íntegro del documento.
+   * Analiza la estructura semántica de un documento utilizando el LLM conectado.
+   * Filtra cadenas base64 de imágenes reemplazándolas por su contexto descriptivo (~10 líneas).
+   *
+   * @param {string} text - Texto limpio del documento.
    * @param {string} filename - Nombre del archivo.
    * @param {Object|Function} llmClient - Cliente de invocación del LLM.
    * @returns {Promise<{ globalSummary: string, chapters: Array<{ chapterId: number, title: string, summary: string, content: string, charCount: number }> }>}
@@ -556,7 +658,8 @@ Sé absolutamente escueto y directo. No uses prefacios, explicaciones ni palabra
 
     // Si el texto es de longitud moderada (<= 12.000 caracteres / ~3.000 tokens)
     if (cleanText.length <= 12000) {
-      const prompt = `Analiza el documento "${filename}" y divide su contenido en capítulos estructurados con resúmenes telegráficos ultra-escuetos (1 sola frase por capítulo):\n\n---\n${cleanText}\n---`;
+      const summaryCleanText = prepareTextForSummarization(cleanText);
+      const prompt = `Analiza el documento "${filename}" y divide su contenido en capítulos estructurados con resúmenes telegráficos ultra-escuetos (1 sola frase por capítulo):\n\n---\n${summaryCleanText}\n---`;
 
       try {
         let responseText = await callLLM(llmClient, prompt, SYSTEM_PROMPT);
@@ -565,7 +668,7 @@ Sé absolutamente escueto y directo. No uses prefacios, explicaciones ni palabra
         // Auto-reintento (máximo 1 reintento) si el primer intento no es JSON estructurado válido
         if (!parsed || !Array.isArray(parsed.chapters) || parsed.chapters.length === 0) {
           try {
-            const retryPrompt = `La respuesta anterior no era un JSON válido. Devuelve ÚNICAMENTE el objeto JSON estructurado con "globalSummary" (1-2 frases) y "chapters" (1 frase telegráfica cada uno) para "${filename}":\n\n---\n${cleanText}\n---`;
+            const retryPrompt = `La respuesta anterior no era un JSON válido. Devuelve ÚNICAMENTE el objeto JSON estructurado con "globalSummary" (1-2 frases) y "chapters" (1 frase telegráfica cada uno) para "${filename}":\n\n---\n${summaryCleanText}\n---`;
             const retryResponse = await callLLM(llmClient, retryPrompt, SYSTEM_PROMPT);
             const retryParsed = extractJsonFromResponse(retryResponse);
             if (retryParsed && Array.isArray(retryParsed.chapters) && retryParsed.chapters.length > 0) {
@@ -594,7 +697,7 @@ Sé absolutamente escueto y directo. No uses prefacios, explicaciones ni palabra
     }
 
     // Estrategia para documentos extensos:
-    // Partición heurística coalescida respetando el límite de contexto K y bloques atómicos (imágenes, código, tablas)
+    // Partición heurística (por páginas completas en PDFs) respetando el límite de contexto K
     const candidateChapters = partitionTextIntoHeuristicChapters(cleanText, contextLimitK);
     const processedChapters = [];
     const chapterSummaries = [];
@@ -612,7 +715,8 @@ Sé absolutamente escueto y directo. No uses prefacios, explicaciones ni palabra
       // Muestreo ágil adaptado al tamaño de contexto K configurado (hasta 32.000 caracteres / ~8.000 tokens)
       const kVal = typeof contextLimitK === 'number' ? contextLimitK : 64;
       const maxSampleChars = Math.min(32000, Math.max(4000, kVal * 200));
-      const sampleText = cand.content.length > maxSampleChars ? (cand.content.slice(0, maxSampleChars) + '...') : cand.content;
+      const cleanedSample = prepareTextForSummarization(cand.content);
+      const sampleText = cleanedSample.length > maxSampleChars ? (cleanedSample.slice(0, maxSampleChars) + '...') : cleanedSample;
       const chapPrompt = `Genera un micro-resumen telegráfico y ultra-escueto (1 SOLA FRASE directa, máx. 15-20 palabras) enumerando únicamente componentes, funciones o datos clave de "${cand.title}" en el documento "${filename}":\n\n${sampleText}`;
 
       let chapSummary = '';
@@ -628,7 +732,7 @@ Sé absolutamente escueto y directo. No uses prefacios, explicaciones ni palabra
         chapterId: i + 1,
         title: cand.title,
         summary: chapSummary,
-        content: cand.content,
+        content: cand.content, // Se guarda el contenido completo íntegro con sus imágenes para recuperación RAG
         charCount: cand.content.length
       });
     }
@@ -810,6 +914,7 @@ Sé absolutamente escueto y directo. No uses prefacios, explicaciones ni palabra
 
   return {
     normalizeExtractedText,
+    prepareTextForSummarization,
     extractTextFromPlainText,
     extractTextFromPDF,
     partitionTextIntoHeuristicChapters,

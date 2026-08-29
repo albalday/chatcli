@@ -327,14 +327,33 @@
   }
 
   /**
-   * Extrae el texto legible de un archivo PDF analizando sus streams y objetos de forma iterativa y segura.
+  function uint8ToBase64(uint8) {
+    if (!uint8 || uint8.length === 0) return '';
+    if (typeof Buffer !== 'undefined') {
+      return Buffer.from(uint8).toString('base64');
+    }
+    let binary = '';
+    const len = uint8.byteLength;
+    const chunk = 8192;
+    for (let i = 0; i < len; i += chunk) {
+      const sub = uint8.subarray(i, Math.min(i + chunk, len));
+      binary += String.fromCharCode.apply(null, sub);
+    }
+    return btoa(binary);
+  }
+
+  /**
+   * Extrae el texto legible y esquemas/imágenes de un archivo PDF analizando streams y objetos por páginas completas.
    */
   async function extractTextFromPdf(arrayBuffer) {
     const bytes = new Uint8Array(arrayBuffer);
     const decoder = new TextDecoder('latin1');
     const fullText = decoder.decode(bytes);
 
-    let foundTextChunks = [];
+    let pages = [];
+    let currentPageItems = [];
+    let pageNum = 1;
+    let imgCounter = 0;
     let pos = 0;
     const len = fullText.length;
 
@@ -350,30 +369,52 @@
 
         const endStreamIdx = fullText.indexOf('endstream', dataStart);
         if (endStreamIdx !== -1) {
-          const dictStart = Math.max(0, streamIdx - 300);
+          const dictStart = Math.max(0, streamIdx - 400);
           const dictSlice = fullText.substring(dictStart, streamIdx);
           const isFlate = dictSlice.includes('FlateDecode');
+          const isDCT = dictSlice.includes('DCTDecode');
 
           let rawEnd = endStreamIdx;
           if (rawEnd > dataStart && (fullText.charCodeAt(rawEnd - 1) === 10 || fullText.charCodeAt(rawEnd - 1) === 13)) rawEnd--;
           if (rawEnd > dataStart && (fullText.charCodeAt(rawEnd - 1) === 10 || fullText.charCodeAt(rawEnd - 1) === 13)) rawEnd--;
 
           const rawStreamBytes = bytes.subarray(dataStart, rawEnd);
-          let streamString = '';
 
-          if (isFlate) {
-            const decompressed = await decompressDeflateData(rawStreamBytes);
-            if (decompressed) {
-              streamString = decoder.decode(decompressed);
+          // 1. Extracción de imágenes JPEG (esquemas, diagramas de placa)
+          if (isDCT && rawStreamBytes.length > 2048 && rawStreamBytes[0] === 0xFF && rawStreamBytes[1] === 0xD8) {
+            imgCounter++;
+            const b64 = uint8ToBase64(rawStreamBytes);
+            if (b64) {
+              currentPageItems.push(`\n![Esquema / Imagen (Pág. ${pageNum}) #img_${pageNum}_${imgCounter}](data:image/jpeg;base64,${b64})\n`);
             }
-          } else {
-            streamString = decoder.decode(rawStreamBytes);
+          }
+          // 2. Extracción de streams de texto
+          else {
+            let streamString = '';
+            if (isFlate) {
+              const decompressed = await decompressDeflateData(rawStreamBytes);
+              if (decompressed) {
+                streamString = decoder.decode(decompressed);
+              }
+            } else if (!isDCT) {
+              streamString = decoder.decode(rawStreamBytes);
+            }
+
+            if (streamString) {
+              const parsed = parsePdfStreamText(streamString);
+              if (parsed && parsed.trim().length > 0) {
+                currentPageItems.push(parsed.trim());
+              }
+            }
           }
 
-          if (streamString) {
-            const parsed = parsePdfStreamText(streamString);
-            if (parsed && parsed.trim().length > 0) {
-              foundTextChunks.push(parsed.trim());
+          // Si se han acumulado elementos significativos en la página
+          if (currentPageItems.length >= 3) {
+            const pageText = currentPageItems.join('\n\n').trim();
+            if (pageText.length > 0) {
+              pages.push(`--- Página ${pageNum} ---\n${pageText}`);
+              pageNum++;
+              currentPageItems = [];
             }
           }
 
@@ -384,16 +425,23 @@
       pos = streamIdx + 6;
     }
 
-    // Fallback: si no se encontraron streams comprimidos con texto, escanear texto directo
-    if (foundTextChunks.length === 0) {
-      const directText = parsePdfStreamText(fullText);
-      if (directText && directText.trim().length > 0) {
-        foundTextChunks.push(directText.trim());
+    // Volcar cualquier contenido restante en la última página
+    if (currentPageItems.length > 0) {
+      const pageText = currentPageItems.join('\n\n').trim();
+      if (pageText.length > 0) {
+        pages.push(`--- Página ${pageNum} ---\n${pageText}`);
       }
     }
 
-    // Limpiar y estructurar el texto resultante
-    let finalCleanText = foundTextChunks.join('\n\n').trim();
+    // Fallback si no se pudieron dividir por páginas
+    if (pages.length === 0) {
+      const directText = parsePdfStreamText(fullText);
+      if (directText && directText.trim().length > 0) {
+        pages.push(`--- Página 1 ---\n${directText.trim()}`);
+      }
+    }
+
+    let finalCleanText = pages.join('\n\n').trim();
 
     if (!finalCleanText) {
       return `[Documento PDF adjunto: No se pudo extraer texto seleccionable. Es posible que el PDF contenga únicamente imágenes escaneadas o esté protegido por contraseña.]`;
