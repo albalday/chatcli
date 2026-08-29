@@ -1459,7 +1459,7 @@
       `;
     }
 
-    const maxAgentTurns = 5;
+    const maxAgentTurns = 8;
     let turnIndex = 0;
     let accumulatedConversationMarkdown = '';
     const toolCallSignatures = [];
@@ -1561,12 +1561,14 @@
         addDebugLog('error', streamError.message || String(streamError));
         row.classList.add('message-error');
         turnBlock.innerHTML = `
-          <div style="display:flex; align-items:flex-start; gap:0.5rem;">
+          <div class="network-error-card">
             <span>⚠️</span>
             <div>
-              <strong>${t('err_server_connect')}</strong>
-              <p style="margin-top: 0.25rem;">${streamError.message || streamError}</p>
-              <p style="margin-top: 0.5rem; font-size: 0.85em; opacity: 0.9;">
+              <strong>${t('err_server_connect_title')}</strong>
+              <p style="margin-top: 0.25rem;">
+                ${Markdown.escapeHtml(streamError.message || String(streamError))}
+              </p>
+              <p style="margin-top: 0.25rem; font-size: 0.75rem; color: var(--text-muted);">
                 ${t('err_server_connect_hint', { url: appConfig.apiUrl })}
               </p>
             </div>
@@ -1596,22 +1598,36 @@
       // Si no hay herramientas para ejecutar, es la respuesta final o requiere síntesis
       if (!turnToolCalls || turnToolCalls.length === 0) {
         // Si el modelo devolvió un texto vacío tras haber ejecutado herramientas en turnos anteriores (común en Gemini cuando tool_choice es auto),
-        // solicitar inmediatamente un turno de síntesis forzado (enableTools: false) para que el modelo redacte el resumen.
+        // solicitar inmediatamente un turno de síntesis forzado con instrucción explícita y toolChoice: 'none' para que el modelo redacte el resumen.
         if ((!currentTurnText || currentTurnText.trim() === '') && turnIndex > 0 && chatHistory.length > 0 && chatHistory[chatHistory.length - 1].role === 'tool' && !(currentAbortController && currentAbortController.signal.aborted)) {
           addDebugLog('info', 'El modelo finalizó el turno de herramientas sin texto. Solicitando síntesis final obligatoria...');
 
           let synthText = '';
           let synthStats = null;
 
+          const isEn = appConfig.language === 'en';
+          const synthMessages = buildEffectiveMessages({ forceSystemPromptGuide: true });
+          synthMessages.push({
+            role: 'user',
+            content: isEn
+              ? 'Based on all the information gathered from the tools above, please write a comprehensive, detailed, and well-structured final answer to my initial question, organizing the findings clearly and citing sources.'
+              : 'A partir de toda la información obtenida por las herramientas anteriores, redacta ahora una respuesta final completa, detallada y bien estructurada para mi consulta inicial, organizando los hallazgos con claridad y citando las fuentes consultadas.'
+          });
+
           await API.streamChatCompletion({
             apiUrl: appConfig.apiUrl,
             apiType: appConfig.apiType,
             apiKey: appConfig.apiKey,
             model: appConfig.model,
-            messages: buildEffectiveMessages({ enableTools: false }),
+            messages: synthMessages,
             temperature: appConfig.temperature,
             reasoningEffort: appConfig.reasoningEffort || 'none',
-            enableTools: false, // Forzar al modelo a redactar la síntesis final sin invocar más herramientas
+            enableTools: true,
+            toolChoice: 'none', // Preservar declaraciones de herramientas pero forzar respuesta textual
+            enableAgentJs: appConfig.enableAgentJs !== false,
+            enableAgentWeb: appConfig.enableAgentWeb !== false,
+            enableAgentSearch: appConfig.enableAgentSearch !== false,
+            enableAgentChart: appConfig.enableAgentChart !== false,
             enableContextCache: appConfig.enableContextCache !== false,
             signal: currentAbortController ? currentAbortController.signal : undefined,
 
@@ -1638,6 +1654,21 @@
           if (synthText && synthText.trim() !== '') {
             currentTurnText = synthText;
             if (synthStats) turnFinalStats = synthStats;
+          }
+        }
+
+        // Si el modelo todavía no emitió texto tras la síntesis forzada, compilar los resultados de las herramientas
+        if (!currentTurnText || currentTurnText.trim() === '') {
+          const toolResults = chatHistory
+            .filter(m => m.role === 'tool' && m.content)
+            .map(m => m.content)
+            .filter(Boolean);
+
+          if (toolResults.length > 0) {
+            const isEn = appConfig.language === 'en';
+            currentTurnText = isEn
+              ? '### Summary of Search Results\n\n' + toolResults.join('\n\n---\n\n')
+              : '### Resumen de la Información Consultada\n\n' + toolResults.join('\n\n---\n\n');
           }
         }
 
@@ -2182,7 +2213,7 @@
     }
 
     // Si se agotaron los turnos máximos y el último mensaje fue de una herramienta (role: 'tool'),
-    // realizar una última petición de síntesis al modelo con enableTools: false para garantizar el resumen final.
+    // realizar una última petición de síntesis al modelo con toolChoice: 'none' para garantizar el resumen final.
     if (turnIndex >= maxAgentTurns && chatHistory.length > 0 && chatHistory[chatHistory.length - 1].role === 'tool' && !(currentAbortController && currentAbortController.signal.aborted)) {
       const finalSynthBlock = document.createElement('div');
       finalSynthBlock.className = 'agentic-turn-block';
@@ -2191,15 +2222,29 @@
       let finalSynthText = '';
       let finalSynthStats = null;
 
+      const isEn = appConfig.language === 'en';
+      const synthMessages = buildEffectiveMessages({ forceSystemPromptGuide: true });
+      synthMessages.push({
+        role: 'user',
+        content: isEn
+          ? 'Based on all the information gathered from the tools above, please write a comprehensive, detailed, and well-structured final answer to my initial question, organizing the findings clearly and citing sources.'
+          : 'A partir de toda la información obtenida por las herramientas anteriores, redacta ahora una respuesta final completa, detallada y bien estructurada para mi consulta inicial, organizando los hallazgos con claridad y citando las fuentes consultadas.'
+      });
+
       await API.streamChatCompletion({
         apiUrl: appConfig.apiUrl,
         apiType: appConfig.apiType,
         apiKey: appConfig.apiKey,
         model: appConfig.model,
-        messages: buildEffectiveMessages({ enableTools: false }),
+        messages: synthMessages,
         temperature: appConfig.temperature,
         reasoningEffort: appConfig.reasoningEffort || 'none',
-        enableTools: false, // Forzar al modelo a redactar la síntesis final sin invocar más herramientas
+        enableTools: true,
+        toolChoice: 'none', // Preservar declaraciones de herramientas pero forzar respuesta textual
+        enableAgentJs: appConfig.enableAgentJs !== false,
+        enableAgentWeb: appConfig.enableAgentWeb !== false,
+        enableAgentSearch: appConfig.enableAgentSearch !== false,
+        enableAgentChart: appConfig.enableAgentChart !== false,
         enableContextCache: appConfig.enableContextCache !== false,
         signal: currentAbortController ? currentAbortController.signal : undefined,
 
@@ -2222,6 +2267,19 @@
           finalSynthStats = stats;
         }
       });
+
+      if (!finalSynthText || finalSynthText.trim() === '') {
+        const toolResults = chatHistory
+          .filter(m => m.role === 'tool' && m.content)
+          .map(m => m.content)
+          .filter(Boolean);
+
+        if (toolResults.length > 0) {
+          finalSynthText = isEn
+            ? '### Summary of Search Results\n\n' + toolResults.join('\n\n---\n\n')
+            : '### Resumen de la Información Consultada\n\n' + toolResults.join('\n\n---\n\n');
+        }
+      }
 
       if (finalSynthText) {
         finalSynthBlock.innerHTML = parseMd(finalSynthText);

@@ -277,8 +277,8 @@ test('AgentRuntime - Auto-síntesis cuando el modelo finaliza con texto vacío t
         // Paso 2: El modelo devuelve cadena vacía y 0 toolCalls (comportamiento de Gemini reportado)
         return { accumulatedText: '', toolCalls: [], stats: { tokens: 5 } };
       } else if (step === 3) {
-        // Paso 3: Auto-síntesis forzada con enableTools: false
-        assert.equal(params.enableTools, false);
+        // Paso 3: Auto-síntesis forzada con toolChoice: 'none'
+        assert.equal(params.toolChoice, 'none');
         synthRequested = true;
         return { accumulatedText: 'El precio actual de la acción es $215.4.', toolCalls: [], stats: { tokens: 20 } };
       }

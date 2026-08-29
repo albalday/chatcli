@@ -119,10 +119,10 @@
     /**
      * Inyecta las definiciones de herramientas agénticas.
      */
-    applyTools(payload, toolsList) {
+    applyTools(payload, toolsList, toolChoice = 'auto') {
       if (toolsList && toolsList.length > 0) {
         payload.tools = toolsList;
-        payload.tool_choice = 'auto';
+        payload.tool_choice = toolChoice || 'auto';
       }
     }
 
@@ -136,6 +136,7 @@
         temperature = 0.7,
         reasoningEffort = 'none',
         toolsList = [],
+        toolChoice = 'auto',
         enableContextCache = true,
         jsonMode = false,
         stream = true
@@ -159,7 +160,7 @@
       }
 
       if (capabilities.tools && toolsList && toolsList.length > 0) {
-        this.applyTools(payload, toolsList);
+        this.applyTools(payload, toolsList, toolChoice);
       }
 
       if (capabilities.promptCaching && enableContextCache) {

@@ -795,15 +795,23 @@
             if ((!currentStepText || currentStepText.trim() === '') && stepIndex > 0 && workingMessages.length > 0 && workingMessages[workingMessages.length - 1].role === 'tool' && autoSynthesize && !combinedSignal.aborted) {
               if (callbacks.onSynthesize) callbacks.onSynthesize(stepIndex);
               try {
+                const synthMessages = [
+                  ...workingMessages,
+                  {
+                    role: 'user',
+                    content: 'Por favor, proporciona un resumen final completo, estructurado y detallado respondiendo a mi consulta a partir de toda la información obtenida por las herramientas.'
+                  }
+                ];
                 const synthRes = await API.streamChatCompletion({
                   apiUrl,
                   apiType,
                   apiKey,
                   model,
-                  messages: workingMessages,
+                  messages: synthMessages,
                   temperature,
                   reasoningEffort,
-                  enableTools: false,
+                  enableTools: true,
+                  toolChoice: 'none',
                   enableContextCache,
                   signal: combinedSignal,
                   onChunk: (fullTextSoFar, delta, stats) => {
@@ -820,6 +828,17 @@
                 }
               } catch (synthErr) {
                 if (callbacks.onLog) callbacks.onLog({ type: 'warn', text: `Auto-síntesis fallida: ${synthErr.message}` });
+              }
+            }
+
+            // Si el modelo todavía no devolvió texto, recopilar los resultados de las herramientas
+            if (!currentStepText || currentStepText.trim() === '') {
+              const toolContents = workingMessages
+                .filter(m => m.role === 'tool' && m.content)
+                .map(m => m.content)
+                .filter(Boolean);
+              if (toolContents.length > 0) {
+                currentStepText = '### Resumen de la Información Consultada\n\n' + toolContents.join('\n\n---\n\n');
               }
             }
 
@@ -977,15 +996,23 @@
         if (workingMessages.length > 0 && workingMessages[workingMessages.length - 1].role === 'tool' && autoSynthesize && !combinedSignal.aborted) {
           if (callbacks.onSynthesize) callbacks.onSynthesize(stepIndex);
           try {
+            const synthMessages = [
+              ...workingMessages,
+              {
+                role: 'user',
+                content: 'Por favor, proporciona un resumen final completo, estructurado y detallado respondiendo a mi consulta a partir de toda la información obtenida por las herramientas.'
+              }
+            ];
             const synthRes = await API.streamChatCompletion({
               apiUrl,
               apiType,
               apiKey,
               model,
-              messages: workingMessages,
+              messages: synthMessages,
               temperature,
               reasoningEffort,
-              enableTools: false,
+              enableTools: true,
+              toolChoice: 'none',
               enableContextCache,
               signal: combinedSignal,
               onChunk: (fullTextSoFar, delta, stats) => {
@@ -1001,6 +1028,16 @@
               finalAccumulatedText = synthRes.accumulatedText;
             }
           } catch (e) {}
+
+          if (!finalAccumulatedText || finalAccumulatedText.trim() === '') {
+            const toolContents = workingMessages
+              .filter(m => m.role === 'tool' && m.content)
+              .map(m => m.content)
+              .filter(Boolean);
+            if (toolContents.length > 0) {
+              finalAccumulatedText = '### Resumen de la Información Consultada\n\n' + toolContents.join('\n\n---\n\n');
+            }
+          }
         }
       }
 

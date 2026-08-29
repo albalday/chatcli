@@ -411,6 +411,7 @@
       temperature = 0.7,
       reasoningEffort = 'none',
       enableTools = false,
+      toolChoice = 'auto',
       enableAgentJs = false,
       enableAgentWeb = false,
       enableAgentSearch = false,
@@ -437,7 +438,7 @@
     let toolsList = [];
     const AgentCore = typeof window !== 'undefined' ? window.ChatAgentCore : (typeof require !== 'undefined' ? (() => { try { return require('./agent-core.js'); } catch(e){ return null; } })() : null);
 
-    if (enableTools) {
+    if (enableTools || toolChoice === 'none') {
       if (AgentCore && AgentCore.registry) {
         toolsList = AgentCore.registry.getDefinitions({
           enableAgentJs,
@@ -467,6 +468,7 @@
       temperature,
       reasoningEffort,
       toolsList,
+      toolChoice: toolChoice || 'auto',
       enableContextCache: enableContextCache && !cacheInvalidated
     }) : {
       model: (model || '').trim(),
