@@ -584,7 +584,22 @@
       };
 
       // Cliente LLM configurado en la app
-      const llmClient = (typeof window !== 'undefined' && window.ChatAPI) ? window.ChatAPI : null;
+      const appCfg = (typeof window !== 'undefined' && window.appConfig)
+        ? window.appConfig
+        : ((getStorage && getStorage()?.loadConfig) ? getStorage().loadConfig() : {});
+
+      const llmClient = (typeof window !== 'undefined' && window.ChatAPI) ? {
+        streamChatCompletion: (params) => window.ChatAPI.streamChatCompletion({
+          apiUrl: appCfg.apiUrl || 'http://localhost:1234/v1',
+          apiType: appCfg.apiType || 'openai',
+          apiKey: appCfg.apiKey || '',
+          model: appCfg.model || '',
+          enableTools: false,
+          enableContextCache: false,
+          ...params
+        }),
+        config: appCfg
+      } : null;
 
       await IngestionEngine.processDocumentQueue(files, branchId, llmClient, onProgress);
 

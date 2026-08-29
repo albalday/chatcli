@@ -52,6 +52,16 @@
     return null;
   }
 
+  function getStorage() {
+    if (typeof window !== 'undefined' && window.ChatStorage) {
+      return window.ChatStorage;
+    }
+    if (typeof require !== 'undefined') {
+      try { return require('./cookies.js'); } catch (e) {}
+    }
+    return null;
+  }
+
   // ==========================================================================
   // 1. Parsers de Texto en Cliente
   // ==========================================================================
@@ -323,7 +333,7 @@
       return await llmClient.complete({ prompt, systemPrompt });
     }
 
-    // 3. Si llmClient es un objeto con método sendChatCompletion o ChatAPI
+    // 3. Si llmClient es un objeto con método streamChatCompletion o sendChatCompletion o ChatAPI
     if (typeof llmClient.streamChatCompletion === 'function' || typeof llmClient.sendChatCompletion === 'function') {
       return new Promise((resolve, reject) => {
         let accumulatedText = '';
@@ -331,15 +341,31 @@
         if (systemPrompt) messages.push({ role: 'system', content: systemPrompt });
         messages.push({ role: 'user', content: prompt });
 
+        const Storage = getStorage();
+        const appCfg = (typeof window !== 'undefined' && window.appConfig) ? window.appConfig : (Storage?.loadConfig ? Storage.loadConfig() : {});
+        const clientCfg = llmClient.config || {};
+
+        const apiUrl = clientCfg.apiUrl || appCfg.apiUrl || 'http://localhost:1234/v1';
+        const apiType = clientCfg.apiType || appCfg.apiType || 'openai';
+        const apiKey = clientCfg.apiKey !== undefined ? clientCfg.apiKey : (appCfg.apiKey || '');
+        const model = clientCfg.model || appCfg.model || '';
+
         const apiMethod = llmClient.streamChatCompletion || llmClient.sendChatCompletion;
         apiMethod.call(llmClient, {
+          apiUrl,
+          apiType,
+          apiKey,
+          model,
           messages,
           temperature: 0.2,
-          onChunk: (delta) => {
-            if (delta && delta.content) accumulatedText += delta.content;
+          enableTools: false,
+          enableContextCache: false,
+          onChunk: (fullTextSoFar, delta) => {
+            if (typeof fullTextSoFar === 'string') accumulatedText = fullTextSoFar;
+            else if (delta && delta.content) accumulatedText += delta.content;
           },
-          onDone: (res) => {
-            resolve(res?.text || accumulatedText);
+          onDone: (finalText) => {
+            resolve(typeof finalText === 'string' ? finalText : (finalText?.text || accumulatedText));
           },
           onError: (err) => {
             reject(new Error(typeof err === 'string' ? err : err?.message || 'Error en llamada LLM'));
