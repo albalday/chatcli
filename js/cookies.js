@@ -21,7 +21,6 @@
   const STORE_CONVERSATIONS = 'conversations';
   const STORE_MESSAGES = 'messages';
   const STORE_ATTACHMENTS = 'attachments';
-  const STORE_KNOWLEDGE = 'knowledge_chunks';
 
   const DEFAULT_CONFIG = {
     apiUrl: 'http://localhost:1234/v1',
@@ -337,13 +336,6 @@
             const attStore = db.createObjectStore(STORE_ATTACHMENTS, { keyPath: 'id' });
             attStore.createIndex('by_conversationId', 'conversationId', { unique: false });
             attStore.createIndex('by_messageId', 'messageId', { unique: false });
-          }
-
-          // 4. Store para Knowledge / RAG Chunks
-          if (!db.objectStoreNames.contains(STORE_KNOWLEDGE)) {
-            const knowStore = db.createObjectStore(STORE_KNOWLEDGE, { keyPath: 'id' });
-            knowStore.createIndex('by_conversationId', 'conversationId', { unique: false });
-            knowStore.createIndex('by_createdAt', 'createdAt', { unique: false });
           }
         };
 
@@ -784,7 +776,6 @@
     DB_VERSION,
     STORE_CONVERSATIONS,
     STORE_MESSAGES,
-    STORE_ATTACHMENTS,
-    STORE_KNOWLEDGE
+    STORE_ATTACHMENTS
   };
 });
