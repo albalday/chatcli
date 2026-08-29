@@ -185,6 +185,16 @@
           ? `<span class="rag-branch-inline-desc">— ${getMarkdown().escapeHtml(branch.description)}</span>` 
           : '';
 
+        let docsSummaryHtml = '';
+        if (docs.length > 0) {
+          const docsTitles = docs.map(d => getMarkdown().escapeHtml(d.title)).slice(0, 3).join(', ');
+          const moreDocs = docs.length > 3 ? ` +${docs.length - 3} más` : '';
+          const fullTitles = docs.map(d => d.title).join(', ');
+          docsSummaryHtml = `<span class="rag-branch-docs-preview" title="${getMarkdown().escapeHtml(fullTitles)}">📚 <em>${docsTitles}${moreDocs}</em></span>`;
+        } else {
+          docsSummaryHtml = `<span class="rag-branch-docs-preview-empty"><em>(Sin documentos)</em></span>`;
+        }
+
         const card = document.createElement('div');
         card.className = `rag-branch-toggle-card ${isCurrentActive ? 'is-active-chat' : ''}`;
         card.innerHTML = `
@@ -194,15 +204,20 @@
               <span class="slider"></span>
             </label>
           </div>
-          <div class="rag-branch-main-content">
-            <span class="rag-branch-name-text">📁 ${getMarkdown().escapeHtml(branch.name)}</span>
-            ${descInlineHtml}
-            ${branchActivePill}
-          </div>
-          <div class="rag-branch-meta-badges">
-            <span class="rag-meta-badge" title="Documentos">📄 <strong>${docs.length}</strong> docs</span>
-            <span class="rag-meta-badge" title="Capítulos">📑 <strong>${totalChapters}</strong> caps</span>
-            <span class="rag-meta-badge" title="Tamaño">💾 <strong>${formatBytes(totalSize)}</strong></span>
+          <div class="rag-branch-card-body">
+            <div class="rag-branch-row-top">
+              <span class="rag-branch-name-text">📁 ${getMarkdown().escapeHtml(branch.name)}</span>
+              ${descInlineHtml}
+              ${branchActivePill}
+            </div>
+            <div class="rag-branch-row-bottom">
+              <div class="rag-branch-meta-badges">
+                <span class="rag-meta-badge" title="Documentos">📄 <strong>${docs.length}</strong> docs</span>
+                <span class="rag-meta-badge" title="Capítulos">📑 <strong>${totalChapters}</strong> caps</span>
+                <span class="rag-meta-badge" title="Tamaño">💾 <strong>${formatBytes(totalSize)}</strong></span>
+              </div>
+              ${docsSummaryHtml}
+            </div>
           </div>
         `;
 
