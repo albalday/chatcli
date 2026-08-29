@@ -710,6 +710,76 @@
       });
     }
 
+    buildPayload(params) {
+      const {
+        model = '',
+        messages = [],
+        temperature = 0.7,
+        reasoningEffort = 'none',
+        toolsList = [],
+        toolChoice = 'auto',
+        enableContextCache = true,
+        stream = true
+      } = params;
+
+      const capabilities = this.getCapabilities(model);
+      const formattedMessages = this.formatMessages(messages, capabilities);
+
+      // Separar system prompt (requerido a nivel raíz en Claude Messages API)
+      const systemMessages = formattedMessages.filter(m => m.role === 'system');
+      const nonSystemMessages = formattedMessages.filter(m => m.role !== 'system');
+
+      let systemContent = '';
+      if (systemMessages.length > 0) {
+        systemContent = systemMessages.map(m => typeof m.content === 'string' ? m.content : JSON.stringify(m.content)).join('\n\n');
+      }
+
+      const payload = {
+        model: (model || '').trim(),
+        messages: nonSystemMessages,
+        temperature: parseFloat(temperature) || 0.7,
+        max_tokens: 4096
+      };
+
+      if (systemContent) {
+        if (enableContextCache && capabilities.promptCaching) {
+          payload.system = [{ type: 'text', text: systemContent, cache_control: { type: 'ephemeral' } }];
+        } else {
+          payload.system = systemContent;
+        }
+      }
+
+      if (capabilities.streaming && stream !== false) {
+        payload.stream = true;
+      }
+
+      if (capabilities.reasoning) {
+        this.applyReasoning(payload, reasoningEffort);
+      }
+
+      if (capabilities.tools && toolsList && toolsList.length > 0) {
+        payload.tools = toolsList.map(t => {
+          if (t.type === 'function' && t.function) {
+            return {
+              name: t.function.name,
+              description: t.function.description || '',
+              input_schema: t.function.parameters || { type: 'object', properties: {} }
+            };
+          }
+          return t;
+        });
+        if (enableContextCache && capabilities.promptCaching && payload.tools.length > 0) {
+          payload.tools[payload.tools.length - 1].cache_control = { type: 'ephemeral' };
+        }
+      }
+
+      if (capabilities.promptCaching && enableContextCache) {
+        this.applyContextCache(payload, { toolsList, messages: nonSystemMessages });
+      }
+
+      return payload;
+    }
+
     applyReasoning(payload, effortLevel) {
       let effort = String(effortLevel || 'none').toLowerCase().trim();
       if (effort === 'off') effort = 'none';
