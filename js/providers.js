@@ -958,20 +958,35 @@
 
         if (m.role === 'assistant' && Array.isArray(m.tool_calls) && m.tool_calls.length > 0) {
           const cleanToolCalls = m.tool_calls.map(tc => {
-            const out = {
+            const rawArgs = typeof tc.function?.arguments === 'string'
+              ? tc.function.arguments
+              : JSON.stringify(tc.function?.arguments || {});
+
+            let safeArgs = rawArgs;
+            try {
+              JSON.parse(rawArgs);
+            } catch (e) {
+              const matches = rawArgs.match(/\{[^{}]*("docId"|"chapterId"|[a-zA-Z0-9_]+)[^{}]*\}/g);
+              if (matches && matches.length > 0) {
+                try {
+                  JSON.parse(matches[0]);
+                  safeArgs = matches[0];
+                } catch (e2) {
+                  safeArgs = '{}';
+                }
+              } else {
+                safeArgs = '{}';
+              }
+            }
+
+            return {
               id: tc.id || `call_${Date.now()}`,
               type: 'function',
               function: {
                 name: tc.function?.name || tc.name || '',
-                arguments: typeof tc.function?.arguments === 'string'
-                  ? tc.function.arguments
-                  : JSON.stringify(tc.function?.arguments || {})
+                arguments: safeArgs
               }
             };
-            if (tc.thought_signature) out.thought_signature = tc.thought_signature;
-            if (tc.extra_content) out.extra_content = tc.extra_content;
-            if (tc.provider_specific_fields) out.provider_specific_fields = tc.provider_specific_fields;
-            return out;
           });
 
           // Regla Gemini: Un turno assistant con tool_calls NUNCA puede ir inmediatamente después de system
