@@ -194,19 +194,15 @@
               <span class="slider"></span>
             </label>
           </div>
-          <div class="rag-branch-toggle-info">
-            <div class="rag-branch-header-line">
-              <span class="rag-branch-name-text">📁 ${getMarkdown().escapeHtml(branch.name)}</span>
-              ${descInlineHtml}
-              ${branchActivePill}
-            </div>
-            <div class="rag-branch-info-frame">
-              <div class="rag-branch-meta-badges">
-                <span class="rag-meta-badge">📄 <strong>${docs.length}</strong> documentos</span>
-                <span class="rag-meta-badge">📑 <strong>${totalChapters}</strong> capítulos</span>
-                <span class="rag-meta-badge">💾 <strong>${formatBytes(totalSize)}</strong></span>
-              </div>
-            </div>
+          <div class="rag-branch-main-content">
+            <span class="rag-branch-name-text">📁 ${getMarkdown().escapeHtml(branch.name)}</span>
+            ${descInlineHtml}
+            ${branchActivePill}
+          </div>
+          <div class="rag-branch-meta-badges">
+            <span class="rag-meta-badge" title="Documentos">📄 <strong>${docs.length}</strong> docs</span>
+            <span class="rag-meta-badge" title="Capítulos">📑 <strong>${totalChapters}</strong> caps</span>
+            <span class="rag-meta-badge" title="Tamaño">💾 <strong>${formatBytes(totalSize)}</strong></span>
           </div>
         `;
 
