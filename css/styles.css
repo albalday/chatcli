@@ -780,6 +780,13 @@ body {
   box-shadow: var(--shadow-sm);
 }
 
+.tool-card-header,
+.web-card-header,
+.search-card-header {
+  cursor: pointer;
+  user-select: none;
+}
+
 .tool-card-header {
   background: linear-gradient(135deg, #4f46e5, #6366f1);
   color: white;

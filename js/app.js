@@ -2198,6 +2198,14 @@
           resContainer.innerHTML = `<div class="result-text-block ${ragRes.success ? 'result-success' : 'result-error'}"><pre><code>${Markdown.escapeHtml(outText)}</code></pre></div>`;
         }
 
+        // Colapsar la tarjeta por defecto tras recibir el contenido del RAG para no saturar la vista
+        const cardEl = cardDiv.querySelector('.tool-execution-card');
+        if (cardEl) {
+          cardEl.classList.add('collapsed');
+          const collapseSpan = cardDiv.querySelector('.btn-tool-collapse span');
+          if (collapseSpan) collapseSpan.textContent = '▸';
+        }
+
         addDebugLog('tool', `read_chapter_content Result: ${outText.substring(0, 200)}...`);
         addDebugLog('raw', `<<< TOOL RESULT read_chapter_content:\n${outText}`);
 
@@ -2906,13 +2914,14 @@
         }
       });
     }
-    // Botones de colapso de tarjetas de herramientas
-    container.querySelectorAll('.btn-tool-collapse').forEach(btn => {
-      btn.onclick = () => {
-        const card = btn.closest('.tool-execution-card, .web-search-card');
+    // Botones y cabeceras de colapso de tarjetas de herramientas
+    container.querySelectorAll('.btn-tool-collapse, .tool-card-header, .web-card-header, .search-card-header').forEach(el => {
+      el.onclick = (e) => {
+        if (e.target.closest('a')) return;
+        const card = el.closest('.tool-execution-card, .web-request-card, .web-search-card, .chat-chart-card');
         if (card) {
           card.classList.toggle('collapsed');
-          const span = btn.querySelector('span');
+          const span = card.querySelector('.btn-tool-collapse span');
           if (span) span.textContent = card.classList.contains('collapsed') ? '▸' : '▾';
         }
       };

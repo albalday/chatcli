@@ -370,7 +370,7 @@
       }
 
       cardDiv.innerHTML = `
-        <div class="tool-execution-card rag-execution-card">
+        <div class="tool-execution-card rag-execution-card collapsed">
           <div class="tool-card-header">
             <div class="tool-card-title">
               <span>📖</span>
@@ -378,7 +378,7 @@
             </div>
             <div class="tool-card-header-actions">
               <span class="tool-card-badge ${isSuccess ? 'status-success' : 'status-error'}">${isSuccess ? `✅ Capítulo recuperado (${charCount} caracteres)` : '❌ No encontrado'}</span>
-              <button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Minimizar'}"><span>▾</span></button>
+              <button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Minimizar'}"><span>▸</span></button>
             </div>
           </div>
           <div class="tool-card-collapsible-body">
