@@ -409,7 +409,6 @@
             <div class="rag-doc-item-right">
               <span class="rag-doc-pill">${doc.chapters ? doc.chapters.length : 0} caps</span>
               <span class="rag-doc-pill">${formatBytes(doc.fileSize)}</span>
-              <span class="rag-doc-item-arrow">›</span>
             </div>
           `;
 
