@@ -47,6 +47,8 @@
       btn_tree_rag_title: 'Gestionar Base de Conocimiento por Ramas (RAG Jerárquico)',
       rag_tab_active: '🌿 Rama Activa en Chat',
       rag_tab_manage: '📁 Gestión de Ramas y Documentos',
+      rag_context_limit_title: '📦 Tamaño de Contexto por Capítulo (Tokens)',
+      rag_context_limit_desc: 'Define la capacidad máxima de tokens por capítulo (16K a 1M tokens) para segmentar documentos y realizar síntesis con el modelo. Protege imágenes y tablas completas.',
       rag_select_branch_chat: 'Seleccionar Rama para el Chat',
       rag_select_branch_chat_hint: 'Haz clic en una rama para activarla en la conversación actual:',
       rag_editing_branch: 'Rama en edición:',
@@ -376,6 +378,8 @@
       btn_tree_rag_title: 'Manage Branch Knowledge Base (Hierarchical Tree RAG)',
       rag_tab_active: '🌿 Active Chat Branch',
       rag_tab_manage: '📁 Branch & Document Manager',
+      rag_context_limit_title: '📦 Chapter Context Size (Tokens)',
+      rag_context_limit_desc: 'Sets the maximum token capacity per chapter (16K to 1M tokens) for document partitioning and AI summaries. Preserves atomic tables and images.',
       rag_select_branch_chat: 'Select Branch for Chat',
       rag_select_branch_chat_hint: 'Click a branch to activate it in the current conversation:',
       rag_editing_branch: 'Editing Branch:',
@@ -778,7 +782,10 @@
     rootElement.querySelectorAll('[data-i18n]').forEach(el => {
       const key = el.getAttribute('data-i18n');
       if (key) {
-        el.textContent = t(key);
+        const val = t(key);
+        if (val !== key || !el.textContent.trim()) {
+          el.textContent = val;
+        }
       }
     });
 
@@ -786,7 +793,10 @@
     rootElement.querySelectorAll('[data-i18n-html]').forEach(el => {
       const key = el.getAttribute('data-i18n-html');
       if (key) {
-        el.innerHTML = t(key);
+        const val = t(key);
+        if (val !== key || !el.innerHTML.trim()) {
+          el.innerHTML = val;
+        }
       }
     });
 
@@ -794,7 +804,10 @@
     rootElement.querySelectorAll('[data-i18n-title]').forEach(el => {
       const key = el.getAttribute('data-i18n-title');
       if (key) {
-        el.setAttribute('title', t(key));
+        const val = t(key);
+        if (val !== key || !el.getAttribute('title')) {
+          el.setAttribute('title', val);
+        }
       }
     });
 
@@ -802,7 +815,10 @@
     rootElement.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
       const key = el.getAttribute('data-i18n-placeholder');
       if (key) {
-        el.setAttribute('placeholder', t(key));
+        const val = t(key);
+        if (val !== key || !el.getAttribute('placeholder')) {
+          el.setAttribute('placeholder', val);
+        }
       }
     });
 
@@ -810,7 +826,10 @@
     rootElement.querySelectorAll('[data-i18n-aria]').forEach(el => {
       const key = el.getAttribute('data-i18n-aria');
       if (key) {
-        el.setAttribute('aria-label', t(key));
+        const val = t(key);
+        if (val !== key || !el.getAttribute('aria-label')) {
+          el.setAttribute('aria-label', val);
+        }
       }
     });
 
