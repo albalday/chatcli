@@ -3142,7 +3142,13 @@
     if (!elements.messagesList) return;
     elements.messagesList.innerHTML = '';
 
-    const validMessages = (history || []).filter(m => m && m.role !== 'system');
+    // Filtrar system messages y omitir del chat visual el par inicial de fecha/hora
+    const nonSystem = (history || []).filter(m => m && m.role !== 'system');
+    let validMessages = nonSystem;
+    if (nonSystem.length >= 2 && isDateTimeInitialTurn(nonSystem[0]) && nonSystem[1].role === 'assistant' && (nonSystem[1].content === 'OK' || nonSystem[1].content === 'OK.')) {
+      validMessages = nonSystem.slice(2);
+    }
+
     if (validMessages.length === 0) {
       if (elements.welcomeBanner) {
         elements.messagesList.appendChild(elements.welcomeBanner);
