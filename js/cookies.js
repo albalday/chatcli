@@ -39,7 +39,8 @@
     enableContextCache: true,
     enableRawLogs: false,
     enableDebugMessages: false,
-    sendDateTime: true
+    sendDateTime: true,
+    activeRagBranchId: ''
   };
 
   const STORAGE_PREFIX = 'chatcli_';

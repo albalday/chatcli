@@ -103,8 +103,17 @@
             <span class="status-dot"></span>
             <span id="current-model-name">(Sin modelo)</span>
           </button>
+          <div class="rag-branch-selector-wrapper">
+            <select id="select-rag-branch" class="select-rag-branch" data-i18n-title="rag_branch_select_title" title="Seleccionar Rama de Conocimiento (RAG)">
+              <option value="" data-i18n="rag_branch_default">🌿 Sin contexto (RAG desactivado)</option>
+            </select>
+          </div>
         </div>
         <div class="toolbar-right">
+          <button type="button" id="btn-open-tree-rag" class="btn-tool-mini btn-rag-mini" data-i18n-title="btn_tree_rag_title" title="Gestionar Base de Conocimiento por Ramas (RAG Jerárquico)">
+            <span>🌿</span>
+            <span data-i18n="btn_tree_rag">Conocimiento</span>
+          </button>
           <button type="button" id="btn-lang-quick" class="btn-tool-mini btn-lang-quick" data-i18n-title="lang_switcher_title" title="Cambiar idioma / Switch language">
             <span>🌐</span>
             <span id="current-lang-label">ES</span>
@@ -654,11 +663,83 @@
     </div>
   </dialog>
 
+  <!-- Modal de Gestión de Ramas y Base de Conocimiento (RAG) -->
+  <dialog id="tree-rag-modal" class="settings-modal tree-rag-modal">
+    <div class="modal-header">
+      <div class="modal-title">
+        <span class="rag-header-icon">🌿</span>
+        <h3 data-i18n="rag_modal_title">Base de Conocimiento (RAG Jerárquico por Ramas)</h3>
+      </div>
+      <button type="button" id="btn-close-tree-rag" class="btn-close" data-i18n-aria="modal_close_aria" aria-label="Cerrar modal">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+    </div>
+
+    <div class="rag-modal-body">
+      <!-- Panel Izquierdo: Lista de Ramas -->
+      <aside class="rag-sidebar">
+        <div class="rag-sidebar-header">
+          <h4 data-i18n="rag_branches_title">Ramas de Proyecto</h4>
+          <button type="button" id="btn-rag-new-branch" class="btn-rag-primary-sm" data-i18n="rag_btn_new_branch">+ Nueva Rama</button>
+        </div>
+        <div id="rag-branches-list" class="rag-branches-list">
+          <!-- Se puebla dinámicamente -->
+        </div>
+      </aside>
+
+      <!-- Panel Derecho: Espacio de Trabajo de la Rama Seleccionada -->
+      <main id="rag-branch-workspace" class="rag-main-content">
+        <!-- Se puebla dinámicamente con dropzone, barra de progreso y lista de documentos -->
+      </main>
+    </div>
+
+    <div class="modal-footer">
+      <div class="modal-footer-info">
+        <span class="rag-footer-hint">💡 Los resúmenes se inyectan en el prompt y el modelo lee los capítulos bajo demanda con <code>read_chapter_content</code>.</span>
+      </div>
+      <div class="modal-footer-actions">
+        <button type="button" id="btn-close-tree-rag-footer" class="btn-secondary" data-i18n="modal_btn_close">Cerrar</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Modal / Visor de Estructura de Documento (Árbol de Conocimiento) -->
+  <dialog id="rag-structure-dialog" class="settings-modal rag-structure-modal">
+    <div class="modal-header">
+      <div class="modal-title">
+        <span>📑</span>
+        <h3 id="rag-structure-title" data-i18n="rag_structure_title">Estructura del Documento</h3>
+      </div>
+      <button type="button" id="btn-close-rag-structure" class="btn-close" aria-label="Cerrar visor">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+    </div>
+
+    <div class="rag-structure-body">
+      <div class="rag-structure-summary-card">
+        <h4 data-i18n="rag_global_summary_label">📌 Resumen Global del Documento</h4>
+        <div id="rag-structure-global-summary" class="rag-structure-summary-content"></div>
+      </div>
+
+      <div class="rag-structure-chapters-section">
+        <h4 data-i18n="rag_chapters_label">📑 Capítulos Detectados</h4>
+        <div id="rag-structure-chapters-list" class="rag-structure-chapters-list"></div>
+      </div>
+    </div>
+  </dialog>
+
   <!-- Scripts de la aplicación (compatibles con file:// y http://) -->
   <script src="js/cookies.js"></script>
   <script src="js/ragStorage.js"></script>
   <script src="js/ingestionEngine.js"></script>
   <script src="js/chatService.js"></script>
+  <script src="js/treeRagUI.js"></script>
   <script src="js/i18n.js"></script>
   <script src="js/sandbox.js"></script>
   <script src="js/charts.js"></script>

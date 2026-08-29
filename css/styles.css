@@ -3912,4 +3912,663 @@ input:checked + .slider:before {
   border: 1px solid rgba(107, 114, 128, 0.2);
 }
 
+/* ==========================================================================
+   Base de Conocimiento y RAG Jerárquico por Ramas (Tree RAG UI)
+   ========================================================================== */
+
+/* 1. Selector de Rama y Botón en la Barra de Herramientas */
+.rag-branch-selector-wrapper {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.25rem;
+}
+
+.select-rag-branch {
+  height: 28px;
+  padding: 0 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-main);
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-full);
+  outline: none;
+  cursor: pointer;
+  max-width: 210px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+
+.select-rag-branch:hover {
+  border-color: var(--primary-color);
+}
+
+.btn-rag-mini {
+  color: var(--text-main);
+  background-color: transparent;
+  border: 1px solid var(--border-color);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-weight: 500;
+}
+
+.btn-rag-mini:hover {
+  background-color: var(--bg-app);
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+}
+
+/* 2. Modal de Gestión de Ramas (Tree RAG Modal) */
+.tree-rag-modal {
+  max-width: 920px;
+  width: 95vw;
+  height: 85vh;
+  max-height: calc(var(--app-height, 100dvh) * 0.9);
+}
+
+.rag-header-icon {
+  font-size: 1.25rem;
+}
+
+.rag-modal-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background-color: var(--bg-surface);
+}
+
+/* Panel Izquierdo: Sidebar de Ramas */
+.rag-sidebar {
+  width: 280px;
+  min-width: 240px;
+  border-right: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bg-app);
+}
+
+.rag-sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.rag-sidebar-header h4 {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-main);
+  margin: 0;
+}
+
+.btn-rag-primary-sm {
+  padding: 0.25rem 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background-color: var(--primary-color);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.btn-rag-primary-sm:hover {
+  opacity: 0.9;
+}
+
+.rag-branches-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.rag-branch-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 0.75rem;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  background-color: var(--bg-surface);
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+
+.rag-branch-item:hover {
+  background-color: rgba(59, 130, 246, 0.06);
+  border-color: var(--border-color);
+}
+
+.rag-branch-item.selected {
+  background-color: rgba(59, 130, 246, 0.12);
+  border-color: var(--primary-color);
+}
+
+.rag-branch-item-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.rag-branch-item-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.rag-branch-item-name {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rag-active-pill {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.1rem 0.35rem;
+  border-radius: var(--radius-sm);
+  background-color: #10b981;
+  color: #fff;
+  letter-spacing: 0.03em;
+}
+
+.rag-branch-item-desc {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 0.2rem;
+}
+
+.rag-branch-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  opacity: 0.7;
+}
+
+.rag-branch-item:hover .rag-branch-item-actions {
+  opacity: 1;
+}
+
+.btn-rag-action {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0.25rem;
+  font-size: 0.85rem;
+  border-radius: var(--radius-sm);
+  transition: background-color 0.15s;
+}
+
+.btn-rag-action:hover {
+  background-color: var(--bg-app);
+}
+
+/* Panel Derecho: Contenido de la Rama */
+.rag-main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 1.25rem;
+  gap: 1rem;
+}
+
+.rag-workspace-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 0.85rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.rag-workspace-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-main);
+  margin: 0;
+}
+
+.rag-workspace-desc {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin: 0.25rem 0 0 0;
+}
+
+.btn-rag-toggle-active {
+  padding: 0.4rem 0.85rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-surface);
+  color: var(--text-main);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-rag-toggle-active:hover {
+  border-color: var(--primary-color);
+}
+
+.btn-rag-toggle-active.is-active {
+  background-color: rgba(16, 185, 129, 0.15);
+  border-color: #10b981;
+  color: #059669;
+}
+
+/* Dropzone */
+.rag-dropzone {
+  border: 2px dashed var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  background-color: var(--bg-app);
+  transition: border-color 0.2s, background-color 0.2s, transform 0.1s;
+}
+
+.rag-dropzone:hover, .rag-dropzone.drag-over {
+  border-color: var(--primary-color);
+  background-color: rgba(59, 130, 246, 0.05);
+}
+
+.rag-dropzone-icon {
+  font-size: 2rem;
+}
+
+.rag-dropzone-text {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  color: var(--text-main);
+}
+
+.rag-dropzone-hint {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.rag-dropzone-badges {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.25rem;
+}
+
+.filetype-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.15rem 0.45rem;
+  border-radius: var(--radius-sm);
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+}
+
+/* Panel de Progreso de Ingesta */
+.rag-progress-container {
+  padding: 1rem;
+  border-radius: var(--radius-md);
+  background-color: var(--bg-app);
+  border: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.rag-progress-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.rag-progress-title {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.875rem;
+  color: var(--text-main);
+}
+
+.btn-rag-cancel-queue {
+  padding: 0.2rem 0.5rem;
+  font-size: 0.75rem;
+  background-color: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.btn-rag-cancel-queue:hover {
+  color: #ef4444;
+  border-color: #ef4444;
+}
+
+.rag-progress-bar-wrapper {
+  height: 6px;
+  background-color: var(--border-color);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.rag-progress-bar-fill {
+  height: 100%;
+  background-color: var(--primary-color);
+  transition: width 0.25s ease-out;
+}
+
+.rag-progress-file-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 0.3rem;
+}
+
+.rag-progress-file-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  padding: 0.3rem 0.5rem;
+  background-color: var(--bg-surface);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+}
+
+.rag-status-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.15rem 0.45rem;
+  border-radius: var(--radius-sm);
+}
+
+.rag-status-badge.status-waiting {
+  background-color: rgba(107, 114, 128, 0.1);
+  color: #6b7280;
+}
+
+.rag-status-badge.status-reading, .rag-status-badge.status-extracting {
+  background-color: rgba(59, 130, 246, 0.1);
+  color: #2563eb;
+}
+
+.rag-status-badge.status-summaries {
+  background-color: rgba(139, 92, 246, 0.12);
+  color: #7c3aed;
+}
+
+.rag-status-badge.status-saving {
+  background-color: rgba(245, 158, 11, 0.12);
+  color: #d97706;
+}
+
+.rag-status-badge.status-completed {
+  background-color: rgba(16, 185, 129, 0.12);
+  color: #059669;
+}
+
+.rag-status-badge.status-error {
+  background-color: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
+}
+
+/* Lista de Documentos */
+.rag-docs-section-header h4 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-main);
+  margin: 0 0 0.5rem 0;
+}
+
+.rag-docs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.rag-doc-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background-color: var(--bg-app);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  transition: border-color 0.15s;
+}
+
+.rag-doc-row:hover {
+  border-color: var(--border-color-focus);
+}
+
+.rag-doc-icon {
+  font-size: 1.5rem;
+}
+
+.rag-doc-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.rag-doc-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rag-doc-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 0.2rem;
+}
+
+.rag-doc-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.btn-rag-doc-action {
+  padding: 0.35rem 0.65rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-surface);
+  color: var(--text-main);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-rag-doc-action:hover {
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+}
+
+.btn-rag-doc-action.btn-delete-doc:hover {
+  border-color: #ef4444;
+  color: #ef4444;
+}
+
+.rag-empty-state, .rag-empty-workspace, .rag-no-docs-message {
+  text-align: center;
+  padding: 2rem 1rem;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.rag-empty-icon {
+  font-size: 2.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.rag-footer-hint {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+/* 3. Visor de Estructura / Capítulos (rag-structure-modal) */
+.rag-structure-modal {
+  max-width: 780px;
+  width: 90vw;
+  max-height: 80vh;
+}
+
+.rag-structure-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding: 1.25rem;
+  overflow-y: auto;
+}
+
+.rag-structure-summary-card {
+  padding: 1rem;
+  border-radius: var(--radius-md);
+  background-color: var(--bg-app);
+  border: 1px solid var(--border-color);
+}
+
+.rag-structure-summary-card h4, .rag-structure-chapters-section h4 {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-main);
+  margin: 0 0 0.5rem 0;
+}
+
+.rag-structure-summary-content {
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--text-main);
+}
+
+.rag-structure-chapters-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.rag-chapter-card {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 0.85rem;
+  background-color: var(--bg-surface);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.rag-chapter-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.rag-chapter-title-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.rag-chapter-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.15rem 0.4rem;
+  border-radius: var(--radius-sm);
+  background-color: rgba(59, 130, 246, 0.12);
+  color: var(--primary-color);
+}
+
+.rag-chapter-title {
+  font-size: 0.875rem;
+  color: var(--text-main);
+}
+
+.btn-preview-chapter-content {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-app);
+  color: var(--text-main);
+  cursor: pointer;
+}
+
+.btn-preview-chapter-content:hover {
+  border-color: var(--primary-color);
+}
+
+.rag-chapter-summary {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.rag-chapter-content-preview {
+  margin-top: 0.5rem;
+  padding: 0.75rem;
+  background-color: var(--bg-app);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+}
+
+.rag-content-preview-header {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 0.35rem;
+}
+
+.rag-content-pre {
+  margin: 0;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.8rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 250px;
+  overflow-y: auto;
+  color: var(--text-main);
+}
+
+/* Responsividad para pantallas móviles */
+@media (max-width: 768px) {
+  .rag-modal-body {
+    flex-direction: column;
+  }
+  .rag-sidebar {
+    width: 100%;
+    max-height: 200px;
+    border-right: none;
+    border-bottom: 1px solid var(--border-color);
+  }
+  .tree-rag-modal {
+    width: 98vw;
+    height: 94vh;
+  }
+}
+
 

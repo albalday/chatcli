@@ -30,7 +30,7 @@ test('Bundler - Generación en modo Producción (Terser/esbuild)', () => {
 
     // Verificar presencia de módulos fundamentales
     const expectedModules = [
-      'ChatStorage', 'ChatRagStorage', 'ChatIngestionEngine', 'ChatTreeRagService',
+      'ChatStorage', 'ChatRagStorage', 'ChatIngestionEngine', 'ChatTreeRagService', 'ChatTreeRagUI',
       'ChatI18n', 'ChatSandbox', 'ChatCharts',
       'ChatWebBrowser', 'ChatWebSearch', 'ChatMarkdown',
       'ChatProviders', 'ChatAPI', 'ChatFileParser',

@@ -55,9 +55,11 @@
     enableContextCache: true,
     enableRawLogs: false,
     enableDebugMessages: false,
-    sendDateTime: true
+    sendDateTime: true,
+    activeRagBranchId: ''
   };
 
+  let currentRagSystemContext = '';
   let chatHistory = [];
   let currentAbortController = null;
   let isGenerating = false;
@@ -347,6 +349,11 @@
     let activePrompt = (appConfig.systemPrompt && appConfig.systemPrompt.trim() !== '')
       ? appConfig.systemPrompt.trim()
       : '';
+
+    // Inyección de Base de Conocimiento (RAG Jerárquico por Ramas)
+    if (currentRagSystemContext) {
+      activePrompt = activePrompt ? `${currentRagSystemContext}\n\n${activePrompt}` : currentRagSystemContext;
+    }
 
     // Ancla de fecha diaria para máxima autoridad en System Prompt y 100% de aciertos en Context-Cache
     if (appConfig.sendDateTime !== false) {
@@ -1460,9 +1467,17 @@
     }
 
     const maxAgentTurns = 8;
-    let turnIndex = 0;
-    let accumulatedConversationMarkdown = '';
-    const toolCallSignatures = [];
+    // Cargar contexto jerárquico de la rama RAG activa
+    if (appConfig.activeRagBranchId && window.ChatTreeRagService) {
+      try {
+        currentRagSystemContext = await window.ChatTreeRagService.buildTreeRagSystemContext(appConfig.activeRagBranchId);
+      } catch (err) {
+        console.warn('Error al cargar contexto de RAG:', err);
+        currentRagSystemContext = '';
+      }
+    } else {
+      currentRagSystemContext = '';
+    }
 
     while (turnIndex < maxAgentTurns) {
       if (currentAbortController && currentAbortController.signal.aborted) {
@@ -3453,6 +3468,10 @@
     updateUIFromConfig();
     loadSessionsFromStorage();
     setupEventListeners();
+
+    if (window.ChatTreeRagUI && window.ChatTreeRagUI.initTreeRagUI) {
+      window.ChatTreeRagUI.initTreeRagUI();
+    }
 
     window.ChatApp = {
       toggleReasoningMenu,
