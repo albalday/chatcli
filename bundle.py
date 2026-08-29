@@ -126,23 +126,51 @@ def minify_css_fallback(css: str) -> str:
     return css_clean.strip()
 
 
+def preprocess_js_for_browser(js_code: str) -> str:
+    """
+    Elimina ramas de compatibilidad exclusivas de Node.js (CommonJS exports y require dinámicos)
+    que constituyen código muerto en el entorno web del navegador, permitiendo a Terser/esbuild
+    optimizar y podar bloques innecesarios.
+    """
+    # 1. Neutralizar comprobación UMD de module.exports -> false
+    cleaned = re.sub(
+        r'typeof\s+exports\s*===\s*[\'"]object[\'"]\s*&&\s*typeof\s+module\s*!==\s*[\'"]undefined[\'"]',
+        'false',
+        js_code
+    )
+    # 2. Neutralizar comprobaciones de require de Node.js -> false
+    cleaned = re.sub(
+        r'typeof\s+require\s*!==\s*[\'"]undefined[\'"]',
+        'false',
+        cleaned
+    )
+    return cleaned
+
+
 def minify_js_external(js_code: str) -> Tuple[Optional[str], str]:
     """
     Intenta minificar JavaScript mediante herramientas AST externas en pase único.
-    Prueba primero Terser y posteriormente esbuild.
+    Prueba primero Terser con multi-pass y poda de código muerto, y posteriormente esbuild.
     Retorna (código_minificado, nombre_del_motor_utilizado).
     """
-    # 1. Intentar Terser (máxima compresión AST y mangling)
+    processed_code = preprocess_js_for_browser(js_code)
+
+    # 1. Intentar Terser (máxima compresión AST multi-pass y mangling)
     try:
+        terser_compress_opts = (
+            'passes=3,dead_code=true,unused=true,collapse_vars=true,'
+            'reduce_vars=true,booleans=true,conditionals=true,evaluate=true,'
+            'sequences=true,join_vars=true,drop_debugger=true'
+        )
         res = subprocess.run(
-            ['npx', '--yes', 'terser', '--compress', '--mangle'],
-            input=js_code,
+            ['npx', '--yes', 'terser', '--compress', terser_compress_opts, '--mangle', 'eval=true'],
+            input=processed_code,
             capture_output=True,
             text=True,
             check=True
         )
         if res.stdout and len(res.stdout.strip()) > 100:
-            return res.stdout.strip(), "Terser (AST Single-Pass)"
+            return res.stdout.strip(), "Terser (AST Multi-Pass & Dead-Code Pruned)"
     except Exception:
         pass
 
@@ -150,13 +178,13 @@ def minify_js_external(js_code: str) -> Tuple[Optional[str], str]:
     try:
         res = subprocess.run(
             ['npx', '--yes', 'esbuild', '--minify', '--loader=js'],
-            input=js_code,
+            input=processed_code,
             capture_output=True,
             text=True,
             check=True
         )
         if res.stdout and len(res.stdout.strip()) > 100:
-            return res.stdout.strip(), "esbuild (AST Single-Pass)"
+            return res.stdout.strip(), "esbuild (AST Single-Pass & Dead-Code Pruned)"
     except Exception:
         pass
 
@@ -503,9 +531,9 @@ def build_standalone_html(mode: str = "prod", force_fallback: bool = False, verb
             min_js = ext_js
             js_engine = engine_name
         else:
-            min_js = minify_js_fallback(concatenated_js)
+            min_js = minify_js_fallback(preprocess_js_for_browser(concatenated_js))
     else:
-        min_js = minify_js_fallback(concatenated_js)
+        min_js = minify_js_fallback(preprocess_js_for_browser(concatenated_js))
 
     min_js_size = len(min_js.encode("utf-8"))
 
@@ -518,11 +546,14 @@ def build_standalone_html(mode: str = "prod", force_fallback: bool = False, verb
     min_html_base = minify_html(html_cleaned, mode=mode)
     min_html_size = len(min_html_base.encode("utf-8"))
 
-    style_block = f"<style>{css_min}</style>" if mode == "prod" else f"  <style>\n{css_min}\n  </style>"
-    script_block = f"<script>{min_js}</script>" if mode == "prod" else f"  <script>\n{min_js}\n  </script>"
-
-    final_html = min_html_base.replace("</head>", f"{style_block}\n</head>")
-    final_html = final_html.replace("</body>", f"{script_block}\n</body>")
+    if mode == "prod":
+        final_html = min_html_base.replace("</head>", f"<style>{css_min}</style></head>")
+        final_html = final_html.replace("</body>", f"<script>{min_js}</script></body>")
+    else:
+        style_block = f"  <style>\n{css_min}\n  </style>"
+        script_block = f"  <script>\n{min_js}\n  </script>"
+        final_html = min_html_base.replace("</head>", f"{style_block}\n</head>")
+        final_html = final_html.replace("</body>", f"{script_block}\n</body>")
     final_size = len(final_html.encode("utf-8"))
 
     # 5. Validación de integridad del distribuible
