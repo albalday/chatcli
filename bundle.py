@@ -458,9 +458,9 @@ def verify_bundle(html_content: str, verbose: bool = False) -> Tuple[bool, List[
     return len(errors) == 0, errors
 
 
-def build_standalone_html(mode: str = "prod", force_fallback: bool = False, verbose: bool = False) -> bool:
+def build_standalone_html(mode: str = "prod", force_fallback: bool = False, verbose: bool = False, output_file: Optional[str] = None) -> bool:
     """
-    Ejecuta el pipeline completo de compilación, minificación y generación de 'chatcli.html'.
+    Ejecuta el pipeline completo de compilación, minificación y generación del bundle autónomo.
     """
     start_time = time.time()
     base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -468,7 +468,7 @@ def build_standalone_html(mode: str = "prod", force_fallback: bool = False, verb
     index_path = os.path.join(base_dir, "index.html")
     css_path = os.path.join(base_dir, "css", "styles.css")
     js_dir = os.path.join(base_dir, "js")
-    output_path = os.path.join(base_dir, "chatcli.html")
+    output_path = os.path.abspath(output_file) if output_file else os.path.join(base_dir, "chatcli.html")
 
     if not os.path.exists(index_path):
         print(f"❌ Error: Archivo base no encontrado: {index_path}", file=sys.stderr)
@@ -574,7 +574,7 @@ def build_standalone_html(mode: str = "prod", force_fallback: bool = False, verb
 
     # 7. Informe detallado de tamaños
     print("\n" + "=" * 70)
-    print(f"✨ ChatCLI Standalone Bundle ('chatcli.html') generado con éxito")
+    print(f"✨ ChatCLI Standalone Bundle ('{os.path.basename(output_path)}') generado con éxito")
     print("=" * 70)
     print(f"⚙️  Modo: {mode.upper()} | Motor JS: {js_engine} | Motor CSS: {css_engine}")
     print(f"⏱️  Tiempo de compilación: {elapsed_time:.1f} ms")
@@ -602,6 +602,11 @@ def main() -> None:
         help="Modo de compilación: 'prod' (minificación completa) o 'dev' (sin minificar, formato legible)."
     )
     parser.add_argument(
+        "--output", "-o",
+        default=None,
+        help="Ruta del archivo de salida (por defecto: 'chatcli.html' en la raíz)."
+    )
+    parser.add_argument(
         "--fallback-only",
         action="store_true",
         help="Fuerza el uso exclusivo del motor de compresión seguro en Python puro (sin invocar herramientas externas)."
@@ -616,7 +621,8 @@ def main() -> None:
     success = build_standalone_html(
         mode=args.mode,
         force_fallback=args.fallback_only,
-        verbose=args.verbose
+        verbose=args.verbose,
+        output_file=args.output
     )
     sys.exit(0 if success else 1)
 
