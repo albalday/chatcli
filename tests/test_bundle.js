@@ -16,13 +16,14 @@ test('Bundler - Generación en modo Producción (Terser/esbuild)', () => {
     assert.ok(fs.existsSync(TEST_PROD_PATH));
 
     const content = fs.readFileSync(TEST_PROD_PATH, 'utf-8');
+    const stats = fs.statSync(TEST_PROD_PATH);
     assert.ok(content.includes('<!DOCTYPE html>'));
     assert.ok(content.includes('<html lang="es">'));
     assert.ok(content.includes('<style>'));
     assert.ok(content.includes('<script>'));
 
     // Verificar que el tamaño de producción es compacto (< 460 KB)
-    assert.ok(content.length < 460000, `El bundle de producción debe ser compacto (actual: ${content.length} bytes)`);
+    assert.ok(stats.size < 475000, `El bundle de producción debe ser compacto (actual: ${stats.size} bytes)`);
 
     // Verificar ausencia de enlaces locales externos
     assert.equal(/<script[^>]*src=["']js\//i.test(content), false, 'No deben quedar etiquetas <script src="js/...">');

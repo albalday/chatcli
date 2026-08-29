@@ -743,22 +743,10 @@
           }
 
           const isYCCK = (adobeTransform === 2 || adobeTransform === -1);
-          const rowSize = (frame.width * 3 + 3) & ~3;
-          const imageSize = rowSize * frame.height;
-          const fileSize = 54 + imageSize;
-          const bmpBuf = new Uint8Array(fileSize);
+          const rgbBytes = new Uint8Array(frame.width * frame.height * 3);
+          let rgbPos = 0;
 
-          bmpBuf[0] = 0x42; bmpBuf[1] = 0x4D;
-          bmpBuf[2] = fileSize & 0xFF; bmpBuf[3] = (fileSize >> 8) & 0xFF; bmpBuf[4] = (fileSize >> 16) & 0xFF; bmpBuf[5] = (fileSize >> 24) & 0xFF;
-          bmpBuf[10] = 54;
-          bmpBuf[14] = 40;
-          bmpBuf[18] = frame.width & 0xFF; bmpBuf[19] = (frame.width >> 8) & 0xFF; bmpBuf[20] = (frame.width >> 16) & 0xFF; bmpBuf[21] = (frame.width >> 24) & 0xFF;
-          bmpBuf[22] = frame.height & 0xFF; bmpBuf[23] = (frame.height >> 8) & 0xFF; bmpBuf[24] = (frame.height >> 16) & 0xFF; bmpBuf[25] = (frame.height >> 24) & 0xFF;
-          bmpBuf[26] = 1; bmpBuf[28] = 24;
-          bmpBuf[34] = imageSize & 0xFF; bmpBuf[35] = (imageSize >> 8) & 0xFF; bmpBuf[36] = (imageSize >> 16) & 0xFF; bmpBuf[37] = (imageSize >> 24) & 0xFF;
-
-          let bmpOffset = 54;
-          for (let y = frame.height - 1; y >= 0; y--) {
+          for (let y = 0; y < frame.height; y++) {
             for (let x = 0; x < frame.width; x++) {
               const c0 = getCompVal(0, x, y);
               const c1 = getCompVal(1, x, y);
@@ -780,14 +768,37 @@
                 g = 255 * (1 - m) * (1 - k);
                 b = 255 * (1 - y_) * (1 - k);
               }
-              bmpBuf[bmpOffset++] = Math.max(0, Math.min(255, Math.round(b)));
-              bmpBuf[bmpOffset++] = Math.max(0, Math.min(255, Math.round(g)));
-              bmpBuf[bmpOffset++] = Math.max(0, Math.min(255, Math.round(r)));
+              rgbBytes[rgbPos++] = Math.max(0, Math.min(255, Math.round(r)));
+              rgbBytes[rgbPos++] = Math.max(0, Math.min(255, Math.round(g)));
+              rgbBytes[rgbPos++] = Math.max(0, Math.min(255, Math.round(b)));
             }
-            for (let p = frame.width * 3; p < rowSize; p++) bmpBuf[bmpOffset++] = 0;
           }
 
-          return `data:image/bmp;base64,${uint8ToBase64(bmpBuf)}`;
+          // 1. Intentar compresión nativa ultrarrápida vía Canvas en navegador
+          if (typeof document !== 'undefined' && typeof document.createElement === 'function') {
+            try {
+              const canvas = document.createElement('canvas');
+              canvas.width = frame.width;
+              canvas.height = frame.height;
+              const ctx = canvas.getContext('2d');
+              if (ctx) {
+                const imgData = ctx.createImageData(frame.width, frame.height);
+                const d = imgData.data;
+                let sIdx = 0;
+                for (let i = 0; i < d.length; i += 4) {
+                  d[i] = rgbBytes[sIdx++];
+                  d[i + 1] = rgbBytes[sIdx++];
+                  d[i + 2] = rgbBytes[sIdx++];
+                  d[i + 3] = 255;
+                }
+                ctx.putImageData(imgData, 0, 0);
+                return canvas.toDataURL('image/jpeg', 0.85);
+              }
+            } catch (e) {}
+          }
+
+          // 2. Codificador JPEG puro sRGB para entornos sin DOM (Node.js/Workers)
+          return encodeRgbToJpegDataUrl(frame.width, frame.height, rgbBytes, 80);
         }
 
         const length = readUint16();
@@ -866,6 +877,368 @@
       code <<= 1;
     }
     return root;
+  }
+
+  /**
+   * Codificador JPEG sRGB puro en JavaScript sin dependencias.
+   */
+  function encodeRgbToJpegDataUrl(width, height, rgb, quality = 80) {
+    try {
+      const q = Math.max(1, Math.min(100, quality));
+      const scale = q < 50 ? Math.floor(5000 / q) : Math.floor(200 - q * 2);
+
+      const defaultYTable = [
+        16, 11, 10, 16, 24, 40, 51, 61,
+        12, 12, 14, 19, 26, 58, 60, 55,
+        14, 13, 16, 24, 40, 57, 69, 56,
+        14, 17, 22, 29, 51, 87, 80, 62,
+        18, 22, 37, 56, 68, 109, 103, 77,
+        24, 35, 55, 64, 81, 104, 113, 92,
+        49, 64, 78, 87, 103, 121, 120, 101,
+        72, 92, 95, 98, 112, 100, 103, 99
+      ];
+
+      const defaultUVTable = [
+        17, 18, 24, 47, 99, 99, 99, 99,
+        18, 21, 26, 66, 99, 99, 99, 99,
+        24, 26, 56, 99, 99, 99, 99, 99,
+        47, 66, 99, 99, 99, 99, 99, 99,
+        99, 99, 99, 99, 99, 99, 99, 99,
+        99, 99, 99, 99, 99, 99, 99, 99,
+        99, 99, 99, 99, 99, 99, 99, 99,
+        99, 99, 99, 99, 99, 99, 99, 99
+      ];
+
+      const yTable = new Uint8Array(64);
+      const uvTable = new Uint8Array(64);
+      for (let i = 0; i < 64; i++) {
+        const yVal = Math.floor((defaultYTable[i] * scale + 50) / 100);
+        const uvVal = Math.floor((defaultUVTable[i] * scale + 50) / 100);
+        yTable[i] = Math.max(1, Math.min(255, yVal));
+        uvTable[i] = Math.max(1, Math.min(255, uvVal));
+      }
+
+      const ZIGZAG = [
+         0,  1,  8, 16,  9,  2,  3, 10,
+        17, 24, 32, 25, 18, 11,  4,  5,
+        12, 19, 26, 33, 40, 48, 41, 34,
+        27, 20, 13,  6,  7, 14, 21, 28,
+        35, 42, 49, 56, 57, 50, 43, 36,
+        29, 22, 15, 23, 30, 37, 44, 51,
+        58, 59, 52, 45, 38, 31, 39, 46,
+        53, 60, 61, 54, 47, 55, 62, 63
+      ];
+
+      const yQuant = new Float32Array(64);
+      const uvQuant = new Float32Array(64);
+      const AAN_SCALE = [1.0, 1.387039845, 1.306562965, 1.175875602, 1.0, 0.785694958, 0.541196100, 0.275899379];
+      for (let row = 0; row < 8; row++) {
+        for (let col = 0; col < 8; col++) {
+          const idx = row * 8 + col;
+          yQuant[idx] = 1.0 / (yTable[ZIGZAG[idx]] * AAN_SCALE[row] * AAN_SCALE[col] * 8);
+          uvQuant[idx] = 1.0 / (uvTable[ZIGZAG[idx]] * AAN_SCALE[row] * AAN_SCALE[col] * 8);
+        }
+      }
+
+      const std_dc_lum_nr = [0, 0, 1, 5, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0];
+      const std_dc_lum_val = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+      const std_dc_chr_nr = [0, 0, 3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0];
+      const std_dc_chr_val = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+
+      const std_ac_lum_nr = [0, 0, 2, 1, 3, 3, 2, 4, 3, 5, 5, 4, 4, 0, 0, 1, 0x7d];
+      const std_ac_lum_val = [
+        0x01, 0x02, 0x03, 0x00, 0x04, 0x11, 0x05, 0x12, 0x21, 0x31, 0x41, 0x06, 0x13, 0x51, 0x61, 0x07,
+        0x22, 0x71, 0x14, 0x32, 0x81, 0x91, 0xa1, 0x08, 0x23, 0x42, 0xb1, 0xc1, 0x15, 0x52, 0xd1, 0xf0,
+        0x24, 0x33, 0x62, 0x72, 0x82, 0x09, 0x0a, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x25, 0x26, 0x27, 0x28,
+        0x29, 0x2a, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3a, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49,
+        0x4a, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5a, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69,
+        0x6a, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7a, 0x83, 0x84, 0x85, 0x86, 0x87, 0x88, 0x89,
+        0x8a, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97, 0x98, 0x99, 0x9a, 0xa2, 0xa3, 0xa4, 0xa5, 0xa6, 0xa7,
+        0xa8, 0xa9, 0xaa, 0xb2, 0xb3, 0xb4, 0xb5, 0xb6, 0xb7, 0xb8, 0xb9, 0xba, 0xc2, 0xc3, 0xc4, 0xc5,
+        0xc6, 0xc7, 0xc8, 0xc9, 0xca, 0xd2, 0xd3, 0xd4, 0xd5, 0xd6, 0xd7, 0xd8, 0xd9, 0xda, 0xe1, 0xe2,
+        0xe3, 0xe4, 0xe5, 0xe6, 0xe7, 0xe8, 0xe9, 0xea, 0xf1, 0xf2, 0xf3, 0xf4, 0xf5, 0xf6, 0xf7, 0xf8,
+        0xf9, 0xfa
+      ];
+
+      const std_ac_chr_nr = [0, 0, 2, 1, 2, 4, 4, 3, 4, 7, 5, 4, 4, 0, 1, 2, 0x77];
+      const std_ac_chr_val = [
+        0x00, 0x01, 0x02, 0x03, 0x11, 0x04, 0x05, 0x21, 0x31, 0x06, 0x12, 0x41, 0x51, 0x07, 0x61, 0x71,
+        0x13, 0x22, 0x32, 0x81, 0x08, 0x14, 0x42, 0x91, 0xa1, 0xb1, 0xc1, 0x09, 0x23, 0x33, 0x52, 0xf0,
+        0x15, 0x62, 0x72, 0xd1, 0x0a, 0x16, 0x24, 0x34, 0xe1, 0x25, 0xf1, 0x17, 0x18, 0x19, 0x1a, 0x26,
+        0x27, 0x28, 0x29, 0x2a, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3a, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48,
+        0x49, 0x4a, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5a, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68,
+        0x69, 0x6a, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7a, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87,
+        0x88, 0x89, 0x8a, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97, 0x98, 0x99, 0x9a, 0xa2, 0xa3, 0xa4, 0xa5,
+        0xa6, 0xa7, 0xa8, 0xa9, 0xaa, 0xb2, 0xb3, 0xb4, 0xb5, 0xb6, 0xb7, 0xb8, 0xb9, 0xba, 0xc2, 0xc3,
+        0xc4, 0xc5, 0xc6, 0xc7, 0xc8, 0xc9, 0xca, 0xd2, 0xd3, 0xd4, 0xd5, 0xd6, 0xd7, 0xd8, 0xd9, 0xda,
+        0xe2, 0xe3, 0xe4, 0xe5, 0xe6, 0xe7, 0xe8, 0xe9, 0xea, 0xf2, 0xf3, 0xf4, 0xf5, 0xf6, 0xf7, 0xf8,
+        0xf9, 0xfa
+      ];
+
+      function computeHuffmanTable(nrcodes, values) {
+        const huff = [];
+        let code = 0;
+        let k = 0;
+        for (let i = 1; i <= 16; i++) {
+          for (let j = 1; j <= nrcodes[i]; j++) {
+            huff[values[k]] = { code, len: i };
+            k++;
+            code++;
+          }
+          code <<= 1;
+        }
+        return huff;
+      }
+
+      const dcLumHuff = computeHuffmanTable(std_dc_lum_nr, std_dc_lum_val);
+      const dcChrHuff = computeHuffmanTable(std_dc_chr_nr, std_dc_chr_val);
+      const acLumHuff = computeHuffmanTable(std_ac_lum_nr, std_ac_lum_val);
+      const acChrHuff = computeHuffmanTable(std_ac_chr_nr, std_ac_chr_val);
+
+      const byteStream = [];
+      let bitBuf = 0;
+      let bitCnt = 0;
+
+      function writeBits(code, len) {
+        bitBuf = (bitBuf << len) | code;
+        bitCnt += len;
+        while (bitCnt >= 8) {
+          const b = (bitBuf >> (bitCnt - 8)) & 0xFF;
+          byteStream.push(b);
+          if (b === 0xFF) byteStream.push(0x00);
+          bitCnt -= 8;
+        }
+      }
+
+      function flushBits() {
+        if (bitCnt > 0) {
+          const b = (bitBuf << (8 - bitCnt)) & 0xFF;
+          byteStream.push(b);
+          if (b === 0xFF) byteStream.push(0x00);
+          bitBuf = 0;
+          bitCnt = 0;
+        }
+      }
+
+      function writeWord(w) {
+        byteStream.push((w >> 8) & 0xFF, w & 0xFF);
+      }
+
+      writeWord(0xFFD8);
+      writeWord(0xFFE0);
+      writeWord(16);
+      byteStream.push(0x4A, 0x46, 0x49, 0x46, 0x00, 1, 1, 0, 0, 1, 0, 1, 0, 0);
+
+      writeWord(0xFFDB);
+      writeWord(132);
+      byteStream.push(0x00);
+      for (let i = 0; i < 64; i++) byteStream.push(yTable[ZIGZAG[i]]);
+      byteStream.push(0x01);
+      for (let i = 0; i < 64; i++) byteStream.push(uvTable[ZIGZAG[i]]);
+
+      writeWord(0xFFC0);
+      writeWord(17);
+      byteStream.push(8);
+      writeWord(height);
+      writeWord(width);
+      byteStream.push(3, 1, 0x11, 0, 2, 0x11, 1, 3, 0x11, 1);
+
+      function writeDHT(nr, val, cls, id) {
+        writeWord(0xFFC4);
+        writeWord(2 + 1 + 16 + val.length);
+        byteStream.push((cls << 4) | id);
+        for (let i = 1; i <= 16; i++) byteStream.push(nr[i]);
+        for (let i = 0; i < val.length; i++) byteStream.push(val[i]);
+      }
+      writeDHT(std_dc_lum_nr, std_dc_lum_val, 0, 0);
+      writeDHT(std_ac_lum_nr, std_ac_lum_val, 1, 0);
+      writeDHT(std_dc_chr_nr, std_dc_chr_val, 0, 1);
+      writeDHT(std_ac_chr_nr, std_ac_chr_val, 1, 1);
+
+      writeWord(0xFFDA);
+      writeWord(12);
+      byteStream.push(3, 1, 0x00, 2, 0x11, 3, 0x11, 0, 63, 0);
+
+      function fdct(block, quant) {
+        const out = new Int32Array(64);
+        const tmp = new Float32Array(64);
+
+        for (let i = 0; i < 8; i++) {
+          const i8 = i * 8;
+          const d0 = block[i8] + block[i8 + 7];
+          const d7 = block[i8] - block[i8 + 7];
+          const d1 = block[i8 + 1] + block[i8 + 6];
+          const d6 = block[i8 + 1] - block[i8 + 6];
+          const d2 = block[i8 + 2] + block[i8 + 5];
+          const d5 = block[i8 + 2] - block[i8 + 5];
+          const d3 = block[i8 + 3] + block[i8 + 4];
+          const d4 = block[i8 + 3] - block[i8 + 4];
+
+          const e0 = d0 + d3;
+          const e3 = d0 - d3;
+          const e1 = d1 + d2;
+          const e2 = d1 - d2;
+
+          tmp[i8] = e0 + e1;
+          tmp[i8 + 4] = e0 - e1;
+          const z1 = (e2 + e3) * 0.707106781;
+          tmp[i8 + 2] = e3 + z1;
+          tmp[i8 + 6] = e3 - z1;
+
+          const f0 = d4 + d5;
+          const f1 = d5 + d6;
+          const f2 = d6 + d7;
+
+          const z2 = (f0 - f2) * 0.382683432;
+          const z3 = f0 * 0.541196100 + z2;
+          const z4 = f2 * 1.306562965 + z2;
+          const z5 = f1 * 0.707106781;
+
+          const g0 = d7 + z5;
+          const g1 = d7 - z5;
+
+          tmp[i8 + 5] = g1 + z3;
+          tmp[i8 + 3] = g1 - z3;
+          tmp[i8 + 1] = g0 + z4;
+          tmp[i8 + 7] = g0 - z4;
+        }
+
+        for (let j = 0; j < 8; j++) {
+          const d0 = tmp[j] + tmp[56 + j];
+          const d7 = tmp[j] - tmp[56 + j];
+          const d1 = tmp[8 + j] + tmp[48 + j];
+          const d6 = tmp[8 + j] - tmp[48 + j];
+          const d2 = tmp[16 + j] + tmp[40 + j];
+          const d5 = tmp[16 + j] - tmp[40 + j];
+          const d3 = tmp[24 + j] + tmp[32 + j];
+          const d4 = tmp[24 + j] - tmp[32 + j];
+
+          const e0 = d0 + d3;
+          const e3 = d0 - d3;
+          const e1 = d1 + d2;
+          const e2 = d1 - d2;
+
+          out[j] = Math.round((e0 + e1) * quant[j]);
+          out[32 + j] = Math.round((e0 - e1) * quant[32 + j]);
+          const z1 = (e2 + e3) * 0.707106781;
+          out[16 + j] = Math.round((e3 + z1) * quant[16 + j]);
+          out[48 + j] = Math.round((e3 - z1) * quant[48 + j]);
+
+          const f0 = d4 + d5;
+          const f1 = d5 + d6;
+          const f2 = d6 + d7;
+
+          const z2 = (f0 - f2) * 0.382683432;
+          const z3 = f0 * 0.541196100 + z2;
+          const z4 = f2 * 1.306562965 + z2;
+          const z5 = f1 * 0.707106781;
+
+          const g0 = d7 + z5;
+          const g1 = d7 - z5;
+
+          out[40 + j] = Math.round((g1 + z3) * quant[40 + j]);
+          out[24 + j] = Math.round((g1 - z3) * quant[24 + j]);
+          out[8 + j] = Math.round((g0 + z4) * quant[8 + j]);
+          out[56 + j] = Math.round((g0 - z4) * quant[56 + j]);
+        }
+
+        return out;
+      }
+
+      function encodeCategory(val) {
+        if (val === 0) return { bits: 0, len: 0 };
+        const absVal = Math.abs(val);
+        let len = 0;
+        while (absVal >= (1 << len)) len++;
+        const bits = val < 0 ? (val + (1 << len) - 1) : val;
+        return { bits, len };
+      }
+
+      function encodeBlock(block, quant, dcHuff, acHuff, prevDC) {
+        const dct = fdct(block, quant);
+        const dcDiff = dct[0] - prevDC;
+        const dcCat = encodeCategory(dcDiff);
+        const dcH = dcHuff[dcCat.len];
+        writeBits(dcH.code, dcH.len);
+        if (dcCat.len > 0) writeBits(dcCat.bits, dcCat.len);
+
+        let r = 0;
+        for (let k = 1; k < 64; k++) {
+          const val = dct[ZIGZAG[k]];
+          if (val === 0) {
+            r++;
+          } else {
+            while (r > 15) {
+              const zrl = acHuff[0xF0];
+              writeBits(zrl.code, zrl.len);
+              r -= 16;
+            }
+            const acCat = encodeCategory(val);
+            const acSym = (r << 4) | acCat.len;
+            const acH = acHuff[acSym];
+            writeBits(acH.code, acH.len);
+            writeBits(acCat.bits, acCat.len);
+            r = 0;
+          }
+        }
+        if (r > 0) {
+          const eob = acHuff[0x00];
+          writeBits(eob.code, eob.len);
+        }
+        return dct[0];
+      }
+
+      const mcusX = Math.ceil(width / 8);
+      const mcusY = Math.ceil(height / 8);
+      const yData = new Float32Array(mcusX * 8 * mcusY * 8);
+      const cbData = new Float32Array(mcusX * 8 * mcusY * 8);
+      const crData = new Float32Array(mcusX * 8 * mcusY * 8);
+
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const sIdx = (y * width + x) * 3;
+          const r = rgb[sIdx];
+          const g = rgb[sIdx + 1];
+          const b = rgb[sIdx + 2];
+          const dIdx = y * (mcusX * 8) + x;
+          yData[dIdx] = (0.299 * r + 0.587 * g + 0.114 * b) - 128;
+          cbData[dIdx] = (-0.168736 * r - 0.331264 * g + 0.5 * b);
+          crData[dIdx] = (0.5 * r - 0.418688 * g - 0.081312 * b);
+        }
+      }
+
+      let prevYDC = 0, prevCbDC = 0, prevCrDC = 0;
+      const yBlock = new Float32Array(64);
+      const cbBlock = new Float32Array(64);
+      const crBlock = new Float32Array(64);
+
+      for (let mY = 0; mY < mcusY; mY++) {
+        for (let mX = 0; mX < mcusX; mX++) {
+          for (let r = 0; r < 8; r++) {
+            for (let c = 0; c < 8; c++) {
+              const sX = Math.min(width - 1, mX * 8 + c);
+              const sY = Math.min(height - 1, mY * 8 + r);
+              const idx = sY * (mcusX * 8) + sX;
+              const bIdx = r * 8 + c;
+              yBlock[bIdx] = yData[idx];
+              cbBlock[bIdx] = cbData[idx];
+              crBlock[bIdx] = crData[idx];
+            }
+          }
+          prevYDC = encodeBlock(yBlock, yQuant, dcLumHuff, acLumHuff, prevYDC);
+          prevCbDC = encodeBlock(cbBlock, uvQuant, dcChrHuff, acChrHuff, prevCbDC);
+          prevCrDC = encodeBlock(crBlock, uvQuant, dcChrHuff, acChrHuff, prevCrDC);
+        }
+      }
+
+      flushBits();
+      writeWord(0xFFD9);
+
+      const uint8 = new Uint8Array(byteStream);
+      return `data:image/jpeg;base64,${uint8ToBase64(uint8)}`;
+    } catch (e) {
+      return null;
+    }
   }
   async function extractTextFromPdf(arrayBuffer) {
     const bytes = new Uint8Array(arrayBuffer);
