@@ -806,6 +806,7 @@
     if (!imgId) return '';
 
     const cleanImgId = imgId.replace(/^img_/, '');
+    const parts = cleanImgId.split('_');
     const candidateKeys = [
       imgId,
       `img_${cleanImgId}`,
@@ -813,6 +814,19 @@
       `#${imgId}`,
       `#img_${cleanImgId}`
     ];
+
+    if (parts.length === 2) {
+      const pageNum = parts[0];
+      const counter = parts[1];
+      candidateKeys.push(
+        `img_${counter}`,
+        counter,
+        `#img_${counter}`,
+        `#${counter}`,
+        `img_${pageNum}`,
+        pageNum
+      );
+    }
 
     if (docId) {
       for (const k of candidateKeys) {
@@ -858,9 +872,17 @@
             const tagMatch = alt.match(/#(?:img_)?([0-9]+(?:_[0-9]+)?)/i);
             if (tagMatch) {
               const foundId = `img_${tagMatch[1].replace(/^img_/, '')}`;
+              const fParts = tagMatch[1].replace(/^img_/, '').split('_');
               registerImage(foundId, dataUrl, doc.id);
+              if (fParts.length === 2) {
+                registerImage(`img_${fParts[1]}`, dataUrl, doc.id);
+              }
             }
             if (alt.includes(imgId) || alt.includes(cleanImgId)) {
+              registerImage(imgId, dataUrl, doc.id);
+              return dataUrl;
+            }
+            if (parts.length === 2 && (alt.includes(`_${parts[1]}`) || alt.includes(`#img_${parts[1]}`))) {
               registerImage(imgId, dataUrl, doc.id);
               return dataUrl;
             }

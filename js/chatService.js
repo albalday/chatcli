@@ -115,7 +115,7 @@
       if (options.fallbackMode) {
         lines.push(`Documentos y capítulos indexados:\n`);
       } else {
-        lines.push(`Para citas exactas, diagramas o detalles técnicos profundos, invoca 'read_chapter_content(docId, chapterId)'. Si el capítulo contiene diagramas o esquemas (etiquetas '![...](rag-image://...)' o '#img_X_Y'), puedes incluirlos en tu respuesta para que el usuario visualice la imagen.\n`);
+        lines.push(`Para citas exactas, diagramas o detalles técnicos profundos, invoca 'read_chapter_content(docId, chapterId)'. Si el capítulo contiene diagramas o esquemas (etiquetas '![...](rag-image://...)' o '#img_X_Y'), DEBES incluir la etiqueta exacta devuelta por el capítulo (ejemplo: '![Diagrama](rag-image://docId/chapterId/img_X_Y)' o '#img_X_Y') en tu respuesta para que el usuario visualice la imagen directamente en pantalla.\n`);
       }
 
       for (const doc of docHeaders) {

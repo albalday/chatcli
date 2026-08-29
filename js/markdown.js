@@ -294,15 +294,28 @@
       return `\n<figure class="chat-image-figure"${ragSrcAttr}><img class="chat-embedded-image" src="${safeSrc}" alt="${cleanAlt}"${ragSrcAttr} loading="lazy" />${caption}</figure>\n`;
     });
 
-    // 9. Referencias textuales sueltas a diagramas del RAG (ej: "Diagrama (Pág. 7) #img_7_12" o "#img_7_12")
-    p = p.replace(/(?:^|\n)([^\n]*?#(?:img_)?([0-9]+(?:_[0-9]+)?)[^\n]*)(?:\n|$)/gi, function (match, fullLine, imgNum) {
-      if (fullLine.includes('<img') || fullLine.includes('<figure') || fullLine.includes('![') || fullLine.includes('src=')) {
+    // 9. Referencias textuales a diagramas del RAG (ej: "Diagrama (Pág. 7) #img_7_12", "#img_87_79", "<code>#img_87_79</code>")
+    // A. Desempaquetar tags dentro de <code>
+    p = p.replace(/<code>#?(?:img_)?([0-9]+(?:_[0-9]+)?)<\/code>/gi, '#img_$1');
+
+    // B. Reemplazar líneas completas dedicadas o titulares breves
+    p = p.replace(/(?:^|\n)([ \t]*(?:(?:Diagrama|Esquema|Figura|Ilustración|Captura|Imagen)[^\n<]*?|#)[^\n<]*?#(?:img_)?([0-9]+(?:_[0-9]+)?)[^\n<]*)(?:\n|$)/gi, function (match, fullLine, imgNum) {
+      if (fullLine.includes('<img') || fullLine.includes('<figure') || fullLine.includes('![') || fullLine.includes('src=') || fullLine.length > 90) {
         return match;
       }
       const cleanCaption = fullLine.trim().replace(/^#+\s*/, '');
       const imgId = imgNum.startsWith('img_') ? imgNum : (`img_${imgNum}`);
       const ragUrl = `rag-image://${imgId}`;
       return `\n<figure class="chat-image-figure" data-rag-src="${ragUrl}"><img class="chat-embedded-image" src="${ragUrl}" alt="${escapeHtml(cleanCaption)}" data-rag-src="${ragUrl}" loading="lazy" /><figcaption class="chat-image-caption">${escapeHtml(cleanCaption)}</figcaption></figure>\n`;
+    });
+
+    // C. Reemplazar tags inline residuales en medio de prosa
+    p = p.replace(/(<figure[\s\S]*?<\/figure>)|(#(?:img_)?([0-9]+(?:_[0-9]+)?))/gi, function (match, figureBlock, tagMatch, imgNum) {
+      if (figureBlock) return figureBlock;
+      const imgId = imgNum.startsWith('img_') ? imgNum : (`img_${imgNum}`);
+      const ragUrl = `rag-image://${imgId}`;
+      const cleanCaption = `Diagrama / Ilustración #${imgId.replace('img_', '')}`;
+      return `<figure class="chat-image-figure" data-rag-src="${ragUrl}"><img class="chat-embedded-image" src="${ragUrl}" alt="${cleanCaption}" data-rag-src="${ragUrl}" loading="lazy" /><figcaption class="chat-image-caption">${cleanCaption}</figcaption></figure>`;
     });
 
     // 10. Enlaces [texto](url)
