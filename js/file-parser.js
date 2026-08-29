@@ -686,18 +686,21 @@
         }
 
         // Extraer imágenes XObject referenciadas explícitamente en esta página
-        let resDict = '';
-        const resMatch = body.match(/\/Resources\s+(?:<<([\s\S]*?)>>|(\d+)\s+\d+\s+R)/);
-        if (resMatch) {
-          if (resMatch[1]) resDict = resMatch[1];
-          else if (resMatch[2]) resDict = allObjects.get(resMatch[2]) || '';
-        }
-
-        const xobjMatch = (body + ' ' + resDict).match(/\/XObject\s+(?:<<([\s\S]*?)>>|(\d+)\s+\d+\s+R)/);
         let xobjDict = '';
+        const xobjMatch = body.match(/\/XObject\s*(?:<<([\s\S]*?)>>|(\d+)\s+\d+\s+R)/);
         if (xobjMatch) {
           if (xobjMatch[1]) xobjDict = xobjMatch[1];
           else if (xobjMatch[2]) xobjDict = allObjects.get(xobjMatch[2]) || '';
+        } else {
+          const resMatch = body.match(/\/Resources\s+(\d+)\s+\d+\s+R/);
+          if (resMatch) {
+            const resBody = allObjects.get(resMatch[1]) || '';
+            const subXobjMatch = resBody.match(/\/XObject\s*(?:<<([\s\S]*?)>>|(\d+)\s+\d+\s+R)/);
+            if (subXobjMatch) {
+              if (subXobjMatch[1]) xobjDict = subXobjMatch[1];
+              else if (subXobjMatch[2]) xobjDict = allObjects.get(subXobjMatch[2]) || '';
+            }
+          }
         }
 
         const imgRefs = xobjDict.match(/\/([A-Za-z0-9_]+)\s+(\d+)\s+\d+\s+R/g) || [];
