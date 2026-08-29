@@ -257,7 +257,7 @@
     }
   }
 
-  function buildEffectiveMessages() {
+  function buildEffectiveMessages(options = {}) {
     const rawMessages = chatHistory.filter(m => m && m.role);
     const messages = [];
 
@@ -328,7 +328,22 @@
       ? appConfig.systemPrompt.trim()
       : '';
 
-    const toolsGuide = getToolsSystemPromptGuide();
+    const isToolsEnabled = options.enableTools !== undefined
+      ? Boolean(options.enableTools)
+      : (appConfig.enableAgentJs !== false || appConfig.enableAgentWeb !== false || appConfig.enableAgentSearch !== false || appConfig.enableAgentChart !== false);
+
+    // Consultar dinámicamente si el proveedor y modelo soportan Function Calling nativo en JSON
+    let isNativeToolsSupported = true;
+    if (API.getProviderCapabilities) {
+      const caps = API.getProviderCapabilities(appConfig.apiUrl, appConfig.apiType, appConfig.model);
+      isNativeToolsSupported = caps ? (caps.tools !== false) : true;
+    }
+
+    // Solo se inyecta la descripción textual de herramientas en el System Prompt si las herramientas están activadas
+    // Y el servidor/modelo NO soporta Function Calling nativo en JSON (modo fallback de texto para servidores locales/modelos sin tools).
+    const needsSystemPromptGuide = isToolsEnabled && (!isNativeToolsSupported || options.forceSystemPromptGuide);
+
+    const toolsGuide = needsSystemPromptGuide ? getToolsSystemPromptGuide() : '';
     let fullSystemPrompt = activePrompt;
     if (toolsGuide) {
       fullSystemPrompt = fullSystemPrompt ? (fullSystemPrompt + '\n\n' + toolsGuide) : toolsGuide;
@@ -2091,7 +2106,7 @@
         apiType: appConfig.apiType,
         apiKey: appConfig.apiKey,
         model: appConfig.model,
-        messages: buildEffectiveMessages(),
+        messages: buildEffectiveMessages({ enableTools: false }),
         temperature: appConfig.temperature,
         reasoningEffort: appConfig.reasoningEffort || 'none',
         enableTools: false, // Forzar al modelo a redactar la síntesis final sin invocar más herramientas
