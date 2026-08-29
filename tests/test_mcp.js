@@ -258,3 +258,4 @@ test('MCP - McpManager administración de servidores y sincronización', async (
   manager.removeServer(server.id);
   assert.equal(manager.getServers().some(s => s.id === server.id), false);
 });
+

@@ -208,3 +208,4 @@ test('ChatAPI.inspectProvider - Delegación e integración a través de ChatAPI'
   assert.equal(report.capabilities.promptCaching.status, 'declared');
   assert.equal(report.capabilities.jsonMode.status, 'unsupported');
 });
+

@@ -148,3 +148,4 @@ test('Web Tools - Esquemas de herramientas válidos para Function Calling', () =
   assert.equal(WebBrowser.PDF_TOOL_DEFINITION.function.name, 'download_pdf');
   assert.ok(WebBrowser.PDF_TOOL_DEFINITION.function.parameters.required.includes('url'));
 });
+

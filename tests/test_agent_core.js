@@ -151,3 +151,4 @@ test('AgentCore - Detección y detención de bucles infinitos en el agente', () 
   assert.equal(agent.getToolCallFingerprint(tc1), agent.getToolCallFingerprint(tc2));
   assert.notEqual(agent.getToolCallFingerprint(tc1), agent.getToolCallFingerprint(tcDiff));
 });
+

@@ -153,7 +153,7 @@
           },
           clientInfo: {
             name: 'ChatCLI',
-            version: '1.0.0'
+            version: '5.0.0'
           }
         }, options);
 
@@ -510,3 +510,4 @@
     manager
   };
 });
+
