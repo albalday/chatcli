@@ -41,7 +41,7 @@
     enableDebugMessages: false,
     sendDateTime: true,
     activeRagBranchId: '',
-    ragContextLimitK: 16
+    ragContextLimitK: 64
   };
 
   const STORAGE_PREFIX = 'chatcli_';
@@ -216,7 +216,12 @@
       enableDebugMessages: parseBool(enableDebugMessages, DEFAULT_CONFIG.enableDebugMessages),
       sendDateTime: parseBool(sendDateTime, DEFAULT_CONFIG.sendDateTime),
       activeRagBranchId: activeRagBranchId !== null ? activeRagBranchId : DEFAULT_CONFIG.activeRagBranchId,
-      ragContextLimitK: (ragContextLimitK !== null && !isNaN(parseInt(ragContextLimitK, 10))) ? parseInt(ragContextLimitK, 10) : DEFAULT_CONFIG.ragContextLimitK
+      ragContextLimitK: (() => {
+        const val = parseInt(ragContextLimitK, 10);
+        if (isNaN(val) || val < 16) return DEFAULT_CONFIG.ragContextLimitK;
+        if (val > 1024) return 1024;
+        return val;
+      })()
     };
   }
 
@@ -242,7 +247,12 @@
     if (config.enableDebugMessages !== undefined) setStorageItem('enableDebugMessages', String(config.enableDebugMessages));
     if (config.sendDateTime !== undefined) setStorageItem('sendDateTime', String(config.sendDateTime));
     if (config.activeRagBranchId !== undefined) setStorageItem('activeRagBranchId', String(config.activeRagBranchId));
-    if (config.ragContextLimitK !== undefined) setStorageItem('ragContextLimitK', String(config.ragContextLimitK));
+    if (config.ragContextLimitK !== undefined) {
+      let k = parseInt(config.ragContextLimitK, 10);
+      if (isNaN(k) || k < 16) k = 16;
+      if (k > 1024) k = 1024;
+      setStorageItem('ragContextLimitK', String(k));
+    }
   }
 
   function resetConfigToDefaults() {

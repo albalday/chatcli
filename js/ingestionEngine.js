@@ -342,19 +342,21 @@
     }
 
     const totalLen = text.length;
-    let maxChapterSize = 16000;
+    let maxChapterSize = 256000;
     if (typeof maxCharsOrLimitK === 'number') {
-      if (maxCharsOrLimitK <= 512) {
-        // En unidades de K (ej: 4, 8, 16, 32, 64, 128)
-        maxChapterSize = maxCharsOrLimitK * 1000;
+      if (maxCharsOrLimitK <= 2048) {
+        // En unidades de K tokens (1K tokens ~ 4.000 caracteres)
+        // Rango de 16K a 1024K (1M) tokens
+        const kTokens = Math.min(1024, Math.max(16, maxCharsOrLimitK));
+        maxChapterSize = kTokens * 4000;
       } else {
         // En caracteres directos (ej: 2000, 5000, 25000)
         maxChapterSize = maxCharsOrLimitK;
       }
     }
 
-    const minSize = Math.max(500, Math.floor(maxChapterSize * 0.3));
-    const targetChapters = Math.max(15, Math.ceil(totalLen / maxChapterSize));
+    const minSize = Math.max(500, Math.floor(maxChapterSize * 0.25));
+    const targetChapters = Math.max(8, Math.ceil(totalLen / maxChapterSize));
 
     let sectionsToProcess = rawSections;
 
@@ -607,8 +609,9 @@ No incluyas texto explicativo antes ni después del bloque JSON.`;
         } catch (e) {}
       }
 
-      // Muestreo ágil adaptado al tamaño de contexto K configurado
-      const maxSampleChars = Math.min(6000, Math.max(2000, contextLimitK * 250));
+      // Muestreo ágil adaptado al tamaño de contexto K configurado (hasta 32.000 caracteres / ~8.000 tokens)
+      const kVal = typeof contextLimitK === 'number' ? contextLimitK : 64;
+      const maxSampleChars = Math.min(32000, Math.max(4000, kVal * 200));
       const sampleText = cand.content.length > maxSampleChars ? (cand.content.slice(0, maxSampleChars) + '...') : cand.content;
       const chapPrompt = `Sintetiza de forma muy concisa (2 a 4 frases técnicas) el siguiente fragmento del documento "${filename}" titulado "${cand.title}":\n\n${sampleText}`;
 

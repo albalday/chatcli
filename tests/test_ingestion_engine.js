@@ -279,8 +279,8 @@ Asegúrese de respetar la polaridad de los LEDs.
 Coloque los módulos en las ranuras DIMMA2 y DIMMB2 para activar Dual Channel.
   `.trim();
 
-  // Partición con límite de 4K
-  const chapters = IngestionEngine.partitionTextIntoHeuristicChapters(docWithImages, 4);
+  // Partición con límite de 16K tokens (mínimo)
+  const chapters = IngestionEngine.partitionTextIntoHeuristicChapters(docWithImages, 16);
   assert.ok(chapters.length >= 2, 'Debe identificar las secciones');
   
   // Verificar que la imagen Base64 y la etiqueta HTML no fueron cortadas
@@ -288,4 +288,11 @@ Coloque los módulos en las ranuras DIMMA2 y DIMMB2 para activar Dual Channel.
   assert.ok(jfpChapter, 'Debe existir el capítulo con conectores');
   assert.ok(jfpChapter.content.includes('![Diagrama JFP1](data:image/png;base64,'), 'La imagen Markdown debe estar intacta');
   assert.ok(jfpChapter.content.includes('<img src="https://example.com/images/audio_panel.svg"'), 'La etiqueta img HTML debe estar intacta');
+
+  // Partición con límite amplio de 256K y 1024K tokens
+  const chapters256k = IngestionEngine.partitionTextIntoHeuristicChapters(docWithImages, 256);
+  assert.ok(chapters256k.length >= 1, 'Debe mantener el documento estructurado en rango 256K');
+
+  const chapters1M = IngestionEngine.partitionTextIntoHeuristicChapters(docWithImages, 1024);
+  assert.ok(chapters1M.length >= 1, 'Debe soportar 1M tokens');
 });

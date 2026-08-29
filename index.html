@@ -737,20 +737,21 @@
         <div class="setting-toggle-card rag-chunk-config-card" style="margin-bottom: 1rem;">
           <div class="toggle-card-info">
             <div class="toggle-card-title">
-              <strong data-i18n="rag_context_limit_title">📦 Tamaño de Contexto por Capítulo (Límite K)</strong>
+              <strong data-i18n="rag_context_limit_title">📦 Tamaño de Contexto por Capítulo (Tokens)</strong>
             </div>
             <p class="toggle-card-desc" data-i18n="rag_context_limit_desc">
-              Determina el tamaño máximo en KB (~K tokens) para particionar documentos y generar resúmenes con el modelo. Protege imágenes y tablas completas.
+              Define la capacidad máxima de tokens por capítulo (16K a 1M tokens) para segmentar documentos y realizar síntesis con el modelo. Protege imágenes y tablas completas.
             </p>
           </div>
-          <div class="rag-chunk-select-wrapper" style="min-width: 220px;">
+          <div class="rag-chunk-select-wrapper" style="min-width: 250px;">
             <select id="setting-rag-context-limit-k" class="combobox-select-helper" style="width: 100%;">
-              <option value="4">4 KB (~1.000 tokens) - 4K / Pequeño</option>
-              <option value="8">8 KB (~2.000 tokens) - Modelos 8K</option>
-              <option value="16" selected>16 KB (~4.000 tokens) - Estándar</option>
-              <option value="32">32 KB (~8.000 tokens) - Modelos 16K-32K</option>
-              <option value="64">64 KB (~16.000 tokens) - Modelos 64K</option>
-              <option value="128">128 KB (~32.000 tokens) - Modelos 128K+</option>
+              <option value="16">16K tokens (~64 KB texto) - Mínimo</option>
+              <option value="32">32K tokens (~128 KB texto)</option>
+              <option value="64" selected>64K tokens (~256 KB texto) - Estándar</option>
+              <option value="128">128K tokens (~512 KB texto)</option>
+              <option value="256">256K tokens (~1 MB texto) - Modelos 256K</option>
+              <option value="512">512K tokens (~2 MB texto)</option>
+              <option value="1024">1M tokens (~4 MB texto) - Máximo</option>
             </select>
           </div>
         </div>
