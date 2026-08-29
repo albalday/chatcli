@@ -979,7 +979,7 @@
               }
             }
 
-            return {
+            const out = {
               id: tc.id || `call_${Date.now()}`,
               type: 'function',
               function: {
@@ -987,6 +987,15 @@
                 arguments: safeArgs
               }
             };
+
+            const sig = tc.thought_signature || tc.extra_content?.google?.thought_signature;
+            if (sig) {
+              out.extra_content = { google: { thought_signature: sig } };
+            } else if (tc.extra_content) {
+              out.extra_content = tc.extra_content;
+            }
+
+            return out;
           });
 
           // Regla Gemini: Un turno assistant con tool_calls NUNCA puede ir inmediatamente después de system
