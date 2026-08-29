@@ -441,6 +441,48 @@
     });
   }
 
+  /**
+   * Actualiza el nombre o descripción de una rama existente.
+   * @param {string} id - Identificador único de la rama.
+   * @param {Object} updates - Campos a actualizar ({ name, description }).
+   * @returns {Promise<Object>} - La rama actualizada.
+   */
+  async function updateBranch(id, updates = {}) {
+    const cleanId = String(id || '').trim();
+    if (!cleanId) throw new ValidationError('El parámetro id de la rama es obligatorio.');
+
+    const db = await openDatabase();
+    if (!db) {
+      if (!memoryBranches.has(cleanId)) throw new NotFoundError(`No existe la rama [${cleanId}].`);
+      const b = memoryBranches.get(cleanId);
+      if (updates.name) b.name = String(updates.name).trim();
+      if (updates.description !== undefined) b.description = String(updates.description).trim();
+      b.updatedAt = Date.now();
+      return { ...b };
+    }
+
+    return new Promise((resolve, reject) => {
+      try {
+        const tx = db.transaction([STORE_BRANCHES], 'readwrite');
+        const store = tx.objectStore(STORE_BRANCHES);
+        const req = store.get(cleanId);
+        req.onsuccess = () => {
+          const b = req.result;
+          if (!b) return reject(new NotFoundError(`No existe la rama [${cleanId}].`));
+          if (updates.name) b.name = String(updates.name).trim();
+          if (updates.description !== undefined) b.description = String(updates.description).trim();
+          b.updatedAt = Date.now();
+          const putReq = store.put(b);
+          putReq.onsuccess = () => resolve({ ...b });
+          putReq.onerror = (e) => reject(new RagStorageError(`Error al actualizar rama: ${e.target.error?.message}`));
+        };
+        req.onerror = (e) => reject(new RagStorageError(`Error al buscar rama: ${e.target.error?.message}`));
+      } catch (err) {
+        reject(new RagStorageError(`Excepción al actualizar rama: ${err.message}`));
+      }
+    });
+  }
+
   // ==========================================================================
   // Métodos CRUD: Documentos (Documents)
   // ==========================================================================
@@ -736,6 +778,141 @@
     });
   }
 
+  // ==========================================================================
+  // Estimación de Cuota, Exportación e Importación de Ramas
+  // ==========================================================================
+
+  /**
+   * Consulta el uso y cuota disponible de almacenamiento con navigator.storage.estimate().
+   * @returns {Promise<{ usage: number, quota: number, usagePercent: string, available: number, supported: boolean }>}
+   */
+  async function getStorageEstimate() {
+    if (typeof navigator !== 'undefined' && navigator.storage && typeof navigator.storage.estimate === 'function') {
+      try {
+        const estimate = await navigator.storage.estimate();
+        const usage = estimate.usage || 0;
+        const quota = estimate.quota || 0;
+        const usagePercent = quota > 0 ? ((usage / quota) * 100).toFixed(1) : '0';
+        return {
+          usage,
+          quota,
+          usagePercent,
+          available: Math.max(0, quota - usage),
+          supported: true
+        };
+      } catch (err) {
+        return { usage: 0, quota: 0, usagePercent: '0', available: 0, supported: false, error: err?.message };
+      }
+    }
+    return { usage: 0, quota: 0, usagePercent: '0', available: 0, supported: false };
+  }
+
+  /**
+   * Exporta una rama completa y todos sus documentos/capítulos a un objeto JSON serializable.
+   * @param {string} branchId - ID de la rama a exportar.
+   * @returns {Promise<Object>} - Paquete JSON listo para guardar o descargar.
+   */
+  async function exportBranchToJson(branchId) {
+    const branch = await getBranchById(branchId);
+    if (!branch) {
+      throw new NotFoundError(`No se encontró la rama con ID: ${branchId}`);
+    }
+
+    const docs = await getDocumentsByBranch(branchId);
+    return {
+      version: 1,
+      schema: 'ChatCLI_RAG_Branch_v1',
+      exportedAt: Date.now(),
+      branch: {
+        id: branch.id,
+        name: branch.name,
+        description: branch.description || '',
+        createdAt: branch.createdAt,
+        updatedAt: branch.updatedAt
+      },
+      documents: docs.map((doc) => ({
+        id: doc.id,
+        title: doc.title,
+        fileType: doc.fileType,
+        fileSize: doc.fileSize,
+        globalSummary: doc.globalSummary || '',
+        createdAt: doc.createdAt,
+        updatedAt: doc.updatedAt,
+        chapters: (doc.chapters || []).map((ch) => ({
+          chapterId: ch.chapterId,
+          title: ch.title,
+          summary: ch.summary || '',
+          content: ch.content || ''
+        }))
+      }))
+    };
+  }
+
+  /**
+   * Importa una rama y sus documentos desde un objeto o JSON string.
+   * @param {Object|string} branchData - Datos exportados.
+   * @param {Object} [options={}] - Opciones ({ createNewId: boolean }).
+   * @returns {Promise<{ branch: Object, documentCount: number }>}
+   */
+  async function importBranchFromJson(branchData, options = {}) {
+    let payload = branchData;
+    if (typeof payload === 'string') {
+      try {
+        payload = JSON.parse(payload);
+      } catch (e) {
+        throw new ValidationError('El archivo importado no contiene un formato JSON válido.');
+      }
+    }
+
+    if (!payload || !payload.branch || !payload.branch.name) {
+      throw new ValidationError('Estructura de rama inválida: falta el objeto "branch" o "branch.name".');
+    }
+
+    const branchName = String(payload.branch.name).trim();
+    const branchDesc = String(payload.branch.description || '').trim();
+    const rawDocs = Array.isArray(payload.documents) ? payload.documents : [];
+
+    // Crear o preservar la rama
+    const existingBranch = payload.branch.id ? await getBranchById(payload.branch.id).catch(() => null) : null;
+    const shouldCreateNew = options.createNewId || Boolean(existingBranch);
+
+    let targetBranch;
+    if (shouldCreateNew) {
+      const importedName = existingBranch ? `${branchName} (Copia)` : branchName;
+      targetBranch = await createBranch(importedName, branchDesc);
+    } else {
+      const branchId = payload.branch.id || generateId('branch');
+      targetBranch = await createBranch(branchName, branchDesc);
+    }
+
+    let savedDocCount = 0;
+    for (const rawDoc of rawDocs) {
+      if (!rawDoc.title) continue;
+      const docToSave = {
+        id: generateId('doc'),
+        branchId: targetBranch.id,
+        title: String(rawDoc.title).trim(),
+        fileType: rawDoc.fileType || 'txt',
+        fileSize: Number(rawDoc.fileSize) || 0,
+        globalSummary: String(rawDoc.globalSummary || ''),
+        chapters: Array.isArray(rawDoc.chapters) ? rawDoc.chapters.map((ch, idx) => ({
+          chapterId: typeof ch.chapterId === 'number' ? ch.chapterId : (idx + 1),
+          title: String(ch.title || `Capítulo ${idx + 1}`),
+          summary: String(ch.summary || ''),
+          content: String(ch.content || '')
+        })) : []
+      };
+
+      await saveDocument(docToSave);
+      savedDocCount++;
+    }
+
+    return {
+      branch: targetBranch,
+      documentCount: savedDocCount
+    };
+  }
+
   /**
    * Limpia toda la base de datos RAG (útil para reinicios y pruebas).
    */
@@ -791,17 +968,21 @@
     QuotaExceededError,
     NotFoundError,
 
-    // Métodos de Conexión
+    // Métodos de Conexión y Cuota
     openDatabase,
     requestPersistentStorage,
+    getStorageEstimate,
     clearAllData,
     closeDB,
 
     // Ramas
     createBranch,
+    updateBranch,
     getBranches,
     getBranchById,
     deleteBranch,
+    exportBranchToJson,
+    importBranchFromJson,
 
     // Documentos y Capítulos
     saveDocument,

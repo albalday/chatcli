@@ -20,3 +20,4 @@ test('TreeRagUI - getActiveChatBranchId y setActiveChatBranchId gestionan la ram
   TreeRagUI.setActiveChatBranchId('');
   assert.equal(TreeRagUI.getActiveChatBranchId(), '');
 });
+

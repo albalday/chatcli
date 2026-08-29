@@ -200,3 +200,65 @@ test('IngestionEngine - processDocumentQueue continúa ante fallos individuales 
   assert.equal(docs.length, 1);
   assert.equal(docs[0].title, 'doc_valido.md');
 });
+
+test('IngestionEngine - Reparación de JSON con texto conversacional y comas sobrantes', async () => {
+  const sampleText = 'Documento de políticas internas.';
+  
+  // LLM que devuelve prefacio conversacional, comas sobrantes y sufijo
+  const noisyLLM = async () => {
+    return `
+      ¡Hola! Aquí tienes la estructura JSON solicitada:
+      \`\`\`json
+      {
+        "globalSummary": "Resumen con comas sobrantes.",
+        "chapters": [
+          {
+            "chapterId": 1,
+            "title": "Capítulo 1",
+            "summary": "Resumen 1",
+            "content": "Contenido 1",
+          },
+        ],
+      }
+      \`\`\`
+      Espero que te sea de gran utilidad.
+    `;
+  };
+
+  const result = await IngestionEngine.analyzeDocumentStructure(sampleText, 'Politicas.md', noisyLLM);
+  assert.ok(result);
+  assert.equal(result.globalSummary, 'Resumen con comas sobrantes.');
+  assert.equal(result.chapters.length, 1);
+  assert.equal(result.chapters[0].title, 'Capítulo 1');
+});
+
+test('IngestionEngine - Auto-reintento (1 retry) si el primer intento falla en formatear JSON', async () => {
+  const sampleText = 'Documento para prueba de reintento.';
+  let attemptCount = 0;
+
+  const flakyLLM = async (prompt) => {
+    attemptCount++;
+    if (attemptCount === 1) {
+      // Primer intento: texto no JSON
+      return 'Lo siento, no pude generar el formato JSON pedido.';
+    }
+    // Segundo intento (reintento automático): JSON estructurado válido
+    return JSON.stringify({
+      globalSummary: 'Resumen obtenido tras reintento exitoso.',
+      chapters: [
+        {
+          chapterId: 1,
+          title: 'Capítulo Reintentado',
+          summary: 'Resumen ok.',
+          content: 'Contenido ok.'
+        }
+      ]
+    });
+  };
+
+  const result = await IngestionEngine.analyzeDocumentStructure(sampleText, 'Reintento.txt', flakyLLM);
+  assert.equal(attemptCount, 2, 'Debe haber ejecutado exactamente 1 reintento');
+  assert.equal(result.globalSummary, 'Resumen obtenido tras reintento exitoso.');
+  assert.equal(result.chapters.length, 1);
+});
+

@@ -285,3 +285,80 @@ test('RagStorage - Manejo de errores de validación y QuotaExceededError', async
   assert.ok(quotaErr instanceof RagStorage.RagStorageError);
 });
 
+test('RagStorage - updateBranch actualiza nombre y descripción', async () => {
+  await RagStorage.clearAllData();
+  const branch = await RagStorage.createBranch('Original Name', 'Original Desc');
+
+  const updated = await RagStorage.updateBranch(branch.id, {
+    name: 'Nuevo Nombre',
+    description: 'Nueva Descripción'
+  });
+
+  assert.equal(updated.name, 'Nuevo Nombre');
+  assert.equal(updated.description, 'Nueva Descripción');
+
+  const fetched = await RagStorage.getBranchById(branch.id);
+  assert.equal(fetched.name, 'Nuevo Nombre');
+  assert.equal(fetched.description, 'Nueva Descripción');
+});
+
+test('RagStorage - getStorageEstimate devuelve objeto de cuota estructurado', async () => {
+  const estimate = await RagStorage.getStorageEstimate();
+  assert.ok(estimate);
+  assert.equal(typeof estimate.usage, 'number');
+  assert.equal(typeof estimate.quota, 'number');
+  assert.equal(typeof estimate.usagePercent, 'string');
+});
+
+test('RagStorage - exportBranchToJson e importBranchFromJson exportan e importan íntegramente', async () => {
+  await RagStorage.clearAllData();
+
+  const branch = await RagStorage.createBranch('Rama Export', 'Descripción de exportación');
+  await RagStorage.saveDocument({
+    branchId: branch.id,
+    title: 'DocExport.md',
+    fileType: 'md',
+    fileSize: 4200,
+    globalSummary: 'Resumen global del documento exportado',
+    chapters: [
+      {
+        chapterId: 1,
+        title: 'Sección 1',
+        summary: 'Resumen sección 1',
+        content: 'Contenido completo sección 1'
+      },
+      {
+        chapterId: 2,
+        title: 'Sección 2',
+        summary: 'Resumen sección 2',
+        content: 'Contenido completo sección 2'
+      }
+    ]
+  });
+
+  // 1. Exportar a JSON
+  const exported = await RagStorage.exportBranchToJson(branch.id);
+  assert.ok(exported);
+  assert.equal(exported.version, 1);
+  assert.equal(exported.schema, 'ChatCLI_RAG_Branch_v1');
+  assert.equal(exported.branch.name, 'Rama Export');
+  assert.equal(exported.documents.length, 1);
+  assert.equal(exported.documents[0].chapters.length, 2);
+  assert.equal(exported.documents[0].chapters[0].content, 'Contenido completo sección 1');
+
+  // 2. Importar desde JSON (creando nueva rama o copia)
+  const importRes = await RagStorage.importBranchFromJson(exported, { createNewId: true });
+  assert.ok(importRes.branch);
+  assert.ok(importRes.branch.id);
+  assert.equal(importRes.documentCount, 1);
+
+  const importedDocs = await RagStorage.getDocumentsByBranch(importRes.branch.id);
+  assert.equal(importedDocs.length, 1);
+  assert.equal(importedDocs[0].title, 'DocExport.md');
+  assert.equal(importedDocs[0].chapters.length, 2);
+
+  // Verificar recuperación bajo demanda del capítulo en la rama importada
+  const importedChapterContent = await RagStorage.getChapterContent(importedDocs[0].id, 1);
+  assert.equal(importedChapterContent, 'Contenido completo sección 1');
+});
+

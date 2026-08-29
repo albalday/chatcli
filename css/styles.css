@@ -4005,6 +4005,12 @@ input:checked + .slider:before {
   margin: 0;
 }
 
+.rag-sidebar-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
 .btn-rag-primary-sm {
   padding: 0.25rem 0.6rem;
   font-size: 0.75rem;
@@ -4019,6 +4025,59 @@ input:checked + .slider:before {
 
 .btn-rag-primary-sm:hover {
   opacity: 0.9;
+}
+
+.btn-rag-secondary-sm {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8rem;
+  background-color: var(--bg-surface);
+  color: var(--text-main);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.btn-rag-secondary-sm:hover {
+  background-color: var(--border-color);
+}
+
+.rag-sidebar-footer {
+  padding: 0.6rem 0.85rem;
+  border-top: 1px solid var(--border-color);
+  background-color: var(--bg-surface);
+}
+
+.rag-storage-quota-info {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.btn-rag-action-header {
+  padding: 0.4rem 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-surface);
+  color: var(--text-main);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.btn-rag-action-header:hover {
+  background-color: var(--bg-app);
+  border-color: var(--primary-color);
+  color: var(--primary-color);
 }
 
 .rag-branches-list {

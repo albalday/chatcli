@@ -683,10 +683,19 @@
       <aside class="rag-sidebar">
         <div class="rag-sidebar-header">
           <h4 data-i18n="rag_branches_title">Ramas de Proyecto</h4>
-          <button type="button" id="btn-rag-new-branch" class="btn-rag-primary-sm" data-i18n="rag_btn_new_branch">+ Nueva Rama</button>
+          <div class="rag-sidebar-header-actions">
+            <input type="file" id="rag-import-file-input" accept=".json" style="display: none;">
+            <button type="button" id="btn-rag-import-branch" class="btn-rag-secondary-sm" title="Importar rama desde JSON">📥</button>
+            <button type="button" id="btn-rag-new-branch" class="btn-rag-primary-sm" data-i18n="rag_btn_new_branch">+ Nueva Rama</button>
+          </div>
         </div>
         <div id="rag-branches-list" class="rag-branches-list">
           <!-- Se puebla dinámicamente -->
+        </div>
+        <div class="rag-sidebar-footer">
+          <div id="rag-storage-quota-info" class="rag-storage-quota-info">
+            <span>💾 Almacenamiento local: Calculando...</span>
+          </div>
         </div>
       </aside>
 

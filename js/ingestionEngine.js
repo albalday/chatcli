@@ -145,13 +145,14 @@
                   (typeof globalThis !== 'undefined' && globalThis.pdfjsLib);
 
     if (pdfjs && typeof pdfjs.getDocument === 'function') {
+      let pdfDoc = null;
       try {
         const loadingTask = pdfjs.getDocument({ data: arrayBuffer });
-        const pdf = await loadingTask.promise;
+        pdfDoc = await loadingTask.promise;
         const pageTexts = [];
 
-        for (let i = 1; i <= pdf.numPages; i++) {
-          const page = await pdf.getPage(i);
+        for (let i = 1; i <= pdfDoc.numPages; i++) {
+          const page = await pdfDoc.getPage(i);
           const textContent = await page.getTextContent();
           const pageStrings = textContent.items
             ? textContent.items.map(item => item.str || '')
@@ -159,6 +160,9 @@
           const pageMerged = pageStrings.join(' ').replace(/[ \t]{2,}/g, ' ').trim();
           if (pageMerged.length > 0) {
             pageTexts.push(`--- Página ${i} ---\n${pageMerged}`);
+          }
+          if (typeof page.cleanup === 'function') {
+            page.cleanup();
           }
         }
 
@@ -168,6 +172,14 @@
         }
       } catch (pdfjsErr) {
         console.warn('ChatIngestionEngine: Error con pdfjsLib, recurriendo a ChatFileParser:', pdfjsErr);
+      } finally {
+        if (pdfDoc && typeof pdfDoc.destroy === 'function') {
+          try { await pdfDoc.destroy(); } catch (e) {}
+        }
+        if (pdfDoc && typeof pdfDoc.cleanup === 'function') {
+          try { pdfDoc.cleanup(); } catch (e) {}
+        }
+        arrayBuffer = null;
       }
     }
 
@@ -175,6 +187,7 @@
     const FileParser = getFileParser();
     if (FileParser && typeof FileParser.extractTextFromPdf === 'function') {
       const parsedText = FileParser.extractTextFromPdf(arrayBuffer);
+      arrayBuffer = null;
       return normalizeExtractedText(parsedText);
     }
 
@@ -309,35 +322,45 @@
   }
 
   /**
-   * Extrae y limpia un bloque JSON devuelto por un modelo LLM.
+   * Extrae y repara un bloque JSON devuelto por un modelo LLM tolerando fallos de sintaxis.
+   * Maneja bloques markdown, texto conversacional anterior/posterior, comas sobrantes y caracteres de control.
    */
   function extractJsonFromResponse(rawResponse) {
     if (!rawResponse) return null;
     let clean = String(rawResponse).trim();
 
-    // Eliminar bloques ```json ... ```
+    // 1. Eliminar bloques ```json ... ``` o ``` ... ```
     const match = clean.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
     if (match && match[1]) {
       clean = match[1].trim();
     }
 
+    // 2. Extraer primer '{' y último '}' para ignorar prefacios/sufijos conversacionales
+    const startIdx = clean.indexOf('{');
+    const endIdx = clean.lastIndexOf('}');
+    if (startIdx !== -1 && endIdx > startIdx) {
+      clean = clean.substring(startIdx, endIdx + 1);
+    }
+
+    // 3. Intento directo de parseo
     try {
       return JSON.parse(clean);
-    } catch (e) {
-      // Intentar extraer primer '{' y último '}'
-      const startIdx = clean.indexOf('{');
-      const endIdx = clean.lastIndexOf('}');
-      if (startIdx !== -1 && endIdx > startIdx) {
-        try {
-          return JSON.parse(clean.substring(startIdx, endIdx + 1));
-        } catch (e2) {}
+    } catch (e1) {
+      // 4. Limpieza de comas sobrantes (trailing commas: ,} o ,]) y caracteres de control
+      try {
+        const repaired = clean
+          .replace(/,\s*([}\]])/g, '$1')
+          .replace(/[\u0000-\u0019]+/g, ' ');
+        return JSON.parse(repaired);
+      } catch (e2) {
+        return null;
       }
-      return null;
     }
   }
 
   /**
    * Analiza la estructura del documento y genera el resumen global y los micro-resúmenes de capítulos.
+   * Cuenta con auto-reintento (1 reintento) si la respuesta inicial no es JSON estructurado válido.
    * @param {string} text - Texto íntegro del documento.
    * @param {string} filename - Nombre del archivo.
    * @param {Object|Function} llmClient - Cliente de invocación del LLM.
@@ -372,8 +395,22 @@ No incluyas texto explicativo antes ni después del bloque JSON.`;
       const prompt = `Analiza el siguiente documento titulado "${filename}" y divide su contenido en capítulos lógicos estructurados con sus respectivos resúmenes y el resumen global:\n\n---\n${cleanText}\n---`;
 
       try {
-        const responseText = await callLLM(llmClient, prompt, SYSTEM_PROMPT);
-        const parsed = extractJsonFromResponse(responseText);
+        let responseText = await callLLM(llmClient, prompt, SYSTEM_PROMPT);
+        let parsed = extractJsonFromResponse(responseText);
+
+        // Auto-reintento (máximo 1 reintento) si el primer intento no es JSON estructurado válido
+        if (!parsed || !Array.isArray(parsed.chapters) || parsed.chapters.length === 0) {
+          try {
+            const retryPrompt = `La respuesta anterior no era un JSON válido. Devuelve ÚNICAMENTE el objeto JSON estructurado con "globalSummary" y "chapters" para el documento "${filename}":\n\n---\n${cleanText}\n---`;
+            const retryResponse = await callLLM(llmClient, retryPrompt, SYSTEM_PROMPT);
+            const retryParsed = extractJsonFromResponse(retryResponse);
+            if (retryParsed && Array.isArray(retryParsed.chapters) && retryParsed.chapters.length > 0) {
+              parsed = retryParsed;
+            }
+          } catch (retryErr) {
+            // Continuar al particionador heurístico
+          }
+        }
 
         if (parsed && Array.isArray(parsed.chapters) && parsed.chapters.length > 0) {
           return {
@@ -388,7 +425,7 @@ No incluyas texto explicativo antes ni después del bloque JSON.`;
           };
         }
       } catch (err) {
-        console.warn(`ChatIngestionEngine: Error en análisis directo del documento "${filename}":`, err);
+        // Fallback al particionador heurístico
       }
     }
 

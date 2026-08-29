@@ -124,6 +124,7 @@
     try {
       const branches = await RagStorage.getBranches();
       listContainer.innerHTML = '';
+      updateStorageQuotaDisplay();
 
       if (branches.length === 0) {
         listContainer.innerHTML = `
@@ -225,6 +226,9 @@
             ${branch.description ? `<p class="rag-workspace-desc">${getMarkdown().escapeHtml(branch.description)}</p>` : ''}
           </div>
           <div class="rag-workspace-actions">
+            <button type="button" id="btn-rag-export-branch" class="btn-rag-action-header" title="Exportar rama a archivo JSON">
+              📤 Exportar Rama
+            </button>
             <button type="button" id="btn-rag-toggle-active-chat" class="btn-rag-toggle-active ${isActiveInChat ? 'is-active' : ''}">
               ${isActiveInChat ? '✅ ' + (t('rag_active_branch_badge') || 'Rama Activa en Chat') : '🌿 ' + (t('rag_btn_activate_branch') || 'Activar en chat')}
             </button>
@@ -279,6 +283,11 @@
       `;
 
       // Event Listeners del Workspace
+      const btnExport = workspaceContainer.querySelector('#btn-rag-export-branch');
+      if (btnExport) {
+        btnExport.addEventListener('click', () => handleExportBranch(branch.id));
+      }
+
       const btnToggleActive = workspaceContainer.querySelector('#btn-rag-toggle-active-chat');
       if (btnToggleActive) {
         btnToggleActive.addEventListener('click', () => {
@@ -657,6 +666,78 @@
     }
   }
 
+  /**
+   * Actualiza el indicador visual de uso y cuota de almacenamiento disponible.
+   */
+  async function updateStorageQuotaDisplay() {
+    const quotaElem = document.getElementById('rag-storage-quota-info');
+    if (!quotaElem) return;
+
+    const RagStorage = getRagStorage();
+    if (!RagStorage || !RagStorage.getStorageEstimate) {
+      quotaElem.innerHTML = `<span>💾 Almacenamiento local persistente</span>`;
+      return;
+    }
+
+    try {
+      const estimate = await RagStorage.getStorageEstimate();
+      if (estimate && estimate.supported) {
+        quotaElem.innerHTML = `<span>💾 ${formatBytes(estimate.usage)} de ${formatBytes(estimate.quota)} (${estimate.usagePercent}%)</span>`;
+        quotaElem.title = `Espacio libre estimado: ${formatBytes(estimate.available)}`;
+      } else {
+        quotaElem.innerHTML = `<span>💾 Almacenamiento local persistente</span>`;
+      }
+    } catch (err) {
+      quotaElem.innerHTML = `<span>💾 Almacenamiento local</span>`;
+    }
+  }
+
+  /**
+   * Manejador para exportar una rama a archivo JSON descargable.
+   */
+  async function handleExportBranch(branchId) {
+    const RagStorage = getRagStorage();
+    if (!RagStorage || !RagStorage.exportBranchToJson) return;
+
+    try {
+      const exportData = await RagStorage.exportBranchToJson(branchId);
+      const jsonStr = JSON.stringify(exportData, null, 2);
+      const blob = new Blob([jsonStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const safeName = (exportData.branch?.name || 'branch').replace(/[^a-zA-Z0-9_\u00C0-\u017F-]/g, '_');
+      a.href = url;
+      a.download = `${safeName}_rag_branch.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert(`Error al exportar rama: ${err?.message || String(err)}`);
+    }
+  }
+
+  /**
+   * Manejador para importar una rama completa desde un archivo JSON.
+   */
+  async function handleImportBranchFile(file) {
+    if (!file) return;
+    const RagStorage = getRagStorage();
+    if (!RagStorage || !RagStorage.importBranchFromJson) return;
+
+    try {
+      const text = await file.text();
+      const result = await RagStorage.importBranchFromJson(text);
+      selectedBranchId = result.branch.id;
+      await renderBranchesList();
+      await refreshBranchSelector();
+      updateStorageQuotaDisplay();
+      alert(`✅ Rama "${result.branch.name}" importada con éxito (${result.documentCount} documentos).`);
+    } catch (err) {
+      alert(`Error al importar rama: ${err?.message || String(err)}`);
+    }
+  }
+
   let fallbackActiveBranchId = '';
 
   /**
@@ -702,6 +783,8 @@
     const btnCloseModalFooter = document.getElementById('btn-close-tree-rag-footer');
     const branchSelector = document.getElementById('select-rag-branch');
     const btnNewBranch = document.getElementById('btn-rag-new-branch');
+    const btnImportBranch = document.getElementById('btn-rag-import-branch');
+    const importFileInput = document.getElementById('rag-import-file-input');
     const structureDialog = document.getElementById('rag-structure-dialog');
     const btnCloseStructure = document.getElementById('btn-close-rag-structure');
 
@@ -747,8 +830,23 @@
       btnNewBranch.addEventListener('click', handleCreateBranch);
     }
 
-    // Carga inicial del selector
+    if (btnImportBranch && importFileInput) {
+      btnImportBranch.addEventListener('click', () => {
+        importFileInput.value = '';
+        importFileInput.click();
+      });
+
+      importFileInput.addEventListener('change', (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (file) {
+          handleImportBranchFile(file);
+        }
+      });
+    }
+
+    // Carga inicial del selector y cuota
     refreshBranchSelector();
+    updateStorageQuotaDisplay();
   }
 
   return {
@@ -757,6 +855,9 @@
     renderBranchesList,
     renderBranchWorkspace,
     openDocumentStructureViewer,
+    updateStorageQuotaDisplay,
+    handleExportBranch,
+    handleImportBranchFile,
     getActiveChatBranchId,
     setActiveChatBranchId
   };
