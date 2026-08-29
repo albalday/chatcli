@@ -281,6 +281,9 @@
       confirm_clear_all_data: '¿Estás seguro de que deseas borrar TODA la configuración, historial de chats, modelos y cookies locales?\n\nLa aplicación se reiniciará completamente limpia desde cero.',
       btn_cancel: 'Cancelar',
       btn_save: 'Guardar Configuración',
+      btn_close: 'Cerrar',
+      modal_btn_close: 'Cerrar',
+      modal_close_aria: 'Cerrar modal',
 
       // Mensajes de estado y errores
       err_no_model_title: 'No hay ningún modelo seleccionado:',
@@ -607,6 +610,9 @@
       confirm_clear_all_data: 'Are you sure you want to delete ALL settings, chat history, discovered models and local cookies?\n\nThe application will reload completely fresh from scratch.',
       btn_cancel: 'Cancel',
       btn_save: 'Save Settings',
+      btn_close: 'Close',
+      modal_btn_close: 'Close',
+      modal_close_aria: 'Close modal',
 
       // Mensajes de estado y errores
       err_no_model_title: 'No model selected:',
