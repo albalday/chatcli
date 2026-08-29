@@ -4047,270 +4047,155 @@ input:checked + .slider:before {
 
 /* 2. Modal de Gestión de Ramas (Tree RAG Modal) */
 .tree-rag-modal {
-  max-width: 920px;
+  max-width: 860px;
   width: 95vw;
-  height: 85vh;
-  max-height: calc(var(--app-height, 100dvh) * 0.9);
+  height: 82vh;
+  max-height: calc(var(--app-height, 100dvh) * 0.88);
 }
 
 .rag-header-icon {
   font-size: 1.25rem;
 }
 
-.rag-modal-body {
+.rag-tabs-nav {
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-app);
+}
+
+.rag-modal-body-tabbed {
   display: flex;
+  flex-direction: column;
   flex: 1;
   min-height: 0;
-  overflow: hidden;
-  background-color: var(--bg-surface);
+  overflow-y: auto;
+  padding: 1.25rem;
 }
 
-/* Panel Izquierdo: Sidebar de Ramas */
-.rag-sidebar {
-  width: 280px;
-  min-width: 240px;
-  border-right: 1px solid var(--border-color);
-  display: flex;
-  flex-direction: column;
-  background-color: var(--bg-app);
-}
-
-.rag-sidebar-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.85rem 1rem;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.rag-sidebar-header h4 {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--text-main);
-  margin: 0;
-}
-
-.rag-sidebar-header-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-
-.btn-rag-primary-sm {
-  padding: 0.25rem 0.6rem;
-  font-size: 0.75rem;
-  font-weight: 600;
-  background-color: var(--primary-color);
-  color: #fff;
-  border: none;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: opacity 0.15s;
-}
-
-.btn-rag-primary-sm:hover {
-  opacity: 0.9;
-}
-
-.btn-rag-secondary-sm {
-  padding: 0.25rem 0.5rem;
-  font-size: 0.8rem;
-  background-color: var(--bg-surface);
-  color: var(--text-main);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: background-color 0.15s;
-}
-
-.btn-rag-secondary-sm:hover {
-  background-color: var(--border-color);
-}
-
-.rag-sidebar-footer {
-  padding: 0.6rem 0.85rem;
-  border-top: 1px solid var(--border-color);
-  background-color: var(--bg-surface);
-}
-
-.rag-storage-quota-info {
-  font-size: 0.72rem;
-  color: var(--text-muted);
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.btn-rag-action-header {
-  padding: 0.4rem 0.75rem;
-  font-size: 0.8rem;
-  font-weight: 600;
+/* Pestaña 1: Selector y Control de Rama Activa */
+.rag-master-toggle-card {
+  margin-bottom: 0.5rem;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-color);
   background-color: var(--bg-surface);
-  color: var(--text-main);
+  padding: 1rem 1.15rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.rag-active-branch-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.rag-branch-card {
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-surface);
+  border-radius: var(--radius-md);
+  padding: 0.9rem 1rem;
   cursor: pointer;
   transition: all 0.15s ease;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-
-.btn-rag-action-header:hover {
-  background-color: var(--bg-app);
-  border-color: var(--primary-color);
-  color: var(--primary-color);
-}
-
-.rag-branches-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 0.5rem;
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
+  position: relative;
+  user-select: none;
 }
 
-.rag-branch-item {
+.rag-branch-card:hover {
+  border-color: var(--primary-color);
+  background-color: var(--bg-app);
+  transform: translateY(-1px);
+}
+
+.rag-branch-card.is-active-chat {
+  border: 2px solid #10b981;
+  background-color: rgba(16, 185, 129, 0.08);
+}
+
+.rag-branch-card-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.6rem 0.75rem;
-  border-radius: var(--radius-md);
-  border: 1px solid transparent;
-  background-color: var(--bg-surface);
-  cursor: pointer;
-  transition: background-color 0.15s, border-color 0.15s;
+  gap: 0.5rem;
 }
 
-.rag-branch-item:hover {
-  background-color: rgba(59, 130, 246, 0.06);
-  border-color: var(--border-color);
-}
-
-.rag-branch-item.selected {
-  background-color: rgba(59, 130, 246, 0.12);
-  border-color: var(--primary-color);
-}
-
-.rag-branch-item-main {
-  flex: 1;
-  min-width: 0;
-}
-
-.rag-branch-item-header {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-
-.rag-branch-item-name {
-  font-size: 0.875rem;
+.rag-branch-card-title {
+  font-size: 0.92rem;
   font-weight: 600;
   color: var(--text-main);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.rag-branch-card-desc {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.rag-branch-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-top: auto;
+  padding-top: 0.35rem;
 }
 
 .rag-active-pill {
   font-size: 0.65rem;
   font-weight: 700;
-  padding: 0.1rem 0.35rem;
+  padding: 0.15rem 0.45rem;
   border-radius: var(--radius-sm);
   background-color: #10b981;
   color: #fff;
   letter-spacing: 0.03em;
 }
 
-.rag-branch-item-desc {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  margin-top: 0.2rem;
-}
-
-.rag-branch-item-actions {
+/* Pestaña 2: Barra de Gestión de Ramas */
+.rag-manage-toolbar {
   display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  opacity: 0.7;
-}
-
-.rag-branch-item:hover .rag-branch-item-actions {
-  opacity: 1;
-}
-
-.btn-rag-action {
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  padding: 0.25rem;
-  font-size: 0.85rem;
-  border-radius: var(--radius-sm);
-  transition: background-color 0.15s;
-}
-
-.btn-rag-action:hover {
-  background-color: var(--bg-app);
-}
-
-/* Panel Derecho: Contenido de la Rama */
-.rag-main-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow-y: auto;
-  padding: 1.25rem;
-  gap: 1rem;
-}
-
-.rag-workspace-header {
-  display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
+  gap: 0.85rem;
   padding-bottom: 0.85rem;
   border-bottom: 1px solid var(--border-color);
+  flex-wrap: wrap;
 }
 
-.rag-workspace-title {
-  font-size: 1.15rem;
-  font-weight: 700;
-  color: var(--text-main);
-  margin: 0;
+.rag-manage-branch-field {
+  flex: 1 1 200px;
+  margin-bottom: 0 !important;
 }
 
-.rag-workspace-desc {
-  font-size: 0.85rem;
-  color: var(--text-muted);
-  margin: 0.25rem 0 0 0;
+.rag-manage-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
 }
 
-.btn-rag-toggle-active {
-  padding: 0.4rem 0.85rem;
-  font-size: 0.85rem;
-  font-weight: 600;
-  border-radius: var(--radius-full);
-  border: 1px solid var(--border-color);
-  background-color: var(--bg-surface);
-  color: var(--text-main);
-  cursor: pointer;
-  transition: all 0.15s;
+.btn-danger-hover:hover {
+  border-color: #ef4444 !important;
+  color: #ef4444 !important;
+  background-color: rgba(239, 68, 68, 0.08) !important;
 }
 
-.btn-rag-toggle-active:hover {
-  border-color: var(--primary-color);
-}
-
-.btn-rag-toggle-active.is-active {
-  background-color: rgba(16, 185, 129, 0.15);
-  border-color: #10b981;
-  color: #059669;
+.rag-manage-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 1rem;
 }
 
 /* Dropzone */
@@ -4325,7 +4210,7 @@ input:checked + .slider:before {
   gap: 0.5rem;
   cursor: pointer;
   background-color: var(--bg-app);
-  transition: border-color 0.2s, background-color 0.2s, transform 0.1s;
+  transition: border-color 0.2s, background-color 0.2s;
 }
 
 .rag-dropzone:hover, .rag-dropzone.drag-over {
@@ -4389,21 +4274,6 @@ input:checked + .slider:before {
   gap: 0.4rem;
   font-size: 0.875rem;
   color: var(--text-main);
-}
-
-.btn-rag-cancel-queue {
-  padding: 0.2rem 0.5rem;
-  font-size: 0.75rem;
-  background-color: transparent;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  color: var(--text-muted);
-  cursor: pointer;
-}
-
-.btn-rag-cancel-queue:hover {
-  color: #ef4444;
-  border-color: #ef4444;
 }
 
 .rag-progress-bar-wrapper {
@@ -4493,7 +4363,7 @@ input:checked + .slider:before {
   align-items: center;
   gap: 0.75rem;
   padding: 0.75rem 1rem;
-  background-color: var(--bg-app);
+  background-color: var(--bg-surface);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   transition: border-color 0.15s;
@@ -4536,31 +4406,9 @@ input:checked + .slider:before {
   gap: 0.4rem;
 }
 
-.btn-rag-doc-action {
-  padding: 0.35rem 0.65rem;
-  font-size: 0.8rem;
-  font-weight: 500;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-color);
-  background-color: var(--bg-surface);
-  color: var(--text-main);
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.btn-rag-doc-action:hover {
-  border-color: var(--primary-color);
-  color: var(--primary-color);
-}
-
-.btn-rag-doc-action.btn-delete-doc:hover {
-  border-color: #ef4444;
-  color: #ef4444;
-}
-
 .rag-empty-state, .rag-empty-workspace, .rag-no-docs-message {
   text-align: center;
-  padding: 2rem 1rem;
+  padding: 2.5rem 1rem;
   color: var(--text-muted);
   font-size: 0.85rem;
 }
@@ -4570,9 +4418,12 @@ input:checked + .slider:before {
   margin-bottom: 0.5rem;
 }
 
-.rag-footer-hint {
-  font-size: 0.8rem;
+.rag-storage-quota-info {
+  font-size: 0.75rem;
   color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
 }
 
 /* 3. Visor de Estructura / Capítulos (rag-structure-modal) */

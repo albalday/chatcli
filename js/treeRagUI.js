@@ -73,7 +73,7 @@
   }
 
   // Estado interno de la UI de RAG
-  let selectedBranchId = null;
+  let selectedManageBranchId = null;
   let activeQueueController = null;
   let isQueueRunning = false;
 
@@ -113,129 +113,195 @@
   }
 
   /**
-   * Renderiza la lista de ramas en el panel izquierdo del modal.
+   * Pestaña 1: Renderiza la tarjeta principal de estado y la cuadrícula de ramas para activar en el chat.
    */
-  async function renderBranchesList() {
+  async function renderActiveBranchTab() {
     if (typeof document === 'undefined') return;
-    const listContainer = document.getElementById('rag-branches-list');
-    if (!listContainer) return;
+    const grid = document.getElementById('rag-active-branch-grid');
+    const titleEl = document.getElementById('rag-active-status-title');
+    const descEl = document.getElementById('rag-active-status-desc');
+    const btnMaster = document.getElementById('btn-rag-toggle-master');
+    if (!grid) return;
 
     const RagStorage = getRagStorage();
     if (!RagStorage) return;
 
     try {
       const branches = await RagStorage.getBranches();
-      listContainer.innerHTML = '';
-      updateStorageQuotaDisplay();
-      updateToolbarRagButtonStatus();
-
       const activeChatBranchId = getActiveChatBranchId();
       const activeBranchObj = activeChatBranchId ? branches.find(b => b.id === activeChatBranchId) : null;
-      const deactivateBtnHtml = activeChatBranchId
-        ? '<button type="button" id="btn-rag-deactivate-all" class="btn-rag-deactivate-sm" title="Desactivar RAG en chat">Desactivar</button>'
-        : '';
 
-      // Tarjeta de estado activo y botón de desactivación rápida en la barra lateral
-      const statusCard = document.createElement('div');
-      statusCard.className = `rag-sidebar-active-status ${activeChatBranchId ? 'has-active' : 'is-disabled'}`;
-      statusCard.innerHTML = `
-        <div class="rag-active-status-info">
-          <span class="rag-status-icon">${activeChatBranchId ? '🌿' : '⚪'}</span>
-          <div class="rag-status-text">
-            <span class="rag-status-label">${activeChatBranchId ? (t('rag_active_label') || 'Rama Activa en Chat:') : (t('rag_inactive_label') || 'RAG Desactivado')}</span>
-            <strong class="rag-status-branch-name">${activeBranchObj ? getMarkdown().escapeHtml(activeBranchObj.name) : (t('rag_no_context') || 'Sin contexto documental')}</strong>
-          </div>
-        </div>
-        ${deactivateBtnHtml}
-      `;
-
-      if (activeChatBranchId) {
-        const btnDeact = statusCard.querySelector('#btn-rag-deactivate-all');
-        if (btnDeact) {
-          btnDeact.addEventListener('click', (e) => {
-            e.stopPropagation();
+      // Actualizar tarjeta superior
+      if (activeBranchObj) {
+        if (titleEl) titleEl.textContent = `🌿 RAG Activado: "${activeBranchObj.name}"`;
+        if (descEl) descEl.textContent = `Los resúmenes de "${activeBranchObj.name}" están integrados en el contexto del chat. El modelo leerá capítulos completos bajo demanda con read_chapter_content.`;
+        if (btnMaster) {
+          btnMaster.textContent = t('rag_btn_deactivate') || 'Desactivar RAG';
+          btnMaster.className = 'btn-secondary btn-danger-hover';
+          btnMaster.disabled = false;
+          btnMaster.onclick = () => {
             setActiveChatBranchId('');
-            renderBranchesList();
-            if (selectedBranchId) renderBranchWorkspace(selectedBranchId);
-          });
+            renderActiveBranchTab();
+            updateToolbarRagButtonStatus();
+          };
+        }
+      } else {
+        if (titleEl) titleEl.textContent = '⚪ ' + (t('rag_inactive_label') || 'RAG Desactivado (Sin contexto)');
+        if (descEl) descEl.textContent = 'El chat opera en modo estándar sin inyectar conocimiento documental. Haz clic en una de las ramas inferiores para activarla.';
+        if (btnMaster) {
+          btnMaster.textContent = 'RAG Desactivado';
+          btnMaster.className = 'btn-secondary';
+          btnMaster.disabled = true;
+          btnMaster.onclick = null;
         }
       }
-      listContainer.appendChild(statusCard);
 
-      if (branches.length === 0) {
-        const emptyDiv = document.createElement('div');
-        emptyDiv.className = 'rag-empty-state';
-        emptyDiv.innerHTML = `<p>${t('rag_no_branches') || 'No hay ramas creadas. Crea una nueva rama para organizar tus documentos.'}</p>`;
-        listContainer.appendChild(emptyDiv);
-        selectedBranchId = null;
-        renderBranchWorkspace(null);
-        return;
-      }
+      grid.innerHTML = '';
 
-      // Si no hay rama seleccionada o ya no existe, seleccionar la primera
-      if (!selectedBranchId || !branches.some(b => b.id === selectedBranchId)) {
-        selectedBranchId = branches[0].id;
-      }
+      // Tarjeta "Sin contexto"
+      const noContextActivePill = !activeChatBranchId ? '<span class="rag-active-pill">ACTIVA</span>' : '';
+      const noContextCard = document.createElement('div');
+      noContextCard.className = `rag-branch-card ${!activeChatBranchId ? 'is-active-chat' : ''}`;
+      noContextCard.innerHTML = `
+        <div class="rag-branch-card-header">
+          <span class="rag-branch-card-title">🌿 Sin contexto (RAG desactivado)</span>
+          ${noContextActivePill}
+        </div>
+        <p class="rag-branch-card-desc">El modelo responderá únicamente con su conocimiento general sin consultar documentos locales.</p>
+        <div class="rag-branch-card-meta">
+          <span>⚪ Modo estándar</span>
+        </div>
+      `;
+      noContextCard.addEventListener('click', () => {
+        setActiveChatBranchId('');
+        renderActiveBranchTab();
+        updateToolbarRagButtonStatus();
+      });
+      grid.appendChild(noContextCard);
 
-      branches.forEach((branch) => {
-        const item = document.createElement('div');
-        item.className = `rag-branch-item ${branch.id === selectedBranchId ? 'selected' : ''}`;
-        item.dataset.branchId = branch.id;
-
+      // Tarjetas por cada rama
+      for (const branch of branches) {
+        const docs = await RagStorage.getDocumentsByBranch(branch.id).catch(() => []);
         const isCurrentActive = branch.id === activeChatBranchId;
+        const branchActivePill = isCurrentActive ? '<span class="rag-active-pill">ACTIVA</span>' : '';
 
-        item.innerHTML = `
-          <div class="rag-branch-item-main">
-            <div class="rag-branch-item-header">
-              <span class="rag-branch-item-name">${getMarkdown().escapeHtml(branch.name)}</span>
-              ${isCurrentActive ? `<span class="rag-active-pill" title="${t('rag_active_branch_badge')}">ACTIVA</span>` : ''}
-            </div>
-            ${branch.description ? `<div class="rag-branch-item-desc">${getMarkdown().escapeHtml(branch.description)}</div>` : ''}
+        let totalChapters = 0;
+        let totalSize = 0;
+        docs.forEach(d => {
+          totalChapters += (d.chapters ? d.chapters.length : 0);
+          totalSize += (d.fileSize || 0);
+        });
+
+        const card = document.createElement('div');
+        card.className = `rag-branch-card ${isCurrentActive ? 'is-active-chat' : ''}`;
+        card.innerHTML = `
+          <div class="rag-branch-card-header">
+            <span class="rag-branch-card-title">📁 ${getMarkdown().escapeHtml(branch.name)}</span>
+            ${branchActivePill}
           </div>
-          <div class="rag-branch-item-actions">
-            <button type="button" class="btn-rag-action btn-edit-branch" title="Editar rama" data-branch-id="${branch.id}">✏️</button>
-            <button type="button" class="btn-rag-action btn-delete-branch" title="Eliminar rama" data-branch-id="${branch.id}">🗑️</button>
+          <p class="rag-branch-card-desc">${branch.description ? getMarkdown().escapeHtml(branch.description) : '<em>Sin descripción</em>'}</p>
+          <div class="rag-branch-card-meta">
+            <span>📄 ${docs.length} docs</span>
+            <span>•</span>
+            <span>📑 ${totalChapters} caps</span>
+            <span>•</span>
+            <span>💾 ${formatBytes(totalSize)}</span>
           </div>
         `;
-
-        item.querySelector('.rag-branch-item-main').addEventListener('click', () => {
-          selectedBranchId = branch.id;
-          renderBranchesList();
-          renderBranchWorkspace(branch.id);
+        card.addEventListener('click', () => {
+          setActiveChatBranchId(branch.id);
+          renderActiveBranchTab();
+          updateToolbarRagButtonStatus();
         });
+        grid.appendChild(card);
+      }
 
-        item.querySelector('.btn-edit-branch').addEventListener('click', (e) => {
-          e.stopPropagation();
-          handleEditBranch(branch);
-        });
-
-        item.querySelector('.btn-delete-branch').addEventListener('click', (e) => {
-          e.stopPropagation();
-          handleDeleteBranch(branch);
-        });
-
-        listContainer.appendChild(item);
-      });
-
-      renderBranchWorkspace(selectedBranchId);
+      updateStorageQuotaDisplay();
     } catch (err) {
-      console.warn('ChatTreeRagUI: Error al listar ramas:', err);
+      console.warn('ChatTreeRagUI: Error al renderizar pestaña activa:', err);
     }
   }
 
   /**
-   * Renderiza el contenido y documentos de la rama seleccionada en el panel derecho.
+   * Pestaña 2: Renderiza la barra de herramientas y espacio de trabajo de gestión de ramas.
    */
-  async function renderBranchWorkspace(branchId) {
-    const workspaceContainer = document.getElementById('rag-branch-workspace');
+  async function renderManageTab() {
+    if (typeof document === 'undefined') return;
+    const selectBranch = document.getElementById('rag-manage-branch-select');
+    const btnEdit = document.getElementById('btn-rag-edit-branch');
+    const btnExport = document.getElementById('btn-rag-export-branch');
+    const btnDelete = document.getElementById('btn-rag-delete-branch');
+    if (!selectBranch) return;
+
+    const RagStorage = getRagStorage();
+    if (!RagStorage) return;
+
+    try {
+      const branches = await RagStorage.getBranches();
+      selectBranch.innerHTML = '';
+
+      if (branches.length === 0) {
+        const opt = document.createElement('option');
+        opt.value = '';
+        opt.textContent = '-- No hay ramas creadas --';
+        selectBranch.appendChild(opt);
+        selectBranch.disabled = true;
+        if (btnEdit) btnEdit.disabled = true;
+        if (btnExport) btnExport.disabled = true;
+        if (btnDelete) btnDelete.disabled = true;
+        selectedManageBranchId = null;
+        renderManageWorkspace(null);
+        return;
+      }
+
+      selectBranch.disabled = false;
+      if (btnEdit) btnEdit.disabled = false;
+      if (btnExport) btnExport.disabled = false;
+      if (btnDelete) btnDelete.disabled = false;
+
+      // Si la rama seleccionada no existe, asignar la activa o la primera
+      if (!selectedManageBranchId || !branches.some(b => b.id === selectedManageBranchId)) {
+        const activeId = getActiveChatBranchId();
+        if (activeId && branches.some(b => b.id === activeId)) {
+          selectedManageBranchId = activeId;
+        } else {
+          selectedManageBranchId = branches[0].id;
+        }
+      }
+
+      branches.forEach((b) => {
+        const opt = document.createElement('option');
+        opt.value = b.id;
+        opt.textContent = `📁 ${b.name}`;
+        if (b.id === selectedManageBranchId) opt.selected = true;
+        selectBranch.appendChild(opt);
+      });
+
+      selectBranch.onchange = (e) => {
+        selectedManageBranchId = e.target.value;
+        renderManageWorkspace(selectedManageBranchId);
+      };
+
+      renderManageWorkspace(selectedManageBranchId);
+      updateStorageQuotaDisplay();
+    } catch (err) {
+      console.warn('ChatTreeRagUI: Error al renderizar pestaña de gestión:', err);
+    }
+  }
+
+  /**
+   * Renderiza el contenido y documentos de la rama en edición en la pestaña de gestión.
+   */
+  async function renderManageWorkspace(branchId) {
+    const workspaceContainer = document.getElementById('rag-manage-workspace');
     if (!workspaceContainer) return;
 
     if (!branchId) {
       workspaceContainer.innerHTML = `
         <div class="rag-empty-workspace">
-          <div class="rag-empty-icon">🌿</div>
-          <h3>Base de Conocimiento Local</h3>
-          <p>Selecciona una rama a la izquierda o crea una nueva para gestionar sus documentos.</p>
+          <div class="rag-empty-icon">📁</div>
+          <h3>${t('rag_no_branches') || 'No hay ramas creadas'}</h3>
+          <p>Crea una nueva rama arriba para comenzar a indexar documentos PDF, Markdown o Texto.</p>
         </div>
       `;
       return;
@@ -249,25 +315,8 @@
       if (!branch) return;
 
       const docs = await RagStorage.getDocumentsByBranch(branchId);
-      const activeChatBranchId = getActiveChatBranchId();
-      const isActiveInChat = branch.id === activeChatBranchId;
 
       workspaceContainer.innerHTML = `
-        <div class="rag-workspace-header">
-          <div class="rag-workspace-title-group">
-            <h3 class="rag-workspace-title">📁 ${getMarkdown().escapeHtml(branch.name)}</h3>
-            ${branch.description ? `<p class="rag-workspace-desc">${getMarkdown().escapeHtml(branch.description)}</p>` : ''}
-          </div>
-          <div class="rag-workspace-actions">
-            <button type="button" id="btn-rag-export-branch" class="btn-rag-action-header" title="Exportar rama a archivo JSON">
-              📤 Exportar Rama
-            </button>
-            <button type="button" id="btn-rag-toggle-active-chat" class="btn-rag-toggle-active ${isActiveInChat ? 'is-active' : ''}">
-              ${isActiveInChat ? '✅ ' + (t('rag_active_branch_badge') || 'Rama Activa en Chat') : '🌿 ' + (t('rag_btn_activate_branch') || 'Activar en chat')}
-            </button>
-          </div>
-        </div>
-
         <!-- Zona Drag & Drop para Ingesta -->
         <div id="rag-dropzone" class="rag-dropzone">
           <input type="file" id="rag-file-input" multiple accept=".pdf,.txt,.md" style="display: none;">
@@ -290,7 +339,7 @@
               <span>⚡</span>
               <strong id="rag-progress-summary-title">Procesando documentos...</strong>
             </div>
-            <button type="button" id="btn-rag-cancel-queue" class="btn-rag-cancel-queue">
+            <button type="button" id="btn-rag-cancel-queue" class="btn-secondary btn-danger-hover" style="font-size: 0.75rem; padding: 0.2rem 0.55rem;">
               ${t('rag_btn_cancel_queue') || 'Cancelar Cola'}
             </button>
           </div>
@@ -314,22 +363,6 @@
           </div>
         </div>
       `;
-
-      // Event Listeners del Workspace
-      const btnExport = workspaceContainer.querySelector('#btn-rag-export-branch');
-      if (btnExport) {
-        btnExport.addEventListener('click', () => handleExportBranch(branch.id));
-      }
-
-      const btnToggleActive = workspaceContainer.querySelector('#btn-rag-toggle-active-chat');
-      if (btnToggleActive) {
-        btnToggleActive.addEventListener('click', () => {
-          const newActiveId = isActiveInChat ? '' : branch.id;
-          setActiveChatBranchId(newActiveId);
-          renderBranchesList();
-          refreshBranchSelector(newActiveId);
-        });
-      }
 
       // Drag & Drop Handlers
       setupDropzoneEvents(branchId);
@@ -355,10 +388,10 @@
               </div>
             </div>
             <div class="rag-doc-actions">
-              <button type="button" class="btn-rag-doc-action btn-view-structure" data-doc-id="${doc.id}">
+              <button type="button" class="btn-secondary btn-view-structure" data-doc-id="${doc.id}">
                 👁️ ${t('rag_btn_view_structure') || 'Ver estructura'}
               </button>
-              <button type="button" class="btn-rag-doc-action btn-delete-doc" data-doc-id="${doc.id}" title="Eliminar documento">
+              <button type="button" class="btn-secondary btn-danger-hover btn-delete-doc" data-doc-id="${doc.id}" title="Eliminar documento">
                 🗑️
               </button>
             </div>
@@ -378,6 +411,21 @@
     } catch (err) {
       console.warn('ChatTreeRagUI: Error al renderizar workspace:', err);
     }
+  }
+
+  /**
+   * Alias de compatibilidad.
+   */
+  async function renderBranchesList() {
+    await renderActiveBranchTab();
+    await renderManageTab();
+  }
+
+  /**
+   * Alias de compatibilidad.
+   */
+  async function renderBranchWorkspace(branchId) {
+    await renderManageWorkspace(branchId);
   }
 
   /**
@@ -524,7 +572,8 @@
 
       // Refrescar lista de documentos tras un breve instante
       setTimeout(() => {
-        renderBranchWorkspace(branchId);
+        renderManageWorkspace(branchId);
+        renderActiveBranchTab();
       }, 1200);
 
     } catch (err) {
@@ -574,7 +623,7 @@
                 <span class="rag-chapter-badge">Cap ID ${chap.chapterId}</span>
                 <strong class="rag-chapter-title">${getMarkdown().escapeHtml(chap.title || 'Sin título')}</strong>
               </div>
-              <button type="button" class="btn-preview-chapter-content">
+              <button type="button" class="btn-secondary btn-preview-chapter-content">
                 👁️ ${t('rag_btn_view_chapter_content') || 'Ver contenido íntegro'}
               </button>
             </div>
@@ -627,7 +676,7 @@
 
     try {
       const newBranch = await RagStorage.createBranch(name.trim(), description.trim());
-      selectedBranchId = newBranch.id;
+      selectedManageBranchId = newBranch.id;
       await renderBranchesList();
       await refreshBranchSelector();
     } catch (err) {
@@ -638,14 +687,20 @@
   /**
    * Manejador para editar nombre y descripción de una rama.
    */
-  async function handleEditBranch(branch) {
+  async function handleEditBranch(branchId) {
+    const targetBranchId = branchId || selectedManageBranchId;
+    if (!targetBranchId) return;
+
+    const RagStorage = getRagStorage();
+    if (!RagStorage) return;
+
+    const branch = await RagStorage.getBranchById(targetBranchId);
+    if (!branch) return;
+
     const newName = prompt('Editar nombre de la rama:', branch.name);
     if (newName === null || !newName.trim()) return;
 
     const newDesc = prompt('Editar descripción de la rama:', branch.description || '') ?? branch.description;
-
-    const RagStorage = getRagStorage();
-    if (!RagStorage) return;
 
     try {
       await RagStorage.updateBranch(branch.id, { name: newName.trim(), description: newDesc.trim() });
@@ -659,20 +714,26 @@
   /**
    * Manejador para eliminar una rama en cascada.
    */
-  async function handleDeleteBranch(branch) {
-    const confirmMsg = `${t('rag_confirm_delete_branch') || '¿Estás seguro de que deseas eliminar esta rama?'}\n\nRama: "${branch.name}"`;
-    if (!confirm(confirmMsg)) return;
+  async function handleDeleteBranch(branchId) {
+    const targetBranchId = branchId || selectedManageBranchId;
+    if (!targetBranchId) return;
 
     const RagStorage = getRagStorage();
     if (!RagStorage) return;
+
+    const branch = await RagStorage.getBranchById(targetBranchId);
+    if (!branch) return;
+
+    const confirmMsg = `${t('rag_confirm_delete_branch') || '¿Estás seguro de que deseas eliminar esta rama?'}\n\nRama: "${branch.name}"`;
+    if (!confirm(confirmMsg)) return;
 
     try {
       await RagStorage.deleteBranch(branch.id);
       if (getActiveChatBranchId() === branch.id) {
         setActiveChatBranchId('');
       }
-      if (selectedBranchId === branch.id) {
-        selectedBranchId = null;
+      if (selectedManageBranchId === branch.id) {
+        selectedManageBranchId = null;
       }
       await renderBranchesList();
       await refreshBranchSelector();
@@ -693,7 +754,8 @@
 
     try {
       await RagStorage.deleteDocument(doc.id);
-      await renderBranchWorkspace(branchId);
+      await renderManageWorkspace(branchId);
+      await renderActiveBranchTab();
     } catch (err) {
       alert(`Error al eliminar documento: ${err?.message || String(err)}`);
     }
@@ -729,11 +791,14 @@
    * Manejador para exportar una rama a archivo JSON descargable.
    */
   async function handleExportBranch(branchId) {
+    const targetBranchId = branchId || selectedManageBranchId;
+    if (!targetBranchId) return;
+
     const RagStorage = getRagStorage();
     if (!RagStorage || !RagStorage.exportBranchToJson) return;
 
     try {
-      const exportData = await RagStorage.exportBranchToJson(branchId);
+      const exportData = await RagStorage.exportBranchToJson(targetBranchId);
       const jsonStr = JSON.stringify(exportData, null, 2);
       const blob = new Blob([jsonStr], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
@@ -761,7 +826,7 @@
     try {
       const text = await file.text();
       const result = await RagStorage.importBranchFromJson(text);
-      selectedBranchId = result.branch.id;
+      selectedManageBranchId = result.branch.id;
       await renderBranchesList();
       await refreshBranchSelector();
       updateStorageQuotaDisplay();
@@ -816,14 +881,38 @@
     const btnCloseModal = document.getElementById('btn-close-tree-rag');
     const btnCloseModalFooter = document.getElementById('btn-close-tree-rag-footer');
     const btnNewBranch = document.getElementById('btn-rag-new-branch');
+    const btnEditBranch = document.getElementById('btn-rag-edit-branch');
+    const btnExportBranch = document.getElementById('btn-rag-export-branch');
+    const btnDeleteBranch = document.getElementById('btn-rag-delete-branch');
     const btnImportBranch = document.getElementById('btn-rag-import-branch');
     const importFileInput = document.getElementById('rag-import-file-input');
     const structureDialog = document.getElementById('rag-structure-dialog');
     const btnCloseStructure = document.getElementById('btn-close-rag-structure');
 
+    // Pestañas del modal
+    const tabBtns = document.querySelectorAll('#rag-modal-tabs-nav .modal-tab-btn');
+    tabBtns.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const targetTabId = btn.getAttribute('data-rag-tab');
+        tabBtns.forEach(b => b.classList.toggle('active', b === btn));
+        
+        const panes = modalDialog ? modalDialog.querySelectorAll('.modal-tab-pane') : [];
+        panes.forEach(pane => {
+          pane.classList.toggle('active', pane.id === targetTabId);
+        });
+
+        if (targetTabId === 'tab-rag-active') {
+          renderActiveBranchTab();
+        } else if (targetTabId === 'tab-rag-manage') {
+          renderManageTab();
+        }
+      });
+    });
+
     if (btnOpenModal && modalDialog) {
       btnOpenModal.addEventListener('click', () => {
-        renderBranchesList();
+        renderActiveBranchTab();
+        renderManageTab();
         modalDialog.showModal();
       });
     }
@@ -854,6 +943,18 @@
       btnNewBranch.addEventListener('click', handleCreateBranch);
     }
 
+    if (btnEditBranch) {
+      btnEditBranch.addEventListener('click', () => handleEditBranch());
+    }
+
+    if (btnExportBranch) {
+      btnExportBranch.addEventListener('click', () => handleExportBranch());
+    }
+
+    if (btnDeleteBranch) {
+      btnDeleteBranch.addEventListener('click', () => handleDeleteBranch());
+    }
+
     if (btnImportBranch && importFileInput) {
       btnImportBranch.addEventListener('click', () => {
         importFileInput.value = '';
@@ -868,8 +969,8 @@
       });
     }
 
-    // Carga inicial del selector y cuota
-    refreshBranchSelector();
+    // Carga inicial del estado
+    updateToolbarRagButtonStatus();
     updateStorageQuotaDisplay();
   }
 
@@ -877,8 +978,11 @@
     initTreeRagUI,
     updateToolbarRagButtonStatus,
     refreshBranchSelector,
+    renderActiveBranchTab,
+    renderManageTab,
     renderBranchesList,
     renderBranchWorkspace,
+    renderManageWorkspace,
     openDocumentStructureViewer,
     updateStorageQuotaDisplay,
     handleExportBranch,

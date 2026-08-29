@@ -663,7 +663,7 @@
     <div class="modal-header">
       <div class="modal-title">
         <span class="rag-header-icon">🌿</span>
-        <h3 data-i18n="rag_modal_title">Base de Conocimiento (RAG Jerárquico por Ramas)</h3>
+        <h3 data-i18n="rag_modal_title">Base de Conocimiento (RAG)</h3>
       </div>
       <button type="button" id="btn-close-tree-rag" class="btn-close" data-i18n-aria="modal_close_aria" aria-label="Cerrar modal">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -673,36 +673,77 @@
       </button>
     </div>
 
-    <div class="rag-modal-body">
-      <!-- Panel Izquierdo: Lista de Ramas -->
-      <aside class="rag-sidebar">
-        <div class="rag-sidebar-header">
-          <h4 data-i18n="rag_branches_title">Ramas de Proyecto</h4>
-          <div class="rag-sidebar-header-actions">
-            <input type="file" id="rag-import-file-input" accept=".json" style="display: none;">
-            <button type="button" id="btn-rag-import-branch" class="btn-rag-secondary-sm" title="Importar rama desde JSON">📥</button>
-            <button type="button" id="btn-rag-new-branch" class="btn-rag-primary-sm" data-i18n="rag_btn_new_branch">+ Nueva Rama</button>
-          </div>
-        </div>
-        <div id="rag-branches-list" class="rag-branches-list">
-          <!-- Se puebla dinámicamente -->
-        </div>
-        <div class="rag-sidebar-footer">
-          <div id="rag-storage-quota-info" class="rag-storage-quota-info">
-            <span>💾 Almacenamiento local: Calculando...</span>
-          </div>
-        </div>
-      </aside>
+    <!-- Navegación por pestañas unificadas -->
+    <div class="modal-tabs-nav rag-tabs-nav" id="rag-modal-tabs-nav">
+      <button type="button" class="modal-tab-btn active" data-rag-tab="tab-rag-active">
+        <span data-i18n="rag_tab_active">🌿 Rama Activa en Chat</span>
+      </button>
+      <button type="button" class="modal-tab-btn" data-rag-tab="tab-rag-manage">
+        <span data-i18n="rag_tab_manage">📁 Gestión de Ramas y Documentos</span>
+      </button>
+    </div>
 
-      <!-- Panel Derecho: Espacio de Trabajo de la Rama Seleccionada -->
-      <main id="rag-branch-workspace" class="rag-main-content">
-        <!-- Se puebla dinámicamente con dropzone, barra de progreso y lista de documentos -->
-      </main>
+    <div class="modal-body rag-modal-body-tabbed">
+      <!-- PESTAÑA 1: Activar / Desactivar y Escoger Rama Activa para el Chat -->
+      <div id="tab-rag-active" class="modal-tab-pane active">
+        <!-- Tarjeta de Control Principal de Estado RAG -->
+        <div class="setting-toggle-card rag-master-toggle-card">
+          <div class="toggle-card-info">
+            <div class="toggle-card-title">
+              <span id="rag-active-status-title">🌿 Contexto de Conocimiento Activo</span>
+            </div>
+            <p class="toggle-card-desc" id="rag-active-status-desc">
+              Inyecta resúmenes jerárquicos de la rama seleccionada en el System Prompt y permite al modelo leer capítulos bajo demanda con <code>read_chapter_content</code>.
+            </p>
+          </div>
+          <button type="button" id="btn-rag-toggle-master" class="btn-secondary">
+            Desactivar RAG
+          </button>
+        </div>
+
+        <div class="form-field" style="margin-top: 1.25rem;">
+          <label>
+            <strong data-i18n="rag_select_branch_chat">Seleccionar Rama para el Chat</strong>
+            <span class="label-hint" data-i18n="rag_select_branch_chat_hint">Haz clic en una rama para activarla en la conversación actual:</span>
+          </label>
+          <div id="rag-active-branch-grid" class="rag-active-branch-grid">
+            <!-- Tarjetas de selección rápida de rama -->
+          </div>
+        </div>
+      </div>
+
+      <!-- PESTAÑA 2: Gestión de Ramas, Dropzone y Documentos -->
+      <div id="tab-rag-manage" class="modal-tab-pane">
+        <div class="rag-manage-toolbar">
+          <div class="form-field rag-manage-branch-field">
+            <label for="rag-manage-branch-select">
+              <strong data-i18n="rag_editing_branch">Rama en edición:</strong>
+            </label>
+            <select id="rag-manage-branch-select" class="combobox-select-helper">
+              <!-- Lista de ramas para editar -->
+            </select>
+          </div>
+          <div class="rag-manage-toolbar-actions">
+            <button type="button" id="btn-rag-new-branch" class="btn-primary" data-i18n="rag_btn_new_branch">+ Nueva Rama</button>
+            <button type="button" id="btn-rag-edit-branch" class="btn-secondary" title="Renombrar o editar descripción">✏️ Editar</button>
+            <button type="button" id="btn-rag-export-branch" class="btn-secondary" title="Exportar rama a archivo JSON">📤 Exportar</button>
+            <input type="file" id="rag-import-file-input" accept=".json" style="display: none;">
+            <button type="button" id="btn-rag-import-branch" class="btn-secondary" title="Importar rama desde archivo JSON">📥 Importar</button>
+            <button type="button" id="btn-rag-delete-branch" class="btn-secondary btn-danger-hover" title="Eliminar rama">🗑️</button>
+          </div>
+        </div>
+
+        <div id="rag-manage-workspace" class="rag-manage-workspace">
+          <!-- Dropzone, cola de ingesta y tarjetas de documentos -->
+        </div>
+      </div>
     </div>
 
     <div class="modal-footer">
       <div class="modal-footer-info">
-        <span class="rag-footer-hint">💡 Los resúmenes se inyectan en el prompt y el modelo lee los capítulos bajo demanda con <code>read_chapter_content</code>.</span>
+        <div id="rag-storage-quota-info" class="rag-storage-quota-info">
+          <span>💾 Almacenamiento local: Calculando...</span>
+        </div>
       </div>
       <div class="modal-footer-actions">
         <button type="button" id="btn-close-tree-rag-footer" class="btn-secondary" data-i18n="modal_btn_close">Cerrar</button>
