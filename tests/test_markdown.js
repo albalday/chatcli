@@ -50,3 +50,23 @@ Referencia: Manual Gigabyte.`;
   assert.ok(html.includes('<figcaption class="chat-image-caption">Diagrama Placa Base GA-Z77P-D3</figcaption>'), 'Debe generar el pie de foto figcaption');
 });
 
+test('Markdown - Renderizado de protocolo rag-image:// y etiquetas sueltas #img_X_Y', () => {
+  // 1. Sintaxis explícita ![alt](rag-image://doc/cap/img_7_12)
+  const explicitMd = `Esquema de componentes:
+![Distribución GA-Z77P-D3](rag-image://doc_123/6/img_7_12)`;
+  const explicitHtml = Markdown.parseMarkdown(explicitMd);
+  assert.ok(explicitHtml.includes('data-rag-src="rag-image://doc_123/6/img_7_12"'), 'Debe incluir atributo data-rag-src');
+  assert.ok(explicitHtml.includes('src="rag-image://doc_123/6/img_7_12"'));
+
+  // 2. Referencia textual suelta generada por el LLM: "Diagrama / Esquema (Pág. 7) #img_7_12"
+  const looseMd = `1. Esquema de Distribución de la Placa Base
+Diagrama / Esquema (Pág. 7) #img_7_12
+
+#### Distribución física:
+- Socket LGA1155`;
+  const looseHtml = Markdown.parseMarkdown(looseMd);
+  assert.ok(looseHtml.includes('data-rag-src="rag-image://img_7_12"'), 'Debe detectar automáticamente el tag suelto #img_7_12');
+  assert.ok(looseHtml.includes('<figcaption class="chat-image-caption">Diagrama / Esquema (Pág. 7) #img_7_12</figcaption>'));
+});
+
+

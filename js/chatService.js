@@ -115,7 +115,7 @@
       if (options.fallbackMode) {
         lines.push(`Documentos y capítulos indexados:\n`);
       } else {
-        lines.push(`Para citas exactas, diagramas o detalles técnicos profundos, invoca 'read_chapter_content(docId, chapterId)'.\n`);
+        lines.push(`Para citas exactas, diagramas o detalles técnicos profundos, invoca 'read_chapter_content(docId, chapterId)'. Si el capítulo contiene diagramas o esquemas (etiquetas '![...](rag-image://...)' o '#img_X_Y'), puedes incluirlos en tu respuesta para que el usuario visualice la imagen.\n`);
       }
 
       for (const doc of docHeaders) {
@@ -189,13 +189,28 @@
       if (!docId || isNaN(chapterId)) continue;
 
       try {
-        const content = await RagStorage.getChapterContent(docId, chapterId);
-        if (content !== null && typeof content === 'string') {
+        const rawContent = await RagStorage.getChapterContent(docId, chapterId);
+        if (rawContent !== null && typeof rawContent === 'string') {
+          // Reemplazar cadenas pesadas base64 por referencias ligeras 'rag-image://...' y cachear
+          const cleanContent = rawContent.replace(/!\[([^\]]*#img_([0-9_]+)[^\]]*)\]\((data:image\/[^)]+)\)/g, (match, alt, id, dataUrl) => {
+            if (RagStorage.registerImage) {
+              RagStorage.registerImage(`img_${id}`, dataUrl, docId);
+            }
+            return `![${alt}](rag-image://${docId}/${chapterId}/img_${id})`;
+          }).replace(/!\[([^\]]*)\]\((data:image\/[^)]+)\)/g, (match, alt, dataUrl) => {
+            const autoId = `img_c${chapterId}_${Math.random().toString(36).substring(2, 6)}`;
+            if (RagStorage.registerImage) {
+              RagStorage.registerImage(autoId, dataUrl, docId);
+            }
+            return `![${alt}](rag-image://${docId}/${chapterId}/${autoId})`;
+          });
+
           results.push({
             docId,
             chapterId,
-            charCount: content.length,
-            content
+            charCount: cleanContent.length,
+            content: cleanContent,
+            rawContent
           });
         } else {
           results.push({

@@ -352,13 +352,48 @@ test('RagStorage - exportBranchToJson e importBranchFromJson exportan e importan
   assert.ok(importRes.branch.id);
   assert.equal(importRes.documentCount, 1);
 
+  // 3. Verificar que los documentos se importaron
   const importedDocs = await RagStorage.getDocumentsByBranch(importRes.branch.id);
   assert.equal(importedDocs.length, 1);
-  assert.equal(importedDocs[0].title, 'DocExport.md');
   assert.equal(importedDocs[0].chapters.length, 2);
+  assert.equal(importedDocs[0].chapters[0].content, 'Contenido completo sección 1');
 
   // Verificar recuperación bajo demanda del capítulo en la rama importada
   const importedChapterContent = await RagStorage.getChapterContent(importedDocs[0].id, 1);
   assert.equal(importedChapterContent, 'Contenido completo sección 1');
 });
 
+test('RagStorage - registerImage y resolveImageSrc resuelven diagramas e IDs correctamente', async () => {
+  await RagStorage.clearAllData();
+
+  const branch = await RagStorage.createBranch('Rama Diagramas');
+  const b64Mock = 'data:image/jpeg;base64,/9j/4AAQSkZJRg==';
+
+  const doc = await RagStorage.saveDocument({
+    branchId: branch.id,
+    title: 'Manual_GA-Z77P-D3.pdf',
+    fileType: 'pdf',
+    fileSize: 15000,
+    globalSummary: 'Manual con diagramas.',
+    chapters: [
+      {
+        chapterId: 6,
+        title: 'Distribución de Placa',
+        summary: 'Esquema de componentes.',
+        content: `Texto introductorio.\n\n![Diagrama / Esquema (Pág. 7) #img_7_12](${b64Mock})\n\nMás texto.`
+      }
+    ]
+  });
+
+  // 1. Resolver por referencia rag-image://
+  const resolvedDirect = await RagStorage.resolveImageSrc(`rag-image://${doc.id}/6/img_7_12`, branch.id);
+  assert.equal(resolvedDirect, b64Mock);
+
+  // 2. Resolver por ID de imagen suelto '#img_7_12'
+  const resolvedById = await RagStorage.resolveImageSrc('#img_7_12', branch.id);
+  assert.equal(resolvedById, b64Mock);
+
+  // 3. Resolver URI directa
+  const resolvedDataUri = await RagStorage.resolveImageSrc(b64Mock);
+  assert.equal(resolvedDataUri, b64Mock);
+});

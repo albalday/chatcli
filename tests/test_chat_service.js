@@ -150,3 +150,37 @@ test('ChatService - Integración con ToolRegistry y ejecución en AgentCore', as
   assert.ok(md.includes('read_chapter_content'));
   assert.ok(md.includes('Paso 1: Salir por la salida de emergencia norte.'));
 });
+
+test('ChatService - resolveChapterToolCall transforma imágenes pesadas en referencias rag-image:// ligeras', async () => {
+  await RagStorage.clearAllData();
+
+  const branch = await RagStorage.createBranch('Rama Imagenes');
+  const b64Data = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEA123456789==';
+
+  const doc = await RagStorage.saveDocument({
+    branchId: branch.id,
+    title: 'Manual_GA-Z77P-D3.pdf',
+    fileType: 'pdf',
+    fileSize: 50000,
+    globalSummary: 'Manual con esquemas.',
+    chapters: [
+      {
+        chapterId: 7,
+        title: 'Block Diagram',
+        summary: 'Arquitectura de buses.',
+        content: `Información de arquitectura.\n\n![Diagrama / Esquema (Pág. 8) #img_8_15](${b64Data})\n\nConexiones CPU y PCH.`
+      }
+    ]
+  });
+
+  const result = await ChatService.resolveChapterToolCall({ docId: doc.id, chapterId: 7 });
+  assert.equal(result.success, true);
+  assert.ok(!result.content.includes(b64Data), 'El contenido devuelto al modelo NO debe incluir la cadena pesada base64');
+  assert.ok(result.content.includes(`rag-image://${doc.id}/7/img_8_15`), 'Debe incluir la referencia ligera rag-image://');
+  assert.ok(result.content.includes('Diagrama / Esquema (Pág. 8) #img_8_15'), 'Debe conservar la descripción y tag de imagen');
+
+  // Verificar que la imagen se registró en la caché rápida de RagStorage
+  const resolved = await RagStorage.resolveImageSrc('img_8_15');
+  assert.equal(resolved, b64Data);
+});
+

@@ -742,6 +742,138 @@
     });
   }
 
+  // ==========================================================================
+  // Caché y Resolución Dinámica de Imágenes RAG
+  // ==========================================================================
+
+  const ragImageCache = new Map();
+
+  /**
+   * Registra una imagen extraída en la caché rápida en memoria.
+   * @param {string} imgId - Identificador de la imagen (ej: 'img_7_12')
+   * @param {string} dataUrl - Cadena Data URI base64
+   * @param {string} [docId] - ID del documento opcional
+   */
+  function registerImage(imgId, dataUrl, docId = null) {
+    if (!imgId || !dataUrl) return;
+    const cleanId = String(imgId).trim();
+    ragImageCache.set(cleanId, dataUrl);
+    if (docId) {
+      ragImageCache.set(`${docId}:${cleanId}`, dataUrl);
+    }
+  }
+
+  /**
+   * Resuelve una referencia 'rag-image://...' o '#img_X_Y' a su cadena Data URI base64 real.
+   * @param {string} srcOrRef - Referencia de imagen
+   * @param {string} [activeBranchId] - Rama activa opcional para acelerar la búsqueda
+   * @returns {Promise<string>} - Cadena Data URI base64 o '' si no se encuentra
+   */
+  async function resolveImageSrc(srcOrRef, activeBranchId = null) {
+    if (!srcOrRef || typeof srcOrRef !== 'string') return '';
+    const trimmed = srcOrRef.trim();
+
+    // 1. Si ya es una URI válida directa (data:, blob:, http/https)
+    if (/^(?:data:image\/|blob:|https?:\/\/)/i.test(trimmed)) {
+      return trimmed;
+    }
+
+    // 2. Extraer imgId y docId
+    let docId = null;
+    let imgId = '';
+
+    if (trimmed.startsWith('rag-image://')) {
+      const rest = trimmed.replace('rag-image://', '').replace(/^\/+/, '');
+      const parts = rest.split('/');
+      if (parts.length === 1) {
+        imgId = parts[0];
+      } else if (parts.length === 2) {
+        docId = parts[0];
+        imgId = parts[1];
+      } else if (parts.length >= 3) {
+        docId = parts[0];
+        imgId = parts[parts.length - 1];
+      }
+    } else {
+      const match = trimmed.match(/#(?:img_)?([0-9]+(?:_[0-9]+)?)/i) || trimmed.match(/^(?:img_)?([0-9]+(?:_[0-9]+)?)$/i);
+      if (match) {
+        imgId = match[1].startsWith('img_') ? match[1] : `img_${match[1]}`;
+      } else {
+        imgId = trimmed.replace(/^#/, '');
+      }
+    }
+
+    if (!imgId) return '';
+
+    const cleanImgId = imgId.replace(/^img_/, '');
+    const candidateKeys = [
+      imgId,
+      `img_${cleanImgId}`,
+      cleanImgId,
+      `#${imgId}`,
+      `#img_${cleanImgId}`
+    ];
+
+    if (docId) {
+      for (const k of candidateKeys) {
+        if (ragImageCache.has(`${docId}:${k}`)) {
+          return ragImageCache.get(`${docId}:${k}`);
+        }
+      }
+    }
+
+    for (const k of candidateKeys) {
+      if (ragImageCache.has(k)) {
+        return ragImageCache.get(k);
+      }
+    }
+
+    // 3. Búsqueda en base de datos IndexedDB / Memoria
+    try {
+      let docsToSearch = [];
+      if (docId) {
+        const d = await getDocumentById(docId);
+        if (d) docsToSearch.push(d);
+      }
+      if (docsToSearch.length === 0 && activeBranchId) {
+        docsToSearch = await getDocumentsByBranch(activeBranchId);
+      }
+      if (docsToSearch.length === 0) {
+        const branches = await getBranches();
+        for (const b of branches) {
+          const docs = await getDocumentsByBranch(b.id);
+          docsToSearch.push(...docs);
+        }
+      }
+
+      for (const doc of docsToSearch) {
+        if (!doc || !Array.isArray(doc.chapters)) continue;
+        for (const chap of doc.chapters) {
+          if (!chap.content || !chap.content.includes('data:image/')) continue;
+          const imgRegex = /!\[([^\]]*)\]\((data:image\/[^)]+)\)/g;
+          let m;
+          while ((m = imgRegex.exec(chap.content)) !== null) {
+            const alt = m[1];
+            const dataUrl = m[2];
+            const tagMatch = alt.match(/#(?:img_)?([0-9]+(?:_[0-9]+)?)/i);
+            if (tagMatch) {
+              const foundId = `img_${tagMatch[1].replace(/^img_/, '')}`;
+              registerImage(foundId, dataUrl, doc.id);
+            }
+            if (alt.includes(imgId) || alt.includes(cleanImgId)) {
+              registerImage(imgId, dataUrl, doc.id);
+              return dataUrl;
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn(`[${DB_NAME}] Error al resolver imagen RAG [${trimmed}]:`, e);
+    }
+
+    return '';
+  }
+
   /**
    * Elimina un documento específico por su ID.
    * @param {string} docId - Identificador del documento a eliminar.
@@ -990,7 +1122,12 @@
     getDocumentsByBranch,
     getDocumentHeadersByBranch,
     getChapterContent,
-    deleteDocument
+    deleteDocument,
+
+    // Caché y Resolución de Imágenes
+    registerImage,
+    resolveImageSrc,
+    ragImageCache
   };
 });
 

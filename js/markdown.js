@@ -69,6 +69,9 @@
     if (/^blob:[^\s"'<>]+/i.test(trimmed)) {
       return escapeHtml(trimmed);
     }
+    if (/^rag-image:\/\/[^\s"'<>]+/i.test(trimmed)) {
+      return escapeHtml(trimmed);
+    }
     return '';
   }
 
@@ -281,26 +284,38 @@
       return `<ol>${listItems}</ol>\n`;
     });
 
-    // 8. Negrita y cursiva
-    p = p.replace(/\*\*\*(.*?)\*\*\*/g, '<strong><em>$1</em></strong>');
-    p = p.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-    p = p.replace(/__(.*?)__/g, '<strong>$1</strong>');
-    p = p.replace(/\*([^\*\n]+)\*/g, '<em>$1</em>');
-    p = p.replace(/_([^_\n]+)_/g, '<em>$1</em>');
-
-    // 9. Imágenes Markdown: ![alt](url)
+    // 8. Imágenes Markdown: ![alt](url)
     p = p.replace(/!\[([^\]]*)\]\(([^)]+)\)/gi, function (match, altText, url) {
       const safeSrc = sanitizeImageUrl(url);
       if (!safeSrc) return altText || '';
       const cleanAlt = altText ? escapeHtml(altText.trim()) : 'Imagen';
       const caption = cleanAlt && !cleanAlt.startsWith('#img') ? `<figcaption class="chat-image-caption">${cleanAlt}</figcaption>` : '';
-      return `\n<figure class="chat-image-figure"><img class="chat-embedded-image" src="${safeSrc}" alt="${cleanAlt}" loading="lazy" />${caption}</figure>\n`;
+      const ragSrcAttr = url.startsWith('rag-image://') ? ` data-rag-src="${url}"` : '';
+      return `\n<figure class="chat-image-figure"${ragSrcAttr}><img class="chat-embedded-image" src="${safeSrc}" alt="${cleanAlt}"${ragSrcAttr} loading="lazy" />${caption}</figure>\n`;
+    });
+
+    // 9. Referencias textuales sueltas a diagramas del RAG (ej: "Diagrama (Pág. 7) #img_7_12" o "#img_7_12")
+    p = p.replace(/(?:^|\n)([^\n]*?#(?:img_)?([0-9]+(?:_[0-9]+)?)[^\n]*)(?:\n|$)/gi, function (match, fullLine, imgNum) {
+      if (fullLine.includes('<img') || fullLine.includes('<figure') || fullLine.includes('![') || fullLine.includes('src=')) {
+        return match;
+      }
+      const cleanCaption = fullLine.trim().replace(/^#+\s*/, '');
+      const imgId = imgNum.startsWith('img_') ? imgNum : (`img_${imgNum}`);
+      const ragUrl = `rag-image://${imgId}`;
+      return `\n<figure class="chat-image-figure" data-rag-src="${ragUrl}"><img class="chat-embedded-image" src="${ragUrl}" alt="${escapeHtml(cleanCaption)}" data-rag-src="${ragUrl}" loading="lazy" /><figcaption class="chat-image-caption">${escapeHtml(cleanCaption)}</figcaption></figure>\n`;
     });
 
     // 10. Enlaces [texto](url)
     p = p.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
 
-    // 11. Párrafos y saltos de línea
+    // 11. Negrita y cursiva
+    p = p.replace(/\*\*\*(.*?)\*\*\*/g, '<strong><em>$1</em></strong>');
+    p = p.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    p = p.replace(/__(.*?)__/g, '<strong>$1</strong>');
+    p = p.replace(/\*([^\*\n]+)\*/g, '<em>$1</em>');
+    p = p.replace(/(?:^|\s)_([^_<>\n]+)_(?=\s|$|[.,;:!?\)])/g, ' <em>$1</em>');
+
+    // 12. Párrafos y saltos de línea
     const chunks = p.split(/\n{2,}/);
     return chunks.map(chunk => {
       const trimmed = chunk.trim();
@@ -510,12 +525,39 @@
         if (!card) return;
         const isCollapsed = card.classList.toggle('collapsed');
         const iconSpan = button.querySelector('span');
-        if (iconSpan) {
-          iconSpan.textContent = isCollapsed ? '▸' : '▾';
-        }
         button.title = isCollapsed ? tr('tool_btn_expand', 'Expandir herramienta') : tr('tool_btn_collapse', 'Minimizar herramienta');
       });
     });
+
+    // 4. Hidratación de imágenes dinámicas del RAG (rag-image://)
+    hydrateRagImages(container);
+  }
+
+  async function hydrateRagImages(container) {
+    if (!container || !container.querySelectorAll) return;
+    const RagStorage = typeof window !== 'undefined' ? (window.ChatRagStorage || {}) : {};
+    const TreeRagUI = typeof window !== 'undefined' ? (window.ChatTreeRagUI || {}) : {};
+    const activeBranchId = TreeRagUI.getActiveChatBranchId ? TreeRagUI.getActiveChatBranchId() : null;
+
+    const imgEls = container.querySelectorAll('img[data-rag-src], img[src^="rag-image://"], figure[data-rag-src]');
+    if (imgEls.length === 0) return;
+
+    for (const el of imgEls) {
+      const img = el.tagName === 'IMG' ? el : el.querySelector('img');
+      if (!img) continue;
+      const ragSrc = img.getAttribute('data-rag-src') || img.getAttribute('src');
+      if (!ragSrc || !ragSrc.startsWith('rag-image://')) continue;
+
+      if (RagStorage && typeof RagStorage.resolveImageSrc === 'function') {
+        try {
+          const dataUrl = await RagStorage.resolveImageSrc(ragSrc, activeBranchId);
+          if (dataUrl && (dataUrl.startsWith('data:image/') || dataUrl.startsWith('http') || dataUrl.startsWith('blob:'))) {
+            img.src = dataUrl;
+            img.removeAttribute('data-rag-src');
+          }
+        } catch (e) {}
+      }
+    }
   }
 
   return {
