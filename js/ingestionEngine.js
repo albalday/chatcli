@@ -307,23 +307,24 @@
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
-      const imgMatch = line.match(/!\[([^\]]*)\]\(data:image\/[^)]+\)/i) ||
-                       line.match(/<img\b[^>]*alt=["']([^"']*)["'][^>]*\/?>/i);
+      const imgMatch = line.match(/!\[([^\]]*)\]\((?:data:image\/[^)]+|rag-image:\/\/[^)]+|https?:\/\/[^)]+)\)/i) ||
+                       line.match(/<img\b[^>]*alt=["']([^"']*)["'][^>]*\/?>/i) ||
+                       line.match(/!\[([^\]]*)\]\(.*?\)/i);
       if (imgMatch) {
         const label = (imgMatch[1] || 'Diagrama / Esquema').trim();
-        const before = lines.slice(Math.max(0, i - 10), i)
-          .filter(l => !l.includes('data:image'))
+        const before = lines.slice(Math.max(0, i - 8), i)
+          .filter(l => !l.includes('data:image') && !l.includes('rag-image://'))
           .map(l => l.trim())
           .filter(l => l.length > 0)
           .join(' ');
-        const after = lines.slice(i + 1, Math.min(lines.length, i + 11))
-          .filter(l => !l.includes('data:image'))
+        const after = lines.slice(i + 1, Math.min(lines.length, i + 9))
+          .filter(l => !l.includes('data:image') && !l.includes('rag-image://'))
           .map(l => l.trim())
           .filter(l => l.length > 0)
           .join(' ');
-        const contextSnippet = (before + ' ' + after).slice(0, 350).trim();
-        resultLines.push(`[IMAGEN / ESQUEMA: "${label}" | Referencia de contenido (contexto): ${contextSnippet || 'Sin texto explicativo adyacente'}]`);
-      } else {
+        const contextSnippet = (before + ' ' + after).slice(0, 400).trim();
+        resultLines.push(`[IMAGEN / ESQUEMA: "${label}" | Referencia de contenido (contexto): ${contextSnippet || 'Diagrama técnico del capítulo'}]`);
+      } else if (!line.includes('data:image/')) {
         resultLines.push(line);
       }
     }
@@ -736,12 +737,15 @@ Sé absolutamente escueto y directo. No uses prefacios, explicaciones ni palabra
       const kVal = typeof contextLimitK === 'number' ? contextLimitK : 64;
       const maxSampleChars = Math.min(32000, Math.max(4000, kVal * 200));
       const cleanedSample = prepareTextForSummarization(cand.content);
-      const sampleText = cleanedSample.length > maxSampleChars ? (cleanedSample.slice(0, maxSampleChars) + '...') : cleanedSample;
-      const chapPrompt = `Genera un micro-resumen telegráfico y ultra-escueto (1 SOLA FRASE directa, máx. 15-20 palabras) enumerando únicamente componentes, funciones o datos clave de "${cand.title}" en el documento "${filename}":\n\n${sampleText}`;
+      const chapPrompt = `Genera un micro-resumen telegráfico y ultra-escueto (1 SOLA FRASE directa, máx. 20-25 palabras) de "${cand.title}" en el documento "${filename}".
+Si la sección contiene esquemas, imágenes o diagramas visuales ([ESQUEMA / IMAGEN VISUAL: ...]), menciona explícitamente qué diagramas o ilustraciones clave incluye (ej: "Incluye diagrama de conectores de audio 7.1", "Esquema del zócalo CPU").
+
+Contenido:
+${sampleText}`;
 
       let chapSummary = '';
       try {
-        chapSummary = await callLLM(llmClient, chapPrompt, 'Eres un indexador técnico ultra-conciso. Responde ÚNICAMENTE con 1 sola frase telegráfica directa sin introducciones ni palabras sobrantes.');
+        chapSummary = await callLLM(llmClient, chapPrompt, 'Eres un indexador técnico ultra-conciso para RAG. Responde ÚNICAMENTE con 1 sola frase directa enumerando componentes, funciones y diagramas presentes sin introducciones ni palabras sobrantes.');
         chapSummary = chapSummary.trim().replace(/^Resumen:\s*/i, '').replace(/^En esta sección se\s+/i, '');
       } catch (e) {
         chapSummary = `${cand.title}.`;
