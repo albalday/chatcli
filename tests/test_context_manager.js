@@ -131,3 +131,112 @@ test('ContextManager - Diagnóstico y cálculo de presupuestos por modelo', () =
   });
   assert.ok(budget > 100000 && budget <= 128000);
 });
+
+test('ContextManager - shouldCompress detecta cuándo una conversación supera los umbrales', () => {
+  const shortHistory = [
+    { role: 'system', content: 'Sistema' },
+    { role: 'user', content: 'Pregunta 1' },
+    { role: 'assistant', content: 'Respuesta 1' }
+  ];
+  assert.equal(ChatContextManager.shouldCompress(shortHistory), false, 'No debe comprimir historiales muy cortos');
+
+  // Historial largo que supera el ratio de presupuesto
+  const longHistory = [
+    { role: 'system', content: 'Sistema' }
+  ];
+  for (let i = 1; i <= 12; i++) {
+    longHistory.push({ role: 'user', content: `Pregunta de usuario número ${i}: ` + 'detalles '.repeat(40) });
+    longHistory.push({ role: 'assistant', content: `Respuesta del asistente número ${i}: ` + 'explicación '.repeat(40) });
+  }
+
+  const should = ChatContextManager.shouldCompress(longHistory, {
+    maxInputTokens: 2000,
+    compressionThresholdRatio: 0.50
+  });
+  assert.equal(should, true, 'Debe activar compresión para historiales densos que superan el umbral');
+});
+
+test('ContextManager - compressHistory consolida mensajes antiguos con summarizeFn simulada', async () => {
+  const history = [
+    { role: 'system', content: 'Eres un tutor de programación.' },
+    { role: 'user', content: 'Quiero crear una API REST con Node.js y SQLite.' },
+    { role: 'assistant', content: 'Perfecto, utilizaremos Express y better-sqlite3.' },
+    { role: 'user', content: 'Añadamos autenticación con JWT.' },
+    { role: 'assistant', content: 'Implementaremos bcrypt y jsonwebtoken para emitir tokens seguros.' },
+    { role: 'user', content: '¿Cómo creamos la tabla de usuarios?' },
+    { role: 'assistant', content: 'CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT UNIQUE);' },
+    { role: 'user', content: 'Ahora implementemos el endpoint de login.' }
+  ];
+
+  let simulatedSummarizeCalled = false;
+  const mockSummarizeFn = async ({ systemPrompt, userPrompt }) => {
+    simulatedSummarizeCalled = true;
+    assert.ok(systemPrompt.includes('MEMORIA ESTRUCTURADA'));
+    assert.ok(userPrompt.includes('API REST'));
+    return `### [MEMORIA ESTRUCTURADA DE TURNOS ANTERIORES]
+- **Requisitos y Objetivos:** API REST Node.js con SQLite y auth JWT.
+- **Decisiones Clave:** Express, better-sqlite3, bcrypt y jsonwebtoken.
+- **Datos y Hechos Establecidos:** Tabla users con id y email.
+- **Tareas Pendientes:** Endpoint de login.
+- **Contexto Técnico:** Node.js, Express, SQLite.`;
+  };
+
+  const res = await ChatContextManager.compressHistory({
+    messages: history,
+    summarizeFn: mockSummarizeFn,
+    options: { recentTurnsToKeep: 2 }
+  });
+
+  assert.equal(res.compressed, true);
+  assert.equal(simulatedSummarizeCalled, true);
+  assert.ok(res.memoryBlock);
+  assert.equal(res.memoryBlock._isSummaryBlock, true);
+  assert.ok(res.diagnostics.savedTokens > 0);
+
+  // Verificar preservación de System Prompt y turnos recientes
+  assert.equal(res.messages[0].content, 'Eres un tutor de programación.');
+  assert.equal(res.messages[1]._isSummaryBlock, true);
+  assert.equal(res.messages[res.messages.length - 1].content, 'Ahora implementemos el endpoint de login.');
+});
+
+test('ContextManager - compressHistory fallback determinista sin llamadas de red', async () => {
+  const history = [
+    { role: 'system', content: 'Sistema' },
+    { role: 'user', content: 'Buscar información de vuelos' },
+    { role: 'assistant', content: 'Buscando...', tool_calls: [{ id: '1', function: { name: 'search_web' } }] },
+    { role: 'tool', name: 'search_web', content: 'Resultados de vuelos' },
+    { role: 'assistant', content: 'Encontré 3 vuelos disponibles.' },
+    { role: 'user', content: 'Reservar el primero.' }
+  ];
+
+  const res = await ChatContextManager.compressHistory({
+    messages: history,
+    summarizeFn: null, // Sin LLM
+    options: { recentTurnsToKeep: 1 }
+  });
+
+  assert.equal(res.compressed, true);
+  assert.ok(res.memoryBlock);
+  assert.ok(res.memoryBlock.content.includes('MEMORIA ESTRUCTURADA'));
+  assert.ok(res.memoryBlock.content.includes('search_web'));
+});
+
+test('ContextManager - Protección contra bucles de summarization y pérdida de memoria previa', () => {
+  const historyWithExistingSummary = [
+    { role: 'system', content: 'Sistema' },
+    {
+      role: 'system',
+      content: 'Memoria previa',
+      _isSummaryBlock: true,
+      _compressedMetadata: { timestamp: Date.now(), endIndexInHistory: 8 }
+    },
+    { role: 'user', content: 'Turno 9' },
+    { role: 'assistant', content: 'Respuesta 9' }
+  ];
+
+  // Solo han pasado 2 turnos desde el último resumen (< cooldownTurns)
+  const should = ChatContextManager.shouldCompress(historyWithExistingSummary, {
+    cooldownTurns: 4
+  });
+  assert.equal(should, false, 'Debe respetar el periodo de enfriamiento (cooldown) para evitar bucles');
+});

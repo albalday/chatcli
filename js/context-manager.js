@@ -1,7 +1,8 @@
 /**
  * Módulo de Gestión Inteligente del Contexto (ChatContextManager) para ChatCLI.
  * Gestiona el presupuesto de tokens, estimación adaptable por modelo,
- * ventana deslizante segura con preservación de pares agénticos y control de resultados de herramientas.
+ * ventana deslizante segura con preservación de pares agénticos, control de resultados de herramientas
+ * y sistema de compresión/resumen estructurado del historial.
  */
 (function (root, factory) {
   if (typeof exports === 'object' && typeof module !== 'undefined') {
@@ -200,15 +201,15 @@
   /**
    * Compacta y poda los resultados de herramientas de turnos pasados completados.
    */
-  function pruneHistoricalToolMessage(m, maxHistoricalChars = DEFAULT_MAX_HISTORICAL_TOOL_CHARS) {
+  function pruneHistoricalToolMessage(m, maxHistoricalToolChars = DEFAULT_MAX_HISTORICAL_TOOL_CHARS) {
     if (!m || m.role !== 'tool') return m;
     const contentStr = typeof m.content === 'object' ? JSON.stringify(m.content) : String(m.content !== undefined ? m.content : '');
 
-    if (contentStr.length <= maxHistoricalChars) {
+    if (contentStr.length <= maxHistoricalToolChars) {
       return m;
     }
 
-    const truncated = truncateToolContent(contentStr, maxHistoricalChars, m.name || 'tool');
+    const truncated = truncateToolContent(contentStr, maxHistoricalToolChars, m.name || 'tool');
     return {
       ...m,
       content: truncated,
@@ -284,7 +285,7 @@
       };
     }
 
-    // 1. Separar mensajes del Sistema (Header crítico)
+    // 1. Separar mensajes del Sistema (Header crítico) y bloques de Memoria
     const systemMessages = [];
     const conversationMessages = [];
 
@@ -387,6 +388,225 @@
     };
   }
 
+  // ==========================================================================
+  // 5. Sistema de Compresión y Resumen Inteligente de Memoria (Memory Compression)
+  // ==========================================================================
+
+  const SUMMARIZER_SYSTEM_PROMPT = `Eres un motor de consolidación de memoria de contexto para un asistente IA.
+Tu objetivo es analizar los turnos de conversación proporcionados y generar un resumen estructurado, denso y conciso.
+Conserva obligatoriamente:
+- Requisitos y objetivos del usuario.
+- Decisiones arquitectónicas, técnicas o de diseño tomadas.
+- Hechos, datos verificados y resultados clave de herramientas.
+- Tareas pendientes o siguientes pasos.
+- Contexto técnico relevante (lenguajes, librerías, parámetros).
+
+Responde estrictamente con el siguiente formato:
+### [MEMORIA ESTRUCTURADA DE TURNOS ANTERIORES]
+- **Requisitos y Objetivos:** <resumen de peticiones>
+- **Decisiones Clave:** <elecciones acordadas>
+- **Datos y Hechos Establecidos:** <datos confirmados o fuentes consultadas>
+- **Tareas Pendientes:** <siguientes pasos o aspectos por resolver>
+- **Contexto Técnico:** <entorno, versiones, configuraciones>`;
+
+  /**
+   * Evalúa si una conversación amerita compresión según presupuesto y volumen de turnos.
+   */
+  function shouldCompress(messages = [], options = {}) {
+    if (!Array.isArray(messages) || messages.length < 8) {
+      return false;
+    }
+
+    const minBlocksToCompress = options.minBlocksToCompress || 6;
+    const recentTurnsToKeep = options.recentTurnsToKeep || 4;
+    const conversationMessages = messages.filter(m => m && m.role !== 'system');
+
+    if (conversationMessages.length < (minBlocksToCompress + recentTurnsToKeep)) {
+      return false;
+    }
+
+    // Cooldown para evitar compresiones excesivamente frecuentes
+    const lastSummaryMsg = messages.find(m => m && m._isSummaryBlock);
+    if (lastSummaryMsg && lastSummaryMsg._compressedMetadata) {
+      const turnsSinceSummary = messages.length - (lastSummaryMsg._compressedMetadata.endIndexInHistory || 0);
+      if (turnsSinceSummary < (options.cooldownTurns || 4)) {
+        return false;
+      }
+    }
+
+    const model = options.model || '';
+    const inputBudget = calculateInputBudget(options);
+    const totalTokens = estimateHistoryTokens(messages, model);
+    const thresholdRatio = options.compressionThresholdRatio || 0.70;
+
+    return totalTokens >= (inputBudget * thresholdRatio);
+  }
+
+  /**
+   * Construye el prompt de transcripción para enviar al motor de resumen.
+   */
+  function buildSummarizationTranscript(blocksToCompress = []) {
+    const lines = [];
+
+    blocksToCompress.flat().forEach(m => {
+      if (!m || !m.role) return;
+
+      if (m.role === 'user') {
+        const text = typeof m.content === 'string' ? m.content : (Array.isArray(m.content) ? m.content.map(p => p.text || '').join(' ') : '');
+        lines.push(`[Usuario]: ${text.slice(0, 1500)}`);
+      } else if (m.role === 'assistant') {
+        if (m.content) {
+          lines.push(`[Asistente]: ${String(m.content).slice(0, 1500)}`);
+        }
+        if (Array.isArray(m.tool_calls)) {
+          m.tool_calls.forEach(tc => {
+            lines.push(`[Asistente invocó herramienta]: ${tc.function ? tc.function.name : 'tool'}`);
+          });
+        }
+      } else if (m.role === 'tool') {
+        const contentStr = typeof m.content === 'object' ? JSON.stringify(m.content) : String(m.content || '');
+        lines.push(`[Resultado de herramienta ${m.name || 'tool'}]: ${contentStr.slice(0, 800)}`);
+      }
+    });
+
+    return lines.join('\n\n');
+  }
+
+  /**
+   * Resumidor determinista y extractivo de contingencia (fallback sin llamada de red).
+   */
+  function generateDeterministicSummary(blocksToCompress = []) {
+    const userQueries = [];
+    const toolExecutions = new Set();
+    const keyPhrases = [];
+
+    blocksToCompress.flat().forEach(m => {
+      if (m.role === 'user') {
+        const txt = typeof m.content === 'string' ? m.content : '';
+        if (txt) userQueries.push(txt.slice(0, 120));
+      } else if (m.role === 'tool' && m.name) {
+        toolExecutions.add(m.name);
+      } else if (m.role === 'assistant' && m.content) {
+        const firstLine = String(m.content).split('\n')[0].slice(0, 100);
+        if (firstLine) keyPhrases.push(firstLine);
+      }
+    });
+
+    return `### [MEMORIA ESTRUCTURADA DE TURNOS ANTERIORES]
+- **Requisitos y Objetivos:** ${userQueries.slice(0, 3).join(' | ') || 'Interacción general'}
+- **Decisiones Clave:** Conversación continuada y procesamiento completado.
+- **Datos y Hechos Establecidos:** Herramientas empleadas: ${Array.from(toolExecutions).join(', ') || 'Ninguna'}.
+- **Tareas Pendientes:** Continuar con las consultas activas.
+- **Contexto Técnico:** Turnos previos consolidados automáticamente.`;
+  }
+
+  /**
+   * Comprime y consolida de forma segura los turnos antiguos de una conversación.
+   */
+  async function compressHistory(params = {}) {
+    const {
+      messages = [],
+      summarizeFn = null,
+      options = {}
+    } = params;
+
+    if (!Array.isArray(messages) || messages.length === 0) {
+      return { messages: [], compressed: false, reason: 'empty_messages' };
+    }
+
+    const recentTurnsToKeep = options.recentTurnsToKeep || 4;
+
+    // 1. Separar mensajes de sistema y mensajes conversacionales
+    const systemMessages = [];
+    const conversationMessages = [];
+
+    messages.forEach(m => {
+      if (m && m.role === 'system' && !m._isSummaryBlock) {
+        systemMessages.push(m);
+      } else if (m && m.role) {
+        conversationMessages.push(m);
+      }
+    });
+
+    if (conversationMessages.length <= recentTurnsToKeep) {
+      return { messages, compressed: false, reason: 'insufficient_turns' };
+    }
+
+    // 2. Agrupar en bloques atómicos
+    const atomicBlocks = groupIntoAtomicBlocks(conversationMessages);
+    if (atomicBlocks.length <= 2) {
+      return { messages, compressed: false, reason: 'insufficient_blocks' };
+    }
+
+    // 3. Separar bloques a comprimir de bloques recientes activos
+    // Conservar los últimos N bloques intactos
+    const blocksToKeepCount = Math.max(1, Math.floor(recentTurnsToKeep / 2));
+    const splitIndex = Math.max(1, atomicBlocks.length - blocksToKeepCount);
+
+    const blocksToCompress = atomicBlocks.slice(0, splitIndex);
+    const blocksToKeep = atomicBlocks.slice(splitIndex);
+
+    const originalTokens = estimateHistoryTokens(blocksToCompress.flat(), options.model);
+
+    // 4. Generar el resumen estructurado mediante el modelo o fallback determinista
+    let summaryContent = '';
+    const transcript = buildSummarizationTranscript(blocksToCompress);
+
+    if (typeof summarizeFn === 'function') {
+      try {
+        summaryContent = await summarizeFn({
+          systemPrompt: SUMMARIZER_SYSTEM_PROMPT,
+          userPrompt: `Por favor resume y consolida la siguiente conversación previa respetando el formato estructurado:\n\n${transcript}`
+        });
+      } catch (err) {
+        console.warn('ChatContextManager: Error en summarizeFn, usando generador de contingencia:', err);
+        summaryContent = generateDeterministicSummary(blocksToCompress);
+      }
+    } else {
+      summaryContent = generateDeterministicSummary(blocksToCompress);
+    }
+
+    if (!summaryContent || summaryContent.trim() === '') {
+      summaryContent = generateDeterministicSummary(blocksToCompress);
+    }
+
+    // 5. Construir el bloque de memoria sintético
+    const memoryBlock = {
+      id: `summary_${Date.now()}`,
+      role: 'system',
+      content: summaryContent,
+      _isSummaryBlock: true,
+      _compressedMetadata: {
+        timestamp: Date.now(),
+        originalMessagesCount: blocksToCompress.flat().length,
+        originalEstimatedTokens: originalTokens,
+        endIndexInHistory: blocksToCompress.flat().length
+      }
+    };
+
+    // 6. Ensamblar la nueva historia comprimida
+    const newMessages = [
+      ...systemMessages,
+      memoryBlock,
+      ...blocksToKeep.flat()
+    ];
+
+    const compressedTokens = estimateHistoryTokens(newMessages, options.model);
+
+    return {
+      messages: newMessages,
+      compressed: true,
+      memoryBlock,
+      diagnostics: {
+        originalMessagesCount: messages.length,
+        newMessagesCount: newMessages.length,
+        originalTokens,
+        compressedTokens,
+        savedTokens: Math.max(0, originalTokens - estimateMessageTokens(memoryBlock, options.model))
+      }
+    };
+  }
+
   return {
     getModelContextLimit,
     calculateInputBudget,
@@ -396,6 +616,11 @@
     registerEstimator,
     truncateToolContent,
     pruneHistoricalToolMessage,
-    buildOptimizedContext
+    groupIntoAtomicBlocks,
+    buildOptimizedContext,
+    shouldCompress,
+    buildSummarizationTranscript,
+    generateDeterministicSummary,
+    compressHistory
   };
 }));
