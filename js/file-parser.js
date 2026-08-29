@@ -537,8 +537,336 @@
   }
 
   /**
-   * Extrae el texto legible y esquemas/imágenes de un archivo PDF analizando el árbol de páginas (Page Tree) y mapas CMap.
+   * Decodifica y convierte JPEGs en espacio de color CMYK / Adobe YCCK a formato sRGB legible.
    */
+  function convertCmykJpegToRgbDataUrl(data) {
+    try {
+      let offset = 0;
+      function readUint16() {
+        const val = (data[offset] << 8) | data[offset + 1];
+        offset += 2;
+        return val;
+      }
+
+      if (readUint16() !== 0xFFD8) return null;
+
+      const quantTables = [];
+      const huffmanTablesDC = [];
+      const huffmanTablesAC = [];
+      let frame = null;
+      let adobeTransform = -1;
+
+      while (offset < data.length) {
+        if (data[offset] !== 0xFF) { offset++; continue; }
+        while (data[offset] === 0xFF) offset++;
+        const marker = data[offset++];
+
+        if (marker === 0xD9) break;
+        if (marker === 0xDA) { // SOS
+          readUint16();
+          const numScanComponents = data[offset++];
+          const scanComponents = [];
+          for (let i = 0; i < numScanComponents; i++) {
+            const id = data[offset++];
+            const byte = data[offset++];
+            scanComponents.push({ id, dcTable: (byte >> 4) & 0x0F, acTable: byte & 0x0F });
+          }
+          offset += 3;
+
+          const scanBytes = [];
+          while (offset < data.length) {
+            if (data[offset] === 0xFF) {
+              if (data[offset + 1] === 0x00) {
+                scanBytes.push(0xFF);
+                offset += 2;
+              } else if (data[offset + 1] >= 0xD0 && data[offset + 1] <= 0xD7) {
+                offset += 2;
+              } else {
+                break;
+              }
+            } else {
+              scanBytes.push(data[offset++]);
+            }
+          }
+
+          if (!frame || frame.numComponents !== 4) return null; // Solo convertir 4 componentes (CMYK/YCCK)
+
+          // Decodificar scan
+          let maxH = 1, maxV = 1;
+          for (const comp of frame.components) {
+            if (comp.hSample > maxH) maxH = comp.hSample;
+            if (comp.vSample > maxV) maxV = comp.vSample;
+          }
+
+          const mcuWidth = maxH * 8;
+          const mcuHeight = maxV * 8;
+          const mcusPerRow = Math.ceil(frame.width / mcuWidth);
+          const mcusPerCol = Math.ceil(frame.height / mcuHeight);
+
+          let bitPos = 0;
+          function readBit() {
+            const byteIdx = bitPos >> 3;
+            const bitIdx = 7 - (bitPos & 7);
+            bitPos++;
+            return (scanBytes[byteIdx] >> bitIdx) & 1;
+          }
+          function readBits(n) {
+            let val = 0;
+            for (let i = 0; i < n; i++) val = (val << 1) | readBit();
+            return val;
+          }
+          function readHuffman(tree) {
+            let node = tree;
+            while (node.sym === undefined) {
+              const bit = readBit();
+              node = node[bit];
+              if (!node) throw new Error('Invalid Huffman code');
+            }
+            return node.sym;
+          }
+          function extend(val, bits) {
+            const vt = 1 << (bits - 1);
+            if (val < vt) return val + (-1 << bits) + 1;
+            return val;
+          }
+
+          function idct(block, out) {
+            const temp = new Float64Array(64);
+            const C = Math.PI / 16;
+            for (let i = 0; i < 8; i++) {
+              for (let j = 0; j < 8; j++) {
+                let sum = 0;
+                for (let k = 0; k < 8; k++) {
+                  const s = block[i * 8 + k];
+                  if (s === 0) continue;
+                  const c = k === 0 ? 0.7071067811865475 : 1;
+                  sum += c * s * Math.cos((2 * j + 1) * k * C);
+                }
+                temp[i * 8 + j] = sum * 0.5;
+              }
+            }
+            for (let j = 0; j < 8; j++) {
+              for (let i = 0; i < 8; i++) {
+                let sum = 0;
+                for (let k = 0; k < 8; k++) {
+                  const s = temp[k * 8 + j];
+                  if (s === 0) continue;
+                  const c = k === 0 ? 0.7071067811865475 : 1;
+                  sum += c * s * Math.cos((2 * i + 1) * k * C);
+                }
+                let val = Math.round(sum * 0.5) + 128;
+                if (val < 0) val = 0;
+                else if (val > 255) val = 255;
+                out[i * 8 + j] = val;
+              }
+            }
+          }
+
+          const ZIGZAG = [
+             0,  1,  8, 16,  9,  2,  3, 10,
+            17, 24, 32, 25, 18, 11,  4,  5,
+            12, 19, 26, 33, 40, 48, 41, 34,
+            27, 20, 13,  6,  7, 14, 21, 28,
+            35, 42, 49, 56, 57, 50, 43, 36,
+            29, 22, 15, 23, 30, 37, 44, 51,
+            58, 59, 52, 45, 38, 31, 39, 46,
+            53, 60, 61, 54, 47, 55, 62, 63
+          ];
+
+          const compBuffers = frame.components.map(comp => {
+            const w = mcusPerRow * comp.hSample * 8;
+            const h = mcusPerCol * comp.vSample * 8;
+            return {
+              data: new Uint8Array(w * h),
+              width: w,
+              height: h,
+              hSample: comp.hSample,
+              vSample: comp.vSample,
+              quantTable: quantTables[comp.quantId],
+              dcPred: 0
+            };
+          });
+
+          for (let mcuY = 0; mcuY < mcusPerCol; mcuY++) {
+            for (let mcuX = 0; mcuX < mcusPerRow; mcuX++) {
+              for (let c = 0; c < frame.numComponents; c++) {
+                const comp = compBuffers[c];
+                const scanComp = scanComponents.find(sc => sc.id === frame.components[c].id);
+                const dcTree = huffmanTablesDC[scanComp.dcTable];
+                const acTree = huffmanTablesAC[scanComp.acTable];
+
+                for (let v = 0; v < comp.vSample; v++) {
+                  for (let h = 0; h < comp.hSample; h++) {
+                    const block = new Int32Array(64);
+                    const dcLen = readHuffman(dcTree);
+                    let dcDiff = 0;
+                    if (dcLen > 0) dcDiff = extend(readBits(dcLen), dcLen);
+                    comp.dcPred += dcDiff;
+                    block[0] = comp.dcPred * comp.quantTable[0];
+
+                    let k = 1;
+                    while (k < 64) {
+                      const acByte = readHuffman(acTree);
+                      const rrr = (acByte >> 4) & 0x0F;
+                      const sss = acByte & 0x0F;
+                      if (sss === 0) {
+                        if (rrr === 0) break;
+                        if (rrr === 15) { k += 16; continue; }
+                      }
+                      k += rrr;
+                      if (k >= 64) break;
+                      const acVal = extend(readBits(sss), sss);
+                      block[ZIGZAG[k]] = acVal * comp.quantTable[ZIGZAG[k]];
+                      k++;
+                    }
+
+                    const blockOut = new Uint8Array(64);
+                    idct(block, blockOut);
+
+                    const startX = (mcuX * comp.hSample + h) * 8;
+                    const startY = (mcuY * comp.vSample + v) * 8;
+                    for (let row = 0; row < 8; row++) {
+                      const destOffset = (startY + row) * comp.width + startX;
+                      for (let col = 0; col < 8; col++) {
+                        comp.data[destOffset + col] = blockOut[row * 8 + col];
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+
+          function getCompVal(cIdx, x, y) {
+            const b = compBuffers[cIdx];
+            return b.data[Math.floor(y * b.vSample / maxV) * b.width + Math.floor(x * b.hSample / maxH)];
+          }
+
+          const isYCCK = (adobeTransform === 2 || adobeTransform === -1);
+          const rowSize = (frame.width * 3 + 3) & ~3;
+          const imageSize = rowSize * frame.height;
+          const fileSize = 54 + imageSize;
+          const bmpBuf = new Uint8Array(fileSize);
+
+          bmpBuf[0] = 0x42; bmpBuf[1] = 0x4D;
+          bmpBuf[2] = fileSize & 0xFF; bmpBuf[3] = (fileSize >> 8) & 0xFF; bmpBuf[4] = (fileSize >> 16) & 0xFF; bmpBuf[5] = (fileSize >> 24) & 0xFF;
+          bmpBuf[10] = 54;
+          bmpBuf[14] = 40;
+          bmpBuf[18] = frame.width & 0xFF; bmpBuf[19] = (frame.width >> 8) & 0xFF; bmpBuf[20] = (frame.width >> 16) & 0xFF; bmpBuf[21] = (frame.width >> 24) & 0xFF;
+          bmpBuf[22] = frame.height & 0xFF; bmpBuf[23] = (frame.height >> 8) & 0xFF; bmpBuf[24] = (frame.height >> 16) & 0xFF; bmpBuf[25] = (frame.height >> 24) & 0xFF;
+          bmpBuf[26] = 1; bmpBuf[28] = 24;
+          bmpBuf[34] = imageSize & 0xFF; bmpBuf[35] = (imageSize >> 8) & 0xFF; bmpBuf[36] = (imageSize >> 16) & 0xFF; bmpBuf[37] = (imageSize >> 24) & 0xFF;
+
+          let bmpOffset = 54;
+          for (let y = frame.height - 1; y >= 0; y--) {
+            for (let x = 0; x < frame.width; x++) {
+              const c0 = getCompVal(0, x, y);
+              const c1 = getCompVal(1, x, y);
+              const c2 = getCompVal(2, x, y);
+              const c3 = getCompVal(3, x, y);
+
+              let r, g, b;
+              if (isYCCK) {
+                const yVal = c0;
+                const cb = c1 - 128;
+                const cr = c2 - 128;
+                const kNorm = (255 - c3) / 255;
+                r = (yVal + 1.402 * cr) * kNorm;
+                g = (yVal - 0.344136 * cb - 0.714136 * cr) * kNorm;
+                b = (yVal + 1.772 * cb) * kNorm;
+              } else {
+                const c = c0 / 255, m = c1 / 255, y_ = c2 / 255, k = c3 / 255;
+                r = 255 * (1 - c) * (1 - k);
+                g = 255 * (1 - m) * (1 - k);
+                b = 255 * (1 - y_) * (1 - k);
+              }
+              bmpBuf[bmpOffset++] = Math.max(0, Math.min(255, Math.round(b)));
+              bmpBuf[bmpOffset++] = Math.max(0, Math.min(255, Math.round(g)));
+              bmpBuf[bmpOffset++] = Math.max(0, Math.min(255, Math.round(r)));
+            }
+            for (let p = frame.width * 3; p < rowSize; p++) bmpBuf[bmpOffset++] = 0;
+          }
+
+          return `data:image/bmp;base64,${uint8ToBase64(bmpBuf)}`;
+        }
+
+        const length = readUint16();
+        const nextMarkerOffset = offset + length - 2;
+
+        if (marker === 0xDB) { // DQT
+          let p = offset;
+          while (p < nextMarkerOffset) {
+            const info = data[p++];
+            const tableId = info & 0x0F;
+            const is16Bit = (info >> 4) !== 0;
+            const table = new Int32Array(64);
+            for (let i = 0; i < 64; i++) {
+              table[i] = is16Bit ? ((data[p++] << 8) | data[p++]) : data[p++];
+            }
+            quantTables[tableId] = table;
+          }
+        } else if (marker === 0xC0 || marker === 0xC2) { // SOF0 / SOF2
+          const precision = data[offset++];
+          const height = readUint16();
+          const width = readUint16();
+          const numComponents = data[offset++];
+          const components = [];
+          for (let i = 0; i < numComponents; i++) {
+            const id = data[offset++];
+            const byte = data[offset++];
+            const quantId = data[offset++];
+            components.push({ id, hSample: (byte >> 4) & 0x0F, vSample: byte & 0x0F, quantId });
+          }
+          frame = { precision, height, width, numComponents, components };
+        } else if (marker === 0xC4) { // DHT
+          let p = offset;
+          while (p < nextMarkerOffset) {
+            const info = data[p++];
+            const isAC = (info >> 4) !== 0;
+            const tableId = info & 0x0F;
+            const counts = new Uint8Array(16);
+            for (let i = 0; i < 16; i++) counts[i] = data[p++];
+            const symbols = [];
+            for (let i = 0; i < 16; i++) {
+              const syms = [];
+              for (let j = 0; j < counts[i]; j++) syms.push(data[p++]);
+              symbols.push(syms);
+            }
+            const tree = buildHuffmanTree(counts, symbols);
+            if (isAC) huffmanTablesAC[tableId] = tree;
+            else huffmanTablesDC[tableId] = tree;
+          }
+        } else if (marker === 0xEE) { // APP14 (Adobe)
+          if (length >= 14 && data[offset] === 0x41 && data[offset+1] === 0x64 && data[offset+2] === 0x6F && data[offset+3] === 0x62 && data[offset+4] === 0x65) {
+            adobeTransform = data[offset + 11];
+          }
+        }
+        offset = nextMarkerOffset;
+      }
+    } catch (e) {}
+    return null;
+  }
+
+  function buildHuffmanTree(counts, symbols) {
+    const root = {};
+    let code = 0;
+    for (let len = 1; len <= 16; len++) {
+      const syms = symbols[len - 1];
+      for (let i = 0; i < syms.length; i++) {
+        const sym = syms[i];
+        let node = root;
+        for (let bit = len - 1; bit >= 0; bit--) {
+          const b = (code >> bit) & 1;
+          if (!node[b]) node[b] = {};
+          node = node[b];
+        }
+        node.sym = sym;
+        code++;
+      }
+      code <<= 1;
+    }
+    return root;
+  }
   async function extractTextFromPdf(arrayBuffer) {
     const bytes = new Uint8Array(arrayBuffer);
     const decoder = new TextDecoder('latin1');
@@ -727,9 +1055,16 @@
 
                 if (rawStreamBytes.length > 2048 && rawStreamBytes[0] === 0xFF && rawStreamBytes[1] === 0xD8) {
                   imgCounter++;
-                  const b64 = uint8ToBase64(rawStreamBytes);
-                  if (b64) {
-                    pageItems.push(`\n![Diagrama / Esquema (Pág. ${pageNum}) #img_${pageNum}_${imgCounter}](data:image/jpeg;base64,${b64})\n`);
+                  let dataUrl = null;
+                  if (imgBody.includes('DeviceCMYK') || imgBody.includes('/ColorSpace/DeviceCMYK') || imgBody.includes('/ColorSpace /DeviceCMYK')) {
+                    dataUrl = convertCmykJpegToRgbDataUrl(rawStreamBytes);
+                  }
+                  if (!dataUrl) {
+                    const b64 = uint8ToBase64(rawStreamBytes);
+                    if (b64) dataUrl = `data:image/jpeg;base64,${b64}`;
+                  }
+                  if (dataUrl) {
+                    pageItems.push(`\n![Diagrama / Esquema (Pág. ${pageNum}) #img_${pageNum}_${imgCounter}](${dataUrl})\n`);
                   }
                 }
               }
@@ -766,9 +1101,10 @@
           if (endStreamIdx !== -1) {
             const dictStart = Math.max(0, streamIdx - 400);
             const dictSlice = fullText.substring(dictStart, streamIdx);
-            const isFontOrMeta = /FontFile|Type1|CIDFont|XRef|ObjStm|Metadata|JavaScript|FontDescriptor|CharProcs/i.test(dictSlice);
             const isDCT = dictSlice.includes('DCTDecode');
             const isFlate = dictSlice.includes('FlateDecode');
+            const isFontOrMeta = dictSlice.includes('/Font') || dictSlice.includes('/Metadata') || dictSlice.includes('/ICCBased');
+            const isCMYK = dictSlice.includes('DeviceCMYK') || dictSlice.includes('/ColorSpace/DeviceCMYK');
 
             let rawEnd = endStreamIdx;
             if (rawEnd > dataStart && (fullText.charCodeAt(rawEnd - 1) === 10 || fullText.charCodeAt(rawEnd - 1) === 13)) rawEnd--;
@@ -778,9 +1114,16 @@
 
             if (isDCT && rawStreamBytes.length > 2048 && rawStreamBytes[0] === 0xFF && rawStreamBytes[1] === 0xD8) {
               imgCounter++;
-              const b64 = uint8ToBase64(rawStreamBytes);
-              if (b64) {
-                currentPageItems.push(`\n![Diagrama / Esquema (Pág. ${pageNum}) #img_${pageNum}_${imgCounter}](data:image/jpeg;base64,${b64})\n`);
+              let dataUrl = null;
+              if (isCMYK) {
+                dataUrl = convertCmykJpegToRgbDataUrl(rawStreamBytes);
+              }
+              if (!dataUrl) {
+                const b64 = uint8ToBase64(rawStreamBytes);
+                if (b64) dataUrl = `data:image/jpeg;base64,${b64}`;
+              }
+              if (dataUrl) {
+                currentPageItems.push(`\n![Diagrama / Esquema (Pág. ${pageNum}) #img_${pageNum}_${imgCounter}](${dataUrl})\n`);
               }
             } else if (!isFontOrMeta) {
               let streamString = '';
