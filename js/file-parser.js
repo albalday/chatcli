@@ -201,6 +201,35 @@
     return '';
   }
 
+  function uint8ToBase64(uint8) {
+    if (!uint8 || uint8.length === 0) return '';
+    if (typeof Buffer !== 'undefined') {
+      return Buffer.from(uint8).toString('base64');
+    }
+    let binary = '';
+    const len = uint8.byteLength;
+    const chunk = 8192;
+    for (let i = 0; i < len; i += chunk) {
+      const sub = uint8.subarray(i, Math.min(i + chunk, len));
+      binary += String.fromCharCode.apply(null, sub);
+    }
+    return btoa(binary);
+  }
+
+  function isReadablePdfText(str) {
+    if (!str || str.length < 3) return false;
+    let printable = 0;
+    for (let i = 0; i < str.length; i++) {
+      const code = str.charCodeAt(i);
+      if ((code >= 32 && code <= 126) || (code >= 160 && code <= 255) || code === 10 || code === 13 || code === 9) {
+        printable++;
+      }
+    }
+    const ratio = printable / str.length;
+    if (/SF\d{6}|afii\d+|upblock|dnblock|triagup|dmacron/.test(str)) return false;
+    return ratio >= 0.80;
+  }
+
   function parsePdfStreamText(streamString) {
     if (!streamString || typeof streamString !== 'string') return '';
 
@@ -235,15 +264,18 @@
         }
       }
 
+      if (!inTextObject) {
+        i++;
+        continue;
+      }
+
       // Literal string: (texto)
       if (c === 40 /* ( */) {
         const { strVal, nextIndex } = scanPdfLiteralString(streamString, i);
         i = nextIndex;
         const op = scanNextPdfOperator(streamString, i);
-        if (op === 'Tj' || op === "'" || op === '"' || inTextObject) {
-          if (strVal) out.push(strVal);
-          if (op === "'" || op === '"') out.push('\n');
-        }
+        if (strVal) out.push(strVal);
+        if (op === "'" || op === '"') out.push('\n');
         continue;
       }
 
@@ -256,10 +288,8 @@
         const { strVal, nextIndex } = scanPdfHexString(streamString, i);
         i = nextIndex;
         const op = scanNextPdfOperator(streamString, i);
-        if (op === 'Tj' || op === "'" || op === '"' || inTextObject) {
-          if (strVal) out.push(strVal);
-          if (op === "'" || op === '"') out.push('\n');
-        }
+        if (strVal) out.push(strVal);
+        if (op === "'" || op === '"') out.push('\n');
         continue;
       }
 
@@ -274,7 +304,7 @@
       }
 
       // Operadores de salto de línea T*, Td, TD
-      if (inTextObject && c === 84 /* T */ && i + 1 < len) {
+      if (c === 84 /* T */ && i + 1 < len) {
         const nextC = streamString.charCodeAt(i + 1);
         if (nextC === 42 /* * */ || nextC === 100 /* d */ || nextC === 68 /* D */) {
           const after = i + 2 < len ? streamString.charCodeAt(i + 2) : 32;
@@ -289,14 +319,14 @@
       i++;
     }
 
-    return out.join('').replace(/[ \t]+/g, ' ').replace(/\n\s*\n+/g, '\n\n').trim();
+    const res = out.join('').replace(/[ \t]+/g, ' ').replace(/\n\s*\n+/g, '\n\n').trim();
+    return isReadablePdfText(res) ? res : '';
   }
 
   async function decompressDeflateData(uint8Array) {
     if (!uint8Array || uint8Array.length === 0) return null;
 
     if (typeof DecompressionStream !== 'undefined') {
-      // Intento 1: DecompressionStream('deflate')
       try {
         const ds = new DecompressionStream('deflate');
         const writer = ds.writable.getWriter();
@@ -307,7 +337,6 @@
         return new Uint8Array(buf);
       } catch (e) {}
 
-      // Intento 2: DecompressionStream('deflate-raw')
       try {
         let rawSlice = uint8Array;
         if (uint8Array.length > 6 && uint8Array[0] === 0x78) {
@@ -323,23 +352,19 @@
       } catch (e) {}
     }
 
-    return null;
-  }
+    if (typeof require !== 'undefined') {
+      try {
+        const zlib = require('zlib');
+        return zlib.inflateSync(uint8Array);
+      } catch (e) {
+        try {
+          const zlib = require('zlib');
+          return zlib.inflateRawSync(uint8Array);
+        } catch (e2) {}
+      }
+    }
 
-  /**
-  function uint8ToBase64(uint8) {
-    if (!uint8 || uint8.length === 0) return '';
-    if (typeof Buffer !== 'undefined') {
-      return Buffer.from(uint8).toString('base64');
-    }
-    let binary = '';
-    const len = uint8.byteLength;
-    const chunk = 8192;
-    for (let i = 0; i < len; i += chunk) {
-      const sub = uint8.subarray(i, Math.min(i + chunk, len));
-      binary += String.fromCharCode.apply(null, sub);
-    }
-    return btoa(binary);
+    return null;
   }
 
   /**
@@ -371,8 +396,9 @@
         if (endStreamIdx !== -1) {
           const dictStart = Math.max(0, streamIdx - 400);
           const dictSlice = fullText.substring(dictStart, streamIdx);
-          const isFlate = dictSlice.includes('FlateDecode');
+          const isFontOrMeta = /FontFile|Type1|CIDFont|XRef|ObjStm|Metadata|JavaScript|FontDescriptor|CharProcs/i.test(dictSlice);
           const isDCT = dictSlice.includes('DCTDecode');
+          const isFlate = dictSlice.includes('FlateDecode');
 
           let rawEnd = endStreamIdx;
           if (rawEnd > dataStart && (fullText.charCodeAt(rawEnd - 1) === 10 || fullText.charCodeAt(rawEnd - 1) === 13)) rawEnd--;
@@ -385,11 +411,11 @@
             imgCounter++;
             const b64 = uint8ToBase64(rawStreamBytes);
             if (b64) {
-              currentPageItems.push(`\n![Esquema / Imagen (Pág. ${pageNum}) #img_${pageNum}_${imgCounter}](data:image/jpeg;base64,${b64})\n`);
+              currentPageItems.push(`\n![Diagrama / Esquema (Pág. ${pageNum}) #img_${pageNum}_${imgCounter}](data:image/jpeg;base64,${b64})\n`);
             }
           }
-          // 2. Extracción de streams de texto
-          else {
+          // 2. Extracción de streams de texto (filtrando fuentes y metadatos)
+          else if (!isFontOrMeta) {
             let streamString = '';
             if (isFlate) {
               const decompressed = await decompressDeflateData(rawStreamBytes);

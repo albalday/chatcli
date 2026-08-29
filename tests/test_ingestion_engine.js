@@ -2,6 +2,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const RagStorage = require('../js/ragStorage.js');
 const IngestionEngine = require('../js/ingestionEngine.js');
+const FileParser = require('../js/file-parser.js');
 
 test('IngestionEngine - Normalización y extracción de texto plano', async () => {
   const rawText = 'Línea 1\r\nLínea 2\x00\x07 con caracteres especiales y acentos: acción.';
@@ -343,3 +344,30 @@ Instrucciones para actualizar BIOS con M-Flash.
     assert.ok(chap.title.includes('Pág'), 'El título debe indicar las páginas comprendidas');
   });
 });
+
+test('FileParser - Filtra fuentes TrueType/Type1 y extrae texto limpio y diagramas de PDF', async () => {
+  // Simular un PDF sintético con stream de fuente que debe ser ignorado y stream de texto BT...ET que debe extraerse
+  const mockPdf = Buffer.from(`%PDF-1.4
+1 0 obj
+<< /Type /FontFile2 /Length 45 >>
+stream
+(Typeface Monotype Arial Font Data \x00\x01\x02\x03)
+endstream
+endobj
+2 0 obj
+<< /Length 75 >>
+stream
+BT
+/F1 12 Tf
+72 712 Td
+(GA-Z77P-D3 Motherboard User Manual) Tj
+ET
+endstream
+endobj
+%%EOF`);
+
+  const extracted = await FileParser.extractTextFromPdf(mockPdf.buffer);
+  assert.ok(extracted.includes('GA-Z77P-D3 Motherboard User Manual'), 'Debe extraer el texto de página en bloque BT...ET');
+  assert.ok(!extracted.includes('Typeface Monotype Arial'), 'Debe ignorar por completo streams de fuentes (/FontFile2)');
+});
+
