@@ -274,11 +274,15 @@
       }
 
       // Operadores de salto de línea T*, Td, TD
-      if (inTextObject && c === 84 /* T */) {
-        if (i + 1 < len && streamString.charCodeAt(i + 1) === 42 /* T* */) {
-          out.push('\n');
-          i += 2;
-          continue;
+      if (inTextObject && c === 84 /* T */ && i + 1 < len) {
+        const nextC = streamString.charCodeAt(i + 1);
+        if (nextC === 42 /* * */ || nextC === 100 /* d */ || nextC === 68 /* D */) {
+          const after = i + 2 < len ? streamString.charCodeAt(i + 2) : 32;
+          if (isPdfDelimiterOrWs(after)) {
+            out.push('\n');
+            i += 2;
+            continue;
+          }
         }
       }
 

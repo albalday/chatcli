@@ -186,7 +186,7 @@
     // 2. Fallback fiable: ChatFileParser nativo de ChatCLI
     const FileParser = getFileParser();
     if (FileParser && typeof FileParser.extractTextFromPdf === 'function') {
-      const parsedText = FileParser.extractTextFromPdf(arrayBuffer);
+      const parsedText = await FileParser.extractTextFromPdf(arrayBuffer);
       arrayBuffer = null;
       return normalizeExtractedText(parsedText);
     }
@@ -201,19 +201,24 @@
   /**
    * Divide un documento extenso en fragmentos/capítulos candidatos por títulos o páginas.
    */
-  function partitionTextIntoHeuristicChapters(text, maxCharsPerChapter = 3500) {
+  function partitionTextIntoHeuristicChapters(text, maxCharsPerChapter = 5000) {
     if (!text) return [];
 
     const lines = text.split('\n');
     const sections = [];
-    let currentTitle = 'Introducción';
+    let currentTitle = 'Introducción / Información General';
     let currentLines = [];
 
-    const headingRegex = /^(#{1,3}\s+|--- Página \d+ ---|\b(?:Capítulo|Sección|Tema|Module|Section|Chapter)\s+\d+[:.]?)/i;
+    const headingRegex = /^(?:#{1,6}\s+|--- Página \d+ ---|\[(?:Página|Page)\s+\d+\]|\b(?:Capítulo|Capitulo|Sección|Seccion|Tema|Módulo|Modulo|Module|Section|Chapter|Parte|Part)\s+[0-9A-Za-zIVXLCDM]+[:.]?|\b(?:Overview|Quick Start|Specifications|Special Features|Rear I\/O Panel|Component Overview|CPU Socket|DIMM Slots|PCI_E|M\.?2 Slots|SATA|Front Panel|Power Connectors|Fan Headers|Audio|JRGB|JARGB|EZ Debug|BIOS Setup|RAID Configuration|Driver|Troubleshooting|Safety Information|Package Contents|Block Diagram|Hardware Setup|Software Description|Appendix)\b|^[0-9]+(?:\.[0-9]+)*\s+[A-ZÁÉÍÓÚÑ])/i;
 
-    for (const line of lines) {
-      const match = line.trim().match(headingRegex);
-      if (match) {
+    for (const rawLine of lines) {
+      const line = rawLine.trim();
+      const isHeading = line.length > 0 && line.length < 90 && (
+        headingRegex.test(line) ||
+        (line.startsWith('#') && line.length > 3)
+      );
+
+      if (isHeading) {
         const textSoFar = currentLines.join('\n').trim();
         if (textSoFar.length > 0) {
           sections.push({
@@ -222,10 +227,10 @@
           });
           currentLines = [];
         }
-        currentTitle = line.replace(/^#+\s*/, '').replace(/---/g, '').trim() || `Capítulo ${sections.length + 1}`;
-        currentLines.push(line);
+        currentTitle = line.replace(/^#+\s*/, '').replace(/---/g, '').replace(/[\[\]]/g, '').trim() || `Sección ${sections.length + 1}`;
+        currentLines.push(rawLine);
       } else {
-        currentLines.push(line);
+        currentLines.push(rawLine);
       }
     }
 
@@ -236,33 +241,58 @@
       });
     }
 
-    // Si aún hay secciones demasiado grandes, dividirlas por párrafos
+    // Si aún hay secciones demasiado grandes, dividirlas por párrafos y líneas
     const finalChapters = [];
     for (const sec of sections) {
       if (sec.content.length <= maxCharsPerChapter) {
         finalChapters.push(sec);
       } else {
-        // Subdividir por bloques de párrafos
-        const paragraphs = sec.content.split(/\n\n+/);
+        const paragraphs = sec.content.split(/\n+/);
         let subChunk = [];
         let subIndex = 1;
+        let currentLen = 0;
 
         for (const p of paragraphs) {
-          if ((subChunk.join('\n\n') + '\n\n' + p).length > maxCharsPerChapter && subChunk.length > 0) {
+          if (p.length > maxCharsPerChapter) {
+            if (subChunk.length > 0) {
+              finalChapters.push({
+                title: `${sec.title} (Parte ${subIndex})`,
+                content: subChunk.join('\n').trim()
+              });
+              subIndex++;
+              subChunk = [];
+              currentLen = 0;
+            }
+            let start = 0;
+            while (start < p.length) {
+              const piece = p.slice(start, start + maxCharsPerChapter);
+              finalChapters.push({
+                title: `${sec.title} (Parte ${subIndex})`,
+                content: piece.trim()
+              });
+              subIndex++;
+              start += maxCharsPerChapter;
+            }
+            continue;
+          }
+
+          if (currentLen + p.length + 1 > maxCharsPerChapter && subChunk.length > 0) {
             finalChapters.push({
               title: `${sec.title} (Parte ${subIndex})`,
-              content: subChunk.join('\n\n').trim()
+              content: subChunk.join('\n').trim()
             });
             subIndex++;
             subChunk = [p];
+            currentLen = p.length;
           } else {
             subChunk.push(p);
+            currentLen += p.length + 1;
           }
         }
         if (subChunk.length > 0) {
           finalChapters.push({
             title: subIndex > 1 ? `${sec.title} (Parte ${subIndex})` : sec.title,
-            content: subChunk.join('\n\n').trim()
+            content: subChunk.join('\n').trim()
           });
         }
       }
