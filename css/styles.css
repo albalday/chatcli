@@ -4084,72 +4084,64 @@ input:checked + .slider:before {
   gap: 1rem;
 }
 
-.rag-active-branch-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-  gap: 0.75rem;
+.rag-active-branch-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
   margin-top: 0.5rem;
 }
 
-.rag-branch-card {
-  border: 1px solid var(--border-color);
-  background-color: var(--bg-surface);
-  border-radius: var(--radius-md);
-  padding: 0.9rem 1rem;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  position: relative;
-  user-select: none;
-}
-
-.rag-branch-card:hover {
-  border-color: var(--primary-color);
-  background-color: var(--bg-app);
-  transform: translateY(-1px);
-}
-
-.rag-branch-card.is-active-chat {
-  border: 2px solid #10b981;
-  background-color: rgba(16, 185, 129, 0.08);
-}
-
-.rag-branch-card-header {
+.rag-branch-toggle-card {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.5rem;
+  gap: 1rem;
+  padding: 0.85rem 1.15rem;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  transition: all 0.15s ease;
 }
 
-.rag-branch-card-title {
-  font-size: 0.92rem;
+.rag-branch-toggle-card:hover {
+  border-color: var(--primary-color);
+}
+
+.rag-branch-toggle-card.is-active-chat {
+  border-color: #10b981;
+  background-color: rgba(16, 185, 129, 0.06);
+}
+
+.rag-branch-toggle-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.rag-branch-toggle-title {
+  font-size: 0.9rem;
   font-weight: 600;
   color: var(--text-main);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: 0.25rem;
 }
 
-.rag-branch-card-desc {
-  font-size: 0.78rem;
+.rag-branch-toggle-desc {
+  font-size: 0.775rem;
   color: var(--text-muted);
-  line-height: 1.35;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  line-height: 1.4;
+  margin: 0;
 }
 
-.rag-branch-card-meta {
+.rag-branch-toggle-meta {
   display: flex;
   align-items: center;
   gap: 0.4rem;
   font-size: 0.72rem;
   color: var(--text-muted);
-  margin-top: auto;
-  padding-top: 0.35rem;
+  margin-top: 0.3rem;
 }
 
 .rag-active-pill {

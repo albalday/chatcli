@@ -113,15 +113,15 @@
   }
 
   /**
-   * Pestaña 1: Renderiza la tarjeta principal de estado y la cuadrícula de ramas para activar en el chat.
+   * Pestaña 1: Renderiza la tarjeta principal de estado y cada rama como una caja con un check/switch de activar.
    */
   async function renderActiveBranchTab() {
     if (typeof document === 'undefined') return;
-    const grid = document.getElementById('rag-active-branch-grid');
+    const list = document.getElementById('rag-active-branch-list') || document.getElementById('rag-active-branch-grid');
     const titleEl = document.getElementById('rag-active-status-title');
     const descEl = document.getElementById('rag-active-status-desc');
     const btnMaster = document.getElementById('btn-rag-toggle-master');
-    if (!grid) return;
+    if (!list) return;
 
     const RagStorage = getRagStorage();
     if (!RagStorage) return;
@@ -134,7 +134,7 @@
       // Actualizar tarjeta superior
       if (activeBranchObj) {
         if (titleEl) titleEl.textContent = `🌿 RAG Activado: "${activeBranchObj.name}"`;
-        if (descEl) descEl.textContent = `Los resúmenes de "${activeBranchObj.name}" están integrados en el contexto del chat. El modelo leerá capítulos completos bajo demanda con read_chapter_content.`;
+        if (descEl) descEl.textContent = `Los resúmenes de "${activeBranchObj.name}" están integrados en el contexto del chat. El modelo consultará capítulos con read_chapter_content.`;
         if (btnMaster) {
           btnMaster.textContent = t('rag_btn_deactivate') || 'Desactivar RAG';
           btnMaster.className = 'btn-secondary btn-danger-hover';
@@ -146,8 +146,8 @@
           };
         }
       } else {
-        if (titleEl) titleEl.textContent = '⚪ ' + (t('rag_inactive_label') || 'RAG Desactivado (Sin contexto)');
-        if (descEl) descEl.textContent = 'El chat opera en modo estándar sin inyectar conocimiento documental. Haz clic en una de las ramas inferiores para activarla.';
+        if (titleEl) titleEl.textContent = '⚪ ' + (t('rag_inactive_label') || 'RAG Desactivado (Sin contexto documental)');
+        if (descEl) descEl.textContent = 'El chat opera en modo estándar sin documentos de contexto. Activa el interruptor de cualquier rama para añadir su conocimiento.';
         if (btnMaster) {
           btnMaster.textContent = 'RAG Desactivado';
           btnMaster.className = 'btn-secondary';
@@ -156,30 +156,19 @@
         }
       }
 
-      grid.innerHTML = '';
+      list.innerHTML = '';
 
-      // Tarjeta "Sin contexto"
-      const noContextActivePill = !activeChatBranchId ? '<span class="rag-active-pill">ACTIVA</span>' : '';
-      const noContextCard = document.createElement('div');
-      noContextCard.className = `rag-branch-card ${!activeChatBranchId ? 'is-active-chat' : ''}`;
-      noContextCard.innerHTML = `
-        <div class="rag-branch-card-header">
-          <span class="rag-branch-card-title">🌿 Sin contexto (RAG desactivado)</span>
-          ${noContextActivePill}
-        </div>
-        <p class="rag-branch-card-desc">El modelo responderá únicamente con su conocimiento general sin consultar documentos locales.</p>
-        <div class="rag-branch-card-meta">
-          <span>⚪ Modo estándar</span>
-        </div>
-      `;
-      noContextCard.addEventListener('click', () => {
-        setActiveChatBranchId('');
-        renderActiveBranchTab();
-        updateToolbarRagButtonStatus();
-      });
-      grid.appendChild(noContextCard);
+      if (branches.length === 0) {
+        list.innerHTML = `
+          <div class="rag-empty-state">
+            <p>${t('rag_no_branches') || 'No hay ramas creadas. Crea una nueva rama en la pestaña "Gestión de Ramas" para organizar tus documentos.'}</p>
+          </div>
+        `;
+        updateStorageQuotaDisplay();
+        return;
+      }
 
-      // Tarjetas por cada rama
+      // Cajas con switch por cada rama
       for (const branch of branches) {
         const docs = await RagStorage.getDocumentsByBranch(branch.id).catch(() => []);
         const isCurrentActive = branch.id === activeChatBranchId;
@@ -193,27 +182,42 @@
         });
 
         const card = document.createElement('div');
-        card.className = `rag-branch-card ${isCurrentActive ? 'is-active-chat' : ''}`;
+        card.className = `rag-branch-toggle-card ${isCurrentActive ? 'is-active-chat' : ''}`;
         card.innerHTML = `
-          <div class="rag-branch-card-header">
-            <span class="rag-branch-card-title">📁 ${getMarkdown().escapeHtml(branch.name)}</span>
-            ${branchActivePill}
+          <div class="rag-branch-toggle-info">
+            <div class="rag-branch-toggle-title">
+              <span>📁 ${getMarkdown().escapeHtml(branch.name)}</span>
+              ${branchActivePill}
+            </div>
+            <p class="rag-branch-toggle-desc">${branch.description ? getMarkdown().escapeHtml(branch.description) : '<em>Sin descripción</em>'}</p>
+            <div class="rag-branch-toggle-meta">
+              <span>📄 ${docs.length} documentos</span>
+              <span>•</span>
+              <span>📑 ${totalChapters} capítulos</span>
+              <span>•</span>
+              <span>💾 ${formatBytes(totalSize)}</span>
+            </div>
           </div>
-          <p class="rag-branch-card-desc">${branch.description ? getMarkdown().escapeHtml(branch.description) : '<em>Sin descripción</em>'}</p>
-          <div class="rag-branch-card-meta">
-            <span>📄 ${docs.length} docs</span>
-            <span>•</span>
-            <span>📑 ${totalChapters} caps</span>
-            <span>•</span>
-            <span>💾 ${formatBytes(totalSize)}</span>
-          </div>
+          <label class="switch" title="${isCurrentActive ? 'Desactivar esta rama en el chat' : 'Activar esta rama en el chat'}">
+            <input type="checkbox" class="rag-branch-checkbox" data-branch-id="${branch.id}" ${isCurrentActive ? 'checked' : ''}>
+            <span class="slider"></span>
+          </label>
         `;
-        card.addEventListener('click', () => {
-          setActiveChatBranchId(branch.id);
-          renderActiveBranchTab();
-          updateToolbarRagButtonStatus();
-        });
-        grid.appendChild(card);
+
+        const checkbox = card.querySelector('.rag-branch-checkbox');
+        if (checkbox) {
+          checkbox.addEventListener('change', (e) => {
+            if (e.target.checked) {
+              setActiveChatBranchId(branch.id);
+            } else {
+              setActiveChatBranchId('');
+            }
+            renderActiveBranchTab();
+            updateToolbarRagButtonStatus();
+          });
+        }
+
+        list.appendChild(card);
       }
 
       updateStorageQuotaDisplay();
