@@ -58,6 +58,14 @@
     return null;
   }
 
+  function getContextManager() {
+    if (typeof window !== 'undefined' && window.ChatContextManager) return window.ChatContextManager;
+    if (typeof require !== 'undefined') {
+      try { return require('./context-manager.js'); } catch (e) {}
+    }
+    return null;
+  }
+
   /**
    * Representa una herramienta individual ejecutable (Tool).
    */
@@ -522,18 +530,25 @@
   }
 
   /**
-   * Orquestador Agéntico del Ciclo de Vida de Conversación (AgentCore).
-   * Gestiona el bucle agéntico multi-turno, protección de bucles infinitos, cancelación y contexto.
+   * Entorno de ejecución agéntico avanzado (AgentRuntime).
+   * Orquesta el ciclo de vida de razonamiento y acción (ReAct), múltiples pasos,
+   * control de tiempo/timeout, reintentos de herramientas, cancelación,
+   * detección de bucles infinitos, presupuestos de tokens y síntesis final.
    */
-  class AgentCore {
+  class AgentRuntime {
     constructor(options = {}) {
       this.registry = options.registry || new ToolRegistry();
       this.executor = options.executor || new ToolExecutor(this.registry);
-      this.maxTurns = options.maxTurns || 5;
+      this.maxSteps = options.maxSteps || options.maxTurns || 6;
+      this.timeoutMs = options.timeoutMs || 0; // 0 = sin límite global de tiempo
+      this.stepTimeoutMs = options.stepTimeoutMs || 60000; // 60s por paso
+      this.maxRetries = options.maxRetries !== undefined ? options.maxRetries : 1;
+      this.loopThreshold = options.loopThreshold || 2;
+      this.autoSynthesize = options.autoSynthesize !== false;
     }
 
     /**
-     * Genera una huella única para la llamada a herramienta para detectar bucles infinitos.
+     * Genera una huella única para la llamada a herramienta para detectar repeticiones cíclicas.
      */
     getToolCallFingerprint(toolCall) {
       if (!toolCall || !toolCall.function) return '';
@@ -545,9 +560,45 @@
     }
 
     /**
-     * Ejecuta el ciclo de vida conversacional completo de un turno del asistente.
+     * Ejecuta una llamada a herramienta con soporte de reintentos y captura de errores.
      */
-    async runConversationLoop(params = {}) {
+    async executeToolWithRetries(toolCall, context = {}, maxRetries = 0, onRetry = null) {
+      let attempts = 0;
+      let lastResult = null;
+
+      while (attempts <= maxRetries) {
+        if (context.signal && context.signal.aborted) {
+          return {
+            success: false,
+            toolName: toolCall?.function?.name || '',
+            error: 'Ejecución cancelada por el usuario.',
+            executionTimeMs: 0,
+            cancelled: true
+          };
+        }
+
+        lastResult = await this.executor.executeToolCall(toolCall, context);
+        if (lastResult.success) {
+          return lastResult;
+        }
+
+        attempts++;
+        if (attempts <= maxRetries && !lastResult.cancelled) {
+          if (typeof onRetry === 'function') {
+            onRetry(toolCall, attempts, maxRetries, lastResult.error);
+          }
+          // Pausa corta antes de reintentar
+          await new Promise(r => setTimeout(r, 50));
+        }
+      }
+
+      return lastResult;
+    }
+
+    /**
+     * Ejecuta el ciclo completo de ejecución agéntica multi-turno.
+     */
+    async execute(params = {}) {
       const {
         apiUrl,
         apiType,
@@ -562,254 +613,451 @@
         cacheInvalidated = false,
         cacheRevision = null,
         signal = null,
+        maxSteps = this.maxSteps,
+        timeoutMs = this.timeoutMs,
+        stepTimeoutMs = this.stepTimeoutMs,
+        maxRetries = this.maxRetries,
+        loopThreshold = this.loopThreshold,
+        autoSynthesize = this.autoSynthesize,
+        api: customApi = null,
         callbacks = {}
       } = params;
 
-      const API = getAPI();
+      const API = customApi || getAPI();
       if (!API || !API.streamChatCompletion) {
-        throw new Error('Módulo ChatAPI no disponible.');
+        throw new Error('Módulo ChatAPI no disponible para ejecución agéntica.');
       }
 
-      let turnIndex = 0;
+      const ContextManager = getContextManager();
+      const startTime = typeof performance !== 'undefined' ? performance.now() : Date.now();
+
+      // Configuración de cancelación y timeouts
+      let isTimedOut = false;
+      let isCancelled = false;
+      const internalAbortController = new AbortController();
+      let timeoutTimer = null;
+
+      if (timeoutMs > 0) {
+        timeoutTimer = setTimeout(() => {
+          isTimedOut = true;
+          internalAbortController.abort();
+          if (callbacks.onTimeout) {
+            callbacks.onTimeout(timeoutMs, stepIndex);
+          }
+        }, timeoutMs);
+      }
+
+      if (signal) {
+        if (signal.aborted) {
+          isCancelled = true;
+          internalAbortController.abort();
+        } else {
+          signal.addEventListener('abort', () => {
+            isCancelled = true;
+            internalAbortController.abort();
+            if (callbacks.onAbort) callbacks.onAbort();
+          });
+        }
+      }
+
+      const combinedSignal = internalAbortController.signal;
+
+      let stepIndex = 0;
       let workingMessages = [...messages];
       let finalAccumulatedText = '';
+      let finalReasoningText = '';
       let lastStats = null;
-      const executedTurnHistory = [];
+      const toolExecutions = [];
       const toolCallSignatures = [];
+      let status = 'completed';
+      let executionError = null;
 
-      while (turnIndex < this.maxTurns) {
-        if (signal && signal.aborted) {
-          if (callbacks.onAbort) callbacks.onAbort();
+      while (stepIndex < maxSteps) {
+        if (combinedSignal.aborted) {
+          status = isTimedOut ? 'timeout' : 'cancelled';
+          executionError = new Error(isTimedOut ? 'Tiempo límite de ejecución agéntica excedido.' : 'Ejecución agéntica cancelada por el usuario.');
           break;
         }
 
-        if (callbacks.onTurnStart) {
-          callbacks.onTurnStart(turnIndex);
+        if (callbacks.onStepStart) {
+          callbacks.onStepStart(stepIndex);
         }
 
-        // Obtener lista de herramientas habilitadas según el filtro
+        // 1. Optimización dinámica de presupuesto de contexto (Context Budget)
+        let stepMessages = workingMessages;
+        if (ContextManager && ContextManager.buildOptimizedContext) {
+          try {
+            const opt = ContextManager.buildOptimizedContext(workingMessages, {
+              model,
+              providerType: apiType
+            });
+            if (opt && opt.messages) {
+              stepMessages = opt.messages;
+            }
+          } catch (e) {
+            stepMessages = workingMessages;
+          }
+        }
+
+        // 2. Definición de herramientas activas
         const activeToolDefs = enableTools
           ? this.registry.getDefinitions(toolFilterOptions)
           : [];
 
-        let currentTurnText = '';
-        let turnToolCalls = null;
-        let turnStats = null;
+        let currentStepText = '';
+        let currentStepReasoning = '';
+        let stepToolCalls = null;
+        let stepStats = null;
         let streamError = null;
 
-        const isFirstTurn = turnIndex === 0;
-        const currentCacheInvalidated = isFirstTurn && cacheInvalidated;
+        const isFirstStep = stepIndex === 0;
+        const currentCacheInvalidated = isFirstStep && cacheInvalidated;
 
-        const streamResult = await API.streamChatCompletion({
-          apiUrl,
-          apiType,
-          apiKey,
-          model,
-          messages: workingMessages,
-          temperature,
-          reasoningEffort,
-          enableTools: activeToolDefs.length > 0,
-          enableAgentJs: toolFilterOptions.enableAgentJs !== false,
-          enableAgentWeb: toolFilterOptions.enableAgentWeb !== false,
-          enableAgentSearch: toolFilterOptions.enableAgentSearch !== false,
-          enableAgentChart: toolFilterOptions.enableAgentChart !== false,
-          enableContextCache,
-          cacheInvalidated: currentCacheInvalidated,
-          cacheRevision,
-          signal,
-
-          onReasoningChunk: (chunk, accumulated) => {
-            if (callbacks.onReasoningChunk) callbacks.onReasoningChunk(chunk, accumulated);
-          },
-          onLog: (logData) => {
-            if (callbacks.onLog) callbacks.onLog(logData);
-          },
-          onChunk: (fullTextSoFar, delta, stats) => {
-            currentTurnText = fullTextSoFar;
-            if (callbacks.onChunk) callbacks.onChunk(fullTextSoFar, delta, stats);
-          },
-          onDone: (finalText, stats, toolCalls) => {
-            currentTurnText = finalText || currentTurnText;
-            turnStats = stats;
-            turnToolCalls = toolCalls;
-          },
-          onError: (error) => {
-            streamError = error;
-            if (callbacks.onError) callbacks.onError(error);
-          }
-        });
-
-        if (streamError) {
-          return {
-            success: false,
-            error: streamError,
-            turnIndex,
-            history: workingMessages
-          };
-        }
-
-        if (streamResult) {
-          currentTurnText = streamResult.accumulatedText || currentTurnText;
-          turnToolCalls = streamResult.toolCalls || turnToolCalls;
-          turnStats = streamResult.stats || turnStats;
-        }
-
-        lastStats = turnStats || lastStats;
-
-        // Extraer tool calls de texto si no llegaron estructuradas
-        if ((!turnToolCalls || turnToolCalls.length === 0) && currentTurnText) {
-          if (API.extractToolCallsFromText) {
-            const textCalls = API.extractToolCallsFromText(currentTurnText);
-            if (textCalls && textCalls.length > 0) {
-              turnToolCalls = textCalls;
-            }
-          }
-        }
-
-        // Si no hay tool calls generadas, es la respuesta final -> finalizar el bucle
-        if (!turnToolCalls || turnToolCalls.length === 0) {
-          finalAccumulatedText = currentTurnText;
-          if (callbacks.onDone) {
-            callbacks.onDone(currentTurnText, lastStats, turnIndex);
-          }
-          return {
-            success: true,
-            finalText: currentTurnText,
-            turnsCount: turnIndex + 1,
-            stats: lastStats,
-            history: workingMessages
-          };
-        }
-
-        // Protección contra Bucles Infinitos: Analizar repetición de llamadas
-        const primaryCall = turnToolCalls[0];
-        const callFingerprint = this.getToolCallFingerprint(primaryCall);
-        const identicalCount = toolCallSignatures.filter(sig => sig === callFingerprint).length;
-
-        if (identicalCount >= 2) {
-          const loopWarning = `\n\n> ⚠️ *[Protección de Bucle Infinito]*: La herramienta \`${primaryCall.function.name}\` ha sido invocada 3 veces con los mismos parámetros. Se detiene la iteración automática.`;
-          currentTurnText = (currentTurnText || '') + loopWarning;
-          finalAccumulatedText = currentTurnText;
-
-          if (callbacks.onDone) {
-            callbacks.onDone(currentTurnText, lastStats, turnIndex);
-          }
-          return {
-            success: true,
-            finalText: currentTurnText,
-            turnsCount: turnIndex + 1,
-            stats: lastStats,
-            loopDetected: true,
-            history: workingMessages
-          };
-        }
-        toolCallSignatures.push(callFingerprint);
-
-        // Procesar la llamada a la herramienta con ToolExecutor
-        if (callbacks.onToolStart) {
-          const toolInstance = this.registry.getTool(primaryCall.function?.name);
-          callbacks.onToolStart(primaryCall, toolInstance, turnIndex);
-        }
-
-        const execResult = await this.executor.executeToolCall(primaryCall, { signal, ...params });
-
-        // Preparar contenido serializado para el mensaje de respuesta de la herramienta (role: 'tool')
-        let toolResponseContent = '';
-        if (execResult.success && execResult.result) {
-          toolResponseContent = typeof execResult.result === 'object'
-            ? JSON.stringify(execResult.result)
-            : String(execResult.result);
-        } else {
-          toolResponseContent = JSON.stringify({
-            success: false,
-            error: execResult.error || 'Error desconocido ejecutando la herramienta.'
-          });
-        }
-
-        if (callbacks.onToolComplete) {
-          callbacks.onToolComplete(primaryCall, execResult, toolResponseContent, turnIndex);
-        }
-
-        // Actualizar workingMessages emparejando estrictamente assistant tool_calls con tool result
-        const assistantTurnMsg = {
-          id: `msg_turn_${turnIndex}_assistant`,
-          role: 'assistant',
-          content: currentTurnText || null,
-          tool_calls: [primaryCall]
-        };
-
-        const toolResultMsg = {
-          id: `msg_turn_${turnIndex}_tool_${primaryCall.id || 'res'}`,
-          role: 'tool',
-          tool_call_id: primaryCall.id || `call_${Date.now()}`,
-          name: primaryCall.function?.name || 'tool',
-          content: toolResponseContent
-        };
-
-        workingMessages.push(assistantTurnMsg);
-        workingMessages.push(toolResultMsg);
-
-        executedTurnHistory.push({
-          turnIndex,
-          assistantMsg: assistantTurnMsg,
-          toolMsg: toolResultMsg,
-          execResult
-        });
-
-        turnIndex++;
-      }
-
-      // Si se alcanzó el límite máximo de iteraciones y el último mensaje fue de una herramienta,
-      // realizar una petición final de síntesis forzada (con enableTools: false) para que el modelo resuma.
-      if (workingMessages.length > 0 && workingMessages[workingMessages.length - 1].role === 'tool' && (!signal || !signal.aborted)) {
         try {
-          const synthResult = await API.streamChatCompletion({
+          const streamResult = await API.streamChatCompletion({
             apiUrl,
             apiType,
             apiKey,
             model,
-            messages: workingMessages,
+            messages: stepMessages,
             temperature,
             reasoningEffort,
-            enableTools: false,
+            enableTools: activeToolDefs.length > 0,
+            enableAgentJs: toolFilterOptions.enableAgentJs !== false,
+            enableAgentWeb: toolFilterOptions.enableAgentWeb !== false,
+            enableAgentSearch: toolFilterOptions.enableAgentSearch !== false,
+            enableAgentChart: toolFilterOptions.enableAgentChart !== false,
             enableContextCache,
-            signal,
+            cacheInvalidated: currentCacheInvalidated,
+            cacheRevision,
+            signal: combinedSignal,
+
+            onReasoningChunk: (chunk, accumulated) => {
+              currentStepReasoning = accumulated;
+              if (callbacks.onReasoningChunk) callbacks.onReasoningChunk(chunk, accumulated);
+            },
+            onLog: (logData) => {
+              if (callbacks.onLog) callbacks.onLog(logData);
+            },
             onChunk: (fullTextSoFar, delta, stats) => {
-              finalAccumulatedText = fullTextSoFar;
+              currentStepText = fullTextSoFar;
               if (callbacks.onChunk) callbacks.onChunk(fullTextSoFar, delta, stats);
             },
-            onDone: (finalText, stats) => {
-              finalAccumulatedText = finalText || finalAccumulatedText;
-              lastStats = stats || lastStats;
+            onDone: (finalText, stats, toolCalls, reasoning) => {
+              currentStepText = finalText || currentStepText;
+              currentStepReasoning = reasoning || currentStepReasoning;
+              stepStats = stats;
+              stepToolCalls = toolCalls;
+            },
+            onError: (error) => {
+              streamError = error;
+              if (callbacks.onError) callbacks.onError(error);
             }
           });
-          if (synthResult) {
-            finalAccumulatedText = synthResult.accumulatedText || finalAccumulatedText;
-            lastStats = synthResult.stats || lastStats;
+
+          if (streamError) {
+            if (combinedSignal.aborted) {
+              status = isTimedOut ? 'timeout' : 'cancelled';
+              executionError = new Error(isTimedOut ? 'Tiempo límite de ejecución agéntica excedido.' : 'Ejecución agéntica cancelada por el usuario.');
+            } else {
+              status = 'error';
+              executionError = streamError;
+              if (callbacks.onError) callbacks.onError(streamError);
+            }
+            break;
           }
-        } catch (e) {
-          console.warn('Error en turno de síntesis final:', e);
+
+          if (streamResult) {
+            currentStepText = streamResult.accumulatedText || currentStepText;
+            currentStepReasoning = streamResult.accumulatedReasoning || currentStepReasoning;
+            stepToolCalls = streamResult.toolCalls || stepToolCalls;
+            stepStats = streamResult.stats || stepStats;
+          }
+
+          lastStats = stepStats || lastStats;
+          if (currentStepReasoning) {
+            finalReasoningText += (finalReasoningText ? '\n' : '') + currentStepReasoning;
+          }
+
+          // Extraer tool calls de texto si no llegaron estructuradas
+          if ((!stepToolCalls || stepToolCalls.length === 0) && currentStepText) {
+            if (API.extractToolCallsFromText) {
+              const textCalls = API.extractToolCallsFromText(currentStepText);
+              if (textCalls && textCalls.length > 0) {
+                stepToolCalls = textCalls;
+              }
+            }
+          }
+
+          // Caso A: Sin llamadas a herramientas -> Turno final o necesidad de síntesis
+          if (!stepToolCalls || stepToolCalls.length === 0) {
+            // Si el texto devuelto está vacío y el paso previo fue una tool, forzar turno de síntesis
+            if ((!currentStepText || currentStepText.trim() === '') && stepIndex > 0 && workingMessages.length > 0 && workingMessages[workingMessages.length - 1].role === 'tool' && autoSynthesize && !combinedSignal.aborted) {
+              if (callbacks.onSynthesize) callbacks.onSynthesize(stepIndex);
+              try {
+                const synthRes = await API.streamChatCompletion({
+                  apiUrl,
+                  apiType,
+                  apiKey,
+                  model,
+                  messages: workingMessages,
+                  temperature,
+                  reasoningEffort,
+                  enableTools: false,
+                  enableContextCache,
+                  signal: combinedSignal,
+                  onChunk: (fullTextSoFar, delta, stats) => {
+                    currentStepText = fullTextSoFar;
+                    if (callbacks.onChunk) callbacks.onChunk(fullTextSoFar, delta, stats);
+                  },
+                  onDone: (finalText, stats) => {
+                    currentStepText = finalText || currentStepText;
+                    lastStats = stats || lastStats;
+                  }
+                });
+                if (synthRes && synthRes.accumulatedText) {
+                  currentStepText = synthRes.accumulatedText;
+                }
+              } catch (synthErr) {
+                if (callbacks.onLog) callbacks.onLog({ type: 'warn', text: `Auto-síntesis fallida: ${synthErr.message}` });
+              }
+            }
+
+            finalAccumulatedText = currentStepText;
+            if (callbacks.onStepDone) {
+              callbacks.onStepDone(stepIndex, {
+                type: 'final_response',
+                text: currentStepText,
+                stats: lastStats
+              });
+            }
+            status = 'completed';
+            break;
+          }
+
+          // Caso B: Llamada a herramienta detectada
+          const primaryCall = stepToolCalls[0];
+          const callFingerprint = this.getToolCallFingerprint(primaryCall);
+          const identicalCount = toolCallSignatures.filter(sig => sig === callFingerprint).length;
+
+          // Detección y protección contra bucles infinitos
+          if (identicalCount >= loopThreshold) {
+            status = 'loop_detected';
+            if (callbacks.onLoopDetected) {
+              callbacks.onLoopDetected(primaryCall, identicalCount + 1, stepIndex);
+            }
+            const loopWarning = `\n\n> ⚠️ *[Protección de Bucle Infinito]*: La herramienta \`${primaryCall.function?.name}\` ha sido invocada repetidamente (${identicalCount + 1} veces) con los mismos parámetros. Deteniendo ciclo de ejecución.`;
+            currentStepText = (currentStepText || '') + loopWarning;
+            finalAccumulatedText = currentStepText;
+
+            if (autoSynthesize && !combinedSignal.aborted) {
+              if (callbacks.onSynthesize) callbacks.onSynthesize(stepIndex);
+              try {
+                const synthRes = await API.streamChatCompletion({
+                  apiUrl,
+                  apiType,
+                  apiKey,
+                  model,
+                  messages: [
+                    ...workingMessages,
+                    { role: 'assistant', content: currentStepText }
+                  ],
+                  temperature,
+                  reasoningEffort,
+                  enableTools: false,
+                  enableContextCache,
+                  signal: combinedSignal,
+                  onChunk: (fullTextSoFar, delta, stats) => {
+                    finalAccumulatedText = fullTextSoFar;
+                    if (callbacks.onChunk) callbacks.onChunk(fullTextSoFar, delta, stats);
+                  },
+                  onDone: (finalText, stats) => {
+                    finalAccumulatedText = finalText || finalAccumulatedText;
+                    lastStats = stats || lastStats;
+                  }
+                });
+              } catch (e) {}
+            }
+            break;
+          }
+          toolCallSignatures.push(callFingerprint);
+
+          // Iniciar ejecución de la herramienta con soporte de reintentos
+          if (callbacks.onToolStart) {
+            const toolInstance = this.registry.getTool(primaryCall.function?.name);
+            callbacks.onToolStart(primaryCall, toolInstance, stepIndex);
+          }
+
+          const execResult = await this.executeToolWithRetries(
+            primaryCall,
+            { signal: combinedSignal, ...params },
+            maxRetries,
+            (tc, attempt, total, err) => {
+              if (callbacks.onRetry) {
+                callbacks.onRetry(tc, attempt, total, err, stepIndex);
+              }
+            }
+          );
+
+          let toolResponseContent = '';
+          if (execResult.success && execResult.result !== undefined) {
+            toolResponseContent = typeof execResult.result === 'object'
+              ? JSON.stringify(execResult.result)
+              : String(execResult.result);
+          } else {
+            toolResponseContent = JSON.stringify({
+              success: false,
+              error: execResult.error || 'Error desconocido ejecutando la herramienta.'
+            });
+            if (callbacks.onToolError) {
+              callbacks.onToolError(primaryCall, execResult.error, stepIndex);
+            }
+          }
+
+          if (callbacks.onToolComplete) {
+            callbacks.onToolComplete(primaryCall, execResult, toolResponseContent, stepIndex);
+          }
+
+          toolExecutions.push({
+            step: stepIndex,
+            toolName: primaryCall.function?.name || 'tool',
+            args: execResult.args || primaryCall.function?.arguments,
+            result: execResult.result,
+            success: execResult.success,
+            executionTimeMs: execResult.executionTimeMs || 0,
+            error: execResult.error || null
+          });
+
+          // Actualizar historial asegurando el emparejamiento estricto assistant(tool_calls) <-> tool(results)
+          const assistantMsg = {
+            id: `msg_turn_${stepIndex}_assistant`,
+            role: 'assistant',
+            content: currentStepText || null,
+            tool_calls: [primaryCall]
+          };
+
+          const toolMsg = {
+            id: `msg_turn_${stepIndex}_tool_${primaryCall.id || 'res'}`,
+            role: 'tool',
+            tool_call_id: primaryCall.id || `call_${Date.now()}`,
+            name: primaryCall.function?.name || 'tool',
+            content: toolResponseContent
+          };
+
+          workingMessages.push(assistantMsg);
+          workingMessages.push(toolMsg);
+
+          if (callbacks.onStepDone) {
+            callbacks.onStepDone(stepIndex, {
+              type: 'tool_execution',
+              toolCall: primaryCall,
+              execResult,
+              assistantMsg,
+              toolMsg
+            });
+          }
+
+          stepIndex++;
+        } catch (err) {
+          if (combinedSignal.aborted) {
+            status = isTimedOut ? 'timeout' : 'cancelled';
+            executionError = new Error(isTimedOut ? 'Tiempo límite de ejecución agéntica excedido.' : 'Ejecución agéntica cancelada por el usuario.');
+          } else {
+            status = 'error';
+            executionError = err;
+            if (callbacks.onError) callbacks.onError(err);
+          }
+          break;
         }
       }
 
       // Si se alcanzó el límite máximo de iteraciones
+      if (stepIndex >= maxSteps && status === 'completed') {
+        status = 'max_steps';
+        if (workingMessages.length > 0 && workingMessages[workingMessages.length - 1].role === 'tool' && autoSynthesize && !combinedSignal.aborted) {
+          if (callbacks.onSynthesize) callbacks.onSynthesize(stepIndex);
+          try {
+            const synthRes = await API.streamChatCompletion({
+              apiUrl,
+              apiType,
+              apiKey,
+              model,
+              messages: workingMessages,
+              temperature,
+              reasoningEffort,
+              enableTools: false,
+              enableContextCache,
+              signal: combinedSignal,
+              onChunk: (fullTextSoFar, delta, stats) => {
+                finalAccumulatedText = fullTextSoFar;
+                if (callbacks.onChunk) callbacks.onChunk(fullTextSoFar, delta, stats);
+              },
+              onDone: (finalText, stats) => {
+                finalAccumulatedText = finalText || finalAccumulatedText;
+                lastStats = stats || lastStats;
+              }
+            });
+            if (synthRes && synthRes.accumulatedText) {
+              finalAccumulatedText = synthRes.accumulatedText;
+            }
+          } catch (e) {}
+        }
+      }
+
+      if (timeoutTimer) {
+        clearTimeout(timeoutTimer);
+      }
+
+      const endTime = typeof performance !== 'undefined' ? performance.now() : Date.now();
+      const totalElapsedMs = Math.round(endTime - startTime);
+
       if (callbacks.onDone) {
-        callbacks.onDone(finalAccumulatedText, lastStats, turnIndex);
+        callbacks.onDone(finalAccumulatedText, lastStats, stepIndex);
       }
 
       return {
-        success: true,
+        success: status === 'completed' || status === 'max_steps' || status === 'loop_detected',
+        status,
         finalText: finalAccumulatedText,
-        turnsCount: turnIndex,
-        maxTurnsReached: true,
-        stats: lastStats,
-        history: workingMessages
+        reasoningText: finalReasoningText,
+        stepsCount: stepIndex,
+        maxStepsReached: status === 'max_steps',
+        loopDetected: status === 'loop_detected',
+        toolExecutions,
+        history: workingMessages,
+        stats: {
+          totalTimeMs: totalElapsedMs,
+          tokens: lastStats?.tokens || 0,
+          tokensPerSec: lastStats?.tokensPerSec || 0,
+          cachedTokens: lastStats?.cachedTokens || 0,
+          ttftSec: lastStats?.ttftSec || 0
+        },
+        error: executionError
       };
+    }
+  }
+
+  /**
+   * Orquestador Agéntico del Ciclo de Vida de Conversación (AgentCore).
+   * Mantiene compatibilidad total con la API previa extendiendo AgentRuntime.
+   */
+  class AgentCore extends AgentRuntime {
+    constructor(options = {}) {
+      super(options);
+      this.maxTurns = this.maxSteps;
+    }
+
+    /**
+     * Alias compatible con la firma previa runConversationLoop.
+     */
+    async runConversationLoop(params = {}) {
+      return this.execute(params);
     }
   }
 
   const globalRegistry = new ToolRegistry();
   const globalExecutor = new ToolExecutor(globalRegistry);
+  const globalRuntime = new AgentRuntime({ registry: globalRegistry, executor: globalExecutor });
   const globalAgent = new AgentCore({ registry: globalRegistry, executor: globalExecutor });
 
   return {
@@ -818,9 +1066,11 @@
     BuiltinToolProvider,
     ToolRegistry,
     ToolExecutor,
+    AgentRuntime,
     AgentCore,
     registry: globalRegistry,
     executor: globalExecutor,
+    runtime: globalRuntime,
     agent: globalAgent
   };
 });

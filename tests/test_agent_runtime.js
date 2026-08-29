@@ -1,0 +1,298 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+
+const AgentCoreModule = require('../js/agent-core.js');
+const { AgentRuntime, Tool, ToolRegistry, ToolExecutor } = AgentCoreModule;
+
+test('AgentRuntime - Tool call normal con resolución y respuesta final', async () => {
+  const registry = new ToolRegistry();
+  registry.registerTool(new Tool({
+    name: 'calculate_sum',
+    description: 'Suma dos números',
+    parameters: {
+      type: 'object',
+      properties: {
+        a: { type: 'number' },
+        b: { type: 'number' }
+      },
+      required: ['a', 'b']
+    },
+    handler: async (args) => {
+      return { sum: Number(args.a) + Number(args.b) };
+    }
+  }));
+
+  // Simular mock de API
+  let callCount = 0;
+  const mockApi = {
+    streamChatCompletion: async (params) => {
+      callCount++;
+      if (callCount === 1) {
+        // Paso 1: El modelo decide llamar a la herramienta
+        const toolCall = {
+          id: 'call_sum_123',
+          type: 'function',
+          function: {
+            name: 'calculate_sum',
+            arguments: JSON.stringify({ a: 15, b: 27 })
+          }
+        };
+        if (params.onChunk) params.onChunk('Calculando la suma...', 'Calculando la suma...', { tokens: 10 });
+        if (params.onDone) await params.onDone('Calculando la suma...', { tokens: 10 }, [toolCall]);
+        return { accumulatedText: 'Calculando la suma...', toolCalls: [toolCall], stats: { tokens: 10 } };
+      } else {
+        // Paso 2: El modelo recibe el resultado y redacta la respuesta final
+        const lastToolMsg = params.messages.find(m => m.role === 'tool');
+        assert.ok(lastToolMsg, 'El mensaje de la herramienta debe estar en el contexto');
+        const toolRes = JSON.parse(lastToolMsg.content);
+        assert.equal(toolRes.sum, 42);
+
+        const finalText = `El resultado de la suma es ${toolRes.sum}.`;
+        if (params.onChunk) params.onChunk(finalText, finalText, { tokens: 25 });
+        if (params.onDone) await params.onDone(finalText, { tokens: 25 }, []);
+        return { accumulatedText: finalText, toolCalls: [], stats: { tokens: 25 } };
+      }
+    }
+  };
+
+  const runtime = new AgentRuntime({ registry });
+  const result = await runtime.execute({
+    api: mockApi,
+    messages: [{ role: 'user', content: '¿Cuánto es 15 + 27?' }]
+  });
+
+  assert.equal(result.success, true);
+  assert.equal(result.status, 'completed');
+  assert.equal(result.stepsCount, 1);
+  assert.equal(result.toolExecutions.length, 1);
+  assert.equal(result.toolExecutions[0].toolName, 'calculate_sum');
+  assert.equal(result.toolExecutions[0].result.sum, 42);
+  assert.match(result.finalText, /42/);
+  assert.equal(result.history.length, 3); // user, assistant(call), tool(res)
+});
+
+test('AgentRuntime - Múltiples pasos agénticos secuenciales', async () => {
+  const registry = new ToolRegistry();
+  registry.registerTool(new Tool({
+    name: 'get_user_id',
+    handler: async () => ({ userId: 'usr_8899' })
+  }));
+  registry.registerTool(new Tool({
+    name: 'get_user_orders',
+    handler: async (args) => ({ orders: [`order_1_for_${args.userId}`, `order_2_for_${args.userId}`] })
+  }));
+
+  let step = 0;
+  const mockApi = {
+    streamChatCompletion: async (params) => {
+      step++;
+      if (step === 1) {
+        const tc = { id: 'call_uid', function: { name: 'get_user_id', arguments: '{}' } };
+        return { accumulatedText: '', toolCalls: [tc], stats: { tokens: 8 } };
+      } else if (step === 2) {
+        const tc = { id: 'call_orders', function: { name: 'get_user_orders', arguments: '{"userId":"usr_8899"}' } };
+        return { accumulatedText: '', toolCalls: [tc], stats: { tokens: 16 } };
+      } else {
+        return { accumulatedText: 'El usuario tiene 2 pedidos registrados.', toolCalls: [], stats: { tokens: 24 } };
+      }
+    }
+  };
+
+  const runtime = new AgentRuntime({ registry, maxSteps: 5 });
+  const result = await runtime.execute({
+    api: mockApi,
+    messages: [{ role: 'user', content: 'Dame los pedidos del usuario activo' }]
+  });
+
+  assert.equal(result.success, true);
+  assert.equal(result.status, 'completed');
+  assert.equal(result.stepsCount, 2);
+  assert.equal(result.toolExecutions.length, 2);
+  assert.equal(result.toolExecutions[0].toolName, 'get_user_id');
+  assert.equal(result.toolExecutions[1].toolName, 'get_user_orders');
+  assert.equal(result.finalText, 'El usuario tiene 2 pedidos registrados.');
+});
+
+test('AgentRuntime - Error de herramienta capturado y recuperación en siguiente paso', async () => {
+  const registry = new ToolRegistry();
+  let attempts = 0;
+  registry.registerTool(new Tool({
+    name: 'unstable_tool',
+    handler: async () => {
+      attempts++;
+      throw new Error('Servicio de base de datos no disponible');
+    }
+  }));
+
+  let step = 0;
+  const mockApi = {
+    streamChatCompletion: async (params) => {
+      step++;
+      if (step === 1) {
+        const tc = { id: 'call_err_1', function: { name: 'unstable_tool', arguments: '{}' } };
+        return { accumulatedText: '', toolCalls: [tc], stats: { tokens: 10 } };
+      } else {
+        const toolMsg = params.messages.find(m => m.role === 'tool');
+        assert.ok(toolMsg);
+        const parsed = JSON.parse(toolMsg.content);
+        assert.equal(parsed.success, false);
+        assert.match(parsed.error, /base de datos/);
+
+        return { accumulatedText: 'No pude obtener los datos debido a un error en el servicio.', toolCalls: [], stats: { tokens: 30 } };
+      }
+    }
+  };
+
+  const runtime = new AgentRuntime({ registry, maxRetries: 1 });
+  const result = await runtime.execute({
+    api: mockApi,
+    messages: [{ role: 'user', content: 'Consulta la base de datos' }]
+  });
+
+  assert.equal(result.success, true);
+  assert.equal(result.status, 'completed');
+  assert.equal(result.toolExecutions[0].success, false);
+  assert.match(result.toolExecutions[0].error, /base de datos/);
+  assert.equal(attempts, 2); // 1 original + 1 retry
+  assert.match(result.finalText, /error en el servicio/);
+});
+
+test('AgentRuntime - Timeout global de ejecución agéntica', async () => {
+  const registry = new ToolRegistry();
+  registry.registerTool(new Tool({
+    name: 'slow_query',
+    handler: async (args, ctx) => {
+      await new Promise(r => setTimeout(r, 200));
+      return { data: 'ok' };
+    }
+  }));
+
+  const mockApi = {
+    streamChatCompletion: async (params) => {
+      // Simular latencia de red en streaming
+      await new Promise((resolve, reject) => {
+        const timer = setTimeout(() => resolve({ accumulatedText: '', toolCalls: [{ function: { name: 'slow_query', arguments: '{}' } }] }), 100);
+        if (params.signal) {
+          params.signal.addEventListener('abort', () => {
+            clearTimeout(timer);
+            reject(new Error('Abortado'));
+          });
+        }
+      });
+    }
+  };
+
+  const runtime = new AgentRuntime({ registry, timeoutMs: 30 });
+  const result = await runtime.execute({
+    api: mockApi,
+    messages: [{ role: 'user', content: 'Haz algo muy lento' }]
+  });
+
+  assert.equal(result.success, false);
+  assert.equal(result.status, 'timeout');
+  assert.match(result.error.message, /Tiempo límite/);
+});
+
+test('AgentRuntime - Cancelación manual mediante AbortSignal', async () => {
+  const registry = new ToolRegistry();
+  registry.registerTool(new Tool({
+    name: 'dummy_tool',
+    handler: async () => ({ ok: true })
+  }));
+
+  const controller = new AbortController();
+  const mockApi = {
+    streamChatCompletion: async (params) => {
+      controller.abort(); // Cancelar durante la petición
+      throw new Error('Petición abortada');
+    }
+  };
+
+  const runtime = new AgentRuntime({ registry });
+  const result = await runtime.execute({
+    api: mockApi,
+    signal: controller.signal,
+    messages: [{ role: 'user', content: 'Hola' }]
+  });
+
+  assert.equal(result.success, false);
+  assert.equal(result.status, 'cancelled');
+  assert.match(result.error.message, /cancelada/);
+});
+
+test('AgentRuntime - Detección de bucles infinitos (Loop Detection)', async () => {
+  const registry = new ToolRegistry();
+  registry.registerTool(new Tool({
+    name: 'same_search',
+    handler: async () => ({ results: ['noticia 1'] })
+  }));
+
+  let loopDetectedEventFired = false;
+  const mockApi = {
+    streamChatCompletion: async (params) => {
+      if (params.enableTools === false) {
+        return { accumulatedText: 'Resumen final tras detección de bucle.', toolCalls: [] };
+      }
+      // El modelo insiste en emitir exactamente la misma llamada
+      const tc = { id: 'call_loop', function: { name: 'same_search', arguments: '{"q":"mismo_termino"}' } };
+      return { accumulatedText: '', toolCalls: [tc], stats: { tokens: 10 } };
+    }
+  };
+
+  const runtime = new AgentRuntime({ registry, loopThreshold: 2, maxSteps: 8 });
+  const result = await runtime.execute({
+    api: mockApi,
+    messages: [{ role: 'user', content: 'Busca noticias' }],
+    callbacks: {
+      onLoopDetected: () => {
+        loopDetectedEventFired = true;
+      }
+    }
+  });
+
+  assert.equal(result.status, 'loop_detected');
+  assert.equal(result.loopDetected, true);
+  assert.equal(loopDetectedEventFired, true);
+  assert.match(result.finalText, /bucle/i);
+});
+
+test('AgentRuntime - Auto-síntesis cuando el modelo finaliza con texto vacío tras ejecutar tools', async () => {
+  const registry = new ToolRegistry();
+  registry.registerTool(new Tool({
+    name: 'fetch_stock',
+    handler: async () => ({ price: 215.4 })
+  }));
+
+  let step = 0;
+  let synthRequested = false;
+
+  const mockApi = {
+    streamChatCompletion: async (params) => {
+      step++;
+      if (step === 1) {
+        // Paso 1: Ejecutar tool
+        const tc = { id: 'call_stock', function: { name: 'fetch_stock', arguments: '{}' } };
+        return { accumulatedText: '', toolCalls: [tc], stats: { tokens: 10 } };
+      } else if (step === 2) {
+        // Paso 2: El modelo devuelve cadena vacía y 0 toolCalls (comportamiento de Gemini reportado)
+        return { accumulatedText: '', toolCalls: [], stats: { tokens: 5 } };
+      } else if (step === 3) {
+        // Paso 3: Auto-síntesis forzada con enableTools: false
+        assert.equal(params.enableTools, false);
+        synthRequested = true;
+        return { accumulatedText: 'El precio actual de la acción es $215.4.', toolCalls: [], stats: { tokens: 20 } };
+      }
+    }
+  };
+
+  const runtime = new AgentRuntime({ registry, autoSynthesize: true });
+  const result = await runtime.execute({
+    api: mockApi,
+    messages: [{ role: 'user', content: 'Dame el precio de la acción' }]
+  });
+
+  assert.equal(result.success, true);
+  assert.equal(result.status, 'completed');
+  assert.equal(synthRequested, true);
+  assert.equal(result.finalText, 'El precio actual de la acción es $215.4.');
+});
