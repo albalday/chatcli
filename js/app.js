@@ -48,6 +48,7 @@
     enableAgentChart: true,
     enableContextCache: true,
     enableRawLogs: false,
+    enableDebugMessages: false,
     sendDateTime: true
   };
 
@@ -127,9 +128,24 @@
       btnCloseDebug: document.getElementById('btn-close-debug'),
       debugLogContent: document.getElementById('debug-log-content'),
       debugTabs: document.querySelectorAll('.debug-tab'),
+      chkEnableDebugMessages: document.getElementById('chk-enable-debug-messages'),
+      debugMessagesStatusBadge: document.getElementById('debug-messages-status-badge'),
       debugRawBar: document.getElementById('debug-raw-bar'),
       chkEnableRaw: document.getElementById('chk-enable-raw'),
       rawStatusBadge: document.getElementById('raw-status-badge'),
+
+      // Modal de Depuración de Mensajes Salientes (Interceptor)
+      debugInterceptorDialog: document.getElementById('debug-interceptor-dialog'),
+      btnCloseDebugModal: document.getElementById('btn-close-debug-modal'),
+      debugModalEndpointBadge: document.getElementById('debug-modal-endpoint-badge'),
+      btnFormatDebugJson: document.getElementById('btn-format-debug-json'),
+      btnCopyDebugJson: document.getElementById('btn-copy-debug-json'),
+      txtDebugPayload: document.getElementById('txt-debug-payload'),
+      debugJsonError: document.getElementById('debug-json-error'),
+      chkModalDebugActive: document.getElementById('chk-modal-debug-active'),
+      btnDebugCancel: document.getElementById('btn-debug-cancel'),
+      btnDebugSendDisable: document.getElementById('btn-debug-send-disable'),
+      btnDebugSend: document.getElementById('btn-debug-send'),
 
       // Adjuntos
       btnAttachFile: document.getElementById('btn-attach-file'),
@@ -1141,6 +1157,135 @@
     });
   }
 
+  function syncDebugMessagesState(enabled, persist = true) {
+    appConfig.enableDebugMessages = Boolean(enabled);
+    if (elements.chkEnableDebugMessages) {
+      elements.chkEnableDebugMessages.checked = appConfig.enableDebugMessages;
+    }
+    if (elements.debugMessagesStatusBadge) {
+      elements.debugMessagesStatusBadge.textContent = appConfig.enableDebugMessages ? 'ON' : 'OFF';
+      elements.debugMessagesStatusBadge.className = 'debug-status-pill ' + (appConfig.enableDebugMessages ? 'on' : 'off');
+    }
+    if (elements.chkModalDebugActive) {
+      elements.chkModalDebugActive.checked = appConfig.enableDebugMessages;
+    }
+    if (persist && Storage.saveConfig) {
+      Storage.saveConfig(appConfig);
+    }
+  }
+
+  function openDebugInterceptorModal({ endpoint, headers, payload }) {
+    return new Promise((resolve) => {
+      if (!elements.debugInterceptorDialog) {
+        return resolve({ cancel: false, modifiedPayload: null });
+      }
+
+      if (elements.debugModalEndpointBadge) {
+        elements.debugModalEndpointBadge.textContent = `POST ${endpoint}`;
+      }
+      if (elements.txtDebugPayload) {
+        elements.txtDebugPayload.value = JSON.stringify(payload, null, 2);
+      }
+      if (elements.debugJsonError) {
+        elements.debugJsonError.style.display = 'none';
+        elements.debugJsonError.textContent = '';
+      }
+      if (elements.chkModalDebugActive) {
+        elements.chkModalDebugActive.checked = Boolean(appConfig.enableDebugMessages);
+      }
+
+      function cleanup() {
+        if (elements.debugInterceptorDialog.open) {
+          elements.debugInterceptorDialog.close();
+        }
+        if (elements.btnDebugCancel) elements.btnDebugCancel.onclick = null;
+        if (elements.btnDebugSend) elements.btnDebugSend.onclick = null;
+        if (elements.btnDebugSendDisable) elements.btnDebugSendDisable.onclick = null;
+        if (elements.btnCloseDebugModal) elements.btnCloseDebugModal.onclick = null;
+        if (elements.btnFormatDebugJson) elements.btnFormatDebugJson.onclick = null;
+        if (elements.btnCopyDebugJson) elements.btnCopyDebugJson.onclick = null;
+      }
+
+      if (elements.btnFormatDebugJson) {
+        elements.btnFormatDebugJson.onclick = () => {
+          try {
+            const parsed = JSON.parse(elements.txtDebugPayload.value);
+            elements.txtDebugPayload.value = JSON.stringify(parsed, null, 2);
+            if (elements.debugJsonError) elements.debugJsonError.style.display = 'none';
+          } catch (err) {
+            if (elements.debugJsonError) {
+              elements.debugJsonError.textContent = t('debug_json_error_invalid', { error: err.message });
+              elements.debugJsonError.style.display = 'block';
+            }
+          }
+        };
+      }
+
+      if (elements.btnCopyDebugJson) {
+        elements.btnCopyDebugJson.onclick = async () => {
+          try {
+            await navigator.clipboard.writeText(elements.txtDebugPayload.value);
+            const span = elements.btnCopyDebugJson.querySelector('span');
+            if (span) {
+              const old = span.textContent;
+              span.textContent = '✅ Copiado';
+              setTimeout(() => { span.textContent = old; }, 1500);
+            }
+          } catch (e) {}
+        };
+      }
+
+      function handleSend(disableDebug = false) {
+        let editedJson = null;
+        const raw = elements.txtDebugPayload.value.trim();
+        if (raw) {
+          try {
+            editedJson = JSON.parse(raw);
+          } catch (err) {
+            if (elements.debugJsonError) {
+              elements.debugJsonError.textContent = t('debug_json_error_invalid', { error: err.message });
+              elements.debugJsonError.style.display = 'block';
+            }
+            return;
+          }
+        }
+
+        if (disableDebug) {
+          syncDebugMessagesState(false);
+        } else if (elements.chkModalDebugActive) {
+          syncDebugMessagesState(elements.chkModalDebugActive.checked);
+        }
+
+        cleanup();
+        resolve({ cancel: false, modifiedPayload: editedJson });
+      }
+
+      if (elements.btnDebugSend) {
+        elements.btnDebugSend.onclick = () => handleSend(false);
+      }
+      if (elements.btnDebugSendDisable) {
+        elements.btnDebugSendDisable.onclick = () => handleSend(true);
+      }
+      if (elements.btnDebugCancel) {
+        elements.btnDebugCancel.onclick = () => {
+          cleanup();
+          resolve({ cancel: true });
+        };
+      }
+      if (elements.btnCloseDebugModal) {
+        elements.btnCloseDebugModal.onclick = () => {
+          cleanup();
+          resolve({ cancel: true });
+        };
+      }
+
+      elements.debugInterceptorDialog.showModal();
+      if (elements.txtDebugPayload) {
+        elements.txtDebugPayload.focus();
+      }
+    });
+  }
+
   function updateUIFromConfig() {
     if (elements.currentServerUrl) {
       elements.currentServerUrl.textContent = appConfig.apiUrl || 'http://localhost:1234/v1';
@@ -1178,6 +1323,8 @@
     if (elements.settingEnableRawLogs) {
       elements.settingEnableRawLogs.checked = isRawEnabled;
     }
+
+    syncDebugMessagesState(appConfig.enableDebugMessages, false);
   }
 
   function autoResizeTextarea() {
@@ -1612,6 +1759,10 @@
         cacheRevision: sessionCacheRevision,
         signal: currentAbortController.signal,
 
+        onBeforeRequest: appConfig.enableDebugMessages ? async function ({ endpoint, headers, payload }) {
+          return await openDebugInterceptorModal({ endpoint, headers, payload });
+        } : null,
+
         onReasoningChunk: function (chunk) {
           addDebugLog('thinking', chunk);
           setDebugStatus('streaming', t('debug_status_thinking'));
@@ -1641,6 +1792,18 @@
           streamError = error;
         }
       });
+
+      if (streamResult && streamResult.cancelled) {
+        if (!currentTurnText && turnBlock.parentNode) {
+          turnBlock.parentNode.removeChild(turnBlock);
+        }
+        if (wrapper && !wrapper.querySelector('.agentic-turn-block') && wrapper.parentNode) {
+          wrapper.parentNode.removeChild(wrapper);
+        }
+        setDebugStatus('idle');
+        finishGeneration();
+        return;
+      }
 
       if (sessionCacheInvalidated) {
         sessionCacheInvalidated = false;
@@ -3448,6 +3611,12 @@
     if (elements.settingEnableRawLogs) {
       elements.settingEnableRawLogs.addEventListener('change', () => {
         syncRawLogsState(elements.settingEnableRawLogs.checked);
+      });
+    }
+
+    if (elements.chkEnableDebugMessages) {
+      elements.chkEnableDebugMessages.addEventListener('change', () => {
+        syncDebugMessagesState(elements.chkEnableDebugMessages.checked);
       });
     }
 

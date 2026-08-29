@@ -37,3 +37,86 @@ test('Api - Estimación aproximada de tokens', () => {
   const count = Api.estimateTokens(shortText);
   assert.ok(count > 0 && count < 10);
 });
+
+test('Api - Intercepción y modificación de payload con onBeforeRequest (Debug Messages)', async () => {
+  let interceptedEndpoint = '';
+  const originalFetch = global.fetch;
+  let fetchBodySent = null;
+
+  global.fetch = async (url, options) => {
+    fetchBodySent = JSON.parse(options.body);
+    return {
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'text/event-stream' }),
+      body: {
+        getReader: () => {
+          let called = false;
+          return {
+            read: async () => {
+              if (!called) {
+                called = true;
+                const chunk = 'data: {"choices":[{"delta":{"content":"Respuesta"}}]}\n\ndata: [DONE]\n\n';
+                return { done: false, value: new TextEncoder().encode(chunk) };
+              }
+              return { done: true, value: undefined };
+            }
+          };
+        }
+      }
+    };
+  };
+
+  try {
+    const res = await Api.streamChatCompletion({
+      apiUrl: 'http://localhost:1234/v1',
+      apiType: 'openai',
+      model: 'test-model',
+      messages: [{ role: 'user', content: 'Pregunta original' }],
+      onBeforeRequest: async ({ endpoint, payload }) => {
+        interceptedEndpoint = endpoint;
+        return {
+          cancel: false,
+          modifiedPayload: {
+            ...payload,
+            messages: [{ role: 'user', content: 'Pregunta editada en Debug' }]
+          }
+        };
+      }
+    });
+
+    assert.ok(interceptedEndpoint.includes('/chat/completions'));
+    assert.equal(fetchBodySent.messages[0].content, 'Pregunta editada en Debug');
+    assert.equal(res.accumulatedText, 'Respuesta');
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test('Api - Cancelación de envío desde onBeforeRequest sin invocar fetch (Debug Messages)', async () => {
+  let fetchCalled = false;
+  const originalFetch = global.fetch;
+
+  global.fetch = async () => {
+    fetchCalled = true;
+    throw new Error('No debe realizar fetch si fue cancelado');
+  };
+
+  try {
+    const res = await Api.streamChatCompletion({
+      apiUrl: 'http://localhost:1234/v1',
+      apiType: 'openai',
+      model: 'test-model',
+      messages: [{ role: 'user', content: 'Prueba cancelada' }],
+      onBeforeRequest: async () => {
+        return { cancel: true };
+      }
+    });
+
+    assert.equal(fetchCalled, false);
+    assert.equal(res.cancelled, true);
+    assert.equal(res.aborted, true);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});

@@ -121,9 +121,9 @@
             <span data-i18n="btn_clear_chat">Limpiar</span>
           </button>
 
-          <button type="button" id="btn-toggle-debug" class="btn-tool-mini btn-debug-toggle" data-i18n-title="btn_logs_title" title="Abrir/Cerrar panel lateral de logs y razonamiento">
+          <button type="button" id="btn-toggle-debug" class="btn-tool-mini btn-debug-toggle" data-i18n-title="btn_logs_title" title="Abrir/Cerrar panel lateral de logs y depuración">
             <span class="debug-toggle-icon">📜</span>
-            <span data-i18n="btn_logs">Logs</span>
+            <span data-i18n="btn_logs">Logs y Debug</span>
           </button>
           <button type="button" id="btn-open-settings" class="btn-tool-mini btn-config-mini" data-i18n-title="btn_settings_title" title="Abrir configuración de API y Modelo">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -201,7 +201,7 @@
     <div class="debug-panel-header">
       <div class="debug-title">
         <span class="debug-badge-icon">📜</span>
-        <span class="debug-badge-text" data-i18n="debug_panel_title">Logs & Razonamiento</span>
+        <span class="debug-badge-text" data-i18n="debug_panel_title">Logs y Debug</span>
         <span id="debug-status-indicator" class="debug-status-indicator idle">Inactivo</span>
       </div>
       <div class="debug-actions">
@@ -210,6 +210,18 @@
         <button type="button" id="btn-toggle-autoscroll" class="btn-debug-action active" data-i18n-title="btn_autoscroll_title" title="Auto-scroll activado">⬇️</button>
         <button type="button" id="btn-close-debug" class="btn-debug-action btn-close-panel" data-i18n-title="btn_close_debug_title" title="Cerrar panel de logs">✕</button>
       </div>
+    </div>
+
+    <!-- Barra superior de depuración de mensajes (Debug messages) -->
+    <div class="debug-controls-bar">
+      <div class="debug-toggle-wrapper">
+        <label class="switch switch-sm" data-i18n-title="debug_messages_toggle_title" title="Activar/Desactivar depuración interactiva de mensajes salientes">
+          <input type="checkbox" id="chk-enable-debug-messages">
+          <span class="slider"></span>
+        </label>
+        <span class="debug-toggle-label" data-i18n="debug_messages_toggle">Debug messages</span>
+      </div>
+      <span id="debug-messages-status-badge" class="debug-status-pill off">OFF</span>
     </div>
 
     <!-- Pestañas de filtrado de logs -->
@@ -607,6 +619,57 @@
 
       <div class="modal-footer">
         <button type="button" id="btn-cancel-export" class="btn-secondary" data-i18n="btn_close">Cerrar</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Modal de Depuración de Mensajes Salientes (Debug Messages Interceptor) -->
+  <dialog id="debug-interceptor-dialog" class="debug-interceptor-modal">
+    <div class="modal-header">
+      <div class="modal-title">
+        <span style="font-size: 1.15rem;">🛠️</span>
+        <h3 data-i18n="debug_modal_title">Debug de Mensaje Saliente</h3>
+      </div>
+      <button type="button" id="btn-close-debug-modal" class="modal-btn-close" title="Cancelar envío">✕</button>
+    </div>
+    
+    <div class="debug-modal-body">
+      <div class="debug-modal-info">
+        <p data-i18n="debug_modal_desc">
+          Revisa o modifica el payload JSON antes de enviarlo al servidor. Puedes editar cualquier mensaje, parámetros o herramientas.
+        </p>
+      </div>
+
+      <div class="debug-editor-wrapper">
+        <div class="debug-editor-header">
+          <span id="debug-modal-endpoint-badge" class="debug-endpoint-badge">POST /v1/chat/completions</span>
+          <div class="debug-editor-actions">
+            <button type="button" id="btn-format-debug-json" class="btn-tool-mini" title="Formatear JSON">
+              <span data-i18n="btn_format_json">✨ Formatear</span>
+            </button>
+            <button type="button" id="btn-copy-debug-json" class="btn-tool-mini" title="Copiar todo al portapapeles">
+              <span data-i18n="btn_copy_all">📋 Copiar todo</span>
+            </button>
+          </div>
+        </div>
+        <textarea id="txt-debug-payload" class="debug-payload-textarea" spellcheck="false" wrap="off"></textarea>
+        <div id="debug-json-error" class="debug-json-error" style="display: none;"></div>
+      </div>
+
+      <div class="debug-modal-footer">
+        <div class="debug-modal-footer-left">
+          <label class="switch switch-sm" data-i18n-title="debug_messages_toggle_title" title="Activar/Desactivar depuración interactiva de mensajes salientes">
+            <input type="checkbox" id="chk-modal-debug-active" checked>
+            <span class="slider"></span>
+          </label>
+          <span class="debug-toggle-label" data-i18n="debug_messages_toggle">Debug messages</span>
+        </div>
+
+        <div class="debug-modal-footer-actions">
+          <button type="button" id="btn-debug-cancel" class="btn-secondary" data-i18n="btn_cancel">Cancelar</button>
+          <button type="button" id="btn-debug-send-disable" class="btn-secondary-action" data-i18n="btn_send_and_stop_debug">Enviar y parar debug</button>
+          <button type="button" id="btn-debug-send" class="btn-primary" data-i18n="btn_send">Enviar</button>
+        </div>
       </div>
     </div>
   </dialog>

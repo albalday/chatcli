@@ -419,6 +419,7 @@
       cacheInvalidated = false,
       cacheRevision = null,
       signal,
+      onBeforeRequest,
       onChunk,
       onReasoningChunk,
       onToolCallDelta,
@@ -473,6 +474,36 @@
       stream: true,
       temperature: parseFloat(temperature) || 0.7
     };
+
+    if (onBeforeRequest) {
+      try {
+        const debugResult = await onBeforeRequest({ endpoint, headers, payload });
+        if (debugResult && debugResult.cancel) {
+          if (onLog) {
+            onLog({
+              type: 'info',
+              text: '🛑 Envío de petición cancelado por el usuario en el depurador de mensajes.'
+            });
+          }
+          if (onError) {
+            onError('Envío cancelado en depurador de mensajes.');
+          }
+          return {
+            aborted: true,
+            cancelled: true,
+            text: '',
+            toolCalls: null,
+            stats: null
+          };
+        }
+        if (debugResult && debugResult.modifiedPayload) {
+          Object.keys(payload).forEach(k => delete payload[k]);
+          Object.assign(payload, debugResult.modifiedPayload);
+        }
+      } catch (err) {
+        console.warn('ChatAPI: Error en callback onBeforeRequest:', err);
+      }
+    }
 
     if (enableContextCache && cacheInvalidated && onLog) {
       onLog({

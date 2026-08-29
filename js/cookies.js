@@ -39,6 +39,7 @@
     enableAgentChart: true,
     enableContextCache: true,
     enableRawLogs: false,
+    enableDebugMessages: false,
     sendDateTime: true
   };
 
@@ -152,6 +153,7 @@
     const enableAgentChart = getStorageItem('enableAgentChart');
     const enableContextCache = getStorageItem('enableContextCache');
     const enableRawLogs = getStorageItem('enableRawLogs');
+    const enableDebugMessages = getStorageItem('enableDebugMessages');
     const sendDateTime = getStorageItem('sendDateTime');
     const modelReasoningConfigRaw = getStorageItem('modelReasoningConfig');
 
@@ -208,6 +210,7 @@
       enableAgentChart: parseBool(enableAgentChart, DEFAULT_CONFIG.enableAgentChart),
       enableContextCache: parseBool(enableContextCache, DEFAULT_CONFIG.enableContextCache),
       enableRawLogs: parseBool(enableRawLogs, DEFAULT_CONFIG.enableRawLogs),
+      enableDebugMessages: parseBool(enableDebugMessages, DEFAULT_CONFIG.enableDebugMessages),
       sendDateTime: parseBool(sendDateTime, DEFAULT_CONFIG.sendDateTime)
     };
   }
@@ -231,6 +234,7 @@
     if (config.enableAgentChart !== undefined) setStorageItem('enableAgentChart', String(config.enableAgentChart));
     if (config.enableContextCache !== undefined) setStorageItem('enableContextCache', String(config.enableContextCache));
     if (config.enableRawLogs !== undefined) setStorageItem('enableRawLogs', String(config.enableRawLogs));
+    if (config.enableDebugMessages !== undefined) setStorageItem('enableDebugMessages', String(config.enableDebugMessages));
     if (config.sendDateTime !== undefined) setStorageItem('sendDateTime', String(config.sendDateTime));
   }
 

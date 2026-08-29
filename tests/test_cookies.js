@@ -11,6 +11,7 @@ test('Storage - Configuración por defecto', () => {
   assert.equal(defaults.language, 'es');
   assert.equal(defaults.enableContextCache, true);
   assert.equal(defaults.enableRawLogs, false);
+  assert.equal(defaults.enableDebugMessages, false);
 });
 
 test('Storage - Guardar y recuperar valores en memoria/storage', () => {
