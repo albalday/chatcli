@@ -630,7 +630,10 @@
         <span style="font-size: 1.15rem;">🛠️</span>
         <h3 data-i18n="debug_modal_title">Debug de Mensaje Saliente</h3>
       </div>
-      <button type="button" id="btn-close-debug-modal" class="modal-btn-close" title="Cancelar envío">✕</button>
+      <div class="modal-header-actions">
+        <button type="button" id="btn-maximize-debug-modal" class="modal-btn-action" data-i18n-title="btn_maximize_title" title="Maximizar / Restaurar">⛶</button>
+        <button type="button" id="btn-close-debug-modal" class="modal-btn-close" title="Cancelar envío">✕</button>
+      </div>
     </div>
     
     <div class="debug-modal-body">
@@ -657,14 +660,6 @@
       </div>
 
       <div class="debug-modal-footer">
-        <div class="debug-modal-footer-left">
-          <label class="switch switch-sm" data-i18n-title="debug_messages_toggle_title" title="Activar/Desactivar depuración interactiva de mensajes salientes">
-            <input type="checkbox" id="chk-modal-debug-active" checked>
-            <span class="slider"></span>
-          </label>
-          <span class="debug-toggle-label" data-i18n="debug_messages_toggle">Debug messages</span>
-        </div>
-
         <div class="debug-modal-footer-actions">
           <button type="button" id="btn-debug-cancel" class="btn-secondary" data-i18n="btn_cancel">Cancelar</button>
           <button type="button" id="btn-debug-send-disable" class="btn-secondary-action" data-i18n="btn_send_and_stop_debug">Enviar y parar debug</button>

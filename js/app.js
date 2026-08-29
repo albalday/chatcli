@@ -136,13 +136,13 @@
 
       // Modal de Depuración de Mensajes Salientes (Interceptor)
       debugInterceptorDialog: document.getElementById('debug-interceptor-dialog'),
+      btnMaximizeDebugModal: document.getElementById('btn-maximize-debug-modal'),
       btnCloseDebugModal: document.getElementById('btn-close-debug-modal'),
       debugModalEndpointBadge: document.getElementById('debug-modal-endpoint-badge'),
       btnFormatDebugJson: document.getElementById('btn-format-debug-json'),
       btnCopyDebugJson: document.getElementById('btn-copy-debug-json'),
       txtDebugPayload: document.getElementById('txt-debug-payload'),
       debugJsonError: document.getElementById('debug-json-error'),
-      chkModalDebugActive: document.getElementById('chk-modal-debug-active'),
       btnDebugCancel: document.getElementById('btn-debug-cancel'),
       btnDebugSendDisable: document.getElementById('btn-debug-send-disable'),
       btnDebugSend: document.getElementById('btn-debug-send'),
@@ -1166,9 +1166,6 @@
       elements.debugMessagesStatusBadge.textContent = appConfig.enableDebugMessages ? 'ON' : 'OFF';
       elements.debugMessagesStatusBadge.className = 'debug-status-pill ' + (appConfig.enableDebugMessages ? 'on' : 'off');
     }
-    if (elements.chkModalDebugActive) {
-      elements.chkModalDebugActive.checked = appConfig.enableDebugMessages;
-    }
     if (persist && Storage.saveConfig) {
       Storage.saveConfig(appConfig);
     }
@@ -1178,6 +1175,12 @@
     return new Promise((resolve) => {
       if (!elements.debugInterceptorDialog) {
         return resolve({ cancel: false, modifiedPayload: null });
+      }
+
+      let isMaximized = false;
+      elements.debugInterceptorDialog.classList.remove('maximized');
+      if (elements.btnMaximizeDebugModal) {
+        elements.btnMaximizeDebugModal.textContent = '⛶';
       }
 
       if (elements.debugModalEndpointBadge) {
@@ -1190,20 +1193,27 @@
         elements.debugJsonError.style.display = 'none';
         elements.debugJsonError.textContent = '';
       }
-      if (elements.chkModalDebugActive) {
-        elements.chkModalDebugActive.checked = Boolean(appConfig.enableDebugMessages);
-      }
 
       function cleanup() {
         if (elements.debugInterceptorDialog.open) {
           elements.debugInterceptorDialog.close();
         }
+        elements.debugInterceptorDialog.classList.remove('maximized');
+        if (elements.btnMaximizeDebugModal) elements.btnMaximizeDebugModal.onclick = null;
         if (elements.btnDebugCancel) elements.btnDebugCancel.onclick = null;
         if (elements.btnDebugSend) elements.btnDebugSend.onclick = null;
         if (elements.btnDebugSendDisable) elements.btnDebugSendDisable.onclick = null;
         if (elements.btnCloseDebugModal) elements.btnCloseDebugModal.onclick = null;
         if (elements.btnFormatDebugJson) elements.btnFormatDebugJson.onclick = null;
         if (elements.btnCopyDebugJson) elements.btnCopyDebugJson.onclick = null;
+      }
+
+      if (elements.btnMaximizeDebugModal) {
+        elements.btnMaximizeDebugModal.onclick = () => {
+          isMaximized = !isMaximized;
+          elements.debugInterceptorDialog.classList.toggle('maximized', isMaximized);
+          elements.btnMaximizeDebugModal.textContent = isMaximized ? '🗗' : '⛶';
+        };
       }
 
       if (elements.btnFormatDebugJson) {
@@ -1252,8 +1262,6 @@
 
         if (disableDebug) {
           syncDebugMessagesState(false);
-        } else if (elements.chkModalDebugActive) {
-          syncDebugMessagesState(elements.chkModalDebugActive.checked);
         }
 
         cleanup();
