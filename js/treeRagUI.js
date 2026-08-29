@@ -546,10 +546,10 @@
     try {
       // Callback de progreso en tiempo real
       const onProgress = (event) => {
-        const { fileIndex, totalFiles, fileName, status, message, errorDetails } = event;
-        const percent = Math.round((fileIndex / totalFiles) * 100);
-        progressBarFill.style.width = `${percent}%`;
-        progressSummaryTitle.textContent = `Procesando documento ${fileIndex} de ${totalFiles}...`;
+        const { fileIndex, totalFiles, fileName, status, message, percent, errorDetails } = event;
+        const currentPercent = typeof percent === 'number' ? percent : Math.round((fileIndex / totalFiles) * 100);
+        progressBarFill.style.width = `${currentPercent}%`;
+        progressSummaryTitle.textContent = message || `Procesando documento ${fileIndex + 1} de ${totalFiles} (${currentPercent}%)...`;
 
         const row = fileRowMap.get(fileName);
         if (row) {
@@ -564,7 +564,7 @@
               badgeHtml = '<span class="rag-status-badge status-extracting">📄 Extrayendo PDF</span>';
               break;
             case 'generating_summaries':
-              badgeHtml = '<span class="rag-status-badge status-summaries">🧠 Generando resúmenes...</span>';
+              badgeHtml = `<span class="rag-status-badge status-summaries">${getMarkdown().escapeHtml(message || '🧠 Generando resúmenes...')}</span>`;
               break;
             case 'saving':
               badgeHtml = '<span class="rag-status-badge status-saving">💾 Guardando...</span>';

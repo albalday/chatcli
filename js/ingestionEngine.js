@@ -209,13 +209,14 @@
   // ==========================================================================
 
   /**
-   * Divide un documento extenso en fragmentos/capítulos candidatos por títulos o páginas.
+   * Divide un documento extenso en fragmentos/capítulos candidatos coherentes por títulos o páginas,
+   * unificando subsecciones pequeñas y delimitando el número total de capítulos (15 a 35 por documento).
    */
-  function partitionTextIntoHeuristicChapters(text, maxCharsPerChapter = 5000) {
+  function partitionTextIntoHeuristicChapters(text, maxCharsOrTarget = 25) {
     if (!text) return [];
 
     const lines = text.split('\n');
-    const sections = [];
+    const rawSections = [];
     let currentTitle = 'Introducción / Información General';
     let currentLines = [];
 
@@ -231,13 +232,13 @@
       if (isHeading) {
         const textSoFar = currentLines.join('\n').trim();
         if (textSoFar.length > 0) {
-          sections.push({
+          rawSections.push({
             title: currentTitle,
             content: textSoFar
           });
           currentLines = [];
         }
-        currentTitle = line.replace(/^#+\s*/, '').replace(/---/g, '').replace(/[\[\]]/g, '').trim() || `Sección ${sections.length + 1}`;
+        currentTitle = line.replace(/^#+\s*/, '').replace(/---/g, '').replace(/[\[\]]/g, '').trim() || `Sección ${rawSections.length + 1}`;
         currentLines.push(rawLine);
       } else {
         currentLines.push(rawLine);
@@ -245,65 +246,75 @@
     }
 
     if (currentLines.join('\n').trim().length > 0) {
-      sections.push({
+      rawSections.push({
         title: currentTitle,
         content: currentLines.join('\n').trim()
       });
     }
 
-    // Si aún hay secciones demasiado grandes, dividirlas por párrafos y líneas
+    const totalLen = text.length;
+    const targetChapters = (typeof maxCharsOrTarget === 'number' && maxCharsOrTarget <= 100) ? maxCharsOrTarget : 25;
+    const maxChapterSize = (typeof maxCharsOrTarget === 'number' && maxCharsOrTarget > 100)
+      ? maxCharsOrTarget
+      : (totalLen > 300000 ? Math.max(35000, Math.floor(totalLen / targetChapters)) : 25000);
+
+    // Si el documento ya tiene un número razonable de secciones (<= targetChapters), mantenerlas
+    let sectionsToProcess = rawSections;
+
+    if (rawSections.length > targetChapters) {
+      const minSize = Math.max(8000, Math.floor(totalLen / (targetChapters * 1.5)));
+      const maxSize = maxChapterSize;
+
+      const coalesced = [];
+      let curChunk = [];
+      let curChunkTitle = '';
+      let curChunkLen = 0;
+
+      for (const sec of rawSections) {
+        if (curChunkLen + sec.content.length > maxSize && curChunkLen >= minSize) {
+          coalesced.push({
+            title: curChunkTitle || ('Capítulo ' + (coalesced.length + 1)),
+            content: curChunk.join('\n\n').trim()
+          });
+          curChunk = [sec.content];
+          curChunkTitle = sec.title;
+          curChunkLen = sec.content.length;
+        } else {
+          if (!curChunkTitle) curChunkTitle = sec.title;
+          curChunk.push(sec.content);
+          curChunkLen += sec.content.length;
+        }
+      }
+
+      if (curChunk.length > 0) {
+        coalesced.push({
+          title: curChunkTitle || ('Capítulo ' + (coalesced.length + 1)),
+          content: curChunk.join('\n\n').trim()
+        });
+      }
+      sectionsToProcess = coalesced;
+    }
+
+    // Subdividir cualquier sección que exceda maxChapterSize
     const finalChapters = [];
-    for (const sec of sections) {
-      if (sec.content.length <= maxCharsPerChapter) {
+    for (const sec of sectionsToProcess) {
+      if (sec.content.length <= maxChapterSize) {
         finalChapters.push(sec);
       } else {
-        const paragraphs = sec.content.split(/\n+/);
-        let subChunk = [];
-        let subIndex = 1;
-        let currentLen = 0;
-
-        for (const p of paragraphs) {
-          if (p.length > maxCharsPerChapter) {
-            if (subChunk.length > 0) {
-              finalChapters.push({
-                title: `${sec.title} (Parte ${subIndex})`,
-                content: subChunk.join('\n').trim()
-              });
-              subIndex++;
-              subChunk = [];
-              currentLen = 0;
-            }
-            let start = 0;
-            while (start < p.length) {
-              const piece = p.slice(start, start + maxCharsPerChapter);
-              finalChapters.push({
-                title: `${sec.title} (Parte ${subIndex})`,
-                content: piece.trim()
-              });
-              subIndex++;
-              start += maxCharsPerChapter;
-            }
-            continue;
+        let start = 0;
+        let part = 1;
+        while (start < sec.content.length) {
+          let end = Math.min(start + maxChapterSize, sec.content.length);
+          if (end < sec.content.length) {
+            const lastNl = sec.content.lastIndexOf('\n', end);
+            if (lastNl > start + 500) end = lastNl;
           }
-
-          if (currentLen + p.length + 1 > maxCharsPerChapter && subChunk.length > 0) {
-            finalChapters.push({
-              title: `${sec.title} (Parte ${subIndex})`,
-              content: subChunk.join('\n').trim()
-            });
-            subIndex++;
-            subChunk = [p];
-            currentLen = p.length;
-          } else {
-            subChunk.push(p);
-            currentLen += p.length + 1;
-          }
-        }
-        if (subChunk.length > 0) {
           finalChapters.push({
-            title: subIndex > 1 ? `${sec.title} (Parte ${subIndex})` : sec.title,
-            content: subChunk.join('\n').trim()
+            title: `${sec.title} (Parte ${part})`,
+            content: sec.content.slice(start, end).trim()
           });
+          part++;
+          start = end;
         }
       }
     }
@@ -422,7 +433,7 @@
    * @param {Object|Function} llmClient - Cliente de invocación del LLM.
    * @returns {Promise<{ globalSummary: string, chapters: Array<{ chapterId: number, title: string, summary: string, content: string, charCount: number }> }>}
    */
-  async function analyzeDocumentStructure(text, filename, llmClient) {
+  async function analyzeDocumentStructure(text, filename, llmClient, onChapterProgress) {
     const cleanText = normalizeExtractedText(text);
     if (!cleanText) {
       return {
@@ -485,15 +496,25 @@ No incluyas texto explicativo antes ni después del bloque JSON.`;
       }
     }
 
-    // Estrategia para documentos extensos o si falló el análisis directo:
-    // Partición heurística + síntesis de capítulos uno a uno
-    const candidateChapters = partitionTextIntoHeuristicChapters(cleanText, 3500);
+    // Estrategia para documentos extensos:
+    // Partición heurística coalescida (15 a 35 capítulos) + síntesis ágil con muestreo representativo
+    const candidateChapters = partitionTextIntoHeuristicChapters(cleanText, 25);
     const processedChapters = [];
     const chapterSummaries = [];
+    const totalChapters = candidateChapters.length;
 
-    for (let i = 0; i < candidateChapters.length; i++) {
+    for (let i = 0; i < totalChapters; i++) {
       const cand = candidateChapters[i];
-      const chapPrompt = `Sintetiza de forma muy concisa (2 a 4 frases técnicas) el siguiente fragmento del documento "${filename}" titulado "${cand.title}":\n\n${cand.content}`;
+
+      if (typeof onChapterProgress === 'function') {
+        try {
+          onChapterProgress(i + 1, totalChapters, cand.title);
+        } catch (e) {}
+      }
+
+      // Muestreo ágil de los primeros 4.000 caracteres del capítulo para síntesis rápida y ligera
+      const sampleText = cand.content.length > 4000 ? (cand.content.slice(0, 4000) + '...') : cand.content;
+      const chapPrompt = `Sintetiza de forma muy concisa (2 a 4 frases técnicas) el siguiente fragmento del documento "${filename}" titulado "${cand.title}":\n\n${sampleText}`;
 
       let chapSummary = '';
       try {
@@ -513,10 +534,11 @@ No incluyas texto explicativo antes ni después del bloque JSON.`;
       });
     }
 
-    // Generar resumen global a partir de los resúmenes de los capítulos
+    // Generar resumen global a partir de los micro-resúmenes
     let globalSummary = '';
     try {
-      const globalPrompt = `A partir de los siguientes resúmenes de secciones del documento "${filename}", redacta un resumen global conciso y cohesivo (100-200 palabras):\n\n${chapterSummaries.join('\n')}`;
+      const summariesBlock = chapterSummaries.join('\n').slice(0, 4000);
+      const globalPrompt = `A partir de los siguientes resúmenes de secciones del documento "${filename}", redacta un resumen global conciso y cohesivo (100-200 palabras):\n\n${summariesBlock}`;
       globalSummary = await callLLM(llmClient, globalPrompt, 'Eres un redactor técnico. Responde únicamente con el resumen global.');
       globalSummary = globalSummary.trim();
     } catch (e) {
@@ -566,15 +588,19 @@ No incluyas texto explicativo antes ni después del bloque JSON.`;
       throw new Error('Se requiere un branchId válido para la ingesta de documentos.');
     }
 
-    function emitProgress(fileIndex, fileName, status, message, errorDetails) {
+    function emitProgress(fileIndex, fileName, status, message, errorDetails, percent) {
       if (typeof onProgressCallback === 'function') {
         try {
+          const calcPercent = typeof percent === 'number'
+            ? percent
+            : Math.round(((fileIndex) / totalFiles) * 100);
           onProgressCallback({
             fileIndex,
             totalFiles,
             fileName,
             status,
             message,
+            percent: Math.min(100, Math.max(0, calcPercent)),
             errorDetails
           });
         } catch (cbErr) {
@@ -601,11 +627,13 @@ No incluyas texto explicativo antes ni después del bloque JSON.`;
       const fileType = detectFileType(file);
 
       try {
+        const basePercent = Math.round((index / totalFiles) * 100);
+
         // Paso 1: Lectura y Extracción
         if (fileType === 'pdf') {
-          emitProgress(index, fileName, 'extracting_pdf', `Extrayendo texto del PDF "${fileName}" (${index + 1}/${totalFiles})...`);
+          emitProgress(index, fileName, 'extracting_pdf', `Extrayendo texto del PDF "${fileName}" (${index + 1}/${totalFiles})...`, null, basePercent + 5);
         } else {
-          emitProgress(index, fileName, 'reading', `Leyendo archivo "${fileName}" (${index + 1}/${totalFiles})...`);
+          emitProgress(index, fileName, 'reading', `Leyendo archivo "${fileName}" (${index + 1}/${totalFiles})...`, null, basePercent + 5);
         }
 
         let rawText = '';
@@ -621,12 +649,24 @@ No incluyas texto explicativo antes ni después del bloque JSON.`;
           throw new Error(`El archivo "${fileName}" no contiene texto extraíble.`);
         }
 
-        // Paso 2: Análisis Estructurado y Generación de Resúmenes vía LLM
-        emitProgress(index, fileName, 'generating_summaries', `Analizando estructura y generando resúmenes con el modelo (${index + 1}/${totalFiles})...`);
-        const structure = await analyzeDocumentStructure(rawText, fileName, llmClient);
+        // Paso 2: Análisis Estructurado y Generación de Resúmenes vía LLM con seguimiento granular de capítulos
+        emitProgress(index, fileName, 'generating_summaries', `Analizando estructura y preparando resúmenes (${index + 1}/${totalFiles})...`, null, basePercent + 15);
+
+        const structure = await analyzeDocumentStructure(rawText, fileName, llmClient, (curChap, totChaps, chapTitle) => {
+          const chapFrac = curChap / totChaps;
+          const currentPct = Math.round(basePercent + 15 + (chapFrac * 70 / totalFiles));
+          emitProgress(
+            index,
+            fileName,
+            'generating_summaries',
+            `🧠 Resumiendo Cap. ${curChap}/${totChaps} (${Math.round(chapFrac * 100)}%): "${chapTitle}"`,
+            null,
+            currentPct
+          );
+        });
 
         // Paso 3: Persistencia en IndexedDB
-        emitProgress(index, fileName, 'saving', `Guardando capítulos en base de datos local (${index + 1}/${totalFiles})...`);
+        emitProgress(index, fileName, 'saving', `Guardando capítulos en base de datos local (${index + 1}/${totalFiles})...`, null, basePercent + 90);
         const docPayload = {
           branchId: branchId,
           title: fileName,
@@ -639,7 +679,7 @@ No incluyas texto explicativo antes ni después del bloque JSON.`;
         const savedDoc = await RagStorage.saveDocument(docPayload);
 
         // Paso 4: Completado para este archivo
-        emitProgress(index, fileName, 'completed', `Documento "${fileName}" procesado y guardado con éxito (${index + 1}/${totalFiles}).`);
+        emitProgress(index, fileName, 'completed', `Documento "${fileName}" procesado y guardado con éxito (${index + 1}/${totalFiles}).`, null, Math.round(((index + 1) / totalFiles) * 100));
         result.processed++;
         result.documents.push(savedDoc);
 
