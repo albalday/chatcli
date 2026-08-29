@@ -5,7 +5,7 @@ const TreeRagUI = require('../js/treeRagUI.js');
 
 test('TreeRagUI - Exporta métodos principales', () => {
   assert.equal(typeof TreeRagUI.initTreeRagUI, 'function');
-  assert.equal(typeof TreeRagUI.refreshBranchSelector, 'function');
+  assert.equal(typeof TreeRagUI.updateToolbarRagButtonStatus, 'function');
   assert.equal(typeof TreeRagUI.renderBranchesList, 'function');
   assert.equal(typeof TreeRagUI.renderBranchWorkspace, 'function');
   assert.equal(typeof TreeRagUI.openDocumentStructureViewer, 'function');

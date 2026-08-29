@@ -3960,6 +3960,91 @@ input:checked + .slider:before {
   color: var(--primary-color);
 }
 
+.btn-rag-mini.is-active {
+  background-color: rgba(16, 185, 129, 0.12);
+  border-color: #10b981;
+  color: #10b981;
+  font-weight: 600;
+}
+
+.rag-toolbar-badge-dot {
+  font-size: 0.6rem;
+  color: #10b981;
+  margin-left: 2px;
+}
+
+.rag-sidebar-active-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 0.75rem;
+  border-radius: var(--radius-md);
+  margin-bottom: 0.5rem;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-surface);
+}
+
+.rag-sidebar-active-status.has-active {
+  background-color: rgba(16, 185, 129, 0.08);
+  border-color: #10b981;
+}
+
+.rag-sidebar-active-status.is-disabled {
+  opacity: 0.75;
+  background-color: var(--bg-surface);
+}
+
+.rag-active-status-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.rag-status-icon {
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.rag-status-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.rag-status-label {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.rag-status-branch-name {
+  font-size: 0.8rem;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.btn-rag-deactivate-sm {
+  padding: 0.2rem 0.45rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  border: 1px solid #ef4444;
+  background-color: transparent;
+  color: #ef4444;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.btn-rag-deactivate-sm:hover {
+  background-color: #ef4444;
+  color: #fff;
+}
+
 /* 2. Modal de Gestión de Ramas (Tree RAG Modal) */
 .tree-rag-modal {
   max-width: 920px;

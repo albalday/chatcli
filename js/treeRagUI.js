@@ -78,43 +78,45 @@
   let isQueueRunning = false;
 
   /**
-   * Actualiza las opciones del selector desplegable de ramas en la cabecera del chat.
+   * Actualiza el estado visual y título del botón RAG en la barra superior.
    */
-  async function refreshBranchSelector(activeBranchId = null) {
-    const selector = document.getElementById('select-rag-branch');
-    if (!selector) return;
+  async function updateToolbarRagButtonStatus() {
+    if (typeof document === 'undefined') return;
+    const btn = document.getElementById('btn-open-tree-rag');
+    if (!btn) return;
 
-    const RagStorage = getRagStorage();
-    if (!RagStorage) return;
-
-    try {
-      const branches = await RagStorage.getBranches();
-      const currentVal = activeBranchId !== null ? activeBranchId : selector.value;
-
-      selector.innerHTML = '';
-      
-      const defaultOpt = document.createElement('option');
-      defaultOpt.value = '';
-      defaultOpt.textContent = t('rag_branch_default') || '🌿 Sin contexto (RAG desactivado)';
-      selector.appendChild(defaultOpt);
-
-      for (const branch of branches) {
-        const opt = document.createElement('option');
-        opt.value = branch.id;
-        opt.textContent = `📁 ${branch.name}`;
-        selector.appendChild(opt);
+    const activeBranchId = getActiveChatBranchId();
+    if (activeBranchId) {
+      btn.classList.add('is-active');
+      const RagStorage = getRagStorage();
+      let branchName = '';
+      if (RagStorage && RagStorage.getBranchById) {
+        const b = await RagStorage.getBranchById(activeBranchId).catch(() => null);
+        if (b) branchName = b.name;
       }
-
-      selector.value = currentVal || '';
-    } catch (err) {
-      console.warn('ChatTreeRagUI: Error al recargar selector de ramas:', err);
+      btn.title = branchName
+        ? `Base de Conocimiento (Rama activa: "${branchName}")`
+        : 'Base de Conocimiento (RAG Activo)';
+      btn.innerHTML = '<span>🌿</span><span data-i18n="btn_tree_rag">Conocimiento</span><span class="rag-toolbar-badge-dot" title="RAG Activo">●</span>';
+    } else {
+      btn.classList.remove('is-active');
+      btn.title = 'Gestionar Base de Conocimiento por Ramas (RAG Jerárquico)';
+      btn.innerHTML = '<span>🌿</span><span data-i18n="btn_tree_rag">Conocimiento</span>';
     }
+  }
+
+  /**
+   * Alias de compatibilidad para refrescar estado del selector/botón.
+   */
+  async function refreshBranchSelector() {
+    return await updateToolbarRagButtonStatus();
   }
 
   /**
    * Renderiza la lista de ramas en el panel izquierdo del modal.
    */
   async function renderBranchesList() {
+    if (typeof document === 'undefined') return;
     const listContainer = document.getElementById('rag-branches-list');
     if (!listContainer) return;
 
@@ -125,13 +127,46 @@
       const branches = await RagStorage.getBranches();
       listContainer.innerHTML = '';
       updateStorageQuotaDisplay();
+      updateToolbarRagButtonStatus();
+
+      const activeChatBranchId = getActiveChatBranchId();
+      const activeBranchObj = activeChatBranchId ? branches.find(b => b.id === activeChatBranchId) : null;
+      const deactivateBtnHtml = activeChatBranchId
+        ? '<button type="button" id="btn-rag-deactivate-all" class="btn-rag-deactivate-sm" title="Desactivar RAG en chat">Desactivar</button>'
+        : '';
+
+      // Tarjeta de estado activo y botón de desactivación rápida en la barra lateral
+      const statusCard = document.createElement('div');
+      statusCard.className = `rag-sidebar-active-status ${activeChatBranchId ? 'has-active' : 'is-disabled'}`;
+      statusCard.innerHTML = `
+        <div class="rag-active-status-info">
+          <span class="rag-status-icon">${activeChatBranchId ? '🌿' : '⚪'}</span>
+          <div class="rag-status-text">
+            <span class="rag-status-label">${activeChatBranchId ? (t('rag_active_label') || 'Rama Activa en Chat:') : (t('rag_inactive_label') || 'RAG Desactivado')}</span>
+            <strong class="rag-status-branch-name">${activeBranchObj ? getMarkdown().escapeHtml(activeBranchObj.name) : (t('rag_no_context') || 'Sin contexto documental')}</strong>
+          </div>
+        </div>
+        ${deactivateBtnHtml}
+      `;
+
+      if (activeChatBranchId) {
+        const btnDeact = statusCard.querySelector('#btn-rag-deactivate-all');
+        if (btnDeact) {
+          btnDeact.addEventListener('click', (e) => {
+            e.stopPropagation();
+            setActiveChatBranchId('');
+            renderBranchesList();
+            if (selectedBranchId) renderBranchWorkspace(selectedBranchId);
+          });
+        }
+      }
+      listContainer.appendChild(statusCard);
 
       if (branches.length === 0) {
-        listContainer.innerHTML = `
-          <div class="rag-empty-state">
-            <p>${t('rag_no_branches') || 'No hay ramas creadas. Crea una nueva rama para organizar tus documentos.'}</p>
-          </div>
-        `;
+        const emptyDiv = document.createElement('div');
+        emptyDiv.className = 'rag-empty-state';
+        emptyDiv.innerHTML = `<p>${t('rag_no_branches') || 'No hay ramas creadas. Crea una nueva rama para organizar tus documentos.'}</p>`;
+        listContainer.appendChild(emptyDiv);
         selectedBranchId = null;
         renderBranchWorkspace(null);
         return;
@@ -141,8 +176,6 @@
       if (!selectedBranchId || !branches.some(b => b.id === selectedBranchId)) {
         selectedBranchId = branches[0].id;
       }
-
-      const activeChatBranchId = getActiveChatBranchId();
 
       branches.forEach((branch) => {
         const item = document.createElement('div');
@@ -771,6 +804,7 @@
       cfg.activeRagBranchId = branchId || '';
       Storage.saveConfig(cfg);
     }
+    updateToolbarRagButtonStatus();
   }
 
   /**
@@ -781,7 +815,6 @@
     const modalDialog = document.getElementById('tree-rag-modal');
     const btnCloseModal = document.getElementById('btn-close-tree-rag');
     const btnCloseModalFooter = document.getElementById('btn-close-tree-rag-footer');
-    const branchSelector = document.getElementById('select-rag-branch');
     const btnNewBranch = document.getElementById('btn-rag-new-branch');
     const btnImportBranch = document.getElementById('btn-rag-import-branch');
     const importFileInput = document.getElementById('rag-import-file-input');
@@ -817,15 +850,6 @@
       });
     }
 
-    if (branchSelector) {
-      branchSelector.addEventListener('change', (e) => {
-        setActiveChatBranchId(e.target.value);
-        if (modalDialog && modalDialog.open) {
-          renderBranchesList();
-        }
-      });
-    }
-
     if (btnNewBranch) {
       btnNewBranch.addEventListener('click', handleCreateBranch);
     }
@@ -851,6 +875,7 @@
 
   return {
     initTreeRagUI,
+    updateToolbarRagButtonStatus,
     refreshBranchSelector,
     renderBranchesList,
     renderBranchWorkspace,
