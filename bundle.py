@@ -40,6 +40,7 @@ JS_MODULE_FILES = [
     "tool-cards.js",
     "attachments.js",
     "export.js",
+    "state.js",
     "app.js"
 ]
 
@@ -59,7 +60,8 @@ CORE_EXPORT_SYMBOLS = [
     "ChatDebug",
     "ChatToolCards",
     "ChatAttachments",
-    "ChatExport"
+    "ChatExport",
+    "ChatState"
 ]
 
 

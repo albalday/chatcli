@@ -29,6 +29,7 @@
   const ToolCards = window.ChatToolCards || {};
   const Attachments = window.ChatAttachments || {};
   const Export = window.ChatExport || {};
+  const State = window.ChatState || {};
 
   function t(key, params) {
     if (I18n.t) return I18n.t(key, params);
@@ -1351,9 +1352,13 @@
     autoResizeTextarea();
     closeReasoningMenu();
 
-    isGenerating = true;
-    elements.btnSend.disabled = true;
-    elements.btnStopStream.style.display = 'inline-flex';
+    if (State.set) {
+      State.set('streaming', { isGenerating: true, status: 'streaming', error: null });
+    } else {
+      isGenerating = true;
+      elements.btnSend.disabled = true;
+      elements.btnStopStream.style.display = 'inline-flex';
+    }
 
     currentAbortController = new AbortController();
     const { wrapper, row, content, actions, btnCopy, statsContainer, msgId: assistantMsgId } = createAssistantMessagePlaceholder();
@@ -2168,10 +2173,14 @@
   }
 
   function finishGeneration() {
-    isGenerating = false;
+    if (State.set) {
+      State.set('streaming', { isGenerating: false, status: 'idle' });
+    } else {
+      isGenerating = false;
+      if (elements.btnSend) elements.btnSend.disabled = false;
+      if (elements.btnStopStream) elements.btnStopStream.style.display = 'none';
+    }
     currentAbortController = null;
-    if (elements.btnSend) elements.btnSend.disabled = false;
-    if (elements.btnStopStream) elements.btnStopStream.style.display = 'none';
     if (elements.userInput) elements.userInput.focus();
     saveCurrentSession();
     scrollToBottom();
@@ -3281,6 +3290,22 @@
     cacheDomElements();
     if (Debug.setElements) Debug.setElements(elements);
     if (Debug.setRawLogsEnabled) Debug.setRawLogsEnabled(appConfig.enableRawLogs);
+
+    if (State.setState) {
+      State.setState({
+        config: appConfig,
+        sessions: { activeId: currentSessionId, list: savedSessions }
+      });
+    }
+
+    if (State.subscribe) {
+      State.subscribe('streaming', (streamingState) => {
+        isGenerating = Boolean(streamingState.isGenerating);
+        if (elements.btnSend) elements.btnSend.disabled = isGenerating;
+        if (elements.btnStopStream) elements.btnStopStream.style.display = isGenerating ? 'inline-flex' : 'none';
+      });
+    }
+
     loadCachedModels();
     updateUIFromConfig();
     loadSessionsFromStorage();

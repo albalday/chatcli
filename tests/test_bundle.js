@@ -34,7 +34,8 @@ test('Bundler - Generación en modo Producción (Terser/esbuild)', () => {
       'ChatWebBrowser', 'ChatWebSearch', 'ChatMarkdown',
       'ChatProviders', 'ChatAPI', 'ChatFileParser',
       'ChatAgentCore', 'ChatMCP', 'ChatDebug',
-      'ChatToolCards', 'ChatAttachments', 'ChatExport'
+      'ChatToolCards', 'ChatAttachments', 'ChatExport',
+      'ChatState'
     ];
     for (const mod of expectedModules) {
       assert.ok(content.includes(mod), `El módulo ${mod} debe estar presente en el bundle`);
