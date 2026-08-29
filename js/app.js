@@ -25,6 +25,10 @@
   const WebBrowser = window.ChatWebBrowser || {};
   const WebSearch = window.ChatWebSearch || {};
   const I18n = window.ChatI18n || {};
+  const Debug = window.ChatDebug || {};
+  const ToolCards = window.ChatToolCards || {};
+  const Attachments = window.ChatAttachments || {};
+  const Export = window.ChatExport || {};
 
   function t(key, params) {
     if (I18n.t) return I18n.t(key, params);
@@ -958,203 +962,36 @@
   }
 
   // ==========================================================================
+  // ==========================================================================
   // Panel Lateral de Razonamiento, Streaming & Logs (Debug)
   // ==========================================================================
 
-  let isDebugAutoscroll = true;
-  let activeDebugFilter = 'all';
-  let activeThinkingBlock = null;
-
   function toggleDebugPanel(forceOpen) {
-    if (!elements.debugPanel) return;
-    const isCurrentlyVisible = elements.debugPanel.style.display !== 'none';
-    const shouldOpen = (forceOpen !== undefined) ? forceOpen : !isCurrentlyVisible;
-
-    if (shouldOpen) {
-      elements.debugPanel.style.display = 'flex';
-      if (elements.btnToggleDebug) elements.btnToggleDebug.classList.add('active');
-      if (isDebugAutoscroll && elements.debugLogContent) {
-        elements.debugLogContent.scrollTop = elements.debugLogContent.scrollHeight;
-      }
-    } else {
-      elements.debugPanel.style.display = 'none';
-      if (elements.btnToggleDebug) elements.btnToggleDebug.classList.remove('active');
-    }
+    if (Debug.togglePanel) Debug.togglePanel(forceOpen);
   }
 
   function setDebugStatus(status, text) {
-    if (!elements.debugStatusIndicator) return;
-    elements.debugStatusIndicator.className = `debug-status-indicator ${status || 'idle'}`;
-    let label = text;
-    if (!label) {
-      if (status === 'streaming') label = t('debug_status_streaming');
-      else if (status === 'done') label = t('debug_status_done');
-      else if (status === 'error') label = t('debug_status_error');
-      else label = t('debug_status_idle');
-    }
-    elements.debugStatusIndicator.textContent = label;
+    if (Debug.setStatus) Debug.setStatus(status, text);
   }
 
   function getFormattedTime() {
-    const now = new Date();
-    return now.toTimeString().split(' ')[0];
+    return Debug.getFormattedTime ? Debug.getFormattedTime() : new Date().toTimeString().split(' ')[0];
   }
 
   function clearDebugLogs() {
-    if (!elements.debugLogContent) return;
-    elements.debugLogContent.innerHTML = `
-      <div class="debug-entry debug-entry-system" data-type="system">
-        <span class="debug-time">[${getFormattedTime()}]</span>
-        <span class="debug-tag system">[${t('debug_tag_system')}]</span>
-        <span class="debug-msg">${t('debug_sys_cleared')}</span>
-      </div>
-    `;
-    activeThinkingBlock = null;
+    if (Debug.clearLogs) Debug.clearLogs();
   }
 
   async function copyDebugLogs() {
-    if (!elements.debugLogContent || !elements.btnCopyDebug) return;
-    try {
-      const text = elements.debugLogContent.innerText;
-      await navigator.clipboard.writeText(text);
-      const originalText = elements.btnCopyDebug.textContent;
-      elements.btnCopyDebug.textContent = '✅';
-      setTimeout(() => {
-        elements.btnCopyDebug.textContent = originalText;
-      }, 1500);
-    } catch (e) {
-      console.error('Error al copiar logs:', e);
-    }
+    if (Debug.copyLogs) await Debug.copyLogs();
   }
 
   function addDebugLog(type, text, rawData) {
-    if (!elements.debugLogContent) return;
-
-    // 1. Logs de tipo RAW (Tráfico de red y herramientas sin procesar)
-    if (type === 'raw') {
-      if (appConfig.enableRawLogs === false) return;
-
-      const entry = document.createElement('div');
-      const isOutgoing = (rawData && rawData.subtype === 'outgoing') || String(text).startsWith('>>>');
-      entry.className = `debug-entry debug-entry-raw ${isOutgoing ? 'raw-outgoing' : 'raw-incoming'}`;
-      entry.setAttribute('data-type', 'raw');
-
-      entry.innerHTML = `
-        <div class="debug-entry-header">
-          <span class="debug-time">[${getFormattedTime()}]</span>
-          <span class="debug-tag raw">${isOutgoing ? '📤 RAW OUT' : '📥 RAW IN'}</span>
-        </div>
-        <div class="debug-msg">${Markdown.escapeHtml(text)}</div>
-      `;
-
-      // Los logs RAW NUNCA se muestran en 'all', 'thinking', 'tool' o 'network'. Únicamente en 'raw'.
-      if (activeDebugFilter !== 'raw') {
-        entry.style.display = 'none';
-      }
-
-      elements.debugLogContent.appendChild(entry);
-
-      if (isDebugAutoscroll) {
-        elements.debugLogContent.scrollTop = elements.debugLogContent.scrollHeight;
-      }
-      return; // IMPORTANTE: no reinicia activeThinkingBlock
-    }
-
-    // 2. Logs de tipo RAZONAMIENTO / THINKING (Texto puro parseado de pensamiento)
-    if (type === 'thinking') {
-      if (!activeThinkingBlock) {
-        const entry = document.createElement('div');
-        entry.className = 'debug-entry debug-entry-thinking';
-        entry.setAttribute('data-type', 'thinking');
-        entry.innerHTML = `
-          <div class="debug-entry-header">
-            <span class="debug-time">[${getFormattedTime()}]</span>
-            <span class="debug-tag thinking">🧠 ${t('debug_tag_thinking')}</span>
-          </div>
-          <div class="debug-msg"></div>
-        `;
-        elements.debugLogContent.appendChild(entry);
-        activeThinkingBlock = entry.querySelector('.debug-msg');
-
-        if (activeDebugFilter !== 'all' && activeDebugFilter !== 'thinking') {
-          entry.style.display = 'none';
-        }
-      }
-
-      if (activeThinkingBlock) {
-        activeThinkingBlock.textContent += text;
-      }
-
-      if (isDebugAutoscroll) {
-        elements.debugLogContent.scrollTop = elements.debugLogContent.scrollHeight;
-      }
-      return;
-    }
-
-    // 3. Cualquier otro tipo de log (network, stats, tool, error, system, info):
-    activeThinkingBlock = null;
-
-    const entry = document.createElement('div');
-    entry.className = `debug-entry debug-entry-${type || 'info'}`;
-    entry.setAttribute('data-type', type || 'info');
-
-    let tagLabel = t('debug_tag_info');
-    if (type === 'network') tagLabel = t('debug_tag_network');
-    else if (type === 'tool') tagLabel = t('debug_tag_tool');
-    else if (type === 'stats') tagLabel = t('debug_tag_stats');
-    else if (type === 'error') tagLabel = t('debug_tag_error');
-    else if (type === 'system') tagLabel = t('debug_tag_system');
-
-    entry.innerHTML = `
-      <div class="debug-entry-header">
-        <span class="debug-time">[${getFormattedTime()}]</span>
-        <span class="debug-tag ${type || 'info'}">[${tagLabel}]</span>
-      </div>
-      <div class="debug-msg">${Markdown.escapeHtml(text)}</div>
-    `;
-
-    if (activeDebugFilter === 'raw') {
-      entry.style.display = 'none';
-    } else if (activeDebugFilter !== 'all') {
-      const match = (activeDebugFilter === type) ||
-                    (activeDebugFilter === 'tool' && type === 'tool') ||
-                    (activeDebugFilter === 'network' && (type === 'network' || type === 'stats' || type === 'error'));
-      if (!match) entry.style.display = 'none';
-    }
-
-    elements.debugLogContent.appendChild(entry);
-
-    if (isDebugAutoscroll) {
-      elements.debugLogContent.scrollTop = elements.debugLogContent.scrollHeight;
-    }
+    if (Debug.addLog) Debug.addLog(type, text, rawData);
   }
 
   function filterDebugLogs(tabId) {
-    activeDebugFilter = tabId;
-    if (!elements.debugLogContent) return;
-
-    if (elements.debugRawBar) {
-      elements.debugRawBar.style.display = (tabId === 'raw') ? 'flex' : 'none';
-    }
-
-    const entries = elements.debugLogContent.querySelectorAll('.debug-entry');
-    entries.forEach(entry => {
-      const type = entry.getAttribute('data-type');
-      if (tabId === 'all') {
-        // En 'Todo' se muestran todos los logs regulares pero NUNCA el tráfico raw
-        entry.style.display = (type === 'raw') ? 'none' : 'flex';
-      } else if (tabId === 'thinking') {
-        // En 'Razonamiento' se muestra exclusivamente el contenido de pensamiento
-        entry.style.display = (type === 'thinking') ? 'flex' : 'none';
-      } else if (tabId === 'tool') {
-        entry.style.display = (type === 'tool') ? 'flex' : 'none';
-      } else if (tabId === 'network') {
-        entry.style.display = (type === 'network' || type === 'stats' || type === 'error') ? 'flex' : 'none';
-      } else if (tabId === 'raw') {
-        // En 'Raw' se muestra exclusivamente el tráfico crudo
-        entry.style.display = (type === 'raw') ? 'flex' : 'none';
-      }
-    });
+    if (Debug.filterLogs) Debug.filterLogs(tabId);
   }
 
   function syncDebugMessagesState(enabled, persist = true) {
@@ -1172,126 +1009,15 @@
   }
 
   function openDebugInterceptorModal({ endpoint, headers, payload }) {
-    return new Promise((resolve) => {
-      if (!elements.debugInterceptorDialog) {
-        return resolve({ cancel: false, modifiedPayload: null });
-      }
-
-      let isMaximized = false;
-      elements.debugInterceptorDialog.classList.remove('maximized');
-      if (elements.btnMaximizeDebugModal) {
-        elements.btnMaximizeDebugModal.textContent = '⛶';
-      }
-
-      if (elements.debugModalEndpointBadge) {
-        elements.debugModalEndpointBadge.textContent = `POST ${endpoint}`;
-      }
-      if (elements.txtDebugPayload) {
-        elements.txtDebugPayload.value = JSON.stringify(payload, null, 2);
-      }
-      if (elements.debugJsonError) {
-        elements.debugJsonError.style.display = 'none';
-        elements.debugJsonError.textContent = '';
-      }
-
-      function cleanup() {
-        if (elements.debugInterceptorDialog.open) {
-          elements.debugInterceptorDialog.close();
-        }
-        elements.debugInterceptorDialog.classList.remove('maximized');
-        if (elements.btnMaximizeDebugModal) elements.btnMaximizeDebugModal.onclick = null;
-        if (elements.btnDebugCancel) elements.btnDebugCancel.onclick = null;
-        if (elements.btnDebugSend) elements.btnDebugSend.onclick = null;
-        if (elements.btnDebugSendDisable) elements.btnDebugSendDisable.onclick = null;
-        if (elements.btnCloseDebugModal) elements.btnCloseDebugModal.onclick = null;
-        if (elements.btnFormatDebugJson) elements.btnFormatDebugJson.onclick = null;
-        if (elements.btnCopyDebugJson) elements.btnCopyDebugJson.onclick = null;
-      }
-
-      if (elements.btnMaximizeDebugModal) {
-        elements.btnMaximizeDebugModal.onclick = () => {
-          isMaximized = !isMaximized;
-          elements.debugInterceptorDialog.classList.toggle('maximized', isMaximized);
-          elements.btnMaximizeDebugModal.textContent = isMaximized ? '🗗' : '⛶';
-        };
-      }
-
-      if (elements.btnFormatDebugJson) {
-        elements.btnFormatDebugJson.onclick = () => {
-          try {
-            const parsed = JSON.parse(elements.txtDebugPayload.value);
-            elements.txtDebugPayload.value = JSON.stringify(parsed, null, 2);
-            if (elements.debugJsonError) elements.debugJsonError.style.display = 'none';
-          } catch (err) {
-            if (elements.debugJsonError) {
-              elements.debugJsonError.textContent = t('debug_json_error_invalid', { error: err.message });
-              elements.debugJsonError.style.display = 'block';
-            }
-          }
-        };
-      }
-
-      if (elements.btnCopyDebugJson) {
-        elements.btnCopyDebugJson.onclick = async () => {
-          try {
-            await navigator.clipboard.writeText(elements.txtDebugPayload.value);
-            const span = elements.btnCopyDebugJson.querySelector('span');
-            if (span) {
-              const old = span.textContent;
-              span.textContent = '✅ Copiado';
-              setTimeout(() => { span.textContent = old; }, 1500);
-            }
-          } catch (e) {}
-        };
-      }
-
-      function handleSend(disableDebug = false) {
-        let editedJson = null;
-        const raw = elements.txtDebugPayload.value.trim();
-        if (raw) {
-          try {
-            editedJson = JSON.parse(raw);
-          } catch (err) {
-            if (elements.debugJsonError) {
-              elements.debugJsonError.textContent = t('debug_json_error_invalid', { error: err.message });
-              elements.debugJsonError.style.display = 'block';
-            }
-            return;
-          }
-        }
-
-        if (disableDebug) {
-          syncDebugMessagesState(false);
-        }
-
-        cleanup();
-        resolve({ cancel: false, modifiedPayload: editedJson });
-      }
-
-      if (elements.btnDebugSend) {
-        elements.btnDebugSend.onclick = () => handleSend(false);
-      }
-      if (elements.btnDebugSendDisable) {
-        elements.btnDebugSendDisable.onclick = () => handleSend(true);
-      }
-      if (elements.btnDebugCancel) {
-        elements.btnDebugCancel.onclick = () => {
-          cleanup();
-          resolve({ cancel: true });
-        };
-      }
-      if (elements.btnCloseDebugModal) {
-        elements.btnCloseDebugModal.onclick = () => {
-          cleanup();
-          resolve({ cancel: true });
-        };
-      }
-
-      elements.debugInterceptorDialog.showModal();
-      if (elements.txtDebugPayload) {
-        elements.txtDebugPayload.focus();
-      }
-    });
+    if (Debug.openInterceptorModal) {
+      return Debug.openInterceptorModal({
+        endpoint,
+        headers,
+        payload,
+        onSyncDebugState: (enabled) => syncDebugMessagesState(enabled)
+      });
+    }
+    return Promise.resolve({ cancel: false, modifiedPayload: null });
   }
 
   function updateUIFromConfig() {
@@ -1353,48 +1079,23 @@
   // ==========================================================================
 
   function renderAttachedFiles() {
-    if (!elements.attachmentsContainer) return;
-
-    if (attachedFiles.length === 0) {
-      elements.attachmentsContainer.innerHTML = '';
-      elements.attachmentsContainer.style.display = 'none';
-      return;
+    if (Attachments.renderChips) {
+      Attachments.renderChips(elements.attachmentsContainer, () => autoResizeTextarea());
     }
-
-    elements.attachmentsContainer.style.display = 'flex';
-    elements.attachmentsContainer.innerHTML = '';
-
-    attachedFiles.forEach((file, index) => {
-      const chip = document.createElement('div');
-      chip.className = 'file-chip';
-
-      let icon = '📄';
-      if (file.type === 'pdf') icon = '📕';
-      else if (file.type === 'image') icon = '🖼️';
-
-      chip.innerHTML = `
-        <span class="file-chip-icon">${icon}</span>
-        <span class="file-chip-name" title="${file.name}">${file.name}</span>
-        <span class="file-chip-size">(${FileParser.formatBytes(file.size)})</span>
-        <button type="button" class="btn-remove-chip" data-index="${index}" title="Remove">×</button>
-      `;
-
-      chip.querySelector('.btn-remove-chip').addEventListener('click', () => {
-        removeAttachedFile(index);
-      });
-
-      elements.attachmentsContainer.appendChild(chip);
-    });
   }
 
   function removeAttachedFile(index) {
-    attachedFiles.splice(index, 1);
-    renderAttachedFiles();
+    if (Attachments.removeFileAt) {
+      Attachments.removeFileAt(index);
+      renderAttachedFiles();
+    }
   }
 
   function clearAttachedFiles() {
-    attachedFiles = [];
-    renderAttachedFiles();
+    if (Attachments.clearFiles) {
+      Attachments.clearFiles();
+      renderAttachedFiles();
+    }
     if (elements.fileInput) elements.fileInput.value = '';
   }
 
@@ -1414,14 +1115,14 @@
             content: text
           };
         }
-        attachedFiles.push(parsed);
+        if (Attachments.addFile) Attachments.addFile(parsed);
       } catch (err) {
         console.error(`Error processing file ${file.name}:`, err);
         alert(t('err_file_process', { name: file.name, err: err.message || err }));
       }
     }
     renderAttachedFiles();
-    elements.userInput.focus();
+    if (elements.userInput) elements.userInput.focus();
   }
 
   function readFileAsText(file) {
@@ -1616,36 +1317,12 @@
 
   async function handleSendMessage() {
     const rawText = elements.userInput.value.trim();
-    if ((!rawText && attachedFiles.length === 0) || isGenerating) return;
+    const currentFiles = Attachments.getFiles ? Attachments.getFiles() : [];
+    if ((!rawText && currentFiles.length === 0) || isGenerating) return;
 
-    let fullPrompt = rawText;
-    let displayText = rawText;
-    let imageAttachments = [];
-
-    if (attachedFiles.length > 0) {
-      imageAttachments = attachedFiles.filter(f => f.type === 'image' && f.dataUrl).map(f => ({
-        name: f.name,
-        dataUrl: f.dataUrl,
-        mimeType: f.mimeType || 'image/jpeg'
-      }));
-
-      const attachmentsText = attachedFiles.map(file => {
-        if (file.type === 'pdf') {
-          return `\n\n--- PDF Document: ${file.name} (${FileParser.formatBytes(file.size)}) ---\n\`\`\`text\n${file.content}\n\`\`\``;
-        } else if (file.type === 'image') {
-          return `\n\n--- Image: ${file.name} (${FileParser.formatBytes(file.size)}) ---`;
-        }
-        return `\n\n--- File: ${file.name} (${FileParser.formatBytes(file.size)}) ---\n\`\`\`\n${file.content}\n\`\`\``;
-      }).join('');
-
-      fullPrompt = rawText ? `${rawText}\n${attachmentsText}` : `Attached files for analysis:${attachmentsText}`;
-      
-      const fileNamesList = attachedFiles.map(f => {
-        const icon = f.type === 'pdf' ? '📕' : f.type === 'image' ? '🖼️' : '📎';
-        return `${icon} ${f.name}`;
-      }).join(', ');
-      displayText = rawText ? `${rawText}\n\n[${fileNamesList}]` : `[${fileNamesList}]`;
-    }
+    const { fullPrompt, displayText, imageAttachments } = Attachments.buildAttachmentsPayload
+      ? Attachments.buildAttachmentsPayload(rawText, currentFiles)
+      : { fullPrompt: rawText, displayText: rawText, imageAttachments: [] };
 
     const userMsgId = appendUserMessage(displayText, rawText, imageAttachments);
     const historyEntry = { id: userMsgId, role: 'user', content: fullPrompt };
@@ -2930,183 +2607,10 @@
   }
 
   function renderStoredToolCard(tc, toolMsg) {
-    if (!tc || !tc.function) return null;
-    const rawFuncName = tc.function.name || '';
-    const normName = rawFuncName.toLowerCase().replace(/_/g, '');
-
-    let toolArgs = {};
-    try {
-      toolArgs = typeof tc.function.arguments === 'object' ? tc.function.arguments : JSON.parse(tc.function.arguments || '{}');
-    } catch (e) {
-      toolArgs = { input: tc.function.arguments || '' };
+    if (ToolCards.renderHistoricalToolCard) {
+      return ToolCards.renderHistoricalToolCard(tc, toolMsg);
     }
-
-    const cardDiv = document.createElement('div');
-    cardDiv.className = 'tool-card-wrapper';
-
-    // 1. Gráficos interactivos SVG (render_chart)
-    if (normName === 'renderchart') {
-      if (typeof Charts !== 'undefined' && Charts.renderChartCard) {
-        cardDiv.innerHTML = Charts.renderChartCard(toolArgs);
-      } else {
-        cardDiv.innerHTML = `<div class="chat-chart-card">📊 ${Markdown.escapeHtml(toolArgs.title || 'Gráfico')}</div>`;
-      }
-      return cardDiv;
-    }
-
-    // 2. Ejecución de JavaScript (execute_javascript)
-    if (normName === 'executejavascript') {
-      const codeToRun = toolArgs.code || toolArgs.javascript || toolArgs.js || toolArgs.script || toolArgs.input || '';
-      let outText = '';
-      if (toolMsg && toolMsg.content) {
-        try {
-          const parsedRes = JSON.parse(toolMsg.content);
-          outText = parsedRes.result || (parsedRes.logs && parsedRes.logs.length > 0 ? parsedRes.logs.join('\n') : (parsedRes.error ? `Error: ${parsedRes.error}` : toolMsg.content));
-        } catch (e) {
-          outText = toolMsg.content;
-        }
-      }
-
-      cardDiv.innerHTML = `
-        <div class="tool-execution-card">
-          <div class="tool-card-header">
-            <div class="tool-card-title">
-              <span>⚡</span>
-              <span>${t('tool_js_title_running') || 'execute_javascript'}</span>
-            </div>
-            <div class="tool-card-header-actions">
-              <span class="tool-card-badge status-success">✅ ${t('tool_status_success') || 'Completado'}</span>
-              <button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Minimizar'}"><span>▾</span></button>
-            </div>
-          </div>
-          <div class="tool-card-collapsible-body">
-            <pre class="tool-card-code"><code>${Markdown.escapeHtml(codeToRun)}</code></pre>
-            <div class="tool-card-result">
-              <div class="tool-result-label">${t('tool_sandbox_output') || 'Salida del Sandbox:'}</div>
-              <pre class="tool-result-pre"><code>${Markdown.escapeHtml(outText)}</code></pre>
-            </div>
-          </div>
-        </div>
-      `;
-      return cardDiv;
-    }
-
-    // 3. Búsqueda Web (search_web)
-    if (normName === 'searchweb') {
-      const queryToSearch = toolArgs.query || toolArgs.q || toolArgs.search || toolArgs.keyword || toolArgs.text || '';
-      let resultsHtml = '';
-
-      if (toolMsg && toolMsg.content) {
-        resultsHtml = `<div class="search-results-list"><div class="search-result-snippet">${Markdown.renderMarkdown ? Markdown.renderMarkdown(toolMsg.content) : Markdown.escapeHtml(toolMsg.content)}</div></div>`;
-      } else {
-        resultsHtml = `<div class="search-result-snippet"><em>${t('tool_search_empty') || 'Búsqueda completada'}</em></div>`;
-      }
-
-      cardDiv.innerHTML = `
-        <div class="web-search-card">
-          <div class="web-card-header">
-            <div class="web-card-title">
-              <span>🔍</span>
-              <span>${t('tool_search_title') || 'search_web'}</span>
-            </div>
-            <div class="web-card-header-actions">
-              <span class="web-card-badge status-success">✅ ${t('tool_status_success') || 'Completado'}</span>
-              <button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Minimizar'}"><span>▾</span></button>
-            </div>
-          </div>
-          <div class="tool-card-collapsible-body">
-            <div class="web-card-section">
-              <div class="section-label">${t('tool_search_query') || 'Consulta:'}</div>
-              <div class="query-badge">"${Markdown.escapeHtml(queryToSearch)}"</div>
-            </div>
-            <div class="web-card-section search-results-section">
-              <div class="search-results-container">${resultsHtml}</div>
-            </div>
-          </div>
-        </div>
-      `;
-      return cardDiv;
-    }
-
-    // 4. Navegador Web & PDF (fetch_web_page / download_pdf)
-    if (normName === 'fetchwebpage' || normName === 'downloadpdf') {
-      const urlToFetch = toolArgs.url || toolArgs.link || toolArgs.pdf_url || '';
-      const isPdf = normName === 'downloadpdf' || urlToFetch.toLowerCase().endsWith('.pdf');
-      const cardTitle = isPdf ? (t('tool_pdf_title') || 'download_pdf') : (t('tool_web_title') || 'fetch_web_page');
-      const cardIcon = isPdf ? '📄' : '🌐';
-      let contentSnippet = '';
-
-      if (toolMsg && toolMsg.content) {
-        try {
-          const parsed = JSON.parse(toolMsg.content);
-          contentSnippet = parsed.content || parsed.error || toolMsg.content;
-        } catch (e) {
-          contentSnippet = toolMsg.content;
-        }
-      }
-
-      cardDiv.innerHTML = `
-        <div class="web-search-card">
-          <div class="web-card-header">
-            <div class="web-card-title">
-              <span>${cardIcon}</span>
-              <span>${cardTitle}</span>
-            </div>
-            <div class="web-card-header-actions">
-              <span class="web-card-badge status-success">✅ ${t('tool_status_success') || 'Completado'}</span>
-              <button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Minimizar'}"><span>▾</span></button>
-            </div>
-          </div>
-          <div class="tool-card-collapsible-body">
-            <div class="web-card-section">
-              <div class="section-label">${t('tool_web_requested_url') || 'URL:'}</div>
-              <div class="url-badge"><a href="${Markdown.sanitizeUrl ? Markdown.sanitizeUrl(urlToFetch) : Markdown.escapeHtml(urlToFetch)}" target="_blank" rel="noopener noreferrer">${Markdown.escapeHtml(urlToFetch)}</a></div>
-            </div>
-            <div class="web-card-section web-content-section">
-              <div class="web-content-container">
-                <pre class="web-content-snippet"><code>${Markdown.escapeHtml((contentSnippet || '').substring(0, 1000) + (contentSnippet.length > 1000 ? '\n\n[... contenido restante ...]' : ''))}</code></pre>
-              </div>
-            </div>
-          </div>
-        </div>
-      `;
-      return cardDiv;
-    }
-
-    // 5. Herramientas MCP y Genéricas
-    const AgentCore = window.ChatAgentCore;
-    const toolInstance = AgentCore?.registry?.getTool(rawFuncName);
-    const serverName = toolInstance?.metadata?.mcpServerName || 'Herramienta MCP / Externa';
-    const displayToolName = toolInstance?.metadata?.originalName || rawFuncName;
-    const outText = toolMsg ? (toolMsg.content || '') : '';
-
-    cardDiv.innerHTML = `
-      <div class="tool-execution-card mcp-tool-card">
-        <div class="tool-card-header">
-          <div class="tool-card-title">
-            <span>🔌</span>
-            <span><strong>MCP:</strong> ${Markdown.escapeHtml(displayToolName)} <small style="opacity:0.7;">(${Markdown.escapeHtml(serverName)})</small></span>
-          </div>
-          <div class="tool-card-header-actions">
-            <span class="tool-card-badge status-success">✅ ${t('tool_status_success') || 'Completado'}</span>
-            <button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Minimizar'}"><span>▾</span></button>
-          </div>
-        </div>
-        <div class="tool-card-collapsible-body">
-          <div class="tool-card-section">
-            <div class="section-label">${t('tool_js_code') || 'Argumentos'}</div>
-            <div class="code-preview-block"><pre><code>${Markdown.escapeHtml(JSON.stringify(toolArgs, null, 2))}</code></pre></div>
-          </div>
-          <div class="tool-card-section tool-result-section">
-            <div class="section-label">${t('tool_js_result') || 'Resultado'}</div>
-            <div class="tool-result-container">
-              <div class="result-text-block result-success"><pre><code>${Markdown.escapeHtml(outText)}</code></pre></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    `;
-    return cardDiv;
+    return null;
   }
 
   function attachListenersToContainer(container) {
@@ -3282,19 +2786,10 @@
     const sess = savedSessions.find(s => s.id === currentSessionId);
     const title = (sess && sess.title) || 'ChatCLI_Conversation';
     const dateStr = new Date().toISOString().slice(0, 10);
-
-    let md = `# ${title}\n\n*Fecha de exportación: ${new Date().toLocaleString()}*\n*Modelo: ${appConfig.model || 'No especificado'}*\n\n---\n\n`;
-
-    chatHistory.forEach(m => {
-      if (m.role === 'user') {
-        const contentStr = typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
-        md += `### 👤 Usuario\n\n${contentStr}\n\n---\n\n`;
-      } else if (m.role === 'assistant' && m.content) {
-        md += `### 🤖 Asistente\n\n${m.content}\n\n---\n\n`;
-      }
-    });
-
-    downloadBlob(md, `${title.replace(/[^a-zA-Z0-9_-]/g, '_')}_${dateStr}.md`, 'text/markdown');
+    const md = Export.buildMarkdownExport ? Export.buildMarkdownExport(chatHistory, { title, model: appConfig.model }) : '';
+    if (Export.downloadFile) {
+      Export.downloadFile(md, `${title.replace(/[^a-zA-Z0-9_-]/g, '_')}_${dateStr}.md`, 'text/markdown');
+    }
     closeExportModal();
   }
 
@@ -3302,25 +2797,10 @@
     const sess = savedSessions.find(s => s.id === currentSessionId);
     const title = (sess && sess.title) || 'ChatCLI_Conversation';
     const dateStr = new Date().toISOString().slice(0, 10);
-
-    const exportData = {
-      version: '2.1',
-      app: 'ChatCLI',
-      exportedAt: new Date().toISOString(),
-      session: sess || {
-        id: currentSessionId,
-        title: title,
-        history: chatHistory
-      },
-      config: {
-        model: appConfig.model,
-        apiUrl: appConfig.apiUrl,
-        apiType: appConfig.apiType
-      }
-    };
-
-    const jsonStr = JSON.stringify(exportData, null, 2);
-    downloadBlob(jsonStr, `${title.replace(/[^a-zA-Z0-9_-]/g, '_')}_${dateStr}.json`, 'application/json');
+    const jsonStr = Export.buildJsonExport ? Export.buildJsonExport(sess, chatHistory, appConfig) : '{}';
+    if (Export.downloadFile) {
+      Export.downloadFile(jsonStr, `${title.replace(/[^a-zA-Z0-9_-]/g, '_')}_${dateStr}.json`, 'application/json');
+    }
     closeExportModal();
   }
 
@@ -3338,25 +2818,11 @@
     const reader = new FileReader();
     reader.onload = function(evt) {
       try {
-        const data = JSON.parse(evt.target.result);
-        const importedSession = data.session || data;
-
-        if (!importedSession.history || !Array.isArray(importedSession.history)) {
-          alert('El archivo no contiene un historial de chat válido.');
-          return;
-        }
-
-        const newId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
-        const newSession = {
-          id: newId,
-          title: importedSession.title || file.name.replace('.json', ''),
-          createdAt: importedSession.createdAt || Date.now(),
-          updatedAt: Date.now(),
-          history: importedSession.history
-        };
+        const newSession = Export.parseImportedJson ? Export.parseImportedJson(evt.target.result, file.name.replace('.json', '')) : null;
+        if (!newSession) throw new Error('Error al procesar el archivo');
 
         savedSessions.unshift(newSession);
-        currentSessionId = newId;
+        currentSessionId = newSession.id;
         chatHistory = newSession.history;
 
         renderSessionMessages(chatHistory);
@@ -3368,18 +2834,6 @@
       if (elements.importJsonInput) elements.importJsonInput.value = '';
     };
     reader.readAsText(file);
-  }
-
-  function downloadBlob(content, filename, mimeType) {
-    const blob = new Blob([content], { type: mimeType });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
   }
 
   // ==========================================================================
@@ -3607,7 +3061,8 @@
     }
 
     function syncRawLogsState(enabled) {
-      appConfig.enableRawLogs = enabled;
+      appConfig.enableRawLogs = Boolean(enabled);
+      if (Debug.setRawLogsEnabled) Debug.setRawLogsEnabled(enabled);
       if (elements.chkEnableRaw) elements.chkEnableRaw.checked = enabled;
       if (elements.settingEnableRawLogs) elements.settingEnableRawLogs.checked = enabled;
       if (elements.rawStatusBadge) {
@@ -3809,6 +3264,8 @@
 
   function init() {
     cacheDomElements();
+    if (Debug.setElements) Debug.setElements(elements);
+    if (Debug.setRawLogsEnabled) Debug.setRawLogsEnabled(appConfig.enableRawLogs);
     loadCachedModels();
     updateUIFromConfig();
     loadSessionsFromStorage();

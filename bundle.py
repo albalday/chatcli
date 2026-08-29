@@ -36,6 +36,10 @@ JS_MODULE_FILES = [
     "file-parser.js",
     "agent-core.js",
     "mcp.js",
+    "debug.js",
+    "tool-cards.js",
+    "attachments.js",
+    "export.js",
     "app.js"
 ]
 
@@ -51,7 +55,11 @@ CORE_EXPORT_SYMBOLS = [
     "ChatAPI",
     "ChatFileParser",
     "ChatAgentCore",
-    "ChatMCP"
+    "ChatMCP",
+    "ChatDebug",
+    "ChatToolCards",
+    "ChatAttachments",
+    "ChatExport"
 ]
 
 
