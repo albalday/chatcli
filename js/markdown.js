@@ -314,8 +314,7 @@
       if (figureBlock) return figureBlock;
       const imgId = imgNum.startsWith('img_') ? imgNum : (`img_${imgNum}`);
       const ragUrl = `rag-image://${imgId}`;
-      const cleanCaption = `Diagrama / Ilustración #${imgId.replace('img_', '')}`;
-      return `<figure class="chat-image-figure" data-rag-src="${ragUrl}"><img class="chat-embedded-image" src="${ragUrl}" alt="${cleanCaption}" data-rag-src="${ragUrl}" loading="lazy" /><figcaption class="chat-image-caption">${cleanCaption}</figcaption></figure>`;
+      return `<figure class="chat-image-figure" data-rag-src="${ragUrl}"><img class="chat-embedded-image" src="${ragUrl}" alt="Diagrama #${imgId.replace('img_', '')}" data-rag-src="${ragUrl}" loading="lazy" /></figure>`;
     });
 
     // 10. Enlaces [texto](url)

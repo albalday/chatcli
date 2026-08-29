@@ -569,18 +569,17 @@ body {
    Imágenes Integradas en el Chat y RAG (Markdown Images)
    ========================================================================== */
 .chat-image-figure {
-  margin: 1rem 0;
-  padding: 0.65rem;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
+  margin: 0.75rem auto;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 0;
   text-align: center;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  box-shadow: var(--shadow-sm);
-  overflow: hidden;
+  display: block;
+  box-shadow: none;
+  overflow: visible;
   max-width: 100%;
+  width: fit-content;
 }
 
 .chat-embedded-image {
@@ -588,11 +587,13 @@ body {
   height: auto;
   max-height: 520px;
   object-fit: contain;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
   display: block;
-  cursor: zoom-in;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-  background-color: #ffffff;
+  margin: 0 auto;
+  cursor: default;
+  background-color: transparent;
 }
 
 .chat-embedded-image.inline-image {
@@ -602,17 +603,14 @@ body {
   margin: 0.25rem;
 }
 
-.chat-embedded-image:hover {
-  box-shadow: var(--shadow-md);
-}
-
 .chat-image-caption {
-  margin-top: 0.5rem;
+  margin-top: 0.35rem;
   font-size: 0.8rem;
   color: var(--text-muted);
   font-style: italic;
   line-height: 1.4;
   word-break: break-word;
+  text-align: center;
 }
 
 /* Bloques de código con cabecera y botón de copiar */
