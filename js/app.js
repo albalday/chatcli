@@ -314,14 +314,6 @@
       fullSystemPrompt = fullSystemPrompt ? (fullSystemPrompt + '\n\n' + toolsGuide) : toolsGuide;
     }
 
-    if (appConfig.sendDateTime !== false) {
-      const now = new Date();
-      const dtString = getFormattedDateTime();
-      const currentYear = now.getFullYear();
-      const timeContext = t('system_context_prefix', { datetime: dtString, year: currentYear });
-      fullSystemPrompt = fullSystemPrompt ? (fullSystemPrompt + '\n\n' + timeContext) : timeContext;
-    }
-
     if (messages.length > 0 && messages[0].role === 'system') {
       if (fullSystemPrompt) {
         messages[0].content = fullSystemPrompt;
@@ -415,14 +407,45 @@
     }
   }
 
+  function isDateTimeInitialTurn(m) {
+    if (!m || m.role !== 'user') return false;
+    const content = typeof m.content === 'string' ? m.content : (m.content?.[0]?.text || '');
+    return content.startsWith('La fecha y hora actual es:') ||
+           content.startsWith('Fecha y hora actual:') ||
+           content.startsWith('The current date and time is:') ||
+           content.startsWith('Current date and time:');
+  }
+
+  function createInitialChatHistory() {
+    const history = [
+      { id: 'system_root', role: 'system', content: appConfig.systemPrompt || '' }
+    ];
+
+    if (appConfig.sendDateTime !== false) {
+      const dtString = getFormattedDateTime();
+      const userContent = t('datetime_initial_user_msg', { datetime: dtString }) || `La fecha y hora actual es: ${dtString}.`;
+      const astContent = 'OK';
+
+      history.push({
+        id: `msg_dt_user_${Date.now()}`,
+        role: 'user',
+        content: userContent
+      });
+
+      history.push({
+        id: `msg_dt_ast_${Date.now() + 1}`,
+        role: 'assistant',
+        content: astContent
+      });
+    }
+
+    return history;
+  }
+
   function resetConversation() {
     if (isGenerating && currentAbortController) {
       currentAbortController.abort();
     }
-
-    chatHistory = [
-      { id: 'system_root', role: 'system', content: appConfig.systemPrompt || '' }
-    ];
 
     // Limpiar sesión vacía previa y generar nuevo ID de sesión limpia
     if (Array.isArray(savedSessions)) {
@@ -433,13 +456,9 @@
     }
     currentSessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
 
-    if (elements.messagesList) {
-      elements.messagesList.innerHTML = '';
-      if (elements.welcomeBanner) {
-        elements.messagesList.appendChild(elements.welcomeBanner);
-        elements.welcomeBanner.style.display = 'block';
-      }
-    }
+    chatHistory = createInitialChatHistory();
+    renderSessionMessages(chatHistory);
+    renderSidebarChats();
 
     clearAttachedFiles();
     if (elements.userInput) {
@@ -447,8 +466,6 @@
       autoResizeTextarea();
       elements.userInput.focus();
     }
-
-    renderSidebarChats();
   }
 
   // ==========================================================================
@@ -2481,21 +2498,23 @@
       savedSessions = [];
     }
 
-    // Siempre iniciar en un chat nuevo y vacío al abrir o recargar la página (F5 / Ctrl+F5)
+    // Siempre iniciar en un chat nuevo al abrir o recargar la página (F5 / Ctrl+F5)
     currentSessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
-    chatHistory = [
-      { id: 'system_root', role: 'system', content: appConfig.systemPrompt || '' }
-    ];
+    chatHistory = createInitialChatHistory();
 
     renderSessionMessages(chatHistory);
     renderSidebarChats();
   }
 
   async function saveCurrentSession() {
-    const hasMessages = Array.isArray(chatHistory) && chatHistory.some(m => m && m.role !== 'system');
+    // Comprobar si hay preguntas reales del usuario además de los turnos de inicialización de fecha/hora
+    const hasRealUserMessages = Array.isArray(chatHistory) && chatHistory.some(m => {
+      if (!m || m.role !== 'user') return false;
+      return !isDateTimeInitialTurn(m);
+    });
     
-    // Si la conversación está vacía (o se han borrado todos los mensajes), no guardarla como sesión activa
-    if (!hasMessages) {
+    // Si la conversación no tiene preguntas reales del usuario, no guardarla como sesión activa en el sidebar
+    if (!hasRealUserMessages) {
       if (Array.isArray(savedSessions)) {
         savedSessions = savedSessions.filter(s => s.id !== currentSessionId);
         if (Storage.deleteConversation) {
@@ -2528,16 +2547,16 @@
       sess.messageCount = chatHistory.length;
     }
 
-    // Auto-generar título si es el título genérico por defecto
+    // Auto-generar título a partir del primer mensaje real del usuario
     const isUntitled = !sess.title ||
       sess.title === t('chat_untitled') ||
       sess.title === 'Nueva conversación' ||
       sess.title === 'New conversation';
 
     if (isUntitled && chatHistory.length > 1) {
-      const firstUser = chatHistory.find(m => m.role === 'user');
-      if (firstUser && firstUser.content) {
-        const rawContent = typeof firstUser.content === 'string' ? firstUser.content : (firstUser.content[0]?.text || '');
+      const firstRealUser = chatHistory.find(m => m.role === 'user' && !isDateTimeInitialTurn(m));
+      if (firstRealUser && firstRealUser.content) {
+        const rawContent = typeof firstRealUser.content === 'string' ? firstRealUser.content : (firstRealUser.content[0]?.text || '');
         const candidate = rawContent.split('\n')[0].replace(/[#*`_>\[\]]/g, '').trim();
         if (candidate) {
           sess.title = candidate.length > 35 ? candidate.substring(0, 32) + '…' : candidate;
@@ -2649,9 +2668,7 @@
     await saveCurrentSession();
 
     currentSessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
-    chatHistory = [
-      { id: 'system_root', role: 'system', content: appConfig.systemPrompt || '' }
-    ];
+    chatHistory = createInitialChatHistory();
 
     renderSessionMessages(chatHistory);
     renderSidebarChats();

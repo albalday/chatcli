@@ -173,3 +173,25 @@ test('Storage IndexedDB - Preservación íntegra de turnos del asistente y herra
   assert.equal(loaded.history[3].role, 'assistant');
   assert.equal(loaded.history[3].content, 'Aquí tienes el gráfico generado.');
 });
+
+test('Storage IndexedDB - Preservación de turnos iniciales de fecha/hora para caché de contexto', async () => {
+  const sessionId = 'session_test_datetime_' + Date.now();
+  const sessionMeta = { id: sessionId, title: 'Consulta temporal' };
+
+  const history = [
+    { id: 'msg_dt_user', role: 'user', content: 'La fecha y hora actual es: 29/8/2026, 03:50:00.' },
+    { id: 'msg_dt_ast', role: 'assistant', content: 'OK' },
+    { id: 'msg_user_q', role: 'user', content: '¿Qué eventos ocurrieron hoy?' },
+    { id: 'msg_ast_a', role: 'assistant', content: 'Hoy es 29 de agosto...' }
+  ];
+
+  await Storage.saveConversation(sessionMeta, history);
+  const loaded = await Storage.getConversation(sessionId);
+
+  assert.ok(loaded);
+  assert.equal(loaded.history.length, 4);
+  assert.equal(loaded.history[0].content, 'La fecha y hora actual es: 29/8/2026, 03:50:00.');
+  assert.equal(loaded.history[1].content, 'OK');
+  assert.equal(loaded.history[2].content, '¿Qué eventos ocurrieron hoy?');
+});
+
