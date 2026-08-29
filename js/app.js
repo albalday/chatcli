@@ -210,6 +210,17 @@
     });
   }
 
+  function getDailyDateAnchor() {
+    const now = new Date();
+    const isoDate = now.toISOString().slice(0, 10);
+    const lang = appConfig.language || (I18n.getLanguage ? I18n.getLanguage() : 'es');
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    const dayName = now.toLocaleDateString(lang === 'en' ? 'en-US' : 'es-ES', { weekday: 'long' });
+    return lang === 'en'
+      ? `[System Context: Current Date is ${isoDate} (${dayName}), Timezone: ${tz}]`
+      : `[Contexto del Sistema: La fecha actual es ${isoDate} (${dayName}), Zona Horaria: ${tz}]`;
+  }
+
   function getToolsSystemPromptGuide() {
     const lang = appConfig.language || (I18n.getLanguage ? I18n.getLanguage() : 'es');
     const isEs = lang !== 'en';
@@ -248,6 +259,13 @@
       } else {
         tools.push(`- \`render_chart(type="bar"|"line"|"doughnut"|"pie", title="...", labels=["..."], datasets=[{"label":"...", "data":[...]}])\`: Generates and renders an interactive chart (bar, line, doughnut or pie) from numerical data or tables.`);
       }
+    }
+
+    // Herramienta de Fecha y Hora en tiempo real
+    if (isEs) {
+      tools.push(`- \`get_current_datetime(timezone="...")\`: Obtiene la fecha, hora exacta, día de la semana y zona horaria actual en tiempo real.`);
+    } else {
+      tools.push(`- \`get_current_datetime(timezone="...")\`: Retrieves current date, exact time, day of week and timezone in real-time.`);
     }
 
     if (tools.length === 0) return '';
@@ -330,6 +348,12 @@
       ? appConfig.systemPrompt.trim()
       : '';
 
+    // Ancla de fecha diaria para máxima autoridad en System Prompt y 100% de aciertos en Context-Cache
+    if (appConfig.sendDateTime !== false) {
+      const dateAnchor = getDailyDateAnchor();
+      activePrompt = activePrompt ? (dateAnchor + '\n\n' + activePrompt) : dateAnchor;
+    }
+
     const isToolsEnabled = options.enableTools !== undefined
       ? Boolean(options.enableTools)
       : (appConfig.enableAgentJs !== false || appConfig.enableAgentWeb !== false || appConfig.enableAgentSearch !== false || appConfig.enableAgentChart !== false);
@@ -362,6 +386,18 @@
         role: 'system',
         content: fullSystemPrompt
       });
+    }
+
+    // Inyectar marca temporal exacta en el último mensaje de usuario (fuera del prefijo de caché histórica)
+    if (appConfig.sendDateTime !== false && messages.length > 0) {
+      const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
+      if (lastUserMsg) {
+        const lang = appConfig.language || 'es';
+        const nowTimeStr = new Date().toLocaleTimeString(lang === 'en' ? 'en-US' : 'es-ES', { hour: '2-digit', minute: '2-digit' });
+        if (typeof lastUserMsg.content === 'string' && !lastUserMsg.content.includes('[Context Time:')) {
+          lastUserMsg.content += `\n\n[Context Time: ${nowTimeStr}]`;
+        }
+      }
     }
 
     // Asegurar que la conversación comience con un turno de usuario válido tras el mensaje del sistema
@@ -468,29 +504,9 @@
   }
 
   function createInitialChatHistory() {
-    const history = [
+    return [
       { id: 'system_root', role: 'system', content: appConfig.systemPrompt || '' }
     ];
-
-    if (appConfig.sendDateTime !== false) {
-      const dtString = getFormattedDateTime();
-      const userContent = t('datetime_initial_user_msg', { datetime: dtString }) || `La fecha y hora actual es: ${dtString}.`;
-      const astContent = 'OK';
-
-      history.push({
-        id: `msg_dt_user_${Date.now()}`,
-        role: 'user',
-        content: userContent
-      });
-
-      history.push({
-        id: `msg_dt_ast_${Date.now() + 1}`,
-        role: 'assistant',
-        content: astContent
-      });
-    }
-
-    return history;
   }
 
   function resetConversation() {

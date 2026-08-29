@@ -7,12 +7,13 @@ const AgentCoreModule = require('../js/agent-core.js');
 test('AgentCore - Tool & ToolRegistry registro y resolución de herramientas y alias', () => {
   const registry = new AgentCoreModule.ToolRegistry();
 
-  // Comprobar que las 5 herramientas nativas están registradas
+  // Comprobar que las herramientas nativas están registradas
   assert.ok(registry.hasTool('execute_javascript'));
   assert.ok(registry.hasTool('search_web'));
   assert.ok(registry.hasTool('fetch_web_page'));
   assert.ok(registry.hasTool('download_pdf'));
   assert.ok(registry.hasTool('render_chart'));
+  assert.ok(registry.hasTool('get_current_datetime'));
 
   // Comprobar resolución por alias
   assert.equal(registry.getTool('executejs').name, 'execute_javascript');
@@ -21,10 +22,12 @@ test('AgentCore - Tool & ToolRegistry registro y resolución de herramientas y a
   assert.equal(registry.getTool('fetchwebpage').name, 'fetch_web_page');
   assert.equal(registry.getTool('downloadpdf').name, 'download_pdf');
   assert.equal(registry.getTool('renderchart').name, 'render_chart');
+  assert.equal(registry.getTool('get_current_time').name, 'get_current_datetime');
+  assert.equal(registry.getTool('now').name, 'get_current_datetime');
 
   // Comprobar generación de esquemas Function Calling
   const defs = registry.getDefinitions();
-  assert.ok(defs.length >= 5);
+  assert.ok(defs.length >= 6);
   const jsDef = defs.find(d => d.function.name === 'execute_javascript');
   assert.ok(jsDef);
   assert.equal(jsDef.type, 'function');

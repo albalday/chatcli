@@ -302,6 +302,36 @@
         }
       }));
 
+      // 6. Herramienta get_current_datetime
+      tools.push(new Tool({
+        name: 'get_current_datetime',
+        description: 'Obtiene la fecha, hora, día de la semana y zona horaria actual en tiempo real en el cliente.',
+        parameters: {
+          type: 'object',
+          properties: {
+            timezone: { type: 'string', description: 'Zona horaria opcional (ej: "Europe/Madrid", "America/New_York", "UTC").' }
+          }
+        },
+        aliases: ['get_current_time', 'get_datetime', 'current_time', 'current_date', 'get_date', 'now', 'fecha_actual', 'hora_actual'],
+        category: 'system',
+        metadata: { icon: '⏱️', label: 'get_current_datetime' },
+        handler: async (args, context) => {
+          const now = new Date();
+          const tz = args.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+          return {
+            success: true,
+            iso: now.toISOString(),
+            date: now.toLocaleDateString('es-ES', { timeZone: tz, weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
+            time: now.toLocaleTimeString('es-ES', { timeZone: tz, hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+            timestamp: now.getTime(),
+            timezone: tz
+          };
+        },
+        formatter: (args, result) => {
+          return `> ⏱️ **get_current_datetime**: ${result.date} ${result.time} (${result.timezone})`;
+        }
+      }));
+
       return tools;
     }
   }
