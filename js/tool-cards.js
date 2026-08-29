@@ -146,7 +146,33 @@
       return cardDiv;
     }
 
-    // 4. Default / Generic / MCP
+    // 4. Base de Conocimiento RAG (read_chapter_content)
+    if (norm === 'readchaptercontent' || norm === 'readchapter') {
+      const docId = toolArgs.docId || toolArgs.doc_id || '';
+      const chapterId = toolArgs.chapterId || toolArgs.chapter_id || '';
+      cardDiv.innerHTML = `
+        <div class="tool-execution-card rag-execution-card">
+          <div class="tool-card-header">
+            <div class="tool-card-title">
+              <span>📖</span>
+              <span>Base de Conocimiento (RAG Local)</span>
+            </div>
+            <div class="tool-card-header-actions">
+              <span class="tool-card-badge status-loading">⏳ Consultando doc "${Markdown.escapeHtml(docId)}", Cap ${Markdown.escapeHtml(String(chapterId))}...</span>
+              <button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Minimizar'}"><span>▾</span></button>
+            </div>
+          </div>
+          <div class="tool-card-collapsible-body">
+            <div class="tool-card-result">
+              <div class="tool-loading-placeholder">⏳ Recuperando contenido íntegro del capítulo desde IndexedDB...</div>
+            </div>
+          </div>
+        </div>
+      `;
+      return cardDiv;
+    }
+
+    // 5. Default / Generic / MCP
     const isMcp = rawName.startsWith('mcp__') || rawName.startsWith('mcp_');
     const displayTitle = isMcp ? `🔌 MCP: ${rawName.replace(/^mcp__([^_]+)__/, '$1 / ')}` : `⚙️ ${rawName}`;
     cardDiv.innerHTML = `
@@ -323,7 +349,49 @@
       return cardDiv;
     }
 
-    // 5. Herramientas MCP o Personalizadas
+    // 5. Base de Conocimiento RAG (read_chapter_content)
+    if (norm === 'readchaptercontent' || norm === 'readchapter') {
+      const docId = toolArgs.docId || toolArgs.doc_id || '';
+      const chapterId = toolArgs.chapterId || toolArgs.chapter_id || '';
+      let chapterContent = '';
+      let charCount = 0;
+      let isSuccess = true;
+
+      if (toolMsg && toolMsg.content) {
+        try {
+          const parsed = JSON.parse(toolMsg.content);
+          chapterContent = parsed.content || toolMsg.content;
+          charCount = parsed.charCount || chapterContent.length;
+          isSuccess = parsed.success !== false;
+        } catch (e) {
+          chapterContent = toolMsg.content;
+          charCount = chapterContent.length;
+        }
+      }
+
+      cardDiv.innerHTML = `
+        <div class="tool-execution-card rag-execution-card">
+          <div class="tool-card-header">
+            <div class="tool-card-title">
+              <span>📖</span>
+              <span>Base de Conocimiento: "${Markdown.escapeHtml(docId)}" (Capítulo ${Markdown.escapeHtml(String(chapterId))})</span>
+            </div>
+            <div class="tool-card-header-actions">
+              <span class="tool-card-badge ${isSuccess ? 'status-success' : 'status-error'}">${isSuccess ? `✅ Capítulo recuperado (${charCount} caracteres)` : '❌ No encontrado'}</span>
+              <button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Minimizar'}"><span>▾</span></button>
+            </div>
+          </div>
+          <div class="tool-card-collapsible-body">
+            <div class="tool-card-result">
+              <pre class="tool-result-pre"><code>${Markdown.escapeHtml(chapterContent.slice(0, 2000))}${chapterContent.length > 2000 ? '\n... (texto completo truncado en tarjeta)' : ''}</code></pre>
+            </div>
+          </div>
+        </div>
+      `;
+      return cardDiv;
+    }
+
+    // 6. Herramientas MCP o Personalizadas
     const isMcp = rawFuncName.startsWith('mcp__') || rawFuncName.startsWith('mcp_');
     const displayTitle = isMcp ? `🔌 MCP: ${rawFuncName.replace(/^mcp__([^_]+)__/, '$1 / ')}` : `⚙️ ${rawFuncName}`;
     let resultPreview = toolMsg?.content || 'Sin salida';

@@ -118,6 +118,22 @@
       return 'render_chart';
     }
 
+    // 6. Base de Conocimiento RAG (read_chapter_content)
+    if (
+      clean === 'read_chapter_content' ||
+      clean === 'read_chapter' ||
+      clean === 'get_chapter' ||
+      clean === 'get_chapter_content' ||
+      clean === 'read_doc_chapter' ||
+      noUnderscore === 'readchaptercontent' ||
+      noUnderscore === 'readchapter' ||
+      noUnderscore === 'getchapter' ||
+      noUnderscore === 'getchaptercontent' ||
+      noUnderscore === 'readdocchapter'
+    ) {
+      return 'read_chapter_content';
+    }
+
     return clean;
   }
 

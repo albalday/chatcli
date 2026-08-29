@@ -66,6 +66,16 @@
     return null;
   }
 
+  function getRagStorage() {
+    if (typeof window !== 'undefined' && (window.ChatRagStorage || window.RagStorage)) {
+      return window.ChatRagStorage || window.RagStorage;
+    }
+    if (typeof require !== 'undefined') {
+      try { return require('./ragStorage.js'); } catch (e) {}
+    }
+    return null;
+  }
+
   /**
    * Representa una herramienta individual ejecutable (Tool).
    */
@@ -337,6 +347,62 @@
         },
         formatter: (args, result) => {
           return `> ⏱️ **get_current_datetime**: ${result.date} ${result.time} (${result.timezone})`;
+        }
+      }));
+
+      // 7. Herramienta read_chapter_content (RAG Jerárquico)
+      tools.push(new Tool({
+        name: 'read_chapter_content',
+        description: 'Recupera el contenido completo y detallado de un capítulo de un documento indexado en la rama activa cuando el resumen no es suficiente.',
+        parameters: {
+          type: 'object',
+          properties: {
+            docId: {
+              type: 'string',
+              description: 'El identificador único del documento (docId).'
+            },
+            chapterId: {
+              type: 'number',
+              description: 'El número de ID del capítulo a consultar.'
+            }
+          },
+          required: ['docId', 'chapterId']
+        },
+        aliases: ['readchaptercontent', 'read_chapter', 'get_chapter', 'get_chapter_content', 'read_doc_chapter'],
+        category: 'rag',
+        metadata: { icon: '📖', label: 'read_chapter_content' },
+        handler: async (args, context) => {
+          const RagStorage = getRagStorage();
+          if (!RagStorage || !RagStorage.getChapterContent) {
+            return { success: false, error: 'Módulo de almacenamiento RAG no disponible.' };
+          }
+          const docId = args.docId || args.doc_id || args.id || '';
+          const chapterId = typeof args.chapterId === 'number' ? args.chapterId : parseInt(args.chapter_id || args.chapterId || args.chapter, 10);
+
+          if (!docId || isNaN(chapterId)) {
+            return { success: false, error: 'Parámetros inválidos: docId y chapterId numérico son requeridos.' };
+          }
+
+          const content = await RagStorage.getChapterContent(docId, chapterId);
+          if (content !== null && typeof content === 'string') {
+            return {
+              success: true,
+              docId,
+              chapterId,
+              charCount: content.length,
+              content
+            };
+          }
+          return {
+            success: false,
+            error: `No se encontró el capítulo ${chapterId} en el documento [${docId}].`
+          };
+        },
+        formatter: (args, result) => {
+          if (result.success) {
+            return `> 📖 **read_chapter_content** (Doc: \`${result.docId}\`, Cap: \`${result.chapterId}\`)\n> \`\`\`text\n> ${String(result.content).split('\n').join('\n> ')}\n> \`\`\``;
+          }
+          return `> 📖 **read_chapter_content** (Doc: \`${args.docId}\`, Cap: \`${args.chapterId}\`)\n> ❌ ${result.error || 'Error al recuperar capítulo'}`;
         }
       }));
 
