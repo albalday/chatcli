@@ -262,3 +262,30 @@ test('IngestionEngine - Auto-reintento (1 retry) si el primer intento falla en f
   assert.equal(result.chapters.length, 1);
 });
 
+test('IngestionEngine - Partición con protección atómica de imágenes y límite K de contexto', async () => {
+  const docWithImages = `
+# Guía de Hardware y Conexiones
+Esta guía detalla el cableado principal de la fuente y periféricos.
+
+## Conectores del Panel Frontal
+A continuación se muestra el esquema del conector JFP1:
+![Diagrama JFP1](data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg==)
+
+Asegúrese de respetar la polaridad de los LEDs.
+
+<img src="https://example.com/images/audio_panel.svg" alt="Audio Frontal" />
+
+## Configuración de Memoria RAM
+Coloque los módulos en las ranuras DIMMA2 y DIMMB2 para activar Dual Channel.
+  `.trim();
+
+  // Partición con límite de 4K
+  const chapters = IngestionEngine.partitionTextIntoHeuristicChapters(docWithImages, 4);
+  assert.ok(chapters.length >= 2, 'Debe identificar las secciones');
+  
+  // Verificar que la imagen Base64 y la etiqueta HTML no fueron cortadas
+  const jfpChapter = chapters.find(c => c.title.includes('Conectores') || c.content.includes('JFP1'));
+  assert.ok(jfpChapter, 'Debe existir el capítulo con conectores');
+  assert.ok(jfpChapter.content.includes('![Diagrama JFP1](data:image/png;base64,'), 'La imagen Markdown debe estar intacta');
+  assert.ok(jfpChapter.content.includes('<img src="https://example.com/images/audio_panel.svg"'), 'La etiqueta img HTML debe estar intacta');
+});

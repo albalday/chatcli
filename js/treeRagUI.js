@@ -601,7 +601,8 @@
         config: appCfg
       } : null;
 
-      await IngestionEngine.processDocumentQueue(files, branchId, llmClient, onProgress);
+      const contextLimitK = parseInt(appCfg.ragContextLimitK || '16', 10) || 16;
+      await IngestionEngine.processDocumentQueue(files, branchId, llmClient, onProgress, { ragContextLimitK: contextLimitK });
 
       progressBarFill.style.width = '100%';
       progressSummaryTitle.textContent = `✅ Ingesta completada con éxito (${files.length} archivos procesados).`;
@@ -1001,6 +1002,27 @@
         const file = e.target.files && e.target.files[0];
         if (file) {
           handleImportBranchFile(file);
+        }
+      });
+    }
+
+    // Configuración de tamaño de contexto K para ingesta
+    const selectChunkLimitK = document.getElementById('setting-rag-context-limit-k');
+    if (selectChunkLimitK) {
+      const Storage = getStorage();
+      const curCfg = (typeof window !== 'undefined' && window.appConfig) ? window.appConfig : (Storage?.loadConfig ? Storage.loadConfig() : {});
+      const savedK = String(curCfg.ragContextLimitK || 16);
+      if (selectChunkLimitK.querySelector(`option[value="${savedK}"]`)) {
+        selectChunkLimitK.value = savedK;
+      }
+
+      selectChunkLimitK.addEventListener('change', () => {
+        const valK = parseInt(selectChunkLimitK.value, 10) || 16;
+        if (typeof window !== 'undefined' && window.appConfig) {
+          window.appConfig.ragContextLimitK = valK;
+        }
+        if (Storage && Storage.saveConfig) {
+          Storage.saveConfig({ ragContextLimitK: valK });
         }
       });
     }

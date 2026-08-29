@@ -209,10 +209,99 @@
   // ==========================================================================
 
   /**
-   * Divide un documento extenso en fragmentos/capítulos candidatos coherentes por títulos o páginas,
-   * unificando subsecciones pequeñas y delimitando el número total de capítulos (15 a 35 por documento).
+   * Detecta bloques atómicos que nunca deben cortarse por la mitad (imágenes Markdown, HTML, SVGs, data URIs, bloques de código, etc.).
    */
-  function partitionTextIntoHeuristicChapters(text, maxCharsOrTarget = 25) {
+  function findAtomicBlocks(text) {
+    if (!text) return [];
+    const ranges = [];
+
+    // 1. Imágenes Markdown: ![alt](url)
+    const mdImgRegex = /!\[[^\]]*\]\([^\)]+\)/g;
+    let match;
+    while ((match = mdImgRegex.exec(text)) !== null) {
+      ranges.push({ start: match.index, end: match.index + match[0].length, type: 'image_md' });
+    }
+
+    // 2. Imágenes HTML y etiquetas img
+    const htmlImgRegex = /<img\b[^>]*\/?>/gi;
+    while ((match = htmlImgRegex.exec(text)) !== null) {
+      ranges.push({ start: match.index, end: match.index + match[0].length, type: 'image_html' });
+    }
+
+    // 3. Gráficos y diagramas SVG
+    const svgRegex = /<svg\b[\s\S]*?<\/svg>/gi;
+    while ((match = svgRegex.exec(text)) !== null) {
+      ranges.push({ start: match.index, end: match.index + match[0].length, type: 'svg' });
+    }
+
+    // 4. Data URIs de imágenes embebidas en Base64
+    const dataUriRegex = /data:image\/[a-zA-Z0-9\+\-\.]+;base64,[A-Za-z0-9+/=]+/g;
+    while ((match = dataUriRegex.exec(text)) !== null) {
+      ranges.push({ start: match.index, end: match.index + match[0].length, type: 'data_uri' });
+    }
+
+    // 5. Bloques de código cercados: ``` ... ```
+    const codeBlockRegex = /```[\s\S]*?```/g;
+    while ((match = codeBlockRegex.exec(text)) !== null) {
+      ranges.push({ start: match.index, end: match.index + match[0].length, type: 'code_block' });
+    }
+
+    return ranges.sort((a, b) => a.start - b.start);
+  }
+
+  /**
+   * Encuentra el punto de corte más seguro y cercano al índice objetivo,
+   * respetando los límites de bloques atómicos (imágenes, código, etc.) y prefiriendo saltos de párrafo.
+   */
+  function findSafeSplitIndex(text, targetIndex, minIndex = 0, atomicRanges = null) {
+    if (!text || targetIndex >= text.length) return text ? text.length : 0;
+    const ranges = atomicRanges || findAtomicBlocks(text);
+    let safeIndex = Math.min(targetIndex, text.length);
+
+    // Si targetIndex cae dentro de un bloque atómico (ej. en medio de una imagen)
+    for (const range of ranges) {
+      if (safeIndex > range.start && safeIndex < range.end) {
+        if (range.start >= minIndex) {
+          safeIndex = range.start;
+        } else {
+          safeIndex = Math.min(range.end, text.length);
+        }
+        break;
+      }
+    }
+
+    // Buscar el mejor salto de línea o párrafo antes de safeIndex
+    let bestBreak = -1;
+    const lastDoubleNl = text.lastIndexOf('\n\n', safeIndex);
+    if (lastDoubleNl >= minIndex) {
+      const inside = ranges.some(r => lastDoubleNl > r.start && lastDoubleNl < r.end);
+      if (!inside) bestBreak = lastDoubleNl + 2;
+    }
+
+    if (bestBreak === -1) {
+      const lastNl = text.lastIndexOf('\n', safeIndex);
+      if (lastNl >= minIndex) {
+        const inside = ranges.some(r => lastNl > r.start && lastNl < r.end);
+        if (!inside) bestBreak = lastNl + 1;
+      }
+    }
+
+    if (bestBreak === -1) {
+      const lastDot = text.lastIndexOf('. ', safeIndex);
+      if (lastDot >= minIndex) {
+        const inside = ranges.some(r => lastDot > r.start && lastDot < r.end);
+        if (!inside) bestBreak = lastDot + 2;
+      }
+    }
+
+    return bestBreak !== -1 ? bestBreak : safeIndex;
+  }
+
+  /**
+   * Divide un documento extenso en fragmentos/capítulos candidatos coherentes por títulos o páginas,
+   * unificando subsecciones pequeñas y delimitando el tamaño máximo según el límite de contexto configurado (K).
+   */
+  function partitionTextIntoHeuristicChapters(text, maxCharsOrLimitK = 16) {
     if (!text) return [];
 
     const lines = text.split('\n');
@@ -253,25 +342,30 @@
     }
 
     const totalLen = text.length;
-    const targetChapters = (typeof maxCharsOrTarget === 'number' && maxCharsOrTarget <= 100) ? maxCharsOrTarget : 25;
-    const maxChapterSize = (typeof maxCharsOrTarget === 'number' && maxCharsOrTarget > 100)
-      ? maxCharsOrTarget
-      : (totalLen > 300000 ? Math.max(35000, Math.floor(totalLen / targetChapters)) : 25000);
+    let maxChapterSize = 16000;
+    if (typeof maxCharsOrLimitK === 'number') {
+      if (maxCharsOrLimitK <= 512) {
+        // En unidades de K (ej: 4, 8, 16, 32, 64, 128)
+        maxChapterSize = maxCharsOrLimitK * 1000;
+      } else {
+        // En caracteres directos (ej: 2000, 5000, 25000)
+        maxChapterSize = maxCharsOrLimitK;
+      }
+    }
 
-    // Si el documento ya tiene un número razonable de secciones (<= targetChapters), mantenerlas
+    const minSize = Math.max(500, Math.floor(maxChapterSize * 0.3));
+    const targetChapters = Math.max(15, Math.ceil(totalLen / maxChapterSize));
+
     let sectionsToProcess = rawSections;
 
-    if (rawSections.length > targetChapters) {
-      const minSize = Math.max(8000, Math.floor(totalLen / (targetChapters * 1.5)));
-      const maxSize = maxChapterSize;
-
+    if (rawSections.length > targetChapters * 1.5) {
       const coalesced = [];
       let curChunk = [];
       let curChunkTitle = '';
       let curChunkLen = 0;
 
       for (const sec of rawSections) {
-        if (curChunkLen + sec.content.length > maxSize && curChunkLen >= minSize) {
+        if (curChunkLen + sec.content.length > maxChapterSize && curChunkLen >= minSize) {
           coalesced.push({
             title: curChunkTitle || ('Capítulo ' + (coalesced.length + 1)),
             content: curChunk.join('\n\n').trim()
@@ -295,26 +389,27 @@
       sectionsToProcess = coalesced;
     }
 
-    // Subdividir cualquier sección que exceda maxChapterSize
+    // Subdividir cualquier sección que exceda maxChapterSize protegiendo imágenes y bloques atómicos
     const finalChapters = [];
     for (const sec of sectionsToProcess) {
       if (sec.content.length <= maxChapterSize) {
         finalChapters.push(sec);
       } else {
+        const atomicRanges = findAtomicBlocks(sec.content);
         let start = 0;
         let part = 1;
         while (start < sec.content.length) {
-          let end = Math.min(start + maxChapterSize, sec.content.length);
-          if (end < sec.content.length) {
-            const lastNl = sec.content.lastIndexOf('\n', end);
-            if (lastNl > start + 500) end = lastNl;
+          let targetEnd = start + maxChapterSize;
+          let safeEnd = findSafeSplitIndex(sec.content, targetEnd, start + minSize, atomicRanges);
+          if (safeEnd <= start || safeEnd >= sec.content.length) {
+            safeEnd = sec.content.length;
           }
           finalChapters.push({
             title: `${sec.title} (Parte ${part})`,
-            content: sec.content.slice(start, end).trim()
+            content: sec.content.slice(start, safeEnd).trim()
           });
           part++;
-          start = end;
+          start = safeEnd;
         }
       }
     }
@@ -433,7 +528,7 @@
    * @param {Object|Function} llmClient - Cliente de invocación del LLM.
    * @returns {Promise<{ globalSummary: string, chapters: Array<{ chapterId: number, title: string, summary: string, content: string, charCount: number }> }>}
    */
-  async function analyzeDocumentStructure(text, filename, llmClient, onChapterProgress) {
+  async function analyzeDocumentStructure(text, filename, llmClient, onChapterProgress, contextLimitK = 16) {
     const cleanText = normalizeExtractedText(text);
     if (!cleanText) {
       return {
@@ -497,8 +592,8 @@ No incluyas texto explicativo antes ni después del bloque JSON.`;
     }
 
     // Estrategia para documentos extensos:
-    // Partición heurística coalescida (15 a 35 capítulos) + síntesis ágil con muestreo representativo
-    const candidateChapters = partitionTextIntoHeuristicChapters(cleanText, 25);
+    // Partición heurística coalescida respetando el límite de contexto K y bloques atómicos (imágenes, código, tablas)
+    const candidateChapters = partitionTextIntoHeuristicChapters(cleanText, contextLimitK);
     const processedChapters = [];
     const chapterSummaries = [];
     const totalChapters = candidateChapters.length;
@@ -512,8 +607,9 @@ No incluyas texto explicativo antes ni después del bloque JSON.`;
         } catch (e) {}
       }
 
-      // Muestreo ágil de los primeros 4.000 caracteres del capítulo para síntesis rápida y ligera
-      const sampleText = cand.content.length > 4000 ? (cand.content.slice(0, 4000) + '...') : cand.content;
+      // Muestreo ágil adaptado al tamaño de contexto K configurado
+      const maxSampleChars = Math.min(6000, Math.max(2000, contextLimitK * 250));
+      const sampleText = cand.content.length > maxSampleChars ? (cand.content.slice(0, maxSampleChars) + '...') : cand.content;
       const chapPrompt = `Sintetiza de forma muy concisa (2 a 4 frases técnicas) el siguiente fragmento del documento "${filename}" titulado "${cand.title}":\n\n${sampleText}`;
 
       let chapSummary = '';
@@ -573,12 +669,16 @@ No incluyas texto explicativo antes ni después del bloque JSON.`;
    * @param {string} branchId - ID de la rama destino.
    * @param {Object|Function} llmClient - Cliente de IA configurado.
    * @param {Function} [onProgressCallback] - Callback de estado: (progress: IngestionProgress) => void.
+   * @param {Object} [options] - Opciones adicionales ({ ragContextLimitK: number }).
    * @returns {Promise<{ total: number, processed: number, failed: number, documents: Array<Object>, errors: Array<Object> }>}
    */
-  async function processDocumentQueue(files, branchId, llmClient, onProgressCallback) {
+  async function processDocumentQueue(files, branchId, llmClient, onProgressCallback, options = {}) {
     const fileList = Array.isArray(files) ? files : [files];
     const totalFiles = fileList.length;
     const RagStorage = getRagStorage();
+    const Storage = getStorage();
+    const appCfg = (typeof window !== 'undefined' && window.appConfig) ? window.appConfig : (Storage?.loadConfig ? Storage.loadConfig() : {});
+    const contextLimitK = options.ragContextLimitK || llmClient?.config?.ragContextLimitK || appCfg?.ragContextLimitK || 16;
 
     if (!RagStorage) {
       throw new Error('ChatRagStorage no está disponible para persistir los documentos de la cola.');
@@ -617,7 +717,7 @@ No incluyas texto explicativo antes ni después del bloque JSON.`;
       errors: []
     };
 
-    console.info(`[ChatIngestionEngine] Iniciando cola secuencial de ${totalFiles} archivo(s) para la rama [${branchId}].`);
+    console.info(`[ChatIngestionEngine] Iniciando cola secuencial de ${totalFiles} archivo(s) para la rama [${branchId}] con límite ${contextLimitK}K.`);
 
     // BUCLE SECUENCIAL ESTRICTO (un archivo no inicia hasta guardar el anterior)
     for (let index = 0; index < totalFiles; index++) {
@@ -663,7 +763,7 @@ No incluyas texto explicativo antes ni después del bloque JSON.`;
             null,
             currentPct
           );
-        });
+        }, contextLimitK);
 
         // Paso 3: Persistencia en IndexedDB
         emitProgress(index, fileName, 'saving', `Guardando capítulos en base de datos local (${index + 1}/${totalFiles})...`, null, basePercent + 90);

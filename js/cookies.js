@@ -40,7 +40,8 @@
     enableRawLogs: false,
     enableDebugMessages: false,
     sendDateTime: true,
-    activeRagBranchId: ''
+    activeRagBranchId: '',
+    ragContextLimitK: 16
   };
 
   const STORAGE_PREFIX = 'chatcli_';
@@ -155,6 +156,8 @@
     const enableRawLogs = getStorageItem('enableRawLogs');
     const enableDebugMessages = getStorageItem('enableDebugMessages');
     const sendDateTime = getStorageItem('sendDateTime');
+    const activeRagBranchId = getStorageItem('activeRagBranchId');
+    const ragContextLimitK = getStorageItem('ragContextLimitK');
     const modelReasoningConfigRaw = getStorageItem('modelReasoningConfig');
 
     let effectiveApiUrl = apiUrl;
@@ -211,7 +214,9 @@
       enableContextCache: parseBool(enableContextCache, DEFAULT_CONFIG.enableContextCache),
       enableRawLogs: parseBool(enableRawLogs, DEFAULT_CONFIG.enableRawLogs),
       enableDebugMessages: parseBool(enableDebugMessages, DEFAULT_CONFIG.enableDebugMessages),
-      sendDateTime: parseBool(sendDateTime, DEFAULT_CONFIG.sendDateTime)
+      sendDateTime: parseBool(sendDateTime, DEFAULT_CONFIG.sendDateTime),
+      activeRagBranchId: activeRagBranchId !== null ? activeRagBranchId : DEFAULT_CONFIG.activeRagBranchId,
+      ragContextLimitK: (ragContextLimitK !== null && !isNaN(parseInt(ragContextLimitK, 10))) ? parseInt(ragContextLimitK, 10) : DEFAULT_CONFIG.ragContextLimitK
     };
   }
 
@@ -236,6 +241,8 @@
     if (config.enableRawLogs !== undefined) setStorageItem('enableRawLogs', String(config.enableRawLogs));
     if (config.enableDebugMessages !== undefined) setStorageItem('enableDebugMessages', String(config.enableDebugMessages));
     if (config.sendDateTime !== undefined) setStorageItem('sendDateTime', String(config.sendDateTime));
+    if (config.activeRagBranchId !== undefined) setStorageItem('activeRagBranchId', String(config.activeRagBranchId));
+    if (config.ragContextLimitK !== undefined) setStorageItem('ragContextLimitK', String(config.ragContextLimitK));
   }
 
   function resetConfigToDefaults() {

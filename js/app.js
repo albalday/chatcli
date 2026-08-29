@@ -2527,7 +2527,9 @@
       enableContextCache: elements.settingEnableContextCache ? elements.settingEnableContextCache.checked : true,
       enableRawLogs: elements.settingEnableRawLogs ? elements.settingEnableRawLogs.checked : Boolean(appConfig.enableRawLogs),
       enableDebugMessages: Boolean(appConfig.enableDebugMessages),
-      sendDateTime: elements.settingSendDateTime ? elements.settingSendDateTime.checked : true
+      sendDateTime: elements.settingSendDateTime ? elements.settingSendDateTime.checked : true,
+      activeRagBranchId: appConfig.activeRagBranchId || '',
+      ragContextLimitK: appConfig.ragContextLimitK || 16
     };
 
     if (Storage.saveConfig) {
