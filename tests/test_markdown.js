@@ -36,3 +36,17 @@ test('Markdown - Renderizado de bloques de pensamiento <think> y <thought>', () 
   assert.ok(html.includes('Razonando la respuesta'), 'Debe contener el razonamiento');
   assert.ok(html.includes('Respuesta final'), 'Debe contener la respuesta final');
 });
+
+test('Markdown - Renderizado de imágenes Markdown (![alt](url)) e imágenes base64', () => {
+  const sample = `1. Esquema y Distribución
+![Diagrama Placa Base GA-Z77P-D3](data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=)
+
+Referencia: Manual Gigabyte.`;
+
+  const html = Markdown.parseMarkdown(sample);
+  assert.ok(html.includes('<figure class="chat-image-figure">'), 'Debe envolver la imagen en un tag figure');
+  assert.ok(html.includes('<img class="chat-embedded-image"'), 'Debe renderizar etiqueta img');
+  assert.ok(html.includes('src="data:image/jpeg;base64,/9j/'), 'Debe incluir el src base64 seguro');
+  assert.ok(html.includes('<figcaption class="chat-image-caption">Diagrama Placa Base GA-Z77P-D3</figcaption>'), 'Debe generar el pie de foto figcaption');
+});
+

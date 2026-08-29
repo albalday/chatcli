@@ -24,6 +24,19 @@ test('Security - Sanitización de URLs en Markdown.sanitizeUrl', () => {
   assert.ok(injected.includes('&quot;'));
 });
 
+test('Security - Sanitización de URLs de imagen en Markdown.sanitizeImageUrl', () => {
+  // URLs de imagen legítimas
+  assert.equal(Markdown.sanitizeImageUrl('https://example.com/img.jpg'), 'https://example.com/img.jpg');
+  assert.equal(Markdown.sanitizeImageUrl('data:image/jpeg;base64,/9j/4AAQSkZJRg=='), 'data:image/jpeg;base64,/9j/4AAQSkZJRg==');
+  assert.equal(Markdown.sanitizeImageUrl('blob:http://localhost:8080/1234-5678'), 'blob:http://localhost:8080/1234-5678');
+
+  // Bloqueo de URLs peligrosas
+  assert.equal(Markdown.sanitizeImageUrl('javascript:alert(1)'), '');
+  assert.equal(Markdown.sanitizeImageUrl('data:text/html,<script>alert(1)</script>'), '');
+  assert.equal(Markdown.sanitizeImageUrl('vbscript:msgbox(1)'), '');
+  assert.equal(Markdown.sanitizeImageUrl('file:///etc/shadow'), '');
+});
+
 test('Security - Renderizado seguro de enlaces en Markdown', () => {
   // Enlace legítimo
   const safeMd = '[Página Segura](https://example.com)';

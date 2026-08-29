@@ -565,6 +565,56 @@ body {
   background-color: rgba(99, 102, 241, 0.06);
 }
 
+/* ==========================================================================
+   Imágenes Integradas en el Chat y RAG (Markdown Images)
+   ========================================================================== */
+.chat-image-figure {
+  margin: 1rem 0;
+  padding: 0.65rem;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+  max-width: 100%;
+}
+
+.chat-embedded-image {
+  max-width: 100%;
+  height: auto;
+  max-height: 520px;
+  object-fit: contain;
+  border-radius: var(--radius-sm);
+  display: block;
+  cursor: zoom-in;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  background-color: #ffffff;
+}
+
+.chat-embedded-image.inline-image {
+  display: inline-block;
+  vertical-align: middle;
+  max-height: 120px;
+  margin: 0.25rem;
+}
+
+.chat-embedded-image:hover {
+  box-shadow: var(--shadow-md);
+}
+
+.chat-image-caption {
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-style: italic;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
 /* Bloques de código con cabecera y botón de copiar */
 .code-block-container {
   margin: 0.85rem 0;

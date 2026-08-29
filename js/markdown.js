@@ -52,6 +52,26 @@
     return '#';
   }
 
+  /**
+   * Sanitiza URLs de imágenes (https, http, data:image, blob) para evitar inyecciones XSS.
+   * @param {string} rawUrl - URL de imagen
+   * @returns {string} - URL segura o '' si es inválida
+   */
+  function sanitizeImageUrl(rawUrl) {
+    if (!rawUrl || typeof rawUrl !== 'string') return '';
+    const trimmed = rawUrl.trim();
+    if (/^https?:\/\/[^\s"'<>]+/i.test(trimmed)) {
+      return escapeHtml(trimmed);
+    }
+    if (/^data:image\/(?:png|jpeg|jpg|gif|webp|svg\+xml);base64,[A-Za-z0-9+/=\s\.]+/i.test(trimmed)) {
+      return trimmed.replace(/\s+/g, '');
+    }
+    if (/^blob:[^\s"'<>]+/i.test(trimmed)) {
+      return escapeHtml(trimmed);
+    }
+    return '';
+  }
+
   function parseInlineMarkdown(text) {
     if (!text) return '';
     let p = text;
@@ -61,6 +81,14 @@
     p = p.replace(/__(.*?)__/g, '<strong>$1</strong>');
     p = p.replace(/\*([^\*\n]+)\*/g, '<em>$1</em>');
     p = p.replace(/_([^_\n]+)_/g, '<em>$1</em>');
+    // Imágenes: ![alt](url)
+    p = p.replace(/!\[([^\]]*)\]\(([^)]+)\)/gi, function (match, altText, url) {
+      const safeSrc = sanitizeImageUrl(url);
+      if (!safeSrc) return altText || '';
+      const cleanAlt = escapeHtml(altText ? altText.trim() : 'Imagen');
+      return `<img class="chat-embedded-image inline-image" src="${safeSrc}" alt="${cleanAlt}" loading="lazy" />`;
+    });
+    // Enlaces: [texto](url)
     p = p.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, function (match, linkText, url) {
       const safeHref = sanitizeUrl(url);
       if (safeHref === '#') return linkText;
@@ -260,10 +288,19 @@
     p = p.replace(/\*([^\*\n]+)\*/g, '<em>$1</em>');
     p = p.replace(/_([^_\n]+)_/g, '<em>$1</em>');
 
-    // 9. Enlaces [texto](url)
+    // 9. Imágenes Markdown: ![alt](url)
+    p = p.replace(/!\[([^\]]*)\]\(([^)]+)\)/gi, function (match, altText, url) {
+      const safeSrc = sanitizeImageUrl(url);
+      if (!safeSrc) return altText || '';
+      const cleanAlt = altText ? escapeHtml(altText.trim()) : 'Imagen';
+      const caption = cleanAlt && !cleanAlt.startsWith('#img') ? `<figcaption class="chat-image-caption">${cleanAlt}</figcaption>` : '';
+      return `\n<figure class="chat-image-figure"><img class="chat-embedded-image" src="${safeSrc}" alt="${cleanAlt}" loading="lazy" />${caption}</figure>\n`;
+    });
+
+    // 10. Enlaces [texto](url)
     p = p.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
 
-    // 10. Párrafos y saltos de línea
+    // 11. Párrafos y saltos de línea
     const chunks = p.split(/\n{2,}/);
     return chunks.map(chunk => {
       const trimmed = chunk.trim();
@@ -276,6 +313,7 @@
         trimmed.startsWith('<ol') ||
         trimmed.startsWith('<blockquote') ||
         trimmed.startsWith('<details') ||
+        trimmed.startsWith('<figure') ||
         trimmed.startsWith('<div class="table-container"')
       ) {
         return trimmed;
@@ -483,6 +521,7 @@
   return {
     escapeHtml,
     sanitizeUrl,
+    sanitizeImageUrl,
     parseMarkdown,
     renderMarkdown: parseMarkdown,
     attachCopyCodeListeners
