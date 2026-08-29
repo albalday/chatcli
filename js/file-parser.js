@@ -544,7 +544,8 @@
     const decoder = new TextDecoder('latin1');
     const fullText = decoder.decode(bytes);
 
-    // 1. Mapeo de offsets de objetos PDF
+    // 1. Mapeo de objetos directos PDF
+    const allObjects = new Map();
     const objOffsets = new Map();
     const objRegex = /(\d+)\s+(\d+)\s+obj/g;
     let m;
@@ -552,43 +553,83 @@
       objOffsets.set(m[1], m.index);
     }
 
+    for (const [num, offset] of objOffsets.entries()) {
+      const endObj = fullText.indexOf('endobj', offset);
+      if (endObj !== -1) {
+        allObjects.set(num, fullText.substring(offset, endObj + 6));
+      }
+    }
+
     // 2. Extracción de CMaps / ToUnicode
     const cmap = await parseCMaps(fullText, bytes, objOffsets);
 
-    function getObjectBody(objNum) {
-      const offset = objOffsets.get(String(objNum));
-      if (offset === undefined) return null;
-      const endObj = fullText.indexOf('endobj', offset);
-      if (endObj === -1) return null;
-      return fullText.substring(offset, endObj + 6);
-    }
+    // 3. Descomprimir todos los flujos de objetos comprimidos (/Type /ObjStm)
+    for (const [num, body] of allObjects.entries()) {
+      if (body.includes('/Type/ObjStm') || body.includes('/Type /ObjStm')) {
+        const sIdx = body.indexOf('stream');
+        const eIdx = body.indexOf('endstream', sIdx);
+        if (sIdx !== -1 && eIdx !== -1) {
+          let dStart = sIdx + 6;
+          if (body.charCodeAt(dStart) === 13) dStart++;
+          if (body.charCodeAt(dStart) === 10) dStart++;
+          let rEnd = eIdx;
+          if (rEnd > dStart && (body.charCodeAt(rEnd - 1) === 10 || body.charCodeAt(rEnd - 1) === 13)) rEnd--;
+          if (rEnd > dStart && (body.charCodeAt(rEnd - 1) === 10 || body.charCodeAt(rEnd - 1) === 13)) rEnd--;
 
-    // 3. Resolución del árbol jerárquico de páginas (Page Tree)
-    const pagesList = [];
-    const rootMatch = fullText.match(/\/Root\s+(\d+)\s+\d+\s+R/);
-    if (rootMatch) {
-      const catalogBody = getObjectBody(rootMatch[1]);
-      const pagesMatch = catalogBody ? catalogBody.match(/\/Pages\s+(\d+)\s+\d+\s+R/) : null;
-      if (pagesMatch) {
-        function traverse(nodeObjNum) {
-          const body = getObjectBody(nodeObjNum);
-          if (!body) return;
-          if (/\/Type\s*\/Page\b/i.test(body) && !/\/Type\s*\/Pages\b/i.test(body)) {
-            pagesList.push(nodeObjNum);
-            return;
-          }
-          const kidsMatch = body.match(/\/Kids\s*\[([\s\S]*?)\]/);
-          if (kidsMatch) {
-            const refs = kidsMatch[1].match(/(\d+)\s+\d+\s+R/g) || [];
-            for (const ref of refs) {
-              const kidNum = ref.match(/^(\d+)/)[1];
-              traverse(kidNum);
+          const offset = objOffsets.get(num) || 0;
+          const rawStream = bytes.subarray(offset + dStart, offset + rEnd);
+          try {
+            const decomp = await decompressDeflateData(rawStream);
+            if (decomp) {
+              const decStr = decoder.decode(decomp);
+              const nMatch = body.match(/\/N\s+(\d+)/);
+              const firstMatch = body.match(/\/First\s+(\d+)/);
+              const n = nMatch ? parseInt(nMatch[1]) : 0;
+              const first = firstMatch ? parseInt(firstMatch[1]) : 0;
+              const header = decStr.substring(0, first).trim().split(/\s+/);
+              for (let i = 0; i < header.length; i += 2) {
+                const oNum = header[i];
+                const oOffset = parseInt(header[i + 1]);
+                const nextOffset = (i + 3 < header.length) ? parseInt(header[i + 3]) : decStr.length - first;
+                const oBody = decStr.substring(first + oOffset, first + nextOffset);
+                allObjects.set(oNum, oBody);
+              }
             }
-          }
+          } catch (e) {}
         }
-        traverse(pagesMatch[1]);
       }
     }
+
+    // 4. Resolución del catálogo y árbol jerárquico de páginas (Page Tree)
+    let catalogObjNum = null;
+    for (const [num, body] of allObjects.entries()) {
+      if (/\/Type\s*\/Catalog\b/.test(body)) {
+        catalogObjNum = num;
+        break;
+      }
+    }
+
+    const catalogBody = catalogObjNum ? (allObjects.get(catalogObjNum) || '') : '';
+    const pagesMatch = catalogBody.match(/\/Pages\s+(\d+)\s+\d+\s+R/);
+
+    const pagesList = [];
+    function traverse(nodeObjNum) {
+      const body = allObjects.get(String(nodeObjNum));
+      if (!body) return;
+      if (/\/Type\s*\/Page\b/i.test(body) && !/\/Type\s*\/Pages\b/i.test(body)) {
+        pagesList.push(nodeObjNum);
+        return;
+      }
+      const kidsMatch = body.match(/\/Kids\s*\[([\s\S]*?)\]/);
+      if (kidsMatch) {
+        const refs = kidsMatch[1].match(/(\d+)\s+\d+\s+R/g) || [];
+        for (const ref of refs) {
+          const kidNum = ref.match(/^(\d+)/)[1];
+          traverse(kidNum);
+        }
+      }
+    }
+    if (pagesMatch) traverse(pagesMatch[1]);
 
     let pages = [];
     let pageNum = 1;
@@ -597,7 +638,7 @@
     // A. Extracción secuencial basada en el Page Tree
     if (pagesList.length > 0) {
       for (const pageObjNum of pagesList) {
-        const body = getObjectBody(pageObjNum);
+        const body = allObjects.get(String(pageObjNum));
         if (!body) continue;
 
         const contentsMatch = body.match(/\/Contents\s+(?:\[([\s\S]*?)\]|(\d+)\s+\d+\s+R)/);
@@ -614,29 +655,81 @@
 
         // Extraer contenido de streams de texto de la página
         for (const cNum of contentObjs) {
-          const offset = objOffsets.get(String(cNum));
-          if (offset !== undefined) {
-            const streamIdx = fullText.indexOf('stream', offset);
-            const endStreamIdx = fullText.indexOf('endstream', streamIdx);
-            if (streamIdx !== -1 && endStreamIdx !== -1) {
-              let dataStart = streamIdx + 6;
-              if (fullText.charCodeAt(dataStart) === 13) dataStart++;
-              if (fullText.charCodeAt(dataStart) === 10) dataStart++;
-              let rawEnd = endStreamIdx;
-              if (rawEnd > dataStart && (fullText.charCodeAt(rawEnd - 1) === 10 || fullText.charCodeAt(rawEnd - 1) === 13)) rawEnd--;
-              if (rawEnd > dataStart && (fullText.charCodeAt(rawEnd - 1) === 10 || fullText.charCodeAt(rawEnd - 1) === 13)) rawEnd--;
+          const cBody = allObjects.get(String(cNum));
+          if (!cBody) continue;
+          const streamIdx = cBody.indexOf('stream');
+          const endStreamIdx = cBody.indexOf('endstream', streamIdx);
+          if (streamIdx !== -1 && endStreamIdx !== -1) {
+            let dataStart = streamIdx + 6;
+            if (cBody.charCodeAt(dataStart) === 13) dataStart++;
+            if (cBody.charCodeAt(dataStart) === 10) dataStart++;
+            let rawEnd = endStreamIdx;
+            if (rawEnd > dataStart && (cBody.charCodeAt(rawEnd - 1) === 10 || cBody.charCodeAt(rawEnd - 1) === 13)) rawEnd--;
+            if (rawEnd > dataStart && (cBody.charCodeAt(rawEnd - 1) === 10 || cBody.charCodeAt(rawEnd - 1) === 13)) rawEnd--;
 
-              const rawBytes = bytes.subarray(dataStart, rawEnd);
-              try {
-                const decompressed = await decompressDeflateData(rawBytes);
-                if (decompressed) {
-                  const streamString = decoder.decode(decompressed);
-                  const parsed = parsePdfStreamText(streamString, cmap);
-                  if (parsed && parsed.length > 0) {
-                    pageItems.push(parsed);
+            const offset = objOffsets.get(String(cNum));
+            const rawBytes = offset !== undefined
+              ? bytes.subarray(offset + dataStart, offset + rawEnd)
+              : new Uint8Array(Array.from(cBody.substring(dataStart, rawEnd), ch => ch.charCodeAt(0)));
+
+            try {
+              const decompressed = await decompressDeflateData(rawBytes);
+              if (decompressed) {
+                const streamString = decoder.decode(decompressed);
+                const parsed = parsePdfStreamText(streamString, cmap);
+                if (parsed && parsed.length > 0) {
+                  pageItems.push(parsed);
+                }
+              }
+            } catch (e) {}
+          }
+        }
+
+        // Extraer imágenes XObject referenciadas explícitamente en esta página
+        let resDict = '';
+        const resMatch = body.match(/\/Resources\s+(?:<<([\s\S]*?)>>|(\d+)\s+\d+\s+R)/);
+        if (resMatch) {
+          if (resMatch[1]) resDict = resMatch[1];
+          else if (resMatch[2]) resDict = allObjects.get(resMatch[2]) || '';
+        }
+
+        const xobjMatch = (body + ' ' + resDict).match(/\/XObject\s+(?:<<([\s\S]*?)>>|(\d+)\s+\d+\s+R)/);
+        let xobjDict = '';
+        if (xobjMatch) {
+          if (xobjMatch[1]) xobjDict = xobjMatch[1];
+          else if (xobjMatch[2]) xobjDict = allObjects.get(xobjMatch[2]) || '';
+        }
+
+        const imgRefs = xobjDict.match(/\/([A-Za-z0-9_]+)\s+(\d+)\s+\d+\s+R/g) || [];
+        for (const ir of imgRefs) {
+          const m2 = ir.match(/\/([A-Za-z0-9_]+)\s+(\d+)/);
+          if (m2) {
+            const imgObjNum = m2[2];
+            const imgBody = allObjects.get(imgObjNum) || '';
+            if ((imgBody.includes('/Subtype/Image') || imgBody.includes('/Subtype /Image')) && imgBody.includes('DCTDecode')) {
+              const streamIdx = imgBody.indexOf('stream');
+              const endStreamIdx = imgBody.indexOf('endstream', streamIdx);
+              if (streamIdx !== -1 && endStreamIdx !== -1) {
+                let dataStart = streamIdx + 6;
+                if (imgBody.charCodeAt(dataStart) === 13) dataStart++;
+                if (imgBody.charCodeAt(dataStart) === 10) dataStart++;
+                let rawEnd = endStreamIdx;
+                if (rawEnd > dataStart && (imgBody.charCodeAt(rawEnd - 1) === 10 || imgBody.charCodeAt(rawEnd - 1) === 13)) rawEnd--;
+                if (rawEnd > dataStart && (imgBody.charCodeAt(rawEnd - 1) === 10 || imgBody.charCodeAt(rawEnd - 1) === 13)) rawEnd--;
+
+                const offset = objOffsets.get(imgObjNum);
+                const rawStreamBytes = offset !== undefined
+                  ? bytes.subarray(offset + dataStart, offset + rawEnd)
+                  : new Uint8Array(Array.from(imgBody.substring(dataStart, rawEnd), ch => ch.charCodeAt(0)));
+
+                if (rawStreamBytes.length > 2048 && rawStreamBytes[0] === 0xFF && rawStreamBytes[1] === 0xD8) {
+                  imgCounter++;
+                  const b64 = uint8ToBase64(rawStreamBytes);
+                  if (b64) {
+                    pageItems.push(`\n![Diagrama / Esquema (Pág. ${pageNum}) #img_${pageNum}_${imgCounter}](data:image/jpeg;base64,${b64})\n`);
                   }
                 }
-              } catch (e) {}
+              }
             }
           }
         }
