@@ -4477,60 +4477,130 @@ input:checked + .slider:before {
   font-weight: 600;
   color: var(--text-main);
   margin: 0 0 0.5rem 0;
+.rag-docs-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.rag-docs-section-header h4 {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.rag-docs-search-wrapper {
+  flex: 1;
+  max-width: 240px;
+}
+
+.rag-docs-search-input {
+  width: 100%;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.78rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-surface);
+  color: var(--text-main);
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.rag-docs-search-input:focus {
+  border-color: var(--primary-color);
 }
 
 .rag-docs-list {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.35rem;
+  max-height: 420px;
+  overflow-y: auto;
+  padding-right: 0.25rem;
 }
 
-.rag-doc-row {
+/* Fila compacta e interactiva de documento */
+.rag-doc-item {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem 1rem;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.45rem 0.75rem;
   background-color: var(--bg-surface);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  transition: border-color 0.15s;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.15s ease;
 }
 
-.rag-doc-row:hover {
-  border-color: var(--border-color-focus);
+.rag-doc-item:hover {
+  background-color: var(--bg-app);
+  border-color: var(--primary-color);
+  box-shadow: var(--shadow-sm);
 }
 
-.rag-doc-icon {
-  font-size: 1.5rem;
+.rag-doc-item:active {
+  transform: scale(0.995);
 }
 
-.rag-doc-info {
-  flex: 1;
+.rag-doc-item-left {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
   min-width: 0;
+  flex: 1;
 }
 
-.rag-doc-title {
-  font-size: 0.9rem;
-  font-weight: 600;
+.rag-doc-item-icon {
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+.rag-doc-item-title {
+  font-size: 0.85rem;
+  font-weight: 500;
   color: var(--text-main);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.rag-doc-meta {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  margin-top: 0.2rem;
+.rag-doc-item:hover .rag-doc-item-title {
+  color: var(--primary-color);
 }
 
-.rag-doc-actions {
+.rag-doc-item-right {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
+.rag-doc-pill {
+  font-size: 0.7rem;
+  font-weight: 500;
+  padding: 0.12rem 0.45rem;
+  background-color: var(--bg-app);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-muted);
+}
+
+.rag-doc-item-arrow {
+  font-size: 1rem;
+  color: var(--text-muted);
+  margin-left: 0.2rem;
+  transition: transform 0.15s;
+}
+
+.rag-doc-item:hover .rag-doc-item-arrow {
+  color: var(--primary-color);
+  transform: translateX(2px);
 }
 
 .rag-empty-state, .rag-empty-workspace, .rag-no-docs-message {
@@ -4557,7 +4627,34 @@ input:checked + .slider:before {
 .rag-structure-modal {
   max-width: 780px;
   width: 90vw;
-  max-height: 80vh;
+  max-height: 85vh;
+}
+
+.rag-structure-doc-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  flex-wrap: wrap;
+}
+
+.rag-structure-doc-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  flex-wrap: wrap;
+}
+
+.rag-doc-meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
 }
 
 .rag-structure-body {

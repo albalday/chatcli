@@ -374,6 +374,7 @@
         <div class="rag-docs-section">
           <div class="rag-docs-section-header">
             <h4>${t('rag_docs_title') || 'Documentos Indexados en esta Rama'} (${docs.length})</h4>
+            ${docs.length > 3 ? '<div class="rag-docs-search-wrapper"><input type="search" id="rag-docs-search-input" class="rag-docs-search-input" placeholder="🔍 Filtrar documentos..." /></div>' : ''}
           </div>
           <div id="rag-docs-list" class="rag-docs-list">
             ${docs.length === 0 ? `
@@ -388,46 +389,56 @@
       // Drag & Drop Handlers
       setupDropzoneEvents(branchId);
 
-      // Renderizar filas de documentos
+      // Renderizar filas compactas de documentos
       const docsListContainer = workspaceContainer.querySelector('#rag-docs-list');
       if (docsListContainer && docs.length > 0) {
         docs.forEach((doc) => {
-          const docRow = document.createElement('div');
-          docRow.className = 'rag-doc-row';
-          docRow.innerHTML = `
-            <div class="rag-doc-icon">${doc.fileType === 'pdf' ? '📄' : (doc.fileType === 'md' ? '📝' : '📃')}</div>
-            <div class="rag-doc-info">
-              <div class="rag-doc-title" title="${getMarkdown().escapeHtml(doc.title)}">${getMarkdown().escapeHtml(doc.title)}</div>
-              <div class="rag-doc-meta">
-                <span>${doc.fileType ? doc.fileType.toUpperCase() : 'TXT'}</span>
-                <span>•</span>
-                <span>${formatBytes(doc.fileSize)}</span>
-                <span>•</span>
-                <span>${doc.chapters ? doc.chapters.length : 0} capítulos</span>
-                <span>•</span>
-                <span>${formatDate(doc.createdAt)}</span>
-              </div>
+          const docItem = document.createElement('div');
+          docItem.className = 'rag-doc-item';
+          docItem.setAttribute('role', 'button');
+          docItem.setAttribute('tabindex', '0');
+          docItem.setAttribute('data-doc-id', doc.id);
+          docItem.setAttribute('data-doc-title', (doc.title || '').toLowerCase());
+          docItem.title = `${doc.title} (Clic para inspeccionar o eliminar)`;
+
+          docItem.innerHTML = `
+            <div class="rag-doc-item-left">
+              <span class="rag-doc-item-icon">${doc.fileType === 'pdf' ? '📄' : (doc.fileType === 'md' ? '📝' : '📃')}</span>
+              <span class="rag-doc-item-title">${getMarkdown().escapeHtml(doc.title)}</span>
             </div>
-            <div class="rag-doc-actions">
-              <button type="button" class="btn-secondary btn-view-structure" data-doc-id="${doc.id}">
-                👁️ ${t('rag_btn_view_structure') || 'Ver estructura'}
-              </button>
-              <button type="button" class="btn-secondary btn-danger-hover btn-delete-doc" data-doc-id="${doc.id}" title="Eliminar documento">
-                🗑️
-              </button>
+            <div class="rag-doc-item-right">
+              <span class="rag-doc-pill">${doc.chapters ? doc.chapters.length : 0} caps</span>
+              <span class="rag-doc-pill">${formatBytes(doc.fileSize)}</span>
+              <span class="rag-doc-item-arrow">›</span>
             </div>
           `;
 
-          docRow.querySelector('.btn-view-structure').addEventListener('click', () => {
-            openDocumentStructureViewer(doc);
+          docItem.addEventListener('click', () => {
+            openDocumentStructureViewer(doc, branchId);
           });
 
-          docRow.querySelector('.btn-delete-doc').addEventListener('click', () => {
-            handleDeleteDocument(doc, branchId);
+          docItem.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              openDocumentStructureViewer(doc, branchId);
+            }
           });
 
-          docsListContainer.appendChild(docRow);
+          docsListContainer.appendChild(docItem);
         });
+
+        // Filtro rápido de documentos por búsqueda
+        const searchInput = workspaceContainer.querySelector('#rag-docs-search-input');
+        if (searchInput) {
+          searchInput.addEventListener('input', (e) => {
+            const query = (e.target.value || '').toLowerCase().trim();
+            const items = docsListContainer.querySelectorAll('.rag-doc-item');
+            items.forEach(item => {
+              const title = item.getAttribute('data-doc-title') || '';
+              item.style.display = title.includes(query) ? 'flex' : 'none';
+            });
+          });
+        }
       }
     } catch (err) {
       console.warn('ChatTreeRagUI: Error al renderizar workspace:', err);
@@ -629,15 +640,46 @@
   /**
    * Abre el visor de estructura / Árbol de conocimiento del documento.
    */
-  async function openDocumentStructureViewer(doc) {
+  async function openDocumentStructureViewer(doc, branchId) {
     const viewerDialog = document.getElementById('rag-structure-dialog');
     if (!viewerDialog) return;
 
     const titleEl = viewerDialog.querySelector('#rag-structure-title');
+    const metaEl = viewerDialog.querySelector('#rag-structure-doc-meta');
     const summaryEl = viewerDialog.querySelector('#rag-structure-global-summary');
     const chaptersContainer = viewerDialog.querySelector('#rag-structure-chapters-list');
+    const btnDeleteDoc = viewerDialog.querySelector('#btn-rag-structure-delete-doc');
 
     if (titleEl) titleEl.textContent = doc.title || 'Documento';
+    if (metaEl) {
+      const typeStr = doc.fileType ? doc.fileType.toUpperCase() : 'TXT';
+      const sizeStr = formatBytes(doc.fileSize);
+      const capsStr = `${doc.chapters ? doc.chapters.length : 0} capítulos`;
+      const dateStr = formatDate(doc.createdAt);
+      metaEl.innerHTML = `
+        <span class="filetype-badge">${typeStr}</span>
+        <span class="rag-doc-meta-item">💾 ${sizeStr}</span>
+        <span class="rag-doc-meta-item">📑 ${capsStr}</span>
+        <span class="rag-doc-meta-item">📅 ${dateStr}</span>
+      `;
+    }
+
+    if (btnDeleteDoc) {
+      btnDeleteDoc.onclick = async () => {
+        const targetBranchId = branchId || doc.branchId || selectedManageBranchId;
+        const confirmMsg = `${t('rag_confirm_delete_doc') || '¿Estás seguro de que deseas eliminar este documento?'}\n\nDocumento: "${doc.title}"`;
+        if (confirm(confirmMsg)) {
+          const RagStorage = getRagStorage();
+          if (RagStorage) {
+            await RagStorage.deleteDocument(doc.id);
+            viewerDialog.close();
+            await renderManageWorkspace(targetBranchId);
+            await renderActiveBranchTab();
+          }
+        }
+      };
+    }
+
     if (summaryEl) {
       summaryEl.innerHTML = doc.globalSummary 
         ? getMarkdown().renderMarkdown(doc.globalSummary) 
