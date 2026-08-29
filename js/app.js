@@ -2139,15 +2139,14 @@
 
       // 5. Base de Conocimiento RAG (read_chapter_content)
       else if (normName === 'read_chapter_content' || normName === 'readchaptercontent' || normName === 'readchapter') {
-        let ragArgs = {};
-        try {
-          ragArgs = typeof tc.function.arguments === 'object' ? tc.function.arguments : JSON.parse(tc.function.arguments || '{}');
-        } catch (e) {
-          ragArgs = { docId: '', chapterId: 1 };
-        }
+        const ragService = window.ChatTreeRagService || (typeof require !== 'undefined' ? require('./chatService.js') : null);
+        const parsedReqs = ragService && ragService.parseToolCallArguments
+          ? ragService.parseToolCallArguments(tc.function.arguments)
+          : [];
 
-        const docId = ragArgs.docId || ragArgs.doc_id || '';
-        const chapterId = typeof ragArgs.chapterId === 'number' ? ragArgs.chapterId : parseInt(ragArgs.chapter_id || ragArgs.chapterId || 1, 10);
+        const targetDesc = parsedReqs.length > 1
+          ? `${parsedReqs.length} capítulos (${parsedReqs.map(r => `Cap ${r.chapterId || r.chapter_id || '?'}`).join(', ')})`
+          : (parsedReqs.length === 1 ? `Doc "${parsedReqs[0].docId || parsedReqs[0].doc_id || '?'}", Cap ${parsedReqs[0].chapterId || parsedReqs[0].chapter_id || '1'}` : 'Consultando capítulos...');
 
         const cardDiv = document.createElement('div');
         cardDiv.className = 'tool-card-wrapper';
@@ -2159,7 +2158,7 @@
                 <span>Base de Conocimiento (RAG)</span>
               </div>
               <div class="tool-card-header-actions">
-                <span class="tool-card-badge status-loading">⏳ Consultando doc "${Markdown.escapeHtml(docId)}", Cap ${Markdown.escapeHtml(String(chapterId))}...</span>
+                <span class="tool-card-badge status-loading">⏳ ${Markdown.escapeHtml(targetDesc)}...</span>
                 <button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Minimizar'}"><span>▾</span></button>
               </div>
             </div>
@@ -2174,12 +2173,11 @@
         attachListeners(cardDiv);
         scrollToBottom();
 
-        addDebugLog('tool', `read_chapter_content: Doc [${docId}], Cap [${chapterId}]`);
-        addDebugLog('raw', `>>> TOOL CALL read_chapter_content:\n${JSON.stringify(ragArgs, null, 2)}`);
+        addDebugLog('tool', `read_chapter_content: ${targetDesc}`);
+        addDebugLog('raw', `>>> TOOL CALL read_chapter_content:\n${typeof tc.function.arguments === 'string' ? tc.function.arguments : JSON.stringify(tc.function.arguments, null, 2)}`);
 
-        const ragService = window.ChatTreeRagService || (typeof require !== 'undefined' ? require('./chatService.js') : null);
         const ragRes = ragService && ragService.resolveChapterToolCall
-          ? await ragService.resolveChapterToolCall(ragArgs)
+          ? await ragService.resolveChapterToolCall(tc.function.arguments)
           : { success: false, error: 'Servicio de RAG no disponible' };
 
         const badgeEl = cardDiv.querySelector('.tool-card-badge');
@@ -2188,7 +2186,7 @@
         if (badgeEl) {
           badgeEl.className = ragRes.success ? 'tool-card-badge status-success' : 'tool-card-badge status-error';
           badgeEl.textContent = ragRes.success
-            ? `Capítulo ${chapterId} (${FileParser.formatBytes ? FileParser.formatBytes(ragRes.charCount || 0) : (ragRes.charCount || 0) + ' chars'})`
+            ? (parsedReqs.length > 1 ? `✅ ${parsedReqs.length} Capítulos recuperados (${FileParser.formatBytes ? FileParser.formatBytes(ragRes.charCount || 0) : (ragRes.charCount || 0) + ' chars'})` : `Capítulo ${ragRes.chapterId} (${FileParser.formatBytes ? FileParser.formatBytes(ragRes.charCount || 0) : (ragRes.charCount || 0) + ' chars'})`)
             : 'Error al recuperar';
         }
 
@@ -2218,7 +2216,7 @@
           content: outText
         });
 
-        const toolMd = `> 📖 **read_chapter_content** (Doc: \`${docId}\`, Cap: \`${chapterId}\`)\n> \`\`\`text\n> ${String(outText).split('\n').join('\n> ')}\n> \`\`\`\n\n`;
+        const toolMd = `> 📖 **read_chapter_content** (${targetDesc})\n> \`\`\`text\n> ${String(outText).split('\n').join('\n> ')}\n> \`\`\`\n\n`;
         accumulatedConversationMarkdown += (currentTurnText ? currentTurnText + '\n\n' : '') + toolMd + '\n\n';
 
         turnIndex++;

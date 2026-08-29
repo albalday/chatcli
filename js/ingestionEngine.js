@@ -539,24 +539,24 @@
       };
     }
 
-    const SYSTEM_PROMPT = `Eres un asistente de indexación documental y extracción estructurada para un sistema RAG local.
-Tu misión es analizar el texto del documento y responder EXCLUSIVAMENTE con un objeto JSON válido con la siguiente estructura:
+    const SYSTEM_PROMPT = `Eres un asistente de indexación técnica ultra-conciso para un sistema RAG local.
+Tu misión es responder EXCLUSIVAMENTE con un objeto JSON válido con la siguiente estructura:
 {
-  "globalSummary": "Resumen conciso y temático del documento completo (150-250 palabras).",
+  "globalSummary": "Micro-resumen ultra-escueto y directo del documento completo (1 o 2 frases, máx. 35 palabras).",
   "chapters": [
     {
       "chapterId": 1,
-      "title": "Título descriptivo del capítulo o sección",
-      "summary": "Resumen técnico de 2-4 frases de lo que se cubre aquí.",
+      "title": "Título descriptivo de la sección",
+      "summary": "Micro-resumen telegráfico de 1 sola frase (máx. 15-20 palabras) enumerando los componentes, comandos o conceptos clave.",
       "content": "Texto original íntegro o sección clave asignada a este capítulo."
     }
   ]
 }
-No incluyas texto explicativo antes ni después del bloque JSON.`;
+Sé absolutamente escueto y directo. No uses prefacios, explicaciones ni palabras de relleno.`;
 
     // Si el texto es de longitud moderada (<= 12.000 caracteres / ~3.000 tokens)
     if (cleanText.length <= 12000) {
-      const prompt = `Analiza el siguiente documento titulado "${filename}" y divide su contenido en capítulos lógicos estructurados con sus respectivos resúmenes y el resumen global:\n\n---\n${cleanText}\n---`;
+      const prompt = `Analiza el documento "${filename}" y divide su contenido en capítulos estructurados con resúmenes telegráficos ultra-escuetos (1 sola frase por capítulo):\n\n---\n${cleanText}\n---`;
 
       try {
         let responseText = await callLLM(llmClient, prompt, SYSTEM_PROMPT);
@@ -565,7 +565,7 @@ No incluyas texto explicativo antes ni después del bloque JSON.`;
         // Auto-reintento (máximo 1 reintento) si el primer intento no es JSON estructurado válido
         if (!parsed || !Array.isArray(parsed.chapters) || parsed.chapters.length === 0) {
           try {
-            const retryPrompt = `La respuesta anterior no era un JSON válido. Devuelve ÚNICAMENTE el objeto JSON estructurado con "globalSummary" y "chapters" para el documento "${filename}":\n\n---\n${cleanText}\n---`;
+            const retryPrompt = `La respuesta anterior no era un JSON válido. Devuelve ÚNICAMENTE el objeto JSON estructurado con "globalSummary" (1-2 frases) y "chapters" (1 frase telegráfica cada uno) para "${filename}":\n\n---\n${cleanText}\n---`;
             const retryResponse = await callLLM(llmClient, retryPrompt, SYSTEM_PROMPT);
             const retryParsed = extractJsonFromResponse(retryResponse);
             if (retryParsed && Array.isArray(retryParsed.chapters) && retryParsed.chapters.length > 0) {
@@ -613,14 +613,14 @@ No incluyas texto explicativo antes ni después del bloque JSON.`;
       const kVal = typeof contextLimitK === 'number' ? contextLimitK : 64;
       const maxSampleChars = Math.min(32000, Math.max(4000, kVal * 200));
       const sampleText = cand.content.length > maxSampleChars ? (cand.content.slice(0, maxSampleChars) + '...') : cand.content;
-      const chapPrompt = `Sintetiza de forma muy concisa (2 a 4 frases técnicas) el siguiente fragmento del documento "${filename}" titulado "${cand.title}":\n\n${sampleText}`;
+      const chapPrompt = `Genera un micro-resumen telegráfico y ultra-escueto (1 SOLA FRASE directa, máx. 15-20 palabras) enumerando únicamente componentes, funciones o datos clave de "${cand.title}" en el documento "${filename}":\n\n${sampleText}`;
 
       let chapSummary = '';
       try {
-        chapSummary = await callLLM(llmClient, chapPrompt, 'Eres un sintetizador técnico. Responde solo con el resumen conciso de 2 a 4 frases.');
-        chapSummary = chapSummary.trim().replace(/^Resumen:\s*/i, '');
+        chapSummary = await callLLM(llmClient, chapPrompt, 'Eres un indexador técnico ultra-conciso. Responde ÚNICAMENTE con 1 sola frase telegráfica directa sin introducciones ni palabras sobrantes.');
+        chapSummary = chapSummary.trim().replace(/^Resumen:\s*/i, '').replace(/^En esta sección se\s+/i, '');
       } catch (e) {
-        chapSummary = `Sección sobre ${cand.title}.`;
+        chapSummary = `${cand.title}.`;
       }
 
       chapterSummaries.push(`- ${cand.title}: ${chapSummary}`);
@@ -637,11 +637,11 @@ No incluyas texto explicativo antes ni después del bloque JSON.`;
     let globalSummary = '';
     try {
       const summariesBlock = chapterSummaries.join('\n').slice(0, 4000);
-      const globalPrompt = `A partir de los siguientes resúmenes de secciones del documento "${filename}", redacta un resumen global conciso y cohesivo (100-200 palabras):\n\n${summariesBlock}`;
-      globalSummary = await callLLM(llmClient, globalPrompt, 'Eres un redactor técnico. Responde únicamente con el resumen global.');
+      const globalPrompt = `A partir de los siguientes puntos, redacta un resumen global ultra-escueto (1 o 2 frases directas, máx. 35 palabras) del documento "${filename}":\n\n${summariesBlock}`;
+      globalSummary = await callLLM(llmClient, globalPrompt, 'Eres un redactor técnico ultra-conciso. Responde ÚNICAMENTE con 1 o 2 frases directas sin prefacios ni relleno.');
       globalSummary = globalSummary.trim();
     } catch (e) {
-      globalSummary = `Documento ${filename} compuesto por ${processedChapters.length} secciones estructuradas.`;
+      globalSummary = `Documento ${filename} (${processedChapters.length} secciones).`;
     }
 
     return {

@@ -1026,6 +1026,12 @@
           if (!prevMsg || prevMsg.role === 'system') {
             formatted.push({ role: 'user', content: 'Continuar' });
           }
+        } else if (m.role === 'user') {
+          // Regla Gemini: Un turno 'user' NUNCA puede ir inmediatamente después de un turno 'tool'
+          const prevMsg = formatted.length > 0 ? formatted[formatted.length - 1] : null;
+          if (prevMsg && prevMsg.role === 'tool') {
+            formatted.push({ role: 'assistant', content: 'Información de herramientas recibida.' });
+          }
           formatted.push(m);
         } else {
           formatted.push(m);

@@ -57,6 +57,36 @@
   };
 
   /**
+  /**
+   * Parsea argumentos de herramientas que pueden venir como objeto, array o múltiples JSONs concatenados.
+   */
+  function parseToolCallArguments(rawArgs) {
+    if (!rawArgs) return [];
+    if (typeof rawArgs === 'object') {
+      if (Array.isArray(rawArgs)) return rawArgs;
+      return [rawArgs];
+    }
+    const str = String(rawArgs).trim();
+    if (!str) return [];
+
+    try {
+      const parsed = JSON.parse(str);
+      return Array.isArray(parsed) ? parsed : [parsed];
+    } catch (e) {
+      const items = [];
+      const jsonRegex = /\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g;
+      let m;
+      while ((m = jsonRegex.exec(str)) !== null) {
+        try {
+          const item = JSON.parse(m[0]);
+          if (item && typeof item === 'object') items.push(item);
+        } catch (itemErr) {}
+      }
+      return items;
+    }
+  }
+
+  /**
    * Construye el bloque jerárquico compacto de resúmenes a partir de la rama activa.
    * @param {string} branchId - ID de la rama seleccionada.
    * @param {Object} [options={}] - Opciones adicionales (ej: fallbackMode).
@@ -79,25 +109,25 @@
       const lines = [];
       lines.push(`[BASE DE CONOCIMIENTO ACTIVA: ${branch.name}]`);
       if (branch.description) {
-        lines.push(`Descripción: ${branch.description}`);
+        lines.push(`Descripción: ${branch.description.trim()}`);
       }
 
       if (options.fallbackMode) {
-        lines.push(`Tienes acceso a los siguientes documentos y resúmenes de capítulos indexados. Como la llamada a herramientas no está disponible en este modelo, responde con la información presente en estos resúmenes estructurados:\n`);
+        lines.push(`Documentos y capítulos indexados:\n`);
       } else {
-        lines.push(`Tienes acceso a los siguientes documentos y capítulos. Utiliza los resúmenes para responder preguntas generales. Si necesitas detalles específicos, comandos, fragmentos de código o citas exactas, DEBES invocar la herramienta 'read_chapter_content'.\n`);
+        lines.push(`Para citas exactas, diagramas o detalles técnicos profundos, invoca 'read_chapter_content(docId, chapterId)'.\n`);
       }
 
       for (const doc of docHeaders) {
         lines.push(`- Documento: "${doc.title}" (docId: "${doc.id}")`);
         if (doc.globalSummary) {
-          lines.push(`  Resumen Global: ${doc.globalSummary}`);
+          lines.push(`  Resumen Global: ${doc.globalSummary.trim()}`);
         }
 
         if (Array.isArray(doc.chapters) && doc.chapters.length > 0) {
           lines.push(`  Capítulos disponibles:`);
           for (const chap of doc.chapters) {
-            const sumText = chap.summary || 'Sin resumen específico.';
+            const sumText = (chap.summary || 'Sin resumen específico.').trim();
             lines.push(`    * Cap ID [${chap.chapterId}]: "${chap.title}" -> ${sumText}`);
           }
         }
@@ -131,10 +161,11 @@
 
   /**
    * Resuelve la ejecución de una llamada a 'read_chapter_content' contra IndexedDB.
-   * @param {Object} args - Parámetros { docId, chapterId }.
-   * @returns {Promise<{ success: boolean, docId: string, chapterId: number, content?: string, charCount?: number, error?: string }>}
+   * Soporta peticiones individuales, arrays y múltiples JSONs concatenados devueltos por el modelo.
+   * @param {Object|string} rawArgs - Parámetros { docId, chapterId } o string JSON.
+   * @returns {Promise<{ success: boolean, docId: string, chapterId: number|string, content?: string, charCount?: number, error?: string }>}
    */
-  async function resolveChapterToolCall(args = {}) {
+  async function resolveChapterToolCall(rawArgs = {}) {
     const RagStorage = getRagStorage();
     if (!RagStorage || !RagStorage.getChapterContent) {
       return {
@@ -143,42 +174,90 @@
       };
     }
 
-    const docId = args.docId || args.doc_id || args.id || '';
-    const chapterId = typeof args.chapterId === 'number' ? args.chapterId : parseInt(args.chapter_id || args.chapterId || args.chapter, 10);
-
-    if (!docId || isNaN(chapterId)) {
+    const requests = parseToolCallArguments(rawArgs);
+    if (requests.length === 0) {
       return {
         success: false,
         error: 'Parámetros inválidos: docId (string) y chapterId (número) son obligatorios.'
       };
     }
 
-    try {
-      const content = await RagStorage.getChapterContent(docId, chapterId);
-      if (content !== null && typeof content === 'string') {
-        return {
-          success: true,
+    const results = [];
+    for (const req of requests) {
+      const docId = req.docId || req.doc_id || req.id || '';
+      const chapterId = typeof req.chapterId === 'number' ? req.chapterId : parseInt(req.chapter_id || req.chapterId || req.chapter, 10);
+      if (!docId || isNaN(chapterId)) continue;
+
+      try {
+        const content = await RagStorage.getChapterContent(docId, chapterId);
+        if (content !== null && typeof content === 'string') {
+          results.push({
+            docId,
+            chapterId,
+            charCount: content.length,
+            content
+          });
+        } else {
+          results.push({
+            docId,
+            chapterId,
+            error: `No se encontró el capítulo ID [${chapterId}] en el documento "${docId}".`
+          });
+        }
+      } catch (err) {
+        results.push({
           docId,
           chapterId,
-          charCount: content.length,
-          content
-        };
+          error: `Error al leer capítulo ID [${chapterId}]: ${err.message || String(err)}`
+        });
       }
+    }
 
+    if (results.length === 0) {
       return {
         success: false,
-        error: `No se encontró el capítulo ID [${chapterId}] en el documento "${docId}".`
-      };
-    } catch (err) {
-      return {
-        success: false,
-        error: `Error al leer capítulo de la base de datos: ${err?.message || String(err)}`
+        error: 'Parámetros inválidos: docId (string) y chapterId (número) son obligatorios.'
       };
     }
+
+    if (results.length === 1) {
+      const single = results[0];
+      if (single.content !== undefined) {
+        return {
+          success: true,
+          docId: single.docId,
+          chapterId: single.chapterId,
+          charCount: single.charCount,
+          content: single.content
+        };
+      }
+      return {
+        success: false,
+        docId: single.docId,
+        chapterId: single.chapterId,
+        error: single.error
+      };
+    }
+
+    const combinedContent = results.map(r => {
+      if (r.content !== undefined) {
+        return `=== Documento: ${r.docId} | Capítulo ${r.chapterId} ===\n${r.content}`;
+      }
+      return `=== Documento: ${r.docId} | Capítulo ${r.chapterId} ===\nError: ${r.error}`;
+    }).join('\n\n---\n\n');
+
+    return {
+      success: results.some(r => r.content !== undefined),
+      docId: results.map(r => r.docId).join(', '),
+      chapterId: results.map(r => r.chapterId).join(', '),
+      charCount: combinedContent.length,
+      content: combinedContent
+    };
   }
 
   return {
     READ_CHAPTER_TOOL_DEFINITION,
+    parseToolCallArguments,
     buildTreeRagSystemContext,
     injectTreeRagContext,
     resolveChapterToolCall
