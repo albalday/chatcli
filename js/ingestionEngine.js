@@ -737,8 +737,9 @@ Sé absolutamente escueto y directo. No uses prefacios, explicaciones ni palabra
       const kVal = typeof contextLimitK === 'number' ? contextLimitK : 64;
       const maxSampleChars = Math.min(32000, Math.max(4000, kVal * 200));
       const cleanedSample = prepareTextForSummarization(cand.content);
+      const sampleText = cleanedSample.length > maxSampleChars ? (cleanedSample.slice(0, maxSampleChars) + '...') : cleanedSample;
       const chapPrompt = `Genera un micro-resumen telegráfico y ultra-escueto (1 SOLA FRASE directa, máx. 20-25 palabras) de "${cand.title}" en el documento "${filename}".
-Si la sección contiene esquemas, imágenes o diagramas visuales ([ESQUEMA / IMAGEN VISUAL: ...]), menciona explícitamente qué diagramas o ilustraciones clave incluye (ej: "Incluye diagrama de conectores de audio 7.1", "Esquema del zócalo CPU").
+Si la sección contiene esquemas, imágenes o diagramas visuales ([IMAGEN / ESQUEMA: ...]), menciona explícitamente qué diagramas o ilustraciones clave incluye (ej: "Incluye diagrama de conectores de audio 7.1", "Esquema del zócalo CPU").
 
 Contenido:
 ${sampleText}`;
