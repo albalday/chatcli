@@ -181,27 +181,31 @@
           totalSize += (d.fileSize || 0);
         });
 
+        const descHtml = branch.description ? `<p class="rag-branch-toggle-desc">${getMarkdown().escapeHtml(branch.description)}</p>` : '';
+
         const card = document.createElement('div');
         card.className = `rag-branch-toggle-card ${isCurrentActive ? 'is-active-chat' : ''}`;
         card.innerHTML = `
+          <div class="rag-branch-toggle-switch-wrapper">
+            <label class="switch" title="${isCurrentActive ? 'Desactivar esta rama en el chat' : 'Activar esta rama en el chat'}">
+              <input type="checkbox" class="rag-branch-checkbox" data-branch-id="${branch.id}" ${isCurrentActive ? 'checked' : ''}>
+              <span class="slider"></span>
+            </label>
+          </div>
           <div class="rag-branch-toggle-info">
             <div class="rag-branch-toggle-title">
               <span>📁 ${getMarkdown().escapeHtml(branch.name)}</span>
               ${branchActivePill}
             </div>
-            <p class="rag-branch-toggle-desc">${branch.description ? getMarkdown().escapeHtml(branch.description) : '<em>Sin descripción</em>'}</p>
-            <div class="rag-branch-toggle-meta">
-              <span>📄 ${docs.length} documentos</span>
-              <span>•</span>
-              <span>📑 ${totalChapters} capítulos</span>
-              <span>•</span>
-              <span>💾 ${formatBytes(totalSize)}</span>
+            <div class="rag-branch-info-frame">
+              ${descHtml}
+              <div class="rag-branch-meta-badges">
+                <span class="rag-meta-badge">📄 <strong>${docs.length}</strong> documentos</span>
+                <span class="rag-meta-badge">📑 <strong>${totalChapters}</strong> capítulos</span>
+                <span class="rag-meta-badge">💾 <strong>${formatBytes(totalSize)}</strong></span>
+              </div>
             </div>
           </div>
-          <label class="switch" title="${isCurrentActive ? 'Desactivar esta rama en el chat' : 'Activar esta rama en el chat'}">
-            <input type="checkbox" class="rag-branch-checkbox" data-branch-id="${branch.id}" ${isCurrentActive ? 'checked' : ''}>
-            <span class="slider"></span>
-          </label>
         `;
 
         const checkbox = card.querySelector('.rag-branch-checkbox');
