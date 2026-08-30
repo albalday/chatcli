@@ -664,26 +664,34 @@
       };
     }
 
-    const SYSTEM_PROMPT = `Eres un asistente de indexación técnica ultra-conciso para un sistema RAG local.
-Tu misión es responder EXCLUSIVAMENTE con un objeto JSON válido con la siguiente estructura:
+    const SYSTEM_PROMPT = `Eres un indexador semántico de alta precisión y densidad informativa para un sistema RAG jerárquico.
+Tu misión es estructurar el contenido en un objeto JSON válido con máxima concisión y anclaje de palabras clave esenciales.
+
+Estructura requerida:
 {
-  "globalSummary": "Micro-resumen ultra-escueto y directo del documento completo (1 o 2 frases, máx. 35 palabras).",
+  "globalSummary": "Resumen global denso y directo (1-2 frases, máx. 40 palabras) con tema central, alcance, tecnologías/entidades clave y rangos de fechas/versiones si existen.",
   "chapters": [
     {
       "chapterId": 1,
-      "title": "Título descriptivo de la sección",
-      "summary": "Micro-resumen telegráfico de 1 sola frase (máx. 15-20 palabras) enumerando los componentes, comandos o conceptos clave.",
-      "content": "Texto original íntegro o sección clave asignada a este capítulo."
+      "title": "Título descriptivo y preciso de la sección",
+      "summary": "Micro-resumen telegráfico de alta densidad (1-2 frases, máx. 25-30 palabras): palabras clave exactas, APIs/comandos, rangos de fecha/hora o eventos/logs (si aplica), tags/fuentes y mención explícita de diagramas.",
+      "content": "Texto original íntegro de la sección."
     }
   ]
 }
-Sé absolutamente escueto y directo. No uses prefacios, explicaciones ni palabras de relleno.`;
+
+Reglas estrictas de indexación RAG:
+1. BREVEDAD Y ALTA DENSIDAD: Cero palabras de relleno o muletillas como "En esta sección...", "Este documento describe...", "A continuación se muestra...".
+2. PALABRAS CLAVE Y ENTIDADES: Conserva términos técnicos literales, identificadores de funciones/APIs, endpoints, librerías, parámetros y acrónimos clave.
+3. LOGS, FECHAS Y REGISTROS: Si el texto contiene logs, registros o eventos cronológicos, incluye el rango de fechas/horas, niveles de severidad (ERROR, WARN) o códigos de estado relevantes.
+4. FUENTES Y TAGS: Si hay etiquetas (#tag), nombres de archivo, metadatos de autor o versiones (vX.Y), inclúyelos.
+5. ESQUEMAS Y DIAGRAMAS: Si aparecen marcas [IMAGEN / ESQUEMA: ...], enumera qué diagramas o ilustraciones clave contiene (ej: "Diagrama pinout GPIO", "Esquema arquitectura").`;
 
     // Si el texto es ultra-breve (un solo fragmento sin páginas ni secciones, <= 2.500 caracteres)
     const hasMultiplePagesOrSections = cleanText.includes('--- Página') || cleanText.includes('[Página') || cleanText.length > 2500;
     if (!hasMultiplePagesOrSections) {
       const summaryCleanText = prepareTextForSummarization(cleanText);
-      const prompt = `Analiza el documento "${filename}" y divide su contenido en capítulos estructurados con resúmenes telegráficos ultra-escuetos (1 sola frase por capítulo):\n\n---\n${summaryCleanText}\n---`;
+      const prompt = `Analiza el documento "${filename}" y divide su contenido en capítulos estructurados con micro-resúmenes telegráficos de alta densidad semántica (palabras clave exactas, fechas/logs, diagramas, máx. 25-30 palabras por capítulo):\n\n---\n${summaryCleanText}\n---`;
 
       try {
         let responseText = await callLLM(llmClient, prompt, SYSTEM_PROMPT);
@@ -691,7 +699,7 @@ Sé absolutamente escueto y directo. No uses prefacios, explicaciones ni palabra
 
         if (!parsed || !Array.isArray(parsed.chapters) || parsed.chapters.length === 0) {
           try {
-            const retryPrompt = `La respuesta anterior no era un JSON válido. Devuelve ÚNICAMENTE el objeto JSON estructurado con "globalSummary" (1-2 frases) y "chapters" (1 frase telegráfica cada uno) para "${filename}":\n\n---\n${summaryCleanText}\n---`;
+            const retryPrompt = `La respuesta anterior no era un JSON válido. Devuelve ÚNICAMENTE el objeto JSON estructurado con "globalSummary" (1-2 frases densas) y "chapters" (micro-resúmenes telegráficos con palabras clave, logs/fechas y diagramas) para "${filename}":\n\n---\n${summaryCleanText}\n---`;
             const retryResponse = await callLLM(llmClient, retryPrompt, SYSTEM_PROMPT);
             const retryParsed = extractJsonFromResponse(retryResponse);
             if (retryParsed && Array.isArray(retryParsed.chapters) && retryParsed.chapters.length > 0) {
@@ -738,16 +746,27 @@ Sé absolutamente escueto y directo. No uses prefacios, explicaciones ni palabra
       const maxSampleChars = Math.min(32000, Math.max(4000, kVal * 200));
       const cleanedSample = prepareTextForSummarization(cand.content);
       const sampleText = cleanedSample.length > maxSampleChars ? (cleanedSample.slice(0, maxSampleChars) + '...') : cleanedSample;
-      const chapPrompt = `Genera un micro-resumen telegráfico y ultra-escueto (1 SOLA FRASE directa, máx. 20-25 palabras) de "${cand.title}" en el documento "${filename}".
-Si la sección contiene esquemas, imágenes o diagramas visuales ([IMAGEN / ESQUEMA: ...]), menciona explícitamente qué diagramas o ilustraciones clave incluye (ej: "Incluye diagrama de conectores de audio 7.1", "Esquema del zócalo CPU").
+      const chapPrompt = `Genera un micro-resumen telegráfico de alta densidad semántica (1-2 frases concisas, máx. 25-30 palabras) para la sección "${cand.title}" del documento "${filename}".
+
+Reglas estrictas de indexación RAG:
+- Cero muletillas ("En esta sección se explica...", "Este capítulo trata..."). Sé directo.
+- Incluye palabras clave técnicas exactas, nombres de componentes, comandos, parámetros, librerías o funciones.
+- Si contiene logs, auditorías o registros temporales, captura el rango de fecha/hora, tags (#tag) o eventos críticos.
+- Si contiene esquemas, imágenes o diagramas visuales ([IMAGEN / ESQUEMA: ...]), especifícalos explícitamente (ej: "Incluye diagrama de conectores de audio 7.1", "Esquema del zócalo CPU").
 
 Contenido:
 ${sampleText}`;
 
       let chapSummary = '';
       try {
-        chapSummary = await callLLM(llmClient, chapPrompt, 'Eres un indexador técnico ultra-conciso para RAG. Responde ÚNICAMENTE con 1 sola frase directa enumerando componentes, funciones y diagramas presentes sin introducciones ni palabras sobrantes.');
-        chapSummary = chapSummary.trim().replace(/^Resumen:\s*/i, '').replace(/^En esta sección se\s+/i, '');
+        chapSummary = await callLLM(llmClient, chapPrompt, 'Eres un indexador técnico ultra-conciso para un sistema RAG jerárquico. Responde ÚNICAMENTE con 1-2 frases directas y telegráficas con máxima densidad de palabras clave, fechas/logs y diagramas, sin introducciones ni texto conversacional.');
+        chapSummary = chapSummary.trim()
+          .replace(/^Resumen:\s*/i, '')
+          .replace(/^En esta sección se\s+/i, '')
+          .replace(/^En este capítulo se\s+/i, '')
+          .replace(/^Esta sección describe\s+/i, '')
+          .replace(/^Este documento describe\s+/i, '')
+          .replace(/^Capítulo \d+:\s*/i, '');
       } catch (e) {
         chapSummary = `${cand.title}.`;
       }
@@ -766,9 +785,13 @@ ${sampleText}`;
     let globalSummary = '';
     try {
       const summariesBlock = chapterSummaries.join('\n').slice(0, 4000);
-      const globalPrompt = `A partir de los siguientes puntos, redacta un resumen global ultra-escueto (1 o 2 frases directas, máx. 35 palabras) del documento "${filename}":\n\n${summariesBlock}`;
-      globalSummary = await callLLM(llmClient, globalPrompt, 'Eres un redactor técnico ultra-conciso. Responde ÚNICAMENTE con 1 o 2 frases directas sin prefacios ni relleno.');
-      globalSummary = globalSummary.trim();
+      const globalPrompt = `A partir de los siguientes resúmenes de sección, genera un resumen global denso y conciso (1-2 frases directas, máx. 40 palabras) del documento "${filename}".
+Destaca el propósito central, tecnologías/entidades clave, versiones/fechas relevantes y alcance general:\n\n${summariesBlock}`;
+      globalSummary = await callLLM(llmClient, globalPrompt, 'Eres un redactor técnico de alta densidad. Responde ÚNICAMENTE con 1 o 2 frases directas resumiendo el propósito, tecnologías clave y alcance, sin prefacios ni relleno.');
+      globalSummary = globalSummary.trim()
+        .replace(/^Resumen Global:\s*/i, '')
+        .replace(/^Resumen:\s*/i, '')
+        .replace(/^En este documento se\s+/i, '');
     } catch (e) {
       globalSummary = `Documento ${filename} (${processedChapters.length} secciones).`;
     }
