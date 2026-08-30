@@ -3594,7 +3594,7 @@
       exportConversationAsPrint
     };
 
-    console.log('💬 ZeroChat v5.1 initialized successfully with Autonomous Agentic Engine, Traffic Debug Logs and Tree-RAG.');
+    console.log('💬 ZeroChat v5.2 initialized successfully with Autonomous Agentic Engine, Traffic Debug Logs and Tree-RAG.');
   }
 
   if (document.readyState === 'loading') {
