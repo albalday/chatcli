@@ -1,23 +1,27 @@
 #!/usr/bin/env python3
 """
-ChatCLI Professional Standalone Bundler & Minifier.
+ChatCLI Professional Standalone Bundler & Gzip Base64 Compressor.
 Compila los archivos modulares HTML, CSS y JS en un único archivo autónomo y portable 'chatcli.html'.
 
 Características principales:
-- Arquitectura de dos niveles:
-    1. Nivel Principal: Minificación léxica y AST de alto rendimiento vía esbuild / terser en pase único.
-    2. Nivel Fallback: Tokenizador de máquina de estados (FSM) en Python puro que elimina comentarios
-       y espacios redundantes con seguridad semántica garantizada (preserva Strings, Template Literals ${...},
-       RegExps y reglas de inserción automática de punto y coma ASI).
-- Minificación integral de las 3 capas: HTML estructural, estilos CSS y módulos JavaScript.
-- Verificación automática post-build: Valida estructura HTML, inclusión de módulos y sintaxis JS.
-- Soporte de múltiples modos: Producción (--mode=prod), Desarrollo (--mode=dev), Fallback forzado (--fallback-only) y Detallado (--verbose / -v).
+- Concatena todos los archivos JavaScript (.js) en un único cuerpo de código.
+- Elimina comentarios (bloque y línea) de forma segura con un tokenizador FSM en Python puro,
+  sin manipular ni alterar identificadores ni lógica AST previa.
+- Comprime el JavaScript unificado utilizando la biblioteca estándar 'gzip' de Python
+  al máximo nivel de compresión (compresslevel=9).
+- Convierte los bytes comprimidos a Base64 y los inyecta en una etiqueta:
+    <script type="application/gzip-base64" id="compressed-js">
+- Incluye un cargador bootstrap nativo que descomprime el payload con DecompressionStream('gzip')
+  en tiempo de ejecución en el navegador.
+- Minificación integral de HTML estructural y estilos CSS.
+- Verificación automática de integridad, descompresión y validación sintáctica post-build.
 """
 
 import argparse
+import base64
+import gzip
 import os
 import re
-import shutil
 import subprocess
 import sys
 import time
@@ -74,6 +78,27 @@ CORE_EXPORT_SYMBOLS = [
     "ChatContextManager"
 ]
 
+BOOTSTRAP_LOADER_SCRIPT = """<script>
+(async () => {
+  try {
+    const el = document.getElementById('compressed-js');
+    if (!el) return;
+    const b64 = el.textContent.trim();
+    const binStr = atob(b64);
+    const bytes = new Uint8Array(binStr.length);
+    for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+    const ds = new DecompressionStream('gzip');
+    const stream = new Blob([bytes], { type: 'application/gzip' }).stream().pipeThrough(ds);
+    const text = await new Response(stream).text();
+    const script = document.createElement('script');
+    script.textContent = text;
+    document.body.appendChild(script);
+  } catch (err) {
+    console.error('Error al descomprimir JavaScript:', err);
+  }
+})();
+</script>"""
+
 
 def minify_html(html: str, mode: str = "prod") -> str:
     """
@@ -97,7 +122,7 @@ def minify_html(html: str, mode: str = "prod") -> str:
         flags=re.IGNORECASE
     )
 
-    # 2. Eliminar comentarios HTML (excepto comentarios condicionales IE)
+    # 2. Eliminar comentarios HTML (excepto condicionales IE)
     processed = re.sub(r'<!--(?!\s*\[if)[\s\S]*?-->', '', processed)
 
     # 3. Colapsar espacios y saltos de línea entre etiquetas contiguas
@@ -146,75 +171,11 @@ def minify_css_fallback(css: str) -> str:
     return css_clean.strip()
 
 
-def preprocess_js_for_browser(js_code: str) -> str:
-    """
-    Elimina ramas de compatibilidad exclusivas de Node.js (CommonJS exports y require dinámicos)
-    que constituyen código muerto en el entorno web del navegador, permitiendo a Terser/esbuild
-    optimizar y podar bloques innecesarios.
-    """
-    # 1. Neutralizar comprobación UMD de module.exports -> false
-    cleaned = re.sub(
-        r'typeof\s+exports\s*===\s*[\'"]object[\'"]\s*&&\s*typeof\s+module\s*!==\s*[\'"]undefined[\'"]',
-        'false',
-        js_code
-    )
-    # 2. Neutralizar comprobaciones de require de Node.js -> false
-    cleaned = re.sub(
-        r'typeof\s+require\s*!==\s*[\'"]undefined[\'"]',
-        'false',
-        cleaned
-    )
-    return cleaned
-
-
-def minify_js_external(js_code: str) -> Tuple[Optional[str], str]:
-    """
-    Intenta minificar JavaScript mediante herramientas AST externas en pase único.
-    Prueba primero Terser con multi-pass y poda de código muerto, y posteriormente esbuild.
-    Retorna (código_minificado, nombre_del_motor_utilizado).
-    """
-    processed_code = preprocess_js_for_browser(js_code)
-
-    # 1. Intentar Terser (máxima compresión AST multi-pass y mangling)
-    try:
-        terser_compress_opts = (
-            'passes=3,dead_code=true,unused=true,collapse_vars=true,'
-            'reduce_vars=true,booleans=true,conditionals=true,evaluate=true,'
-            'sequences=true,join_vars=true,drop_debugger=true'
-        )
-        res = subprocess.run(
-            ['npx', '--yes', 'terser', '--compress', terser_compress_opts, '--mangle', 'eval=true'],
-            input=processed_code,
-            capture_output=True,
-            text=True,
-            check=True
-        )
-        if res.stdout and len(res.stdout.strip()) > 100:
-            return res.stdout.strip(), "Terser (AST Multi-Pass & Dead-Code Pruned)"
-    except Exception:
-        pass
-
-    # 2. Intentar esbuild (ultra rápido)
-    try:
-        res = subprocess.run(
-            ['npx', '--yes', 'esbuild', '--minify', '--loader=js'],
-            input=processed_code,
-            capture_output=True,
-            text=True,
-            check=True
-        )
-        if res.stdout and len(res.stdout.strip()) > 100:
-            return res.stdout.strip(), "esbuild (AST Single-Pass & Dead-Code Pruned)"
-    except Exception:
-        pass
-
-    return None, "none"
-
-
-def minify_js_fallback(js: str) -> str:
+def strip_js_comments(js: str) -> str:
     """
     Tokenizador léxico de JavaScript basado en máquina de estados finitos (FSM) en Python puro.
-    Elimina comentarios y líneas vacías garantizando que nunca se rompan:
+    Elimina exclusivamente comentarios (// y /* */) y líneas vacías sin alterar identificadores,
+    cadenas ni lógica previa:
       - Cadenas con comillas simples ('...') o dobles ("...")
       - Template Literals (`...`) incluyendo expresiones anidadas ${...}
       - Expresiones Regulares literales (/.../flags)
@@ -427,18 +388,31 @@ def minify_js_fallback(js: str) -> str:
     return '\n'.join(cleaned_lines)
 
 
+def compress_js_to_gzip_base64(js_code: str) -> Tuple[str, int, int]:
+    """
+    Comprime el código JavaScript usando la biblioteca estándar gzip con el nivel máximo (9)
+    y lo codifica en Base64.
+    Retorna (base64_string, bytes_gzip, bytes_base64).
+    """
+    raw_bytes = js_code.encode("utf-8")
+    compressed_bytes = gzip.compress(raw_bytes, compresslevel=9)
+    b64_string = base64.b64encode(compressed_bytes).decode("ascii")
+    return b64_string, len(compressed_bytes), len(b64_string.encode("ascii"))
+
+
 def verify_bundle(html_content: str, verbose: bool = False) -> Tuple[bool, List[str]]:
     """
     Verifica la integridad del archivo distribuible generado:
     1. Estructura HTML básica.
     2. Ausencia de referencias externas a archivos locales.
-    3. Presencia de todos los símbolos y módulos requeridos.
-    4. Validación de sintaxis JavaScript embebido.
+    3. Presencia del payload comprimido o script JS.
+    4. Descompresión gzip/Base64 y presencia de todos los módulos.
+    5. Validación de sintaxis JavaScript embebido con Node.js.
     """
     errors: List[str] = []
 
     # 1. Estructura HTML básica
-    required_tags = ['<!DOCTYPE html>', '<html', '<head', '</head>', '<body', '</body>', '</html>', '<style>', '</style>', '<script>', '</script>']
+    required_tags = ['<!DOCTYPE html>', '<html', '<head', '</head>', '<body', '</body>', '</html>', '<style>', '</style>']
     for tag in required_tags:
         if tag.lower() not in html_content.lower():
             errors.append(f"Falta la etiqueta requerida '{tag}' en el documento generado.")
@@ -450,21 +424,40 @@ def verify_bundle(html_content: str, verbose: bool = False) -> Tuple[bool, List[
     if re.search(r'<link[^>]*href=["\']css/[^"\']+["\'][^>]*>', html_content, re.IGNORECASE):
         errors.append("El archivo generado aún contiene etiquetas <link href=\"css/...\"> sin embeber.")
 
-    # 3. Presencia de módulos clave
-    script_match = re.search(r'<script>(.*?)</script>', html_content, re.DOTALL)
-    if not script_match:
-        errors.append("No se encontró el bloque <script> embebido en el HTML final.")
+    # 3. Extraer el código JavaScript (desde gzip Base64 o script plano)
+    decompressed_js = ""
+    compressed_match = re.search(
+        r'<script[^>]*type=["\']application/gzip-base64["\'][^>]*id=["\']compressed-js["\'][^>]*>(.*?)</script>',
+        html_content,
+        re.DOTALL | re.IGNORECASE
+    )
+
+    if compressed_match:
+        try:
+            b64_payload = compressed_match.group(1).strip()
+            gzip_bytes = base64.b64decode(b64_payload)
+            decompressed_js = gzip.decompress(gzip_bytes).decode("utf-8")
+        except Exception as e:
+            errors.append(f"Error al decodificar o descomprimir el payload gzip Base64: {e}")
     else:
-        embedded_js = script_match.group(1)
+        # Fallback a script regular (ej: modo dev)
+        script_match = re.search(r'<script(?![^>]*\btype=)[^>]*>(.*?)</script>', html_content, re.DOTALL)
+        if script_match:
+            decompressed_js = script_match.group(1)
+        else:
+            errors.append("No se encontró el payload JavaScript embebido (<script id=\"compressed-js\"> o <script>) en el HTML final.")
+
+    # 4. Verificar presencia de símbolos y módulos clave
+    if decompressed_js:
         for symbol in CORE_EXPORT_SYMBOLS:
-            if symbol not in embedded_js:
+            if symbol not in decompressed_js:
                 errors.append(f"El símbolo o módulo esencial '{symbol}' no fue encontrado en el bundle final.")
 
-        # 4. Validación de sintaxis en Node.js si está presente
+        # 5. Validación de sintaxis en Node.js si está disponible
         try:
             val_res = subprocess.run(
                 ['node', '-c'],
-                input=embedded_js,
+                input=decompressed_js,
                 capture_output=True,
                 text=True
             )
@@ -480,7 +473,7 @@ def verify_bundle(html_content: str, verbose: bool = False) -> Tuple[bool, List[
 
 def build_standalone_html(mode: str = "prod", force_fallback: bool = False, verbose: bool = False, output_file: Optional[str] = None) -> bool:
     """
-    Ejecuta el pipeline completo de compilación, minificación y generación del bundle autónomo.
+    Ejecuta el pipeline completo de compilación, compresión Gzip Base64 y generación del bundle autónomo.
     """
     start_time = time.time()
     base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -522,7 +515,7 @@ def build_standalone_html(mode: str = "prod", force_fallback: bool = False, verb
 
     min_css_size = len(css_min.encode("utf-8"))
 
-    # 3. Cargar y concatenar JavaScript modular
+    # 3. Cargar y concatenar todos los archivos JavaScript (.js)
     raw_js_parts: List[str] = []
     missing_files: List[str] = []
 
@@ -538,26 +531,18 @@ def build_standalone_html(mode: str = "prod", force_fallback: bool = False, verb
         print(f"❌ Error: Faltan módulos JavaScript requeridos: {', '.join(missing_files)}", file=sys.stderr)
         return False
 
+    # Concatenar todos los ficheros JS antes de la compresión para el mejor ratio de diccionario
     concatenated_js = ";\n".join(raw_js_parts)
     raw_js_size = len(concatenated_js.encode("utf-8"))
 
-    js_engine = "Python FSM Tokenizer"
-    if mode == "dev":
-        min_js = concatenated_js
-        js_engine = "Unminified (Dev)"
-    elif not force_fallback:
-        ext_js, engine_name = minify_js_external(concatenated_js)
-        if ext_js is not None:
-            min_js = ext_js
-            js_engine = engine_name
-        else:
-            min_js = minify_js_fallback(preprocess_js_for_browser(concatenated_js))
-    else:
-        min_js = minify_js_fallback(preprocess_js_for_browser(concatenated_js))
+    # 4. Eliminar comentarios de forma segura
+    clean_js = strip_js_comments(concatenated_js)
+    clean_js_size = len(clean_js.encode("utf-8"))
 
-    min_js_size = len(min_js.encode("utf-8"))
+    # 5. Comprimir con Gzip level 9 y convertir a Base64
+    b64_js, gzip_bytes, b64_bytes = compress_js_to_gzip_base64(clean_js)
 
-    # 4. Limpiar e integrar en HTML
+    # 6. Limpiar e integrar en HTML
     html_cleaned = re.sub(r'<link[^>]*href=["\']css/styles\.css["\'][^>]*>', '', raw_html)
     html_cleaned = re.sub(r'<script[^>]*src=["\']js/[^"\']+["\'][^>]*></script>', '', html_cleaned)
     html_cleaned = re.sub(r'<!--\s*Estilos visuales[^>]*-->', '', html_cleaned)
@@ -566,17 +551,14 @@ def build_standalone_html(mode: str = "prod", force_fallback: bool = False, verb
     min_html_base = minify_html(html_cleaned, mode=mode)
     min_html_size = len(min_html_base.encode("utf-8"))
 
-    if mode == "prod":
-        final_html = min_html_base.replace("</head>", f"<style>{css_min}</style></head>")
-        final_html = final_html.replace("</body>", f"<script>{min_js}</script></body>")
-    else:
-        style_block = f"  <style>\n{css_min}\n  </style>"
-        script_block = f"  <script>\n{min_js}\n  </script>"
-        final_html = min_html_base.replace("</head>", f"{style_block}\n</head>")
-        final_html = final_html.replace("</body>", f"{script_block}\n</body>")
+    # Inyección de CSS y JavaScript comprimido
+    compressed_script_tag = f'<script type="application/gzip-base64" id="compressed-js">{b64_js}</script>'
+    
+    final_html = min_html_base.replace("</head>", f"<style>{css_min}</style></head>")
+    final_html = final_html.replace("</body>", f"{compressed_script_tag}\n{BOOTSTRAP_LOADER_SCRIPT}</body>")
     final_size = len(final_html.encode("utf-8"))
 
-    # 5. Validación de integridad del distribuible
+    # 7. Validación de integridad del distribuible
     is_valid, validation_errors = verify_bundle(final_html, verbose=verbose)
     if not is_valid:
         print("❌ Error de validación en el archivo generado:", file=sys.stderr)
@@ -584,7 +566,7 @@ def build_standalone_html(mode: str = "prod", force_fallback: bool = False, verb
             print(f"   - {err}", file=sys.stderr)
         return False
 
-    # 6. Escribir archivo distribuible
+    # 8. Escribir archivo distribuible
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(final_html)
 
@@ -592,20 +574,23 @@ def build_standalone_html(mode: str = "prod", force_fallback: bool = False, verb
     total_raw_size = raw_html_size + raw_css_size + raw_js_size
     total_reduction_pct = ((total_raw_size - final_size) / total_raw_size) * 100
 
-    # 7. Informe detallado de tamaños
+    # 9. Informe detallado de compresión
     print("\n" + "=" * 70)
     print(f"✨ ChatCLI Standalone Bundle ('{os.path.basename(output_path)}') generado con éxito")
     print("=" * 70)
-    print(f"⚙️  Modo: {mode.upper()} | Motor JS: {js_engine} | Motor CSS: {css_engine}")
+    print(f"⚙️  Modo: {mode.upper()} | Compresión: Gzip Level 9 (Base64 Stream) | Motor CSS: {css_engine}")
     print(f"⏱️  Tiempo de compilación: {elapsed_time:.1f} ms")
     print("-" * 70)
-    print(f"  • HTML Markup:   {raw_html_size:>8,} bytes  ➜  {min_html_size:>8,} bytes  ({(1 - min_html_size/raw_html_size)*100:>5.1f}% reducción)")
-    print(f"  • CSS Styles:    {raw_css_size:>8,} bytes  ➜  {min_css_size:>8,} bytes  ({(1 - min_css_size/raw_css_size)*100:>5.1f}% reducción)")
-    print(f"  • JavaScript:    {raw_js_size:>8,} bytes  ➜  {min_js_size:>8,} bytes  ({(1 - min_js_size/raw_js_size)*100:>5.1f}% reducción)")
+    print(f"  • HTML Markup:       {raw_html_size:>8,} bytes  ➜  {min_html_size:>8,} bytes  ({(1 - min_html_size/raw_html_size)*100:>5.1f}% reducción)")
+    print(f"  • CSS Styles:        {raw_css_size:>8,} bytes  ➜  {min_css_size:>8,} bytes  ({(1 - min_css_size/raw_css_size)*100:>5.1f}% reducción)")
+    print(f"  • JS Concatenado:    {raw_js_size:>8,} bytes")
+    print(f"  • JS Sin Comentarios:{clean_js_size:>8,} bytes  ({(1 - clean_js_size/raw_js_size)*100:>5.1f}% reducción)")
+    print(f"  • JS Gzip (L9):      {gzip_bytes:>8,} bytes  ({(1 - gzip_bytes/clean_js_size)*100:>5.1f}% compresión)")
+    print(f"  • JS Base64 Payload: {b64_bytes:>8,} bytes")
     print("-" * 70)
-    print(f"📦 TAMAÑO TOTAL RAW:  {total_raw_size:>8,} bytes ({total_raw_size/1024:.1f} KB)")
-    print(f"🚀 TAMAÑO DIST FINAL: {final_size:>8,} bytes ({final_size/1024:.1f} KB)")
-    print(f"📊 REDUCCIÓN TOTAL:   {total_reduction_pct:.1f}% ({total_raw_size - final_size:,} bytes ahorrados)")
+    print(f"📦 TAMAÑO TOTAL RAW:   {total_raw_size:>8,} bytes ({total_raw_size/1024:.1f} KB)")
+    print(f"🚀 TAMAÑO DIST FINAL:  {final_size:>8,} bytes ({final_size/1024:.1f} KB)")
+    print(f"📊 REDUCCIÓN TOTAL:    {total_reduction_pct:.1f}% ({total_raw_size - final_size:,} bytes ahorrados)")
     print("=" * 70 + "\n")
 
     return True
@@ -613,13 +598,13 @@ def build_standalone_html(mode: str = "prod", force_fallback: bool = False, verb
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Compilador y empaquetador profesional autónomo para ChatCLI."
+        description="Compilador y empaquetador profesional autónomo para ChatCLI con compresión Gzip Base64."
     )
     parser.add_argument(
         "--mode",
         choices=["prod", "dev"],
         default="prod",
-        help="Modo de compilación: 'prod' (minificación completa) o 'dev' (sin minificar, formato legible)."
+        help="Modo de compilación: 'prod' o 'dev'."
     )
     parser.add_argument(
         "--output", "-o",
@@ -629,7 +614,7 @@ def main() -> None:
     parser.add_argument(
         "--fallback-only",
         action="store_true",
-        help="Fuerza el uso exclusivo del motor de compresión seguro en Python puro (sin invocar herramientas externas)."
+        help="Fuerza el uso exclusivo de minificación CSS en Python puro."
     )
     parser.add_argument(
         "-v", "--verbose",
@@ -649,4 +634,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
