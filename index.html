@@ -658,6 +658,42 @@
     </div>
   </dialog>
 
+  <!-- Modal de Autorización de Carpeta Local para RAG -->
+  <dialog id="rag-fs-auth-dialog" class="settings-modal rag-fs-auth-dialog" style="max-width: 520px;">
+    <div class="modal-header">
+      <div class="modal-title">
+        <span class="rag-header-icon">📁</span>
+        <h3>Almacenamiento Local de Conocimiento (RAG)</h3>
+      </div>
+      <button type="button" id="btn-close-rag-fs-auth" class="btn-close" aria-label="Cerrar modal">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body" style="padding: 1.5rem;">
+      <div style="text-align: center; margin-bottom: 1.25rem;">
+        <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">📂</div>
+        <p style="font-size: 0.95rem; line-height: 1.5; color: var(--text-color, #333); margin-bottom: 0.75rem;">
+          Para guardar y consultar tus documentos y ramas de forma 100% privada y local, ZeroChat necesita autorización para acceder a una carpeta en tu disco.
+        </p>
+        <div style="background: var(--surface-bg-secondary, rgba(0,0,0,0.05)); border: 1px dashed var(--border-color, #ccc); border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 1rem; text-align: left; font-size: 0.85rem;">
+          <div><strong>📁 Directorio raíz sugerido:</strong> <code>./zerochat/</code></div>
+          <div style="color: var(--text-muted, #666); margin-top: 0.25rem;">Se creará automáticamente la subcarpeta <code>./zerochat/RAG/</code> para mantener tus ramas y documentos.</div>
+        </div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+        <button type="button" id="btn-rag-authorize-fs" class="btn-primary" style="padding: 0.75rem; font-weight: 600; font-size: 0.95rem;">
+          📁 Seleccionar y Autorizar Carpeta ZeroChat
+        </button>
+        <button type="button" id="btn-rag-cancel-fs" class="btn-secondary" style="padding: 0.5rem;">
+          Cancelar
+        </button>
+      </div>
+    </div>
+  </dialog>
+
   <!-- Modal de Gestión de Ramas y Base de Conocimiento (RAG) -->
   <dialog id="tree-rag-modal" class="settings-modal tree-rag-modal">
     <div class="modal-header">

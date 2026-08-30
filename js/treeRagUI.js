@@ -48,6 +48,10 @@
     return null;
   }
 
+  function getFS() {
+    return (typeof window !== 'undefined' && (window.ChatFileSystem || window.LocalFS)) ? (window.ChatFileSystem || window.LocalFS) : null;
+  }
+
   function t(key, params) {
     const i18n = getI18n();
     return i18n.t ? i18n.t(key, params) : key;
@@ -987,11 +991,72 @@
       });
     });
 
-    if (btnOpenModal && modalDialog) {
-      btnOpenModal.addEventListener('click', () => {
-        renderActiveBranchTab();
-        renderManageTab();
-        modalDialog.showModal();
+    const fsAuthDialog = document.getElementById('rag-fs-auth-dialog');
+    const btnAuthorizeFs = document.getElementById('btn-rag-authorize-fs');
+    const btnCancelFs = document.getElementById('btn-rag-cancel-fs');
+    const btnCloseFsAuth = document.getElementById('btn-close-rag-fs-auth');
+
+    async function openKnowledgePanelWorkflow() {
+      const fs = getFS();
+      if (fs && typeof fs.isSupported === 'function' && fs.isSupported()) {
+        try {
+          const isConfigured = await fs.isConfigured();
+          if (!isConfigured) {
+            if (fsAuthDialog) {
+              fsAuthDialog.showModal();
+              return;
+            }
+          }
+        } catch (_) {}
+      }
+
+      await renderActiveBranchTab();
+      await renderManageTab();
+      if (modalDialog) modalDialog.showModal();
+    }
+
+    if (btnOpenModal) {
+      btnOpenModal.addEventListener('click', async () => {
+        await openKnowledgePanelWorkflow();
+      });
+    }
+
+    if (btnAuthorizeFs && fsAuthDialog) {
+      btnAuthorizeFs.addEventListener('click', async () => {
+        const fs = getFS();
+        if (!fs) return;
+        try {
+          btnAuthorizeFs.disabled = true;
+          btnAuthorizeFs.textContent = '⏳ Conectando carpeta...';
+          const res = await fs.selectRootDirectory({ startIn: 'documents' });
+          if (res && res.success) {
+            await fs.createDirectory('RAG');
+            fsAuthDialog.close();
+            await renderActiveBranchTab();
+            await renderManageTab();
+            if (modalDialog) modalDialog.showModal();
+          }
+        } catch (err) {
+          console.error('[ChatTreeRagUI] Error al autorizar carpeta:', err);
+          alert(`No se pudo autorizar la carpeta local: ${err.message}`);
+        } finally {
+          btnAuthorizeFs.disabled = false;
+          btnAuthorizeFs.textContent = '📁 Seleccionar y Autorizar Carpeta ZeroChat';
+        }
+      });
+    }
+
+    if (btnCancelFs && fsAuthDialog) {
+      btnCancelFs.addEventListener('click', () => fsAuthDialog.close());
+    }
+
+    if (btnCloseFsAuth && fsAuthDialog) {
+      btnCloseFsAuth.addEventListener('click', () => fsAuthDialog.close());
+    }
+
+    if (fsAuthDialog) {
+      fsAuthDialog.addEventListener('click', (e) => {
+        if (e.target === fsAuthDialog) fsAuthDialog.close();
       });
     }
 
