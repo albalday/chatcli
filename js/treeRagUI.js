@@ -146,7 +146,7 @@
             <div>
               <strong>Acceso a Ficheros Locales no detectado en este navegador</strong>
               <p style="margin: 0.25rem 0 0 0; color: var(--text-muted, #666); font-size: 0.82rem;">
-                La File System Access API nativa requiere un navegador basado en Chromium (Chrome, Edge, Brave) y ejecutarse en un entorno seguro (ej: <code>http://localhost:8000/zerochat.html</code> o HTTPS).
+                La File System Access API nativa requiere un navegador moderno (Chrome, Edge, Brave o Firefox con OPFS) y ejecutarse en un entorno seguro (ej: <code>http://localhost:8000/zerochat.html</code> o HTTPS).
               </p>
             </div>
           </div>
@@ -161,24 +161,23 @@
                 <span>📁</span> <span>Almacenamiento Local (RAG) no vinculado</span>
               </div>
               <p style="font-size: 0.82rem; color: var(--text-muted, #666); margin: 0.25rem 0 0 0;">
-                Selecciona la carpeta raíz <code>./zerochat/</code> en tu disco para almacenar tus ramas y documentos en <code>./zerochat/RAG/</code>.
+                Autoriza el directorio <code>zerochat/</code> en tu carpeta de usuario para almacenar tus ramas y documentos en <code>zerochat/RAG/</code>.
               </p>
             </div>
             <button type="button" class="btn-primary btn-action-authorize-fs" style="padding: 0.5rem 1rem; font-weight: 600; font-size: 0.88rem; cursor: pointer; white-space: nowrap;">
-              📁 Seleccionar y Autorizar Carpeta ZeroChat
+              📁 Autorizar Carpeta ZeroChat
             </button>
           </div>
         </div>
       `;
     } else {
+      const mode = fs && typeof fs.getStorageMode === 'function' ? fs.getStorageMode() : 'native';
+      const label = mode === 'opfs' ? 'Almacenamiento Local Activo (OPFS):' : 'Almacenamiento Local Activo:';
       html = `
         <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.45rem 0.85rem; background: rgba(46, 160, 67, 0.08); border: 1px solid rgba(46, 160, 67, 0.25); border-radius: 6px; margin-bottom: 0.85rem; font-size: 0.83rem;">
           <div style="display: flex; align-items: center; gap: 0.4rem;">
-            <span>🟢</span> <span><strong>Carpeta Local Conectada:</strong> <code>./zerochat/RAG/</code></span>
+            <span>🟢</span> <span><strong>${label}</strong> <code>zerochat/RAG/</code></span>
           </div>
-          <button type="button" class="btn-secondary btn-action-authorize-fs" style="font-size: 0.78rem; padding: 0.2rem 0.6rem; cursor: pointer;">
-            📁 Cambiar Carpeta
-          </button>
         </div>
       `;
     }
@@ -1133,16 +1132,25 @@
 
     async function openKnowledgePanelWorkflow() {
       const fs = getFS();
-      if (fs && typeof fs.isSupported === 'function' && fs.isSupported()) {
-        try {
-          const isConfigured = await fs.isConfigured();
-          if (!isConfigured) {
-            if (fsAuthDialog) {
-              fsAuthDialog.showModal();
-              return;
+      if (fs) {
+        if (typeof fs.isFirefoxOrOpfsOnly === 'function' && fs.isFirefoxOrOpfsOnly()) {
+          await renderActiveBranchTab();
+          await renderManageTab();
+          if (modalDialog) modalDialog.showModal();
+          return;
+        }
+
+        if (typeof fs.isSupported === 'function' && fs.isSupported()) {
+          try {
+            const isConfigured = await fs.isConfigured();
+            if (!isConfigured) {
+              if (fsAuthDialog) {
+                fsAuthDialog.showModal();
+                return;
+              }
             }
-          }
-        } catch (_) {}
+          } catch (_) {}
+        }
       }
 
       await renderActiveBranchTab();

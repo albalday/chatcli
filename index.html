@@ -676,16 +676,16 @@
       <div style="text-align: center; margin-bottom: 1.25rem;">
         <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">📂</div>
         <p style="font-size: 0.95rem; line-height: 1.5; color: var(--text-color, #333); margin-bottom: 0.75rem;">
-          Para guardar y consultar tus documentos y ramas de forma 100% privada y local, ZeroChat necesita autorización para acceder a una carpeta en tu disco.
+          Para almacenar y consultar tus documentos y ramas de forma local y privada, ZeroChat requiere acceso al directorio <code>zerochat/</code> en tu carpeta de usuario.
         </p>
         <div style="background: var(--surface-bg-secondary, rgba(0,0,0,0.05)); border: 1px dashed var(--border-color, #ccc); border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 1rem; text-align: left; font-size: 0.85rem;">
-          <div><strong>📁 Directorio raíz sugerido:</strong> <code>./zerochat/</code></div>
-          <div style="color: var(--text-muted, #666); margin-top: 0.25rem;">Se creará automáticamente la subcarpeta <code>./zerochat/RAG/</code> para mantener tus ramas y documentos.</div>
+          <div><strong>📁 Directorio local:</strong> <code>zerochat/</code></div>
+          <div style="color: var(--text-muted, #666); margin-top: 0.25rem;">Se gestionará automáticamente la estructura <code>zerochat/RAG/</code> con tus ramas, resúmenes y documentos indexados.</div>
         </div>
       </div>
       <div style="display: flex; flex-direction: column; gap: 0.75rem;">
         <button type="button" id="btn-rag-authorize-fs" class="btn-primary" style="padding: 0.75rem; font-weight: 600; font-size: 0.95rem;">
-          📁 Seleccionar y Autorizar Carpeta ZeroChat
+          📁 Autorizar Carpeta ZeroChat
         </button>
         <button type="button" id="btn-rag-cancel-fs" class="btn-secondary" style="padding: 0.5rem;">
           Cancelar

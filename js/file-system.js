@@ -119,10 +119,50 @@
   class ChatFileSystemImpl {
     constructor() {
       this._rootHandle = null;
+      this._opfsRootHandle = null;
     }
 
     isSupported() {
-      return typeof window !== "undefined" && typeof window.showDirectoryPicker === "function";
+      if (typeof window === "undefined") return true; // Para entornos de test en Node.js
+      return (
+        typeof window.showDirectoryPicker === "function" ||
+        this.isOpfsSupported()
+      );
+    }
+
+    isOpfsSupported() {
+      return (
+        typeof navigator !== "undefined" &&
+        !!navigator.storage &&
+        typeof navigator.storage.getDirectory === "function"
+      );
+    }
+
+    isFirefoxOrOpfsOnly() {
+      if (typeof window === "undefined") return false;
+      const isPickerSupported = typeof window.showDirectoryPicker === "function";
+      return !isPickerSupported && this.isOpfsSupported();
+    }
+
+    getStorageMode() {
+      if (this.isFirefoxOrOpfsOnly()) return "opfs";
+      if (typeof window !== "undefined" && typeof window.showDirectoryPicker === "function") return "native";
+      return "none";
+    }
+
+    async getOpfsRoot() {
+      if (this._opfsRootHandle) return this._opfsRootHandle;
+      if (!this.isOpfsSupported()) return null;
+      try {
+        const opfs = await navigator.storage.getDirectory();
+        // Directorio raíz siempre fijo 'zerochat'
+        const zerochatDir = await opfs.getDirectoryHandle("zerochat", { create: true });
+        this._opfsRootHandle = zerochatDir;
+        return zerochatDir;
+      } catch (err) {
+        console.warn("[ChatFileSystem] Error al inicializar directorio OPFS:", err);
+        return null;
+      }
     }
 
     normalizePath(pathStr) {
@@ -178,33 +218,49 @@
     }
 
     async selectRootDirectory(options = {}) {
-      if (!this.isSupported()) {
-        throw new FileSystemError("La File System Access API no está disponible en este navegador.", "NOT_SUPPORTED");
-      }
-
-      try {
-        const handle = await window.showDirectoryPicker({
-          id: "zerochat_root_dir",
-          mode: "readwrite",
-          startIn: options.startIn || "documents",
-          ...options
-        });
-
-        this._rootHandle = handle;
-        await HandleStorage.saveHandle(ROOT_HANDLE_KEY, handle);
-        return { success: true, mode: "native", name: handle.name, handle };
-      } catch (err) {
-        if (err.name === "AbortError") {
-          return { success: false, aborted: true, message: "Selección cancelada por el usuario." };
+      if (this.isFirefoxOrOpfsOnly()) {
+        const opfsRoot = await this.getOpfsRoot();
+        if (opfsRoot) {
+          this._rootHandle = opfsRoot;
+          return { success: true, mode: "opfs", name: "zerochat", handle: opfsRoot };
         }
-        throw new FileSystemError(`Error al seleccionar el directorio raíz: ${err.message}`, "PICKER_ERROR", { error: err });
       }
+
+      if (typeof window !== "undefined" && typeof window.showDirectoryPicker === "function") {
+        try {
+          const handle = await window.showDirectoryPicker({
+            id: "zerochat_root_dir",
+            mode: "readwrite",
+            startIn: options.startIn || "documents",
+            ...options
+          });
+
+          this._rootHandle = handle;
+          await HandleStorage.saveHandle(ROOT_HANDLE_KEY, handle);
+          return { success: true, mode: "native", name: handle.name, handle };
+        } catch (err) {
+          if (err.name === "AbortError") {
+            return { success: false, aborted: true, message: "Selección cancelada por el usuario." };
+          }
+          throw new FileSystemError(`Error al seleccionar el directorio raíz: ${err.message}`, "PICKER_ERROR", { error: err });
+        }
+      }
+
+      throw new FileSystemError("El acceso al sistema de archivos no está disponible en este navegador.", "NOT_SUPPORTED");
     }
 
     async getRootDirectory(requestIfPrompt = false) {
       if (this._rootHandle) {
         const ok = await this.verifyPermission(this._rootHandle, true, requestIfPrompt);
         if (ok) return this._rootHandle;
+      }
+
+      if (this.isFirefoxOrOpfsOnly()) {
+        const opfsRoot = await this.getOpfsRoot();
+        if (opfsRoot) {
+          this._rootHandle = opfsRoot;
+          return opfsRoot;
+        }
       }
 
       const storedHandle = await HandleStorage.getHandle(ROOT_HANDLE_KEY);
@@ -229,11 +285,15 @@
 
     async disconnectRootDirectory() {
       this._rootHandle = null;
+      this._opfsRootHandle = null;
       await HandleStorage.removeHandle(ROOT_HANDLE_KEY);
       return true;
     }
 
     async isConfigured() {
+      if (this.isFirefoxOrOpfsOnly()) {
+        return true;
+      }
       const root = await this.getRootDirectory(false);
       return !!root;
     }
