@@ -1,38 +1,115 @@
-# 💬 ChatCLI - Cliente Web Universal de Chat para IA (v5.0)
+# ⚡ ZeroChat - Cliente Web Universal, Agente IA Autónomo & RAG Local (v6.0)
 
-[![Versión](https://img.shields.io/badge/versión-5.0-blue.svg)](chatcli.html)
-[![Multi-Idioma](https://img.shields.io/badge/idiomas-ES%20%7C%20EN-orange.svg)](#-soporte-multi-idioma-internacionalizaci%C3%B3n-i18n)
+[![Versión](https://img.shields.io/badge/versión-6.0-blue.svg)](zerochat.html)
+[![Zero-Instalación](https://img.shields.io/badge/instalación-0%20dependencias-success.svg)](zerochat.html)
+[![Privacidad](https://img.shields.io/badge/privacidad-100%25%20local-brightgreen.svg)](#-privacidad-y-almacenamiento-local)
+[![Multi-Idioma](https://img.shields.io/badge/idiomas-ES%20%7C%20EN-orange.svg)](#-soporte-multi-idioma-i18n)
 [![Licencia](https://img.shields.io/badge/licencia-MIT-green.svg)](LICENSE)
 [![Desarrollo](https://img.shields.io/badge/100%25-Antigravity%20AI-purple.svg)](#-desarrollo-100-con-antigravity)
 
-**ChatCLI** es un cliente web de chat universal, ligero y autosuficiente para modelos de lenguaje (LLMs), diseñado para funcionar directamente en el navegador con cero dependencias externas.
+**ZeroChat** es una plataforma de chat web universal, agente de IA autónomo y motor de base de conocimiento (Tree-RAG) en **un único archivo autónomo y de cero instalación (`zerochat.html`)**, diseñado para ejecutarse directamente en cualquier navegador moderno sin requerir servidores, compiladores ni dependencias externas.
 
 ---
 
-## 🎯 Objetivo Principal
+## 📖 Evolución del Proyecto
 
-El objetivo primordial de este proyecto es disponer de un **cliente de chat para Inteligencia Artificial en un solo fichero (`chatcli.html`)** para poder realizar pruebas individuales, rápidas y privadas con cualquier modelo local o remoto.
+El proyecto nació originalmente como un **cliente de chat básico y minimalista** concebido para realizar pruebas rápidas, individuales y privadas con cualquier modelo de lenguaje (LLM) local o remoto.
 
-- **Solo necesitas un archivo**: Aunque el repositorio incluye todo el código fuente modularizado como proyecto Open Source para mostrar la implementación, **para usar la aplicación solo tienes que descargarte el archivo autónomo [`chatcli.html`](chatcli.html)** y abrirlo en tu navegador favorito con doble clic (funciona incluso directamente bajo el protocolo `file:///` sin necesidad de levantar un servidor web).
-- **Máxima privacidad y portabilidad**: No requiere `npm install`, Node.js, librerías pesadas ni conexión a internet externa para su interfaz. Todo el estado y la configuración se guardan de forma local en tu navegador.
+A lo largo de su desarrollo, **ZeroChat ha preservado estrictamente esa filosofía de partida y su estructura fundacional**:
+> **Un único fichero autónomo (`zerochat.html`) que funciona con doble clic, incluso bajo el protocolo `file:///` sin necesidad de levantar un servidor web ni instalar librerías.**
 
----
-
-## 🌐 Soporte Multi-Idioma (Internacionalización / i18n)
-
-A partir de la versión **v1.0**, ChatCLI cuenta con soporte completo y reactivo para múltiples idiomas:
-- **Español (Castellano)**: Idioma por defecto de la aplicación.
-- **English**: Detección automática si el idioma configurado en el navegador es inglés (`en`).
-- **Selector de Idioma Dinámico**: Conmutable al instante con el botón directo `🌐 ES | EN` en la barra superior o desde el modal de Configuración, con persistencia automática de tu preferencia.
-- **Localización Completa**: Traducción inmediata de toda la interfaz, sugerencias interactivas, menús de razonamiento, consola de depuración, herramientas agénticas y marcas temporales del contexto del sistema.
+Sin embargo, sobre esa misma estructura ligera, el proyecto ha evolucionado sustancialmente para convertirse en una **herramienta integral y de nivel profesional**, dotada de:
+1. **Capacidades Agénticas Autónomas**: Invocación de herramientas (*tool calling*), ejecución de código en sandbox aislado, navegación y extracción web en tiempo real, y generación dinámica de gráficos SVG interactivos.
+2. **Sistema de Depuración y Auditoría de Tráfico (Debug & Raw Logs)**: Consola de eventos en vivo con monitor de red, inspección de streams SSE sin procesar y detección granular de capacidades por modelo.
+3. **Motor Tree-RAG (Base de Conocimiento Jerárquica Local)**: Ingestión, procesamiento y recuperación contextual de grandes colecciones de documentos (PDF con diagramas, Markdown, TXT) en IndexedDB en cliente.
 
 ---
 
-## ⚠️ Descargo de Responsabilidad (Proyecto de Aficionado)
+## 🎯 Características Principales
 
-> [!IMPORTANT]
-> Este es un **proyecto personal y de aficionado** desarrollado como banco de pruebas experimental para explorar las capacidades del asistente **Google Antigravity**.
-> El software se entrega *"tal cual"* (*AS IS*), sin garantías de ningún tipo expresas o implícitas. No se asume ninguna responsabilidad derivada de su uso, ejecución de código en sandbox o conexión a endpoints de terceros.
+### 1. 🚀 Cero Instalación & Portabilidad Absoluta
+- **Un solo archivo para todo**: Toda la aplicación (HTML, CSS, JavaScript, cargador bootstrap y assets) reside compilada en el archivo [**`zerochat.html`**](zerochat.html).
+- **Compresión Gzip Base64 Nativa**: Empaquetado en un payload ultra-compacto (~280 KB) que se descomprime en memoria en tiempo de ejecución mediante la API nativa `DecompressionStream('gzip')` del navegador.
+- **Sin backend intermedio**: Tu navegador se comunica directamente con el proveedor de IA (LM Studio, Ollama, OpenAI, Anthropic, Gemini, OpenRouter, etc.).
+
+### 2. 🤖 Arquitectura Agéntica & Invocación de Herramientas
+ZeroChat incluye un catálogo completo de herramientas integradas con tarjetas interactivas (*Live Tool Cards*):
+- **`execute_javascript`**: Sandbox aislado en Web Worker para cálculos numéricos, transformaciones de datos y algoritmos.
+- **`render_chart`**: Visualización de datos interactiva en SVG nativo (gráficos de barras, líneas, donut y dispersión) sin librerías externas.
+- **`search_web`**: Búsqueda en internet en tiempo real con DuckDuckGo y SearXNG sin necesidad de claves de API.
+- **`fetch_web_page` & `download_pdf`**: Navegación, scraping y lectura de páginas web y documentos PDF en línea.
+- **Protocolo MCP (Model Context Protocol)**: Conexión con servidores MCP para descubrir e invocar herramientas personalizadas.
+
+### 3. 🌳 Tree-RAG: Base de Conocimiento Jerárquica Local
+- **Indexación en Cliente**: Ingestión ultrarrápida de documentos PDF, Markdown y TXT organizados en ramas de conocimiento.
+- **Extracción de Diagramas e Imágenes**: Normalización de esquemas e imágenes de documentos (incluyendo conversión de espacios de color Adobe CMYK a sRGB JPEG) almacenados en IndexedDB.
+- **Segmentación por Capítulos y Resúmenes Adaptativos**: Indexación estructurada que permite al modelo consultar el mapa del documento y cargar exclusivamente los capítulos pertinentes bajo demanda, evitando el desbordamiento de contexto.
+- **Visor e Inspector de Documentos**: Modal de exploración rápida con estadísticas, previsualización de esquemas y gestión de ramas.
+
+### 4. 📡 Consola de Depuración, Logs y Tráfico Raw
+- **Filtros Especializados**: Pestañas en vivo para `Todo`, `🧠 Razonamiento`, `⚙️ Herramientas` y `📡 Raw`.
+- **Monitor de Red & SSE**: Inspección detallada de peticiones HTTP, headers, chunks recibidos en streaming y payloads JSON.
+- **Detección Dinámica de Capacidades**: Adaptadores inteligentes para OpenAI, Claude, Gemini, Ollama y OpenRouter con auto-recuperación ante errores 400 por parámetros no soportados.
+
+### 5. 🧠 Flujo de Razonamiento (Thinking / CoT) & Caché de Contexto
+- Selector directo de nivel de pensamiento (`None`, `Low`, `Med`, `High`, `XHigh`) para modelos como Claude 3.7 Sonnet, Gemini 2.5 y DeepSeek-R1.
+- Reutilización inteligente de memoria caché de contexto (*Prompt Caching* / KV Cache) con auto-invalidación al editar o eliminar turnos anteriores.
+
+### 6. 🌐 Soporte Multi-Idioma (i18n)
+- Soporte completo y reactivo para **Español (Castellano)** e **Inglés (English)**, conmutables en tiempo real con persistencia automática de preferencias.
+
+---
+
+## 📁 Estructura del Proyecto
+
+```text
+zerochat/
+├── zerochat.html       # 🚀 ARCHIVO AUTÓNOMO ÚNICO (Solo necesitas este archivo para usar ZeroChat)
+├── index.html          # Interfaz principal modular, sidebar, modales y panel RAG
+├── bundle.py           # Compilador con compresión Gzip Base64 (compresslevel=9)
+├── css/
+│   └── styles.css      # Estilos visuales modernos, temas claro/oscuro, RAG y diseño responsivo
+├── js/
+│   ├── app.js          # Controlador principal de la UI, eventos y ciclo de vida
+│   ├── agent-core.js   # Bucle de ejecución del Agente IA y resolución de llamadas a herramientas
+│   ├── ragStorage.js   # Base de datos IndexedDB para Ramas, Documentos y Diagramas (Tree-RAG)
+│   ├── ingestionEngine.js # Motor de análisis, resumen por capítulos y segmentación de documentos
+│   ├── treeRagUI.js    # Interfaz gráfica del panel Tree-RAG y visor de estructura
+│   ├── api.js          # Cliente SSE universal y gestión de conexiones
+│   ├── providers.js    # Adaptadores multi-proveedor (OpenAI, Claude, Gemini, Ollama, etc.)
+│   ├── file-parser.js  # Parseador de PDFs, texto y conversor de imágenes CMYK a sRGB JPEG
+│   ├── charts.js       # Motor de renderizado de gráficos SVG interactivos
+│   ├── sandbox.js      # Sandbox de ejecución de código JavaScript
+│   ├── web-search.js   # Proveedores de búsqueda web (DuckDuckGo, SearXNG)
+│   ├── web-browser.js  # Lector de páginas web y extractor de contenidos
+│   ├── debug.js        # Consola de depuración y monitor de tráfico Raw
+│   ├── state.js        # Gestor de estado reactivo global (ChatState)
+│   ├── i18n.js         # Módulo de internacionalización reactiva (ES/EN)
+│   ├── markdown.js     # Renderizador de Markdown con tablas GFM y sanitización
+│   └── mcp.js          # Cliente del protocolo Model Context Protocol (MCP)
+├── tests/              # Suite de pruebas automatizadas (139+ tests unitarios)
+├── LICENSE             # Licencia MIT
+└── README.md           # Documentación del proyecto
+```
+
+---
+
+## 🚀 Inicio Rápido
+
+### Método Recomendado (Zero-Instalación):
+1. Descarga el archivo [**`zerochat.html`**](zerochat.html).
+2. Haz doble clic sobre el archivo para abrirlo en tu navegador favorito (Chrome, Firefox, Edge, Safari, Brave, Opera).
+3. Pulsa el botón **⚙️ Configuración**, selecciona tu proveedor o introduce la URL de tu servidor local (ej. `http://localhost:1234/v1` para LM Studio u `http://localhost:11434` para Ollama), pulsa **🔍 Query** para detectar tus modelos y ¡comienza a chatear!
+
+### Para Desarrolladores (Compilación del Bundle):
+Si modificas los archivos modulares del código fuente:
+```bash
+# Compilar y generar zerochat.html con compresión Gzip Base64
+python3 bundle.py
+
+# Ejecutar la suite completa de pruebas unitarias
+node --test tests/*.js
+```
 
 ---
 
@@ -40,111 +117,12 @@ A partir de la versión **v1.0**, ChatCLI cuenta con soporte completo y reactivo
 
 **Todo este proyecto ha sido concebido, programado, probado y empaquetado exclusivamente con Google Antigravity, sin que el autor haya tecleado manualmente una sola línea de código.**
 
-Desde el diseño de la arquitectura por módulos, la creación de la interfaz HTML5/CSS3 con temas claro y oscuro, el sistema de internacionalización i18n, el cliente de streaming por SSE, el soporte multi-endpoint, el parseador de documentos PDF en cliente, el sandbox de ejecución agéntica, hasta el empaquetador en Base64 en Python y las pruebas automatizadas: todo el ciclo de vida del software ha sido generado mediante programación en pareja (*pair programming*) con Antigravity.
-
----
-
-## ✨ Novedades en la Versión 4.0
-
-- 📜 **Inspector de Logs Avanzado con Pestaña Raw e Interruptor**: Pestaña dedicada `📡 Raw` para tráfico de red crudo y llamadas de herramientas, con interruptor independiente de captura y aislamiento estricto de la pestaña `Todo`.
-- 🧠 **Flujo Limpio de Razonamiento**: Procesamiento continuo e ininterrumpido de tokens de pensamiento estructurados.
-- 🗑️ **Botón "Borrar todo" en Configuración**: Limpieza integral de cookies, almacenamiento local `localStorage`/`sessionStorage` y sesiones guardadas con reinicio limpio de la aplicación.
-- 📝 **Prompt del Sistema Vacío por Defecto**: Inicio limpio y neutral sin instrucciones preimpuestas, permitiendo total fidelidad al modelo.
-- 🗜️ **Compilador Minificador Autónomo**: Reducción superior al 50% en el peso de `chatcli.html` (~236 KB) mediante minificación JS/CSS sin dependencias pesadas.
-- 📱 **Optimizaciones Responsivas en Tablets y Móviles**: Adaptación de viewports dinámicos para teclado virtual en Android/iOS y posicionamiento inteligente de menús.
-
----
-
-## ✨ Novedades en la Versión 3.1
-
-- 📊 **Tablas Markdown GFM Nativas**: Parseador y renderizador completo de tablas GitHub Flavored Markdown con soporte de alineaciones (`:---`, `:---:`, `---:`), formato interno enriquecido y contenedor adaptativo con scroll horizontal.
-- ⚡ **Herramientas en Vivo (Live Tool Cards)**: Aparición instantánea de las tarjetas de herramientas (`search_web`, `fetch_web_page`, `download_pdf`, `execute_javascript`, `render_chart`) con animación de progreso y llenado dinámico de las respuestas en tiempo real.
-- ▾ **Minimizado/Expandido de Herramientas y Gráficos**: Botón interactivo para plegar y desplegar cualquier consulta a herramientas o gráfico para optimizar el espacio vertical.
-- 🗑️ **Borrado Total del Historial**: Botón *Borrar todos* en la barra lateral con diálogo de seguridad para limpiar todo el almacenamiento local y crear una sesión en blanco.
-- 📄 **Parseador Léxico Iterativo de PDF**: Motor de extracción $O(N)$ sin retroceso ni recursión para evitar errores de desbordamiento de pila (*too much recursion*) en documentos PDF complejos.
-
----
-
-## ✨ Características Principales
-
-1. **Gestión Multi-Chat e Historial (Sidebar)**:
-   - Barra lateral izquierda retráctil con lista de conversaciones guardadas en `localStorage`/`ChatStorage`.
-   - Cambio dinámico e instantáneo entre hilos de conversación.
-   - Creación de nuevos chats dentro de la misma vista, renombrado inline, borrado individual y borrado completo.
-   - Buscador en tiempo real de conversaciones anteriores.
-
-2. **Herramientas Agénticas y Análisis Gráfico**:
-   - **`render_chart` (Nativo en SVG)**: Motor de gráficos autónomo (`js/charts.js`) capaz de visualizar datos en gráficos de barras, líneas y sectores/donut sin librerías externas.
-   - **`download_pdf`**: Descarga y extracción de texto completo de documentos PDF desde URLs web.
-   - **`fetch_web_page`**: Consulta y lectura de páginas web públicas y artículos HTML.
-   - **`search_web`**: Motor de búsqueda real en internet con DuckDuckGo (CORS bypass con Jina Reader) y Wikipedia.
-   - **`execute_javascript`**: Sandbox seguro para cálculos matemáticos y procesamiento de datos.
-
-3. **Exportación e Importación Completa**:
-   - Descarga de conversaciones en formato **Markdown limpio (`.md`)**.
-   - Exportación de la sesión completa en **JSON estructurado (`.json`)** e importación directa para restaurar el chat.
-   - Modo de impresión y **Guardar como PDF** maquetado profesionalmente sin elementos de la interfaz.
-
-4. **Adjuntos Multimodales y Pegado de Imágenes**:
-   - Soporte para adjuntar imágenes (`.png`, `.jpg`, `.webp`) y **pegado directo desde el portapapeles (`Ctrl + V`)**.
-   - Formateo multimodal estándar (OpenAI `image_url` y Claude `base64`).
-   - Soporte de documentos PDF y archivos de código/texto con Drag & Drop.
-
-5. **Compatibilidad Universal Multi-Endpoint**:
-   - **LM Studio** (`http://localhost:1234/v1`), **Ollama** (`http://localhost:11434`), **OpenAI**, **Claude**, **Gemini**, **OpenRouter**, **vLLM** y **LocalAI**.
-
-6. **Control de Razonamiento (Thinking / CoT) y Consola en Vivo**:
-   - Botón directo `🧠` con niveles de pensamiento (`None`, `Low`, `Med`, `High`, `XHigh`).
-   - Panel de logs en tiempo real con filtrado (`Todo`, `🧠 Razonamiento`, `⚙️ Herramientas`, `🌐 Red`).
-
-7. **Caché de Contexto Inteligente (Context / Prompt Caching)**:
-   - Optimización automática de latencia y costes reutilizando la memoria caché de contexto (KV Cache / Prompt Caching) en servidores compatibles (OpenAI, Claude, OpenRouter, Gemini, LM Studio, vLLM).
-   - **Auto-invalidación inteligente**: Si el usuario elimina preguntas o respuestas intermedias del chat, la aplicación anula la caché automáticamente y reconstruye un contexto limpio para evitar desincronizaciones o estados residuales en el servidor.
-   - **Métricas de caché en tiempo real**: Visualización de tokens leídos desde la caché (`💾 N cache`) directamente en las estadísticas de cada respuesta y en la consola de depuración.
-
-8. **Métricas de Rendimiento Precisas**:
-   - Latencia al primer token (TTFT), velocidad (`⚡ tok/s`), tiempo total y conteo de tokens.
-
----
-
-## 📁 Estructura del Repositorio
-
-```text
-chatcli/
-├── chatcli.html        # 🚀 ARCHIVO AUTÓNOMO ÚNICO (Solo necesitas este archivo para usar el chat)
-├── index.html          # Interfaz principal modular, sidebar y modales (<dialog>)
-├── css/
-│   └── styles.css      # Estilos visuales modernos, tablas GFM, sidebar, gráficos SVG y tema print
-├── js/
-│   ├── app.js          # Controlador principal de la UI, multi-chat, eventos y consola debug
-│   ├── i18n.js         # Módulo de Internacionalización y traducciones reactivas (ES/EN)
-│   ├── api.js          # Cliente SSE universal, streaming, herramientas y protocolos multi-endpoint
-│   ├── charts.js       # Motor de renderizado de gráficos SVG nativos interactivos
-│   ├── cookies.js      # Persistencia en localStorage y Cookies
-│   ├── sandbox.js      # Sandbox aislado para ejecución de JavaScript
-│   ├── web-search.js   # Buscador web en tiempo real con DuckDuckGo y Wikipedia
-│   ├── web-browser.js  # Módulo de consulta de páginas web y descarga de PDFs en tiempo real
-│   ├── file-parser.js  # Extractor de texto para documentos PDF, código e imágenes
-│   └── markdown.js     # Parseador de Markdown con tablas GFM y ejecución sandbox JS
-├── bundle.py           # Script generador del archivo autónomo chatcli.html
-├── LICENSE             # Licencia MIT
-├── .gitignore          # Filtros para Git
-└── README.md           # Documentación del proyecto
-```
-
----
-
-## 🚀 Cómo Usarlo
-
-### La forma más rápida (Recomendada):
-1. Descarga el archivo [**`chatcli.html`**](chatcli.html).
-2. Haz doble clic sobre él para abrirlo en cualquier navegador (Chrome, Firefox, Edge, Safari, Brave, Opera).
-3. Abre la configuración con el botón **⚙️**, introduce la URL de tu servidor (ej. `http://localhost:1234/v1` para LM Studio) y pulsa **🔍 Query** para listar tus modelos.
-4. ¡Listo para chatear!
+Desde el diseño de la arquitectura modular, el sistema reactivo de estado, los adaptadores multi-proveedor, el motor Tree-RAG en IndexedDB, hasta el compilador Gzip Base64 y la suite de pruebas automatizadas: todo el ciclo de vida del software ha sido generado mediante programación en pareja (*pair programming*) con Antigravity.
 
 ---
 
 ## 📄 Licencia
 
 Este proyecto se distribuye bajo la licencia **MIT**. Consulta el archivo `LICENSE` para más detalles.
+
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-ChatCLI Professional Standalone Bundler & Gzip Base64 Compressor.
-Compila los archivos modulares HTML, CSS y JS en un único archivo autónomo y portable 'chatcli.html'.
+ZeroChat Professional Standalone Bundler & Gzip Base64 Compressor.
+Compila los archivos modulares HTML, CSS y JS en un único archivo autónomo y portable 'zerochat.html'.
 
 Características principales:
 - Concatena todos los archivos JavaScript (.js) en un único cuerpo de código.
@@ -490,7 +490,7 @@ def build_standalone_html(mode: str = "prod", force_fallback: bool = False, verb
     index_path = os.path.join(base_dir, "index.html")
     css_path = os.path.join(base_dir, "css", "styles.css")
     js_dir = os.path.join(base_dir, "js")
-    output_path = os.path.abspath(output_file) if output_file else os.path.join(base_dir, "chatcli.html")
+    output_path = os.path.abspath(output_file) if output_file else os.path.join(base_dir, "zerochat.html")
 
     if not os.path.exists(index_path):
         print(f"❌ Error: Archivo base no encontrado: {index_path}", file=sys.stderr)
@@ -585,7 +585,7 @@ def build_standalone_html(mode: str = "prod", force_fallback: bool = False, verb
 
     # 9. Informe detallado de compresión
     print("\n" + "=" * 70)
-    print(f"✨ ChatCLI Standalone Bundle ('{os.path.basename(output_path)}') generado con éxito")
+    print(f"✨ ZeroChat Standalone Bundle ('{os.path.basename(output_path)}') generado con éxito")
     print("=" * 70)
     print(f"⚙️  Modo: {mode.upper()} | Compresión: Gzip Level 9 (Base64 Stream) | Motor CSS: {css_engine}")
     print(f"⏱️  Tiempo de compilación: {elapsed_time:.1f} ms")
@@ -607,7 +607,7 @@ def build_standalone_html(mode: str = "prod", force_fallback: bool = False, verb
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Compilador y empaquetador profesional autónomo para ChatCLI con compresión Gzip Base64."
+        description="Compilador y empaquetador profesional autónomo para ZeroChat con compresión Gzip Base64."
     )
     parser.add_argument(
         "--mode",
@@ -618,7 +618,7 @@ def main() -> None:
     parser.add_argument(
         "--output", "-o",
         default=None,
-        help="Ruta del archivo de salida (por defecto: 'chatcli.html' en la raíz)."
+        help="Ruta del archivo de salida (por defecto: 'zerochat.html' en la raíz)."
     )
     parser.add_argument(
         "--fallback-only",
