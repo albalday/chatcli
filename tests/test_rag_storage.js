@@ -369,6 +369,62 @@ test('RagStorage - exportBranchToJson e importBranchFromJson exportan e importan
   assert.equal(importedChapterContent, 'Contenido completo sección 1');
 });
 
+test('RagStorage - exportBranch e importBranch exportan e importan la estructura física completa comprimida', async () => {
+  await RagStorage.clearAllData();
+
+  const branch = await RagStorage.createBranch('Rama Comprimida', 'Descripción comprimida');
+  
+  // Guardar documento con un PDF original binario simulado
+  const fakePdfHeader = Buffer.from('%PDF-1.4\n1 0 obj\nstream\n');
+  const fakeJpegBytes = Buffer.from([0xFF, 0xD8, 0xFF, 0xD9]);
+  const fakePdfFooter = Buffer.from('\nendstream\nendobj\n%%EOF');
+  const mockPdfBytes = Buffer.concat([fakePdfHeader, fakeJpegBytes, fakePdfFooter]);
+
+  const doc = await RagStorage.saveDocument({
+    branchId: branch.id,
+    title: 'ManualComp.pdf',
+    fileType: 'pdf',
+    fileSize: mockPdfBytes.length,
+    globalSummary: 'Resumen global del documento comprimido',
+    chapters: [
+      {
+        chapterId: 1,
+        title: 'Sección 1',
+        summary: 'Resumen sección 1',
+        content: 'Contenido completo sección 1'
+      }
+    ],
+    images: []
+  }, mockPdfBytes);
+
+  // 1. Exportar la rama completa a un buffer comprimido Gzip (.rag.gz)
+  const compressedBytes = await RagStorage.exportBranch(branch.id);
+  assert.ok(compressedBytes instanceof Uint8Array);
+  assert.ok(compressedBytes.length > 0);
+
+  // 2. Importar desde el buffer comprimido Gzip
+  const importRes = await RagStorage.importBranch(compressedBytes, { createNewId: true });
+  assert.ok(importRes.branch);
+  assert.notEqual(importRes.branch.id, branch.id);
+  assert.equal(importRes.documentCount, 1);
+
+  // 3. Verificar que los documentos y resúmenes se restauraron
+  const importedDocs = await RagStorage.getDocumentsByBranch(importRes.branch.id);
+  assert.equal(importedDocs.length, 1);
+  assert.equal(importedDocs[0].title, 'ManualComp.pdf');
+  assert.equal(importedDocs[0].chapters[0].content, 'Contenido completo sección 1');
+
+  // 4. Verificar que el archivo PDF binario original se restauró en su ubicación física correcta en disco
+  const fs = ChatFileSystem;
+  const expectedOrigPath = `${RagStorage.RAG_ROOT}/${importRes.branch.id}/${importedDocs[0].bucket || "0001"}/ManualComp.pdf`;
+  const exists = await fs.exists(expectedOrigPath);
+  assert.ok(exists.exists);
+  assert.equal(exists.kind, 'file');
+
+  const restoredBytes = await fs.readFile(expectedOrigPath, 'uint8Array');
+  assert.deepEqual(Buffer.from(restoredBytes), mockPdfBytes);
+});
+
 test('RagStorage - registerImage y resolveImageSrc resuelven diagramas e IDs correctamente', async () => {
   await RagStorage.clearAllData();
 

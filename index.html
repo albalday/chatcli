@@ -771,9 +771,9 @@
           <div class="rag-manage-toolbar-actions">
             <button type="button" id="btn-rag-new-branch" class="btn-primary" data-i18n="rag_btn_new_branch">+ Nueva Rama</button>
             <button type="button" id="btn-rag-edit-branch" class="btn-secondary" title="Renombrar o editar descripción">✏️ Editar</button>
-            <button type="button" id="btn-rag-export-branch" class="btn-secondary" title="Exportar rama a archivo JSON">📤 Exportar</button>
-            <input type="file" id="rag-import-file-input" accept=".json" style="display: none;">
-            <button type="button" id="btn-rag-import-branch" class="btn-secondary" title="Importar rama desde archivo JSON">📥 Importar</button>
+            <button type="button" id="btn-rag-export-branch" class="btn-secondary" title="Exportar rama a paquete comprimido (.rag.gz)">📤 Exportar</button>
+            <input type="file" id="rag-import-file-input" accept=".rag.gz,.json" style="display: none;">
+            <button type="button" id="btn-rag-import-branch" class="btn-secondary" title="Importar rama (.rag.gz o .json)">📥 Importar</button>
             <button type="button" id="btn-rag-delete-branch" class="btn-secondary btn-danger-hover" title="Eliminar rama">🗑️</button>
           </div>
         </div>
@@ -857,8 +857,8 @@
             <div class="setting-card-desc" style="margin-top: 0.5rem; line-height: 1.5;">
               <ul style="margin-left: 1.25rem; display: flex; flex-direction: column; gap: 0.4rem;">
                 <li><strong>Ubicación de Archivos:</strong> En Chrome/Chromium se guardan en la carpeta local <code>./zerochat/RAG/</code> (con un fichero <code>rama.md</code> por rama y subdirectorios <code>0001/</code>, <code>0002/</code> que paginan cada 100 archivos). En Firefox/Safari se guardan en el sistema privado OPFS.</li>
-                <li><strong>Exportar Rama Completa:</strong> En la pestaña <em>Gestión de Ramas y Documentos</em>, selecciona la rama deseada y haz clic en <strong>📤 Exportar</strong> para descargar un único archivo <code>.json</code> con todos sus documentos, capítulos, resúmenes e imágenes.</li>
-                <li><strong>Importar Rama:</strong> Haz clic en <strong>📥 Importar</strong> y selecciona un archivo <code>.json</code> previamente exportado para restaurar la rama completa inmediatamente con todos sus contenidos.</li>
+                <li><strong>Exportar Rama Completa:</strong> En la pestaña <em>Gestión de Ramas y Documentos</em>, selecciona la rama deseada y haz clic en <strong>📤 Exportar</strong> para descargar un paquete comprimido <code>.rag.gz</code> conteniendo la estructura completa del directorio (documentos originales, resúmenes, capítulos e índices).</li>
+                <li><strong>Importar Rama:</strong> Haz clic en <strong>📥 Importar</strong> y selecciona un paquete <code>.rag.gz</code> (o un archivo JSON legado) para restaurar la rama de conocimiento completa inmediatamente con todos sus archivos y configuraciones.</li>
               </ul>
             </div>
           </div>

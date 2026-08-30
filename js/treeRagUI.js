@@ -990,24 +990,25 @@
   }
 
   /**
-   * Manejador para exportar una rama a archivo JSON descargable.
+   * Manejador para exportar una rama a paquete comprimido (.rag.gz) descargable.
    */
   async function handleExportBranch(branchId) {
     const targetBranchId = branchId || selectedManageBranchId;
     if (!targetBranchId) return;
 
     const RagStorage = getRagStorage();
-    if (!RagStorage || !RagStorage.exportBranchToJson) return;
+    if (!RagStorage || !RagStorage.exportBranch) return;
 
     try {
-      const exportData = await RagStorage.exportBranchToJson(targetBranchId);
-      const jsonStr = JSON.stringify(exportData, null, 2);
-      const blob = new Blob([jsonStr], { type: 'application/json' });
+      const branch = await RagStorage.getBranchById(targetBranchId);
+      const safeName = (branch?.name || 'branch').replace(/[^a-zA-Z0-9_\u00C0-\u017F-]/g, '_');
+      
+      const compressedBytes = await RagStorage.exportBranch(targetBranchId);
+      const blob = new Blob([compressedBytes], { type: 'application/gzip' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      const safeName = (exportData.branch?.name || 'branch').replace(/[^a-zA-Z0-9_\u00C0-\u017F-]/g, '_');
       a.href = url;
-      a.download = `${safeName}_rag_branch.json`;
+      a.download = `${safeName}_rag_branch.rag.gz`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -1018,7 +1019,7 @@
   }
 
   /**
-   * Manejador para importar una rama completa desde un archivo JSON.
+   * Manejador para importar una rama completa (.rag.gz o legado .json).
    */
   async function handleImportBranchFile(file) {
     if (!file) return;
@@ -1037,11 +1038,17 @@
     }
 
     const RagStorage = getRagStorage();
-    if (!RagStorage || !RagStorage.importBranchFromJson) return;
+    if (!RagStorage || !RagStorage.importBranch) return;
 
     try {
-      const text = await file.text();
-      const result = await RagStorage.importBranchFromJson(text);
+      let result;
+      if (file.name.toLowerCase().endsWith('.json')) {
+        const text = await file.text();
+        result = await RagStorage.importBranch(text);
+      } else {
+        const ab = await file.arrayBuffer();
+        result = await RagStorage.importBranch(new Uint8Array(ab));
+      }
       selectedManageBranchId = result.branch.id;
       await renderBranchesList();
       await refreshBranchSelector();
