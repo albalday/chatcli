@@ -717,6 +717,9 @@
       <button type="button" class="modal-tab-btn" data-rag-tab="tab-rag-manage">
         <span data-i18n="rag_tab_manage">📁 Gestión de Ramas y Documentos</span>
       </button>
+      <button type="button" class="modal-tab-btn" data-rag-tab="tab-rag-help">
+        <span data-i18n="rag_tab_help">❓ Ayuda</span>
+      </button>
     </div>
 
     <div class="modal-body rag-modal-body-tabbed">
@@ -800,6 +803,65 @@
 
         <div id="rag-manage-workspace" class="rag-manage-workspace">
           <!-- Dropzone, cola de ingesta y tarjetas de documentos -->
+        </div>
+      </div>
+
+      <!-- PESTAÑA 3: Ayuda y Guía del RAG Agéntico -->
+      <div id="tab-rag-help" class="modal-tab-pane">
+        <div class="rag-help-container" style="display: flex; flex-direction: column; gap: 1rem; padding: 0.25rem 0;">
+          <div class="setting-card">
+            <div class="setting-card-title" style="display: flex; align-items: center; gap: 0.5rem;">
+              <span style="font-size: 1.25rem;">🌿</span>
+              <strong data-i18n="rag_help_intro_title">¿Qué es el RAG Agéntico Local?</strong>
+            </div>
+            <p class="setting-card-desc" style="margin-top: 0.5rem; line-height: 1.5;">
+              ZeroChat incorpora un sistema de <strong>RAG Jerárquico y Agéntico (Tree-RAG)</strong> 100% privado y local. Toda la información se almacena directamente en el sistema de ficheros de tu ordenador (<code>./zerochat/RAG/</code> en Chrome/Chromium o almacenamiento privado OPFS en Firefox/Safari), sin bases de datos vectoriales pesadas ni dependencias externas.
+            </p>
+          </div>
+
+          <div class="setting-card">
+            <div class="setting-card-title" style="display: flex; align-items: center; gap: 0.5rem;">
+              <span style="font-size: 1.25rem;">⚙️</span>
+              <strong data-i18n="rag_help_how_it_works_title">¿Cómo funciona la indexación y recuperación?</strong>
+            </div>
+            <div class="setting-card-desc" style="margin-top: 0.5rem; line-height: 1.5;">
+              <ul style="margin-left: 1.25rem; display: flex; flex-direction: column; gap: 0.4rem;">
+                <li><strong>Indexación por Capítulos:</strong> Al subir archivos (PDF, Markdown o Texto), el sistema los particiona en capítulos protegidos y genera micro-resúmenes densos junto con un resumen global.</li>
+                <li><strong>Contexto Ligero en Prompt:</strong> Solo se inyectan en el <em>System Prompt</em> los títulos y micro-resúmenes de la rama activa, ahorrando miles de tokens de contexto.</li>
+                <li><strong>Lectura Agéntica Bajo Demanda:</strong> Cuando el usuario realiza una pregunta que requiere datos específicos o citas textuales, el modelo invoca automáticamente la herramienta nativa <code>read_chapter_content(docId, chapterId)</code> para inspeccionar únicamente la sección necesaria.</li>
+                <li><strong>Imágenes y Esquemas sin Sobrecarga:</strong> Las imágenes y diagramas técnicos no se incrustan en Base64 pesado dentro de los resúmenes; en su lugar, se indexan sus posiciones en el PDF original y se extraen/transforman a sRGB al vuelo en el momento de visualizarlas en el chat.</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="setting-card">
+            <div class="setting-card-title" style="display: flex; align-items: center; gap: 0.5rem;">
+              <span style="font-size: 1.25rem;">🤖</span>
+              <strong data-i18n="rag_help_model_rec_title">Modelo para Ingesta y Carga de Archivos</strong>
+            </div>
+            <div class="setting-card-desc" style="margin-top: 0.5rem; line-height: 1.5;">
+              <p>
+                Para procesar, particionar y resumir los documentos durante la subida, <strong>se utiliza el modelo que esté seleccionado y configurado en ese momento en el chat</strong>.
+              </p>
+              <div style="background-color: var(--primary-light, rgba(37,99,235,0.08)); border-left: 3px solid var(--primary, #2563eb); padding: 0.6rem 0.85rem; margin-top: 0.5rem; border-radius: 0 4px 4px 0;">
+                💡 <strong>Recomendación de modelo local:</strong> Se recomienda encarecidamente utilizar un modelo local rápido y ligero. Las pruebas de desarrollo y validación se han realizado satisfactoriamente con <strong>LM Studio</strong> y el modelo <strong>Gemma 4 A4B</strong> (con una ventana de contexto de <strong>128K</strong>).
+              </div>
+            </div>
+          </div>
+
+          <div class="setting-card">
+            <div class="setting-card-title" style="display: flex; align-items: center; gap: 0.5rem;">
+              <span style="font-size: 1.25rem;">📁</span>
+              <strong data-i18n="rag_help_storage_title">Ubicación de Archivos, Exportación e Importación</strong>
+            </div>
+            <div class="setting-card-desc" style="margin-top: 0.5rem; line-height: 1.5;">
+              <ul style="margin-left: 1.25rem; display: flex; flex-direction: column; gap: 0.4rem;">
+                <li><strong>Ubicación de Archivos:</strong> En Chrome/Chromium se guardan en la carpeta local <code>./zerochat/RAG/</code> (con un fichero <code>rama.md</code> por rama y subdirectorios <code>0001/</code>, <code>0002/</code> que paginan cada 100 archivos). En Firefox/Safari se guardan en el sistema privado OPFS.</li>
+                <li><strong>Exportar Rama Completa:</strong> En la pestaña <em>Gestión de Ramas y Documentos</em>, selecciona la rama deseada y haz clic en <strong>📤 Exportar</strong> para descargar un único archivo <code>.json</code> con todos sus documentos, capítulos, resúmenes e imágenes.</li>
+                <li><strong>Importar Rama:</strong> Haz clic en <strong>📥 Importar</strong> y selecciona un archivo <code>.json</code> previamente exportado para restaurar la rama completa inmediatamente con todos sus contenidos.</li>
+              </ul>
+            </div>
+          </div>
         </div>
       </div>
     </div>
