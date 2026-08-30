@@ -17,8 +17,8 @@
   const TRANSLATIONS = {
     es: {
       // Metadatos y Encabezados
-      app_title: 'ChatCLI v5.0 - Cliente Web Universal de Chat para IA',
-      app_description: 'Cliente de chat web universal, ligero y autosuficiente para modelos de lenguaje (LLMs)',
+      app_title: 'ZeroChat v5.1 - Cliente Web Universal de Chat & Agente IA',
+      app_description: 'Cliente web universal, agente IA autónomo y RAG local en un solo archivo con cero instalación',
       
       // Bienvenida y Sugerencias
       welcome_heading: '¿En qué puedo ayudarte hoy?',
@@ -348,8 +348,8 @@
 
     en: {
       // Metadata & Headers
-      app_title: 'ChatCLI v5.0 - Universal AI Chat Web Client',
-      app_description: 'Universal, lightweight, standalone web chat client for Large Language Models (LLMs)',
+      app_title: 'ZeroChat v5.1 - Universal AI Chat & Agent Web Client',
+      app_description: 'Universal, zero-install, standalone web chat client, autonomous AI agent and local RAG in a single file',
       
       // Bienvenida y Sugerencias
       welcome_heading: 'How can I help you today?',

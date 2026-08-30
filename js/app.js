@@ -3594,7 +3594,7 @@
       exportConversationAsPrint
     };
 
-    console.log('💬 ChatCLI v4.0 initialized successfully with Multi-chat Sidebar, GFM Tables, SVG Charts, Context Caching and Live Tools.');
+    console.log('💬 ZeroChat v5.1 initialized successfully with Autonomous Agentic Engine, Traffic Debug Logs and Tree-RAG.');
   }
 
   if (document.readyState === 'loading') {

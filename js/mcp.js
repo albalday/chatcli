@@ -152,8 +152,8 @@
             sampling: {}
           },
           clientInfo: {
-            name: 'ChatCLI',
-            version: '5.0.0'
+            name: 'ZeroChat',
+            version: '5.1.0'
           }
         }, options);
 

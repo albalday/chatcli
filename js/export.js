@@ -51,10 +51,10 @@
   }
 
   function buildJsonExport(sessionMeta = {}, chatHistory = [], appConfig = {}) {
-    const title = sessionMeta.title || 'ChatCLI_Conversation';
+    const title = sessionMeta.title || 'ZeroChat_Conversation';
     const exportData = {
-      version: '5.0',
-      app: 'ChatCLI',
+      version: '5.1',
+      app: 'ZeroChat',
       exportedAt: new Date().toISOString(),
       session: {
         id: sessionMeta.id || ('session_' + Date.now()),
