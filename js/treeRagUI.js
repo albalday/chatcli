@@ -117,10 +117,115 @@
   }
 
   /**
+   * Renderiza el banner de estado del sistema de archivos local en ambas pestañas.
+   */
+  async function renderFileSystemStatusBanners() {
+    if (typeof document === 'undefined') return;
+    const bannerActive = document.getElementById('rag-fs-banner-active');
+    const bannerManage = document.getElementById('rag-fs-banner-manage');
+    if (!bannerActive && !bannerManage) return;
+
+    const fs = getFS();
+    const isSupported = fs && typeof fs.isSupported === 'function' ? fs.isSupported() : false;
+    let isConfigured = false;
+
+    if (isSupported) {
+      try {
+        isConfigured = await fs.isConfigured();
+      } catch (_) {
+        isConfigured = false;
+      }
+    }
+
+    let html = '';
+    if (!isSupported) {
+      html = `
+        <div style="background: rgba(217, 119, 6, 0.1); border: 1px solid rgba(217, 119, 6, 0.3); border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 1rem; font-size: 0.85rem; color: var(--text-color, #333);">
+          <div style="display: flex; align-items: flex-start; gap: 0.5rem;">
+            <span style="font-size: 1.2rem;">⚠️</span>
+            <div>
+              <strong>Acceso a Ficheros Locales no detectado en este navegador</strong>
+              <p style="margin: 0.25rem 0 0 0; color: var(--text-muted, #666); font-size: 0.82rem;">
+                La File System Access API nativa requiere un navegador basado en Chromium (Chrome, Edge, Brave) y ejecutarse en un entorno seguro (ej: <code>http://localhost:8000/zerochat.html</code> o HTTPS).
+              </p>
+            </div>
+          </div>
+        </div>
+      `;
+    } else if (!isConfigured) {
+      html = `
+        <div style="background: var(--surface-bg-secondary, rgba(0,0,0,0.03)); border: 1.5px dashed var(--accent-primary, #0969da); border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 1rem;">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;">
+            <div style="flex: 1; min-width: 260px;">
+              <div style="font-weight: 600; font-size: 0.92rem; display: flex; align-items: center; gap: 0.4rem;">
+                <span>📁</span> <span>Almacenamiento Local (RAG) no vinculado</span>
+              </div>
+              <p style="font-size: 0.82rem; color: var(--text-muted, #666); margin: 0.25rem 0 0 0;">
+                Selecciona la carpeta raíz <code>./zerochat/</code> en tu disco para almacenar tus ramas y documentos en <code>./zerochat/RAG/</code>.
+              </p>
+            </div>
+            <button type="button" class="btn-primary btn-action-authorize-fs" style="padding: 0.5rem 1rem; font-weight: 600; font-size: 0.88rem; cursor: pointer; white-space: nowrap;">
+              📁 Seleccionar y Autorizar Carpeta ZeroChat
+            </button>
+          </div>
+        </div>
+      `;
+    } else {
+      html = `
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.45rem 0.85rem; background: rgba(46, 160, 67, 0.08); border: 1px solid rgba(46, 160, 67, 0.25); border-radius: 6px; margin-bottom: 0.85rem; font-size: 0.83rem;">
+          <div style="display: flex; align-items: center; gap: 0.4rem;">
+            <span>🟢</span> <span><strong>Carpeta Local Conectada:</strong> <code>./zerochat/RAG/</code></span>
+          </div>
+          <button type="button" class="btn-secondary btn-action-authorize-fs" style="font-size: 0.78rem; padding: 0.2rem 0.6rem; cursor: pointer;">
+            📁 Cambiar Carpeta
+          </button>
+        </div>
+      `;
+    }
+
+    if (bannerActive) {
+      bannerActive.innerHTML = html;
+      bindBannerAuthButtons(bannerActive);
+    }
+    if (bannerManage) {
+      bannerManage.innerHTML = html;
+      bindBannerAuthButtons(bannerManage);
+    }
+  }
+
+  function bindBannerAuthButtons(container) {
+    if (!container) return;
+    const btns = container.querySelectorAll('.btn-action-authorize-fs');
+    btns.forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const fs = getFS();
+        if (!fs) return;
+        try {
+          btn.disabled = true;
+          btn.textContent = '⏳ Conectando carpeta...';
+          const res = await fs.selectRootDirectory({ startIn: 'documents' });
+          if (res && res.success) {
+            await fs.createDirectory('RAG');
+            await renderActiveBranchTab();
+            await renderManageTab();
+          }
+        } catch (err) {
+          console.error('[ChatTreeRagUI] Error al autorizar carpeta:', err);
+          alert(`No se pudo autorizar la carpeta local: ${err.message}`);
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    });
+  }
+
+  /**
    * Pestaña 1: Renderiza la tarjeta principal de estado y cada rama como una caja con un check/switch de activar.
    */
   async function renderActiveBranchTab() {
     if (typeof document === 'undefined') return;
+    await renderFileSystemStatusBanners();
+
     const list = document.getElementById('rag-active-branch-list') || document.getElementById('rag-active-branch-grid');
     const titleEl = document.getElementById('rag-active-status-title');
     const descEl = document.getElementById('rag-active-status-desc');
@@ -252,6 +357,8 @@
    */
   async function renderManageTab() {
     if (typeof document === 'undefined') return;
+    await renderFileSystemStatusBanners();
+
     const selectBranch = document.getElementById('rag-manage-branch-select');
     const btnEdit = document.getElementById('btn-rag-edit-branch');
     const btnExport = document.getElementById('btn-rag-export-branch');
@@ -748,6 +855,20 @@
    * Manejador para crear una nueva rama.
    */
   async function handleCreateBranch() {
+    const fs = getFS();
+    if (fs && typeof fs.isSupported === 'function' && fs.isSupported()) {
+      try {
+        const isConfig = await fs.isConfigured();
+        if (!isConfig) {
+          const fsAuthDialog = document.getElementById('rag-fs-auth-dialog');
+          if (fsAuthDialog) {
+            fsAuthDialog.showModal();
+            return;
+          }
+        }
+      } catch (_) {}
+    }
+
     const name = prompt('Introduce el nombre de la nueva rama de conocimiento (ej: "Proyecto API 2026"):');
     if (!name || !name.trim()) return;
 
@@ -902,6 +1023,20 @@
    */
   async function handleImportBranchFile(file) {
     if (!file) return;
+    const fs = getFS();
+    if (fs && typeof fs.isSupported === 'function' && fs.isSupported()) {
+      try {
+        const isConfig = await fs.isConfigured();
+        if (!isConfig) {
+          const fsAuthDialog = document.getElementById('rag-fs-auth-dialog');
+          if (fsAuthDialog) {
+            fsAuthDialog.showModal();
+            return;
+          }
+        }
+      } catch (_) {}
+    }
+
     const RagStorage = getRagStorage();
     if (!RagStorage || !RagStorage.importBranchFromJson) return;
 
