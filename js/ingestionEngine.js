@@ -198,7 +198,10 @@
     if (FileParser && typeof FileParser.extractTextFromPdf === 'function') {
       const parsedText = await FileParser.extractTextFromPdf(arrayBuffer);
       arrayBuffer = null;
-      return normalizeExtractedText(parsedText);
+      const normalized = normalizeExtractedText(parsedText);
+      const res = new String(normalized);
+      res.images = parsedText.images || [];
+      return res;
     }
 
     throw new Error('No se dispone de un motor de extracción de PDF (pdfjs-dist o ChatFileParser).');
@@ -928,7 +931,8 @@ Destaca el propósito central, tecnologías/entidades clave, versiones/fechas re
           fileType: fileType,
           fileSize: fileSize,
           globalSummary: structure.globalSummary,
-          chapters: structure.chapters
+          chapters: structure.chapters,
+          images: (rawText && rawText.images) ? rawText.images : (file.images || [])
         };
 
         const savedDoc = await RagStorage.saveDocument(docPayload, file);

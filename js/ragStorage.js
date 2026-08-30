@@ -90,6 +90,21 @@
     return null;
   }
 
+  function getFileParser() {
+    if (typeof window !== "undefined" && window.ChatFileParser) {
+      return window.ChatFileParser;
+    }
+    if (typeof globalThis !== "undefined" && globalThis.ChatFileParser) {
+      return globalThis.ChatFileParser;
+    }
+    if (typeof require !== "undefined") {
+      try {
+        return require("./file-parser.js");
+      } catch (e) {}
+    }
+    return null;
+  }
+
   // ==========================================================================
   // Caché de Imágenes y Diagramas en Memoria
   // ==========================================================================
@@ -131,19 +146,54 @@
       }
 
       // 2. Búsqueda por sub-clave (ej: img_7_12)
-      const lastPart = cleanKey.split("/").pop();
+      const lastPart = cleanKey.split("/").pop().replace(/^#/, "");
       if (ragImageCache.has(lastPart)) {
         return ragImageCache.get(lastPart).dataUrl;
       }
 
-      // 3. Búsqueda en los documentos de la rama si se proporciona branchId
+      const fs = getFS();
+      const FileParser = getFileParser();
+
+      // 3. Búsqueda en los documentos de la rama o globalmente
+      let branchesToSearch = [];
       if (branchId) {
+        branchesToSearch = [{ id: branchId }];
+      } else {
         try {
-          const docs = await getDocumentsByBranch(branchId);
+          branchesToSearch = await getBranches();
+        } catch (_) {}
+      }
+
+      for (const br of branchesToSearch) {
+        try {
+          const docs = await getDocumentsByBranch(br.id);
           for (const d of docs) {
+            // A. Extracción bajo demanda a partir del índice de imágenes (doc.images)
+            const imgMeta = (d.images || []).find(img => img.id === lastPart || ('#' + img.id) === lastPart || img.id === `img_${lastPart}`);
+            if (imgMeta && typeof imgMeta.offset === "number" && typeof imgMeta.length === "number" && fs) {
+              const origPath = `${RAG_ROOT}/${d.branchId}/${d.bucket || "0001"}/${d.title}`;
+              const exists = await fs.exists(origPath);
+              if (exists.exists) {
+                try {
+                  const pdfBytes = await fs.readFile(origPath, "uint8Array");
+                  if (pdfBytes && FileParser && typeof FileParser.extractImageFromPdfBytes === "function") {
+                    const dataUrl = FileParser.extractImageFromPdfBytes(pdfBytes, imgMeta);
+                    if (dataUrl) {
+                      registerImage(d.id, lastPart, dataUrl, imgMeta);
+                      registerImage(d.id, `${d.id}/${lastPart}`, dataUrl, imgMeta);
+                      return dataUrl;
+                    }
+                  }
+                } catch (readErr) {
+                  console.warn(`[ChatRagStorage] Error al extraer imagen ${lastPart} de ${origPath}:`, readErr);
+                }
+              }
+            }
+
+            // B. Fallback para imágenes legacy/mock embebidas en capítulos
             for (const ch of d.chapters || []) {
               if (ch.content && ch.content.includes(lastPart)) {
-                const match = ch.content.match(new RegExp('!\[[^\]]*#' + lastPart + '[^\]]*\]\((data:image/[^)]+)\)'));
+                const match = ch.content.match(new RegExp('!\\[[^\\]]*#' + lastPart + '[^\\]]*\\]\\((data:image/[^)]+)\\)'));
                 if (match && match[1]) {
                   registerImage(d.id, lastPart, match[1]);
                   return match[1];
@@ -319,7 +369,13 @@
     body += `---\n\n## Índice de Imágenes y Diagramas\n\n`;
     if (Array.isArray(doc.images) && doc.images.length > 0) {
       for (const img of doc.images) {
-        body += `- **#${img.id}**: ${img.caption || ""} | ${img.description || ""}\n`;
+        const cleanId = String(img.id || "").replace(/^#/, "");
+        const pageStr = img.page !== undefined ? ` | page=${img.page}` : "";
+        const offsetStr = img.offset !== undefined ? ` | offset=${img.offset}` : "";
+        const lenStr = img.length !== undefined ? ` | length=${img.length}` : "";
+        const cmykStr = (img.isCmyk || img.cmyk) ? ` | cmyk=1` : "";
+        const fmtStr = img.format ? ` | format=${img.format}` : "";
+        body += `- **#${cleanId}**: ${img.caption || "Diagrama / Esquema"}${pageStr}${offsetStr}${lenStr}${cmykStr}${fmtStr}\n`;
       }
     } else {
       body += `*(No se detectaron diagramas en este documento)*\n`;
@@ -359,15 +415,28 @@
       fallbackIdx++;
     }
 
-    // 3. Extraer imágenes
+    // 3. Extraer imágenes e índices de acceso
     const images = [];
-    const imgRegex = /- \*\*#([^\*:]+)\*\*:\s*([^|\n]+)(?:\|\s*([^\n]*))?/g;
+    const imgRegex = /- \*\*#([^\*:]+)\*\*:\s*([^|\n]+)([\s\S]*?)(?=\n- \*\*#|\n\n|$)/g;
     let imgMatch;
     while ((imgMatch = imgRegex.exec(body)) !== null) {
+      const imgId = imgMatch[1].trim();
+      const caption = imgMatch[2].trim();
+      const rest = imgMatch[3] || "";
+      const pageM = rest.match(/page=(\d+)/i);
+      const offsetM = rest.match(/offset=(\d+)/i);
+      const lenM = rest.match(/length=(\d+)/i);
+      const cmykM = rest.match(/cmyk=(\d+)/i);
+      const fmtM = rest.match(/format=([a-zA-Z0-9_-]+)/i);
+
       images.push({
-        id: imgMatch[1].trim(),
-        caption: imgMatch[2].trim(),
-        description: (imgMatch[3] || "").trim()
+        id: imgId,
+        caption: caption,
+        page: pageM ? parseInt(pageM[1], 10) : 1,
+        offset: offsetM ? parseInt(offsetM[1], 10) : undefined,
+        length: lenM ? parseInt(lenM[1], 10) : undefined,
+        isCmyk: cmykM ? (parseInt(cmykM[1], 10) === 1) : false,
+        format: fmtM ? fmtM[1] : "jpeg"
       });
     }
 
@@ -482,6 +551,7 @@
       fileSize: typeof data.fileSize === "number" ? data.fileSize : 0,
       globalSummary: data.globalSummary ? String(data.globalSummary).trim() : "",
       chapters: Array.isArray(data.chapters) ? data.chapters : [],
+      images: Array.isArray(data.images) ? data.images : [],
       createdAt: typeof data.createdAt === "number" ? data.createdAt : Date.now()
     };
   }

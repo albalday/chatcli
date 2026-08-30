@@ -403,3 +403,61 @@ test('RagStorage - registerImage y resolveImageSrc resuelven diagramas e IDs cor
   const resolvedDataUri = await RagStorage.resolveImageSrc(b64Mock);
   assert.equal(resolvedDataUri, b64Mock);
 });
+
+test('RagStorage - Extracción bajo demanda de imágenes desde el índice del PDF sin Base64 en .md', async () => {
+  await RagStorage.clearAllData();
+
+  const branch = await RagStorage.createBranch('Rama PDF OnDemand');
+  
+  // Crear un PDF mock en bytes que contiene un fragmento JPEG embebido
+  const fakePdfHeader = Buffer.from('%PDF-1.4\n1 0 obj\n<< /Length 15 >>\nstream\n');
+  const fakeJpegBytes = Buffer.from([0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0xFF, 0xD9]);
+  const fakePdfFooter = Buffer.from('\nendstream\nendobj\n%%EOF');
+  const mockPdfBytes = Buffer.concat([fakePdfHeader, fakeJpegBytes, fakePdfFooter]);
+
+  const jpegOffset = fakePdfHeader.length;
+  const jpegLength = fakeJpegBytes.length;
+
+  const doc = await RagStorage.saveDocument({
+    branchId: branch.id,
+    title: 'ManualHardware.pdf',
+    fileType: 'pdf',
+    fileSize: mockPdfBytes.length,
+    globalSummary: 'Manual con imágenes indexadas.',
+    chapters: [
+      {
+        chapterId: 1,
+        title: 'Diagrama de Bloques',
+        summary: 'Esquema de conexiones.',
+        content: 'Texto explicativo.\n\n![Diagrama de Bloques #img_1_1](rag-image://img_1_1)\n\nMás texto.'
+      }
+    ],
+    images: [
+      {
+        id: 'img_1_1',
+        caption: 'Diagrama de Bloques',
+        page: 1,
+        offset: jpegOffset,
+        length: jpegLength,
+        isCmyk: false,
+        format: 'jpeg'
+      }
+    ]
+  }, mockPdfBytes);
+
+  // 1. Verificar que el archivo .md NO contiene Base64 pesado, sino el índice ligero
+  const mdDoc = await RagStorage.getDocumentById(doc.id);
+  assert.ok(mdDoc);
+  assert.equal(mdDoc.images.length, 1);
+  assert.equal(mdDoc.images[0].id, 'img_1_1');
+  assert.equal(mdDoc.images[0].offset, jpegOffset);
+  assert.equal(mdDoc.images[0].length, jpegLength);
+
+  // 2. Extraer la imagen bajo demanda mediante resolveImageSrc
+  const resolvedOnDemand = await RagStorage.resolveImageSrc('rag-image://img_1_1', branch.id);
+  assert.ok(resolvedOnDemand.startsWith('data:image/jpeg;base64,'));
+  
+  // 3. Verificar que la imagen extraída coincide con los bytes originales
+  const expectedBase64 = `data:image/jpeg;base64,${fakeJpegBytes.toString('base64')}`;
+  assert.equal(resolvedOnDemand, expectedBase64);
+});

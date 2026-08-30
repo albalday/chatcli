@@ -1335,6 +1335,7 @@
     let pages = [];
     let pageNum = 1;
     let imgCounter = 0;
+    const extractedImages = [];
 
     // A. Extracción secuencial basada en el Page Tree
     if (pagesList.length > 0) {
@@ -1422,23 +1423,31 @@
                 if (rawEnd > dataStart && (imgBody.charCodeAt(rawEnd - 1) === 10 || imgBody.charCodeAt(rawEnd - 1) === 13)) rawEnd--;
 
                 const offset = objOffsets.get(imgObjNum);
+                const byteOffset = offset !== undefined ? (offset + dataStart) : dataStart;
+                const byteLen = rawEnd - dataStart;
                 const rawStreamBytes = offset !== undefined
-                  ? bytes.subarray(offset + dataStart, offset + rawEnd)
+                  ? bytes.subarray(byteOffset, byteOffset + byteLen)
                   : new Uint8Array(Array.from(imgBody.substring(dataStart, rawEnd), ch => ch.charCodeAt(0)));
 
                 if (rawStreamBytes.length > 2048 && rawStreamBytes[0] === 0xFF && rawStreamBytes[1] === 0xD8) {
                   imgCounter++;
-                  let dataUrl = null;
-                  if (imgBody.includes('DeviceCMYK') || imgBody.includes('/ColorSpace/DeviceCMYK') || imgBody.includes('/ColorSpace /DeviceCMYK')) {
-                    dataUrl = convertCmykJpegToRgbDataUrl(rawStreamBytes);
-                  }
-                  if (!dataUrl) {
-                    const b64 = uint8ToBase64(rawStreamBytes);
-                    if (b64) dataUrl = `data:image/jpeg;base64,${b64}`;
-                  }
-                  if (dataUrl) {
-                    pageItems.push(`\n![Diagrama / Esquema (Pág. ${pageNum}) #img_${pageNum}_${imgCounter}](${dataUrl})\n`);
-                  }
+                  const isCmyk = imgBody.includes('DeviceCMYK') || imgBody.includes('/ColorSpace/DeviceCMYK') || imgBody.includes('/ColorSpace /DeviceCMYK');
+                  const imgId = `img_${pageNum}_${imgCounter}`;
+                  const caption = `Diagrama / Esquema (Pág. ${pageNum})`;
+
+                  extractedImages.push({
+                    id: imgId,
+                    caption: caption,
+                    page: pageNum,
+                    objNum: imgObjNum || 0,
+                    offset: byteOffset,
+                    length: byteLen,
+                    isCmyk: isCmyk,
+                    format: 'jpeg'
+                  });
+
+                  // Guardar referencia ligera de indexación en Markdown en lugar de cadena Base64
+                  pageItems.push(`\n![${caption} #${imgId}](rag-image://${imgId})\n`);
                 }
               }
             }
@@ -1483,21 +1492,27 @@
             if (rawEnd > dataStart && (fullText.charCodeAt(rawEnd - 1) === 10 || fullText.charCodeAt(rawEnd - 1) === 13)) rawEnd--;
             if (rawEnd > dataStart && (fullText.charCodeAt(rawEnd - 1) === 10 || fullText.charCodeAt(rawEnd - 1) === 13)) rawEnd--;
 
-            const rawStreamBytes = bytes.subarray(dataStart, rawEnd);
+            const byteOffset = dataStart;
+            const byteLen = rawEnd - dataStart;
+            const rawStreamBytes = bytes.subarray(byteOffset, byteOffset + byteLen);
 
             if (isDCT && rawStreamBytes.length > 2048 && rawStreamBytes[0] === 0xFF && rawStreamBytes[1] === 0xD8) {
               imgCounter++;
-              let dataUrl = null;
-              if (isCMYK) {
-                dataUrl = convertCmykJpegToRgbDataUrl(rawStreamBytes);
-              }
-              if (!dataUrl) {
-                const b64 = uint8ToBase64(rawStreamBytes);
-                if (b64) dataUrl = `data:image/jpeg;base64,${b64}`;
-              }
-              if (dataUrl) {
-                currentPageItems.push(`\n![Diagrama / Esquema (Pág. ${pageNum}) #img_${pageNum}_${imgCounter}](${dataUrl})\n`);
-              }
+              const imgId = `img_${pageNum}_${imgCounter}`;
+              const caption = `Diagrama / Esquema (Pág. ${pageNum})`;
+
+              extractedImages.push({
+                id: imgId,
+                caption: caption,
+                page: pageNum,
+                objNum: 0,
+                offset: byteOffset,
+                length: byteLen,
+                isCmyk: isCMYK,
+                format: 'jpeg'
+              });
+
+              currentPageItems.push(`\n![${caption} #${imgId}](rag-image://${imgId})\n`);
             } else if (!isFontOrMeta) {
               let streamString = '';
               if (isFlate) {
@@ -1552,10 +1567,49 @@
     let finalCleanText = pages.join('\n\n').trim();
 
     if (!finalCleanText) {
-      return `[Documento PDF adjunto: No se pudo extraer texto seleccionable. Es posible que el PDF contenga únicamente imágenes escaneadas o esté protegido por contraseña.]`;
+      finalCleanText = `[Documento PDF adjunto: No se pudo extraer texto seleccionable. Es posible que el PDF contenga únicamente imágenes escaneadas o esté protegido por contraseña.]`;
     }
 
-    return finalCleanText;
+    const resultObj = new String(finalCleanText);
+    resultObj.images = extractedImages;
+    return resultObj;
+  }
+
+  /**
+   * Extrae y transforma bajo demanda una imagen indexada a partir de los bytes originales del PDF.
+   * Aplica decodificación JPEG y conversión de espacio de color CMYK a RGB si es requerido.
+   *
+   * @param {Uint8Array|ArrayBuffer} pdfData - Bytes del archivo PDF original.
+   * @param {Object} imgIndex - Metadatos de la imagen ({ offset: number, length: number, isCmyk: boolean }).
+   * @returns {string|null} - Data URL resultante (data:image/jpeg;base64,...).
+   */
+  function extractImageFromPdfBytes(pdfData, imgIndex) {
+    if (!pdfData || !imgIndex || typeof imgIndex.offset !== 'number' || typeof imgIndex.length !== 'number') {
+      return null;
+    }
+    try {
+      const bytes = pdfData instanceof Uint8Array ? pdfData : new Uint8Array(pdfData);
+      const start = imgIndex.offset;
+      const end = start + imgIndex.length;
+      if (start < 0 || end > bytes.length || start >= end) {
+        return null;
+      }
+      const rawStreamBytes = bytes.subarray(start, end);
+      if (rawStreamBytes.length === 0) return null;
+
+      // Transformación de espacio de color CMYK -> RGB bajo demanda si aplica
+      if (imgIndex.isCmyk || imgIndex.cmyk) {
+        const cmykDataUrl = convertCmykJpegToRgbDataUrl(rawStreamBytes);
+        if (cmykDataUrl) return cmykDataUrl;
+      }
+
+      // JPEG estándar
+      const b64 = uint8ToBase64(rawStreamBytes);
+      return b64 ? `data:image/jpeg;base64,${b64}` : null;
+    } catch (err) {
+      console.warn('[ChatFileParser] Error al extraer imagen bajo demanda del PDF:', err);
+      return null;
+    }
   }
 
   /**
@@ -1572,8 +1626,9 @@
         name: file.name,
         size: file.size,
         type: 'pdf',
-        content: extractedText,
-        preview: `📄 PDF: ${file.name} (${formatBytes(file.size)})`
+        content: String(extractedText),
+        images: extractedText.images || [],
+        preview: `📕 ${file.name} (${formatBytes(file.size)})`
       };
     }
 
@@ -1623,7 +1678,10 @@
   return {
     formatBytes,
     parseFile,
-    extractTextFromPdf
+    extractTextFromPdf,
+    extractImageFromPdfBytes,
+    convertCmykJpegToRgbDataUrl,
+    uint8ToBase64
   };
 });
 
