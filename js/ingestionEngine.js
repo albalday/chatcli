@@ -897,8 +897,8 @@ ${sampleText}`;
           );
         }, contextLimitK);
 
-        // Paso 3: Persistencia en IndexedDB
-        emitProgress(index, fileName, 'saving', `Guardando capítulos en base de datos local (${index + 1}/${totalFiles})...`, null, basePercent + 90);
+        // Paso 3: Persistencia en Sistema de Ficheros Local (RAG/<branch_id>/<bucket>/)
+        emitProgress(index, fileName, 'saving', `Guardando capítulos y archivo en sistema de ficheros (${index + 1}/${totalFiles})...`, null, basePercent + 90);
         const docPayload = {
           branchId: branchId,
           title: fileName,
@@ -908,7 +908,7 @@ ${sampleText}`;
           chapters: structure.chapters
         };
 
-        const savedDoc = await RagStorage.saveDocument(docPayload);
+        const savedDoc = await RagStorage.saveDocument(docPayload, file);
 
         // Paso 4: Completado para este archivo
         emitProgress(index, fileName, 'completed', `Documento "${fileName}" procesado y guardado con éxito (${index + 1}/${totalFiles}).`, null, Math.round(((index + 1) / totalFiles) * 100));

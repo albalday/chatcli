@@ -1,37 +1,45 @@
 /**
- * Módulo de Almacenamiento Local Persistente para RAG Jerárquico (ChatRagStorage).
+ * ZeroChat Local RAG Storage Module (ChatRagStorage)
  *
- * Características:
- * - Base de datos IndexedDB dedicada: 'LocalRAG_DB' (v1).
- * - Solicitud de persistencia automática mediante navigator.storage.persist().
- * - Stores:
- *    * 'branches': Ramas temáticas/proyectos con metadatos.
- *    * 'documents': Documentos con capítulos estructurados e índice 'by_branch'.
- * - Operaciones transaccionales seguras y eliminación en cascada.
- * - Proyección ligera de cabeceras (getDocumentHeadersByBranch) para evitar saturar RAM.
- * - Manejo robusto de QuotaExceededError, validación de esquemas y fallback transparente.
+ * Arquitectura de almacenamiento en sistema de ficheros local sobre ./zerochat/RAG/
  *
- * Compatible con Browser (file://, http://) y Node.js.
+ * Estructura de directorios:
+ *  zerochat/
+ *  └── RAG/
+ *      └── <branch_id>/
+ *          ├── rama.md                  (Definición, nombre, descripción y metadatos de la rama)
+ *          ├── 0001/                    (Subdirectorios numerados con máximo 100 archivos)
+ *          │   ├── documento1.pdf       (Archivo original subido)
+ *          │   ├── documento1.md        (Resumen general, capítulos e índice de imágenes)
+ *          │   ├── guia.txt
+ *          │   ├── guia.md
+ *          │   └── images/              (Diagramas/imágenes extraídas)
+ *          │       ├── img_87_0.jpg
+ *          │       └── img_87_1.jpg
+ *          └── 0002/                    (Siguiente subdirectorio al superar los 100 archivos)
+ *
+ * Compatible con Browser (File System Access API vía ChatFileSystem) y Node.js.
  */
 
 (function (root, factory) {
-  if (typeof exports === 'object' && typeof module !== 'undefined') {
+  if (typeof exports === "object" && typeof module !== "undefined") {
     module.exports = factory();
   } else {
     root.ChatRagStorage = factory();
     root.RagStorage = root.ChatRagStorage; // Alias corto
   }
-})(typeof self !== 'undefined' ? self : this, function () {
-  'use strict';
+})(typeof self !== "undefined" ? self : this, function () {
+  "use strict";
 
-  const DB_NAME = 'LocalRAG_DB';
+  const RAG_ROOT = "RAG";
+  const MAX_FILES_PER_BUCKET = 100;
+  const RAMA_FILE = "rama.md";
+
+  // Constantes de compatibilidad con código legacy
+  const DB_NAME = "LocalRAG_DB";
   const DB_VERSION = 1;
-
-  const STORE_BRANCHES = 'branches';
-  const STORE_DOCUMENTS = 'documents';
-
-  const INDEX_BY_BRANCH = 'by_branch';
-  const INDEX_BY_CREATED = 'by_createdAt';
+  const STORE_BRANCHES = "branches";
+  const STORE_DOCUMENTS = "documents";
 
   // ==========================================================================
   // Clases de Error Personalizadas
@@ -40,7 +48,7 @@
   class RagStorageError extends Error {
     constructor(message, details = {}) {
       super(message);
-      this.name = 'RagStorageError';
+      this.name = "RagStorageError";
       this.details = details;
     }
   }
@@ -48,60 +56,125 @@
   class ValidationError extends RagStorageError {
     constructor(message, details = {}) {
       super(message, details);
-      this.name = 'ValidationError';
+      this.name = "ValidationError";
     }
   }
 
   class QuotaExceededError extends RagStorageError {
-    constructor(message = 'Se ha superado el límite de almacenamiento disponible en el navegador (QuotaExceededError).', details = {}) {
+    constructor(message = "Se ha superado el límite de almacenamiento disponible en el navegador (QuotaExceededError).", details = {}) {
       super(message, details);
-      this.name = 'QuotaExceededError';
+      this.name = "QuotaExceededError";
     }
   }
 
   class NotFoundError extends RagStorageError {
     constructor(message, details = {}) {
       super(message, details);
-      this.name = 'NotFoundError';
+      this.name = "NotFoundError";
     }
   }
 
   // ==========================================================================
-  // Almacén en Memoria para Entornos sin IndexedDB (Fallback / Tests)
+  // Resolución de Dependencia de Sistema de Archivos
   // ==========================================================================
 
-  const memoryBranches = new Map();
-  const memoryDocuments = new Map();
-
-  function isIndexedDBAvailable() {
-    try {
-      return typeof indexedDB !== 'undefined' && indexedDB !== null;
-    } catch (e) {
-      return false;
+  function getFS() {
+    if (typeof window !== "undefined" && (window.ChatFileSystem || window.LocalFS)) {
+      return window.ChatFileSystem || window.LocalFS;
     }
-  }
-
-  // ==========================================================================
-  // Solicitud de Almacenamiento Persistente en el Navegador
-  // ==========================================================================
-
-  let persistenceRequested = false;
-
-  async function requestPersistentStorage() {
-    if (persistenceRequested) return;
-    persistenceRequested = true;
-
-    try {
-      if (typeof navigator !== 'undefined' && navigator.storage && typeof navigator.storage.persist === 'function') {
-        const isPersisted = await navigator.storage.persist();
-        if (isPersisted) {
-          console.info(`[${DB_NAME}] Almacenamiento persistente concedido por el navegador.`);
-        } else {
-          console.info(`[${DB_NAME}] El navegador usa almacenamiento estándar (best-effort).`);
+    if (typeof require !== "undefined") {
+      try {
+        const fsMod = require("./file-system.js");
+        if (fsMod && !fsMod.isSupported()) {
+          fsMod.useMemoryBackend(true);
         }
+        return fsMod;
+      } catch (e) {}
+    }
+    return null;
+  }
+
+  // ==========================================================================
+  // Caché de Imágenes y Diagramas en Memoria
+  // ==========================================================================
+
+  const ragImageCache = new Map(); // key -> { dataUrl, docId, metadata }
+  const docLocationIndex = new Map(); // docId -> { branchId, bucket, fileName, mdPath, origPath }
+
+  function normalizeImageKey(key) {
+    if (!key) return "";
+    return String(key).replace(/^rag-image:\/\//, "").replace(/^#/, "").trim();
+  }
+
+  function registerImage(docId, imgId, base64Data, metadata = {}) {
+    const cleanId = normalizeImageKey(imgId);
+    if (!cleanId || !base64Data) return;
+    const entry = {
+      dataUrl: base64Data,
+      docId: docId || "",
+      metadata: metadata || {}
+    };
+    ragImageCache.set(cleanId, entry);
+    if (docId) {
+      ragImageCache.set(`${docId}/${cleanId}`, entry);
+    }
+  }
+
+  async function resolveImageSrc(src, branchId = "") {
+    if (!src) return src;
+    if (typeof src === "string") {
+      if (src.startsWith("data:") || src.startsWith("http://") || src.startsWith("https://") || src.startsWith("blob:")) {
+        return src;
       }
-    } catch (err) {
-      console.warn(`[${DB_NAME}] No se pudo solicitar almacenamiento persistente:`, err);
+
+      const cleanKey = normalizeImageKey(src);
+      
+      // 1. Búsqueda exacta en caché
+      if (ragImageCache.has(cleanKey)) {
+        return ragImageCache.get(cleanKey).dataUrl;
+      }
+
+      // 2. Búsqueda por sub-clave (ej: img_7_12)
+      const lastPart = cleanKey.split("/").pop();
+      if (ragImageCache.has(lastPart)) {
+        return ragImageCache.get(lastPart).dataUrl;
+      }
+
+      // 3. Búsqueda en los documentos de la rama si se proporciona branchId
+      if (branchId) {
+        try {
+          const docs = await getDocumentsByBranch(branchId);
+          for (const d of docs) {
+            for (const ch of d.chapters || []) {
+              if (ch.content && ch.content.includes(lastPart)) {
+                const match = ch.content.match(new RegExp('!\[[^\]]*#' + lastPart + '[^\]]*\]\((data:image/[^)]+)\)'));
+                if (match && match[1]) {
+                  registerImage(d.id, lastPart, match[1]);
+                  return match[1];
+                }
+              }
+            }
+          }
+        } catch (_) {}
+      }
+    }
+    return src;
+  }
+
+  function extractAndRegisterChapterImages(docId, chapters) {
+    if (!Array.isArray(chapters)) return;
+    for (const ch of chapters) {
+      if (!ch.content) continue;
+      const regex = /!\[[^\]]*#(img_[\w_\-]+)[^\]]*\]\((data:image\/[^)]+)\)/g;
+      let m;
+      while ((m = regex.exec(ch.content)) !== null) {
+        const imgTag = m[1];
+        const dataUrl = m[2];
+        const chId = ch.chapterId || "";
+        registerImage(docId, imgTag, dataUrl, { chapterId: chId });
+        registerImage(docId, `${chId}/${imgTag}`, dataUrl, { chapterId: chId });
+        registerImage(docId, `${docId}/${chId}/${imgTag}`, dataUrl, { chapterId: chId });
+      }
     }
   }
 
@@ -109,912 +182,680 @@
   // Generador de Identificadores Únicos
   // ==========================================================================
 
-  function generateId(prefix = 'id') {
-    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+  function generateId(prefix = "id") {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
       return `${prefix}_${crypto.randomUUID()}`;
     }
     const rand = Math.random().toString(36).substring(2, 10);
     return `${prefix}_${Date.now()}_${rand}`;
   }
 
+  function getSummaryMdFileName(fileName) {
+    if (!fileName) return "documento.md";
+    const idx = fileName.lastIndexOf(".");
+    if (idx > 0) {
+      const ext = fileName.slice(idx).toLowerCase();
+      if (ext === ".md") {
+        return fileName;
+      }
+      return `${fileName.slice(0, idx)}.md`;
+    }
+    return `${fileName}.md`;
+  }
+
+  function formatBytes(bytes) {
+    if (!bytes || bytes === 0) return "0 B";
+    const k = 1024;
+    const sizes = ["B", "KB", "MB", "GB", "TB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+  }
+
   // ==========================================================================
-  // Validadores de Esquema
+  // Parseadores y Serializadores Frontmatter Markdown
+  // ==========================================================================
+
+  function parseFrontmatter(markdownText) {
+    if (!markdownText || typeof markdownText !== "string") return { meta: {}, body: "" };
+    const trimmed = markdownText.trimStart();
+    if (!trimmed.startsWith("---")) {
+      return { meta: {}, body: markdownText };
+    }
+    const endIdx = trimmed.indexOf("\n---", 3);
+    if (endIdx === -1) {
+      return { meta: {}, body: markdownText };
+    }
+    const frontmatterContent = trimmed.slice(3, endIdx).trim();
+    const body = trimmed.slice(endIdx + 4).trim();
+    const meta = {};
+    for (const line of frontmatterContent.split("\n")) {
+      const colonIdx = line.indexOf(":");
+      if (colonIdx > -1) {
+        const key = line.slice(0, colonIdx).trim();
+        let val = line.slice(colonIdx + 1).trim();
+        if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+          val = val.slice(1, -1);
+        } else if (val === "true") {
+          val = true;
+        } else if (val === "false") {
+          val = false;
+        } else if (!isNaN(Number(val)) && val !== "") {
+          val = Number(val);
+        }
+        if (key) meta[key] = val;
+      }
+    }
+    return { meta, body };
+  }
+
+  function serializeFrontmatter(meta, body = "") {
+    let yaml = "---\n";
+    for (const [k, v] of Object.entries(meta)) {
+      if (v === undefined || v === null) continue;
+      if (typeof v === "string") {
+        yaml += `${k}: "${v.replace(/"/g, '\\"')}"\n`;
+      } else {
+        yaml += `${k}: ${v}\n`;
+      }
+    }
+    yaml += "---\n\n";
+    return yaml + body;
+  }
+
+  // ==========================================================================
+  // Formateadores y Parseadores de Rama (rama.md)
+  // ==========================================================================
+
+  function formatRamaMarkdown(branch) {
+    const meta = {
+      id: branch.id,
+      name: branch.name,
+      createdAt: branch.createdAt || Date.now(),
+      updatedAt: branch.updatedAt || Date.now()
+    };
+    const body = `# Rama: ${branch.name}\n\n${branch.description || ""}\n`;
+    return serializeFrontmatter(meta, body);
+  }
+
+  function parseRamaMarkdown(content, branchId) {
+    const { meta, body } = parseFrontmatter(content);
+    let description = body;
+    description = description.replace(/^#\s+Rama:[^\n]*\n+/i, "").trim();
+    return {
+      id: meta.id || branchId,
+      name: meta.name || branchId,
+      description: description,
+      createdAt: meta.createdAt || Date.now(),
+      updatedAt: meta.updatedAt || Date.now()
+    };
+  }
+
+  // ==========================================================================
+  // Formateadores y Parseadores de Documentos (<doc>.md)
+  // ==========================================================================
+
+  function formatDocumentMarkdown(doc) {
+    const meta = {
+      id: doc.id,
+      branchId: doc.branchId,
+      title: doc.title,
+      originalFilename: doc.title,
+      fileType: doc.fileType || "txt",
+      fileSize: doc.fileSize || 0,
+      bucket: doc.bucket || "0001",
+      createdAt: doc.createdAt || Date.now(),
+      totalChapters: (doc.chapters || []).length
+    };
+
+    let body = `# Resumen General del Documento\n\n${doc.globalSummary || "Sin resumen global."}\n\n---\n\n## Capítulos\n\n`;
+
+    if (Array.isArray(doc.chapters)) {
+      for (let i = 0; i < doc.chapters.length; i++) {
+        const ch = doc.chapters[i];
+        const chId = ch.chapterId || (i + 1);
+        const chTitle = ch.title || `Capítulo ${chId}`;
+        body += `### Capítulo ${chId}: ${chTitle}\n`;
+        body += `**Resumen**: ${ch.summary || ""}\n\n`;
+        body += `**Contenido**:\n${ch.content || ""}\n\n`;
+      }
+    }
+
+    body += `---\n\n## Índice de Imágenes y Diagramas\n\n`;
+    if (Array.isArray(doc.images) && doc.images.length > 0) {
+      for (const img of doc.images) {
+        body += `- **#${img.id}**: ${img.caption || ""} | ${img.description || ""}\n`;
+      }
+    } else {
+      body += `*(No se detectaron diagramas en este documento)*\n`;
+    }
+
+    return serializeFrontmatter(meta, body);
+  }
+
+  function parseDocumentMarkdown(mdContent, fallbackTitle = "", bucket = "0001", branchId = "") {
+    const { meta, body } = parseFrontmatter(mdContent);
+
+    // 1. Extraer resumen global
+    let globalSummary = "";
+    const sumMatch = body.match(/#\s+Resumen General del Documento\n+([\s\S]*?)(?=\n+---\n+|\n+##\s+Capítulos|$)/i);
+    if (sumMatch) {
+      globalSummary = sumMatch[1].trim();
+    }
+
+    // 2. Extraer capítulos
+    const chapters = [];
+    const chapRegex = /###\s+Capítulo\s+(\d+):\s*([^\n]+)\n+\*\*Resumen\*\*:\s*([\s\S]*?)\n+\*\*Contenido\*\*:\n+([\s\S]*?)(?=\n+###\s+Capítulo|\n+---\n+|\n+##\s+Índice|$)/gi;
+    let match;
+    let fallbackIdx = 1;
+
+    while ((match = chapRegex.exec(body)) !== null) {
+      const chId = parseInt(match[1], 10) || fallbackIdx;
+      const title = match[2].trim();
+      const summary = match[3].trim();
+      const content = match[4].trim();
+      chapters.push({
+        chapterId: chId,
+        title: title,
+        summary: summary,
+        content: content,
+        charCount: content.length
+      });
+      fallbackIdx++;
+    }
+
+    // 3. Extraer imágenes
+    const images = [];
+    const imgRegex = /- \*\*#([^\*:]+)\*\*:\s*([^|\n]+)(?:\|\s*([^\n]*))?/g;
+    let imgMatch;
+    while ((imgMatch = imgRegex.exec(body)) !== null) {
+      images.push({
+        id: imgMatch[1].trim(),
+        caption: imgMatch[2].trim(),
+        description: (imgMatch[3] || "").trim()
+      });
+    }
+
+    const title = meta.title || meta.originalFilename || fallbackTitle;
+    const docId = meta.id || generateId("doc");
+
+    return {
+      id: docId,
+      branchId: meta.branchId || branchId,
+      title: title,
+      fileType: meta.fileType || "txt",
+      fileSize: meta.fileSize || 0,
+      bucket: meta.bucket || bucket,
+      createdAt: meta.createdAt || Date.now(),
+      globalSummary: globalSummary,
+      chapters: chapters,
+      images: images
+    };
+  }
+
+  // ==========================================================================
+  // Gestión de Buckets Paginados (0001, 0002, ...)
+  // ==========================================================================
+
+  async function getBranchBuckets(branchId) {
+    const fs = getFS();
+    if (!fs) return ["0001"];
+
+    const branchDir = `${RAG_ROOT}/${branchId}`;
+    const exists = await fs.exists(branchDir);
+    if (!exists.exists) return ["0001"];
+
+    const list = await fs.listDirectory(branchDir, { recursive: false });
+    const buckets = list
+      .filter(item => item.kind === "directory" && /^\d{4}$/.test(item.name))
+      .map(item => item.name)
+      .sort();
+
+    return buckets.length > 0 ? buckets : ["0001"];
+  }
+
+  async function getAvailableBucket(branchId) {
+    const fs = getFS();
+    if (!fs) return "0001";
+
+    const buckets = await getBranchBuckets(branchId);
+    const lastBucket = buckets[buckets.length - 1] || "0001";
+
+    const bucketPath = `${RAG_ROOT}/${branchId}/${lastBucket}`;
+    const exists = await fs.exists(bucketPath);
+    if (!exists.exists) {
+      await fs.createDirectory(bucketPath);
+      return lastBucket;
+    }
+
+    const items = await fs.listDirectory(bucketPath, { recursive: false });
+    const mdFiles = items.filter(item => item.kind === "file" && item.name.endsWith(".md"));
+
+    if (mdFiles.length >= MAX_FILES_PER_BUCKET) {
+      const nextNum = parseInt(lastBucket, 10) + 1;
+      const nextBucket = String(nextNum).padStart(4, "0");
+      await fs.createDirectory(`${RAG_ROOT}/${branchId}/${nextBucket}`);
+      return nextBucket;
+    }
+
+    return lastBucket;
+  }
+
+  // ==========================================================================
+  // Validación de Entidades
   // ==========================================================================
 
   function validateBranch(data) {
-    if (!data || typeof data !== 'object') {
-      throw new ValidationError('Los datos de la rama deben ser un objeto válido.');
+    if (!data || typeof data !== "object") {
+      throw new ValidationError("Los datos de la rama deben ser un objeto válido.");
     }
-    if (!data.name || typeof data.name !== 'string' || data.name.trim().length === 0) {
-      throw new ValidationError('El nombre de la rama es obligatorio y no puede estar vacío.');
+    if (!data.name || typeof data.name !== "string" || data.name.trim().length === 0) {
+      throw new ValidationError("El nombre de la rama es obligatorio y no puede estar vacío.");
     }
     return {
-      id: data.id ? String(data.id).trim() : generateId('branch'),
+      id: data.id ? String(data.id).trim() : generateId("branch"),
       name: String(data.name).trim(),
-      description: data.description ? String(data.description).trim() : '',
-      createdAt: typeof data.createdAt === 'number' ? data.createdAt : Date.now(),
-      updatedAt: typeof data.updatedAt === 'number' ? data.updatedAt : Date.now()
+      description: data.description ? String(data.description).trim() : "",
+      createdAt: typeof data.createdAt === "number" ? data.createdAt : Date.now(),
+      updatedAt: typeof data.updatedAt === "number" ? data.updatedAt : Date.now()
     };
   }
 
-  function validateChapter(chap, idx) {
-    if (!chap || typeof chap !== 'object') {
-      throw new ValidationError(`El capítulo en la posición ${idx} debe ser un objeto válido.`);
-    }
-    const content = typeof chap.content === 'string' ? chap.content : '';
-    return {
-      chapterId: typeof chap.chapterId === 'number' ? chap.chapterId : (idx + 1),
-      title: chap.title ? String(chap.title).trim() : `Capítulo ${idx + 1}`,
-      summary: chap.summary ? String(chap.summary).trim() : '',
-      content: content,
-      charCount: typeof chap.charCount === 'number' ? chap.charCount : content.length
-    };
-  }
+  const ALLOWED_FILE_TYPES = new Set([
+    "txt", "md", "markdown", "pdf", "csv", "json", "js", "ts", "py", "html", "css", "xml", "log", "yaml", "yml", "doc", "docx"
+  ]);
 
   function validateDocument(data) {
-    if (!data || typeof data !== 'object') {
-      throw new ValidationError('Los datos del documento deben ser un objeto válido.');
+    if (!data || typeof data !== "object") {
+      throw new ValidationError("Los datos del documento deben ser un objeto válido.");
     }
-    if (!data.branchId || typeof data.branchId !== 'string' || data.branchId.trim().length === 0) {
-      throw new ValidationError('El documento debe estar asociado a un branchId válido.');
+    if (!data.branchId || typeof data.branchId !== "string" || data.branchId.trim().length === 0) {
+      throw new ValidationError("El documento debe estar asociado a un branchId válido.");
     }
-    if (!data.title || typeof data.title !== 'string' || data.title.trim().length === 0) {
-      throw new ValidationError('El título del documento es obligatorio.');
+    if (!data.title || typeof data.title !== "string" || data.title.trim().length === 0) {
+      throw new ValidationError("El título del documento es obligatorio.");
     }
-
-    const fileType = String(data.fileType || 'txt').toLowerCase().trim();
-    if (!['pdf', 'txt', 'md'].includes(fileType)) {
-      throw new ValidationError(`Tipo de archivo '${fileType}' no soportado. Debe ser 'pdf', 'txt' o 'md'.`);
+    const cleanType = data.fileType ? String(data.fileType).toLowerCase().replace(/^\./, "").trim() : "txt";
+    if (!ALLOWED_FILE_TYPES.has(cleanType)) {
+      throw new ValidationError(`Tipo de archivo no permitido: "${data.fileType}"`);
     }
-
-    const chapters = Array.isArray(data.chapters)
-      ? data.chapters.map((chap, idx) => validateChapter(chap, idx))
-      : [];
-
     return {
-      id: data.id ? String(data.id).trim() : generateId('doc'),
+      id: data.id ? String(data.id).trim() : generateId("doc"),
       branchId: String(data.branchId).trim(),
       title: String(data.title).trim(),
-      fileType: fileType,
-      fileSize: typeof data.fileSize === 'number' ? data.fileSize : 0,
-      globalSummary: data.globalSummary ? String(data.globalSummary).trim() : '',
-      chapters: chapters,
-      createdAt: typeof data.createdAt === 'number' ? data.createdAt : Date.now()
+      fileType: cleanType,
+      fileSize: typeof data.fileSize === "number" ? data.fileSize : 0,
+      globalSummary: data.globalSummary ? String(data.globalSummary).trim() : "",
+      chapters: Array.isArray(data.chapters) ? data.chapters : [],
+      createdAt: typeof data.createdAt === "number" ? data.createdAt : Date.now()
     };
-  }
-
-  function isQuotaError(err) {
-    if (!err) return false;
-    const name = err.name || '';
-    const code = err.code || 0;
-    return (
-      name === 'QuotaExceededError' ||
-      name === 'NS_ERROR_DOM_QUOTA_REACHED' ||
-      code === 22 ||
-      code === 1014 ||
-      (err.message && err.message.toLowerCase().includes('quota'))
-    );
-  }
-
-  // ==========================================================================
-  // Conexión y Gestión de IndexedDB (Promise Wrapper estilo 'idb')
-  // ==========================================================================
-
-  let dbPromise = null;
-
-  async function openDatabase() {
-    if (!isIndexedDBAvailable()) {
-      return null;
-    }
-
-    if (dbPromise) {
-      return dbPromise;
-    }
-
-    await requestPersistentStorage();
-
-    dbPromise = new Promise((resolve, reject) => {
-      try {
-        const request = indexedDB.open(DB_NAME, DB_VERSION);
-
-        request.onupgradeneeded = function (event) {
-          const db = event.target.result;
-          console.info(`[${DB_NAME}] Creando/Actualizando esquema v${DB_VERSION}...`);
-
-          // 1. Store 'branches'
-          if (!db.objectStoreNames.contains(STORE_BRANCHES)) {
-            const branchStore = db.createObjectStore(STORE_BRANCHES, { keyPath: 'id' });
-            branchStore.createIndex(INDEX_BY_CREATED, 'createdAt', { unique: false });
-          }
-
-          // 2. Store 'documents'
-          if (!db.objectStoreNames.contains(STORE_DOCUMENTS)) {
-            const docStore = db.createObjectStore(STORE_DOCUMENTS, { keyPath: 'id' });
-            docStore.createIndex(INDEX_BY_BRANCH, 'branchId', { unique: false });
-            docStore.createIndex(INDEX_BY_CREATED, 'createdAt', { unique: false });
-          }
-        };
-
-        request.onsuccess = function (event) {
-          const db = event.target.result;
-
-          db.onversionchange = function () {
-            db.close();
-            dbPromise = null;
-            console.warn(`[${DB_NAME}] Base de datos cerrada por cambio de versión en otra pestaña.`);
-          };
-
-          resolve(db);
-        };
-
-        request.onerror = function (event) {
-          console.warn(`[${DB_NAME}] Error al abrir IndexedDB:`, event.target.error);
-          resolve(null); // Fallback a memoria
-        };
-
-        request.onblocked = function () {
-          console.warn(`[${DB_NAME}] Apertura de IndexedDB bloqueada por otra conexión activa.`);
-        };
-      } catch (err) {
-        console.warn(`[${DB_NAME}] Excepción al inicializar IndexedDB:`, err);
-        resolve(null);
-      }
-    });
-
-    return dbPromise;
   }
 
   // ==========================================================================
   // Métodos CRUD: Ramas (Branches)
   // ==========================================================================
 
-  /**
-   * Crea una nueva rama temática en la base de datos.
-   * @param {string} name - Nombre identificativo de la rama.
-   * @param {string} [description=''] - Descripción o alcance opcional.
-   * @returns {Promise<{ id: string, name: string, description: string, createdAt: number, updatedAt: number }>}
-   */
-  async function createBranch(name, description = '') {
-    const branch = validateBranch({ name, description });
-    const db = await openDatabase();
+  async function createBranch(nameOrData, description = "") {
+    const fs = getFS();
+    if (!fs) throw new RagStorageError("ChatFileSystem no está disponible.");
 
-    if (!db) {
-      memoryBranches.set(branch.id, { ...branch });
-      console.info(`[${DB_NAME}] Rama creada (en memoria): "${branch.name}" [${branch.id}]`);
-      return { ...branch };
+    let branchInput;
+    if (typeof nameOrData === "string") {
+      branchInput = { name: nameOrData, description: description };
+    } else {
+      branchInput = nameOrData;
     }
 
-    return new Promise((resolve, reject) => {
-      try {
-        const tx = db.transaction([STORE_BRANCHES], 'readwrite');
-        const store = tx.objectStore(STORE_BRANCHES);
-        const req = store.add(branch);
+    const branch = validateBranch(branchInput);
+    const branchDir = `${RAG_ROOT}/${branch.id}`;
 
-        req.onsuccess = () => {
-          console.info(`[${DB_NAME}] Rama creada: "${branch.name}" [${branch.id}]`);
-          resolve({ ...branch });
-        };
+    await fs.createDirectory(branchDir);
+    await fs.createDirectory(`${branchDir}/0001`);
 
-        req.onerror = (e) => {
-          if (isQuotaError(e.target.error)) {
-            reject(new QuotaExceededError(undefined, { error: e.target.error }));
-          } else {
-            reject(new RagStorageError(`Error al crear la rama: ${e.target.error?.message || e.target.error}`, { error: e.target.error }));
-          }
-        };
-      } catch (err) {
-        if (isQuotaError(err)) {
-          reject(new QuotaExceededError(undefined, { error: err }));
-        } else {
-          reject(new RagStorageError(`Excepción al crear la rama: ${err.message}`, { error: err }));
-        }
-      }
-    });
+    const ramaMd = formatRamaMarkdown(branch);
+    await fs.writeFile(`${branchDir}/${RAMA_FILE}`, ramaMd);
+
+    console.info(`[ChatRagStorage] Rama creada en disco: "${branch.name}" [${branch.id}]`);
+    return { ...branch };
   }
 
-  /**
-   * Obtiene la lista de todas las ramas ordenadas por fecha de creación descendente.
-   * @returns {Promise<Array<{ id: string, name: string, description: string, createdAt: number, updatedAt: number }>>}
-   */
   async function getBranches() {
-    const db = await openDatabase();
+    const fs = getFS();
+    if (!fs) return [];
 
-    if (!db) {
-      return Array.from(memoryBranches.values())
-        .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
-        .map(b => ({ ...b }));
-    }
+    const exists = await fs.exists(RAG_ROOT);
+    if (!exists.exists) return [];
 
-    return new Promise((resolve, reject) => {
-      try {
-        const tx = db.transaction([STORE_BRANCHES], 'readonly');
-        const store = tx.objectStore(STORE_BRANCHES);
-        const req = store.getAll();
+    const items = await fs.listDirectory(RAG_ROOT, { recursive: false });
+    const branches = [];
 
-        req.onsuccess = () => {
-          const list = (req.result || []).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-          resolve(list);
-        };
-
-        req.onerror = (e) => {
-          reject(new RagStorageError(`Error al obtener ramas: ${e.target.error?.message || e.target.error}`));
-        };
-      } catch (err) {
-        reject(new RagStorageError(`Excepción al obtener ramas: ${err.message}`));
-      }
-    });
-  }
-
-  /**
-   * Recupera una rama específica por su ID.
-   * @param {string} branchId - Identificador de la rama.
-   * @returns {Promise<{ id: string, name: string, description: string, createdAt: number, updatedAt: number } | null>}
-   */
-  async function getBranchById(branchId) {
-    if (!branchId) return null;
-    const cleanId = String(branchId).trim();
-    const db = await openDatabase();
-
-    if (!db) {
-      const b = memoryBranches.get(cleanId);
-      return b ? { ...b } : null;
-    }
-
-    return new Promise((resolve, reject) => {
-      try {
-        const tx = db.transaction([STORE_BRANCHES], 'readonly');
-        const store = tx.objectStore(STORE_BRANCHES);
-        const req = store.get(cleanId);
-
-        req.onsuccess = () => {
-          resolve(req.result || null);
-        };
-
-        req.onerror = (e) => {
-          reject(new RagStorageError(`Error al recuperar rama [${cleanId}]: ${e.target.error?.message || e.target.error}`));
-        };
-      } catch (err) {
-        reject(new RagStorageError(`Excepción al recuperar rama [${cleanId}]: ${err.message}`));
-      }
-    });
-  }
-
-  /**
-   * Elimina una rama y todos los documentos asociados en cascada en una única transacción segura.
-   * @param {string} branchId - Identificador de la rama a eliminar.
-   * @returns {Promise<{ success: boolean, deletedBranchId: string, deletedDocumentsCount: number }>}
-   */
-  async function deleteBranch(branchId) {
-    if (!branchId) throw new ValidationError('branchId es requerido para eliminar una rama.');
-    const cleanId = String(branchId).trim();
-    const db = await openDatabase();
-
-    if (!db) {
-      let docCount = 0;
-      for (const [dId, doc] of memoryDocuments.entries()) {
-        if (doc.branchId === cleanId) {
-          memoryDocuments.delete(dId);
-          docCount++;
+    for (const item of items) {
+      if (item.kind === "directory") {
+        const ramaPath = `${RAG_ROOT}/${item.name}/${RAMA_FILE}`;
+        const ramaExists = await fs.exists(ramaPath);
+        if (ramaExists.exists) {
+          try {
+            const content = await fs.readFile(ramaPath, "text");
+            const branch = parseRamaMarkdown(content, item.name);
+            branches.push(branch);
+          } catch (err) {
+            console.warn(`[ChatRagStorage] Error al leer rama en "${ramaPath}":`, err);
+          }
         }
       }
-      memoryBranches.delete(cleanId);
-      console.info(`[${DB_NAME}] Rama [${cleanId}] y ${docCount} documentos eliminados en cascada (en memoria).`);
-      return { success: true, deletedBranchId: cleanId, deletedDocumentsCount: docCount };
     }
 
-    return new Promise((resolve, reject) => {
-      try {
-        const tx = db.transaction([STORE_BRANCHES, STORE_DOCUMENTS], 'readwrite');
-        const branchStore = tx.objectStore(STORE_BRANCHES);
-        const docStore = tx.objectStore(STORE_DOCUMENTS);
-        const docIndex = docStore.index(INDEX_BY_BRANCH);
-
-        let docCount = 0;
-
-        // 1. Obtener todas las claves de documentos pertenecientes a esta rama
-        const getDocsReq = docIndex.getAllKeys(cleanId);
-
-        getDocsReq.onsuccess = () => {
-          const docKeys = getDocsReq.result || [];
-          docCount = docKeys.length;
-
-          // 2. Eliminar cada documento
-          for (const key of docKeys) {
-            docStore.delete(key);
-          }
-
-          // 3. Eliminar la rama
-          branchStore.delete(cleanId);
-        };
-
-        tx.oncomplete = () => {
-          console.info(`[${DB_NAME}] Rama [${cleanId}] y ${docCount} documentos asociados eliminados en cascada.`);
-          resolve({ success: true, deletedBranchId: cleanId, deletedDocumentsCount: docCount });
-        };
-
-        tx.onerror = (e) => {
-          reject(new RagStorageError(`Error en transacción al eliminar rama [${cleanId}]: ${e.target.error?.message || e.target.error}`));
-        };
-      } catch (err) {
-        reject(new RagStorageError(`Excepción al eliminar rama [${cleanId}]: ${err.message}`));
-      }
-    });
+    return branches.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   }
 
-  /**
-   * Actualiza el nombre o descripción de una rama existente.
-   * @param {string} id - Identificador único de la rama.
-   * @param {Object} updates - Campos a actualizar ({ name, description }).
-   * @returns {Promise<Object>} - La rama actualizada.
-   */
-  async function updateBranch(id, updates = {}) {
-    const cleanId = String(id || '').trim();
-    if (!cleanId) throw new ValidationError('El parámetro id de la rama es obligatorio.');
+  async function getBranchById(id) {
+    const cleanId = String(id || "").trim();
+    if (!cleanId) return null;
 
-    const db = await openDatabase();
-    if (!db) {
-      if (!memoryBranches.has(cleanId)) throw new NotFoundError(`No existe la rama [${cleanId}].`);
-      const b = memoryBranches.get(cleanId);
-      if (updates.name) b.name = String(updates.name).trim();
-      if (updates.description !== undefined) b.description = String(updates.description).trim();
-      b.updatedAt = Date.now();
-      return { ...b };
+    const fs = getFS();
+    if (!fs) return null;
+
+    const ramaPath = `${RAG_ROOT}/${cleanId}/${RAMA_FILE}`;
+    const exists = await fs.exists(ramaPath);
+    if (!exists.exists) {
+      return null;
     }
 
-    return new Promise((resolve, reject) => {
-      try {
-        const tx = db.transaction([STORE_BRANCHES], 'readwrite');
-        const store = tx.objectStore(STORE_BRANCHES);
-        const req = store.get(cleanId);
-        req.onsuccess = () => {
-          const b = req.result;
-          if (!b) return reject(new NotFoundError(`No existe la rama [${cleanId}].`));
-          if (updates.name) b.name = String(updates.name).trim();
-          if (updates.description !== undefined) b.description = String(updates.description).trim();
-          b.updatedAt = Date.now();
-          const putReq = store.put(b);
-          putReq.onsuccess = () => resolve({ ...b });
-          putReq.onerror = (e) => reject(new RagStorageError(`Error al actualizar rama: ${e.target.error?.message}`));
-        };
-        req.onerror = (e) => reject(new RagStorageError(`Error al buscar rama: ${e.target.error?.message}`));
-      } catch (err) {
-        reject(new RagStorageError(`Excepción al actualizar rama: ${err.message}`));
+    const content = await fs.readFile(ramaPath, "text");
+    return parseRamaMarkdown(content, cleanId);
+  }
+
+  async function updateBranch(id, updates = {}) {
+    const cleanId = String(id || "").trim();
+    if (!cleanId) throw new ValidationError("El ID de la rama es obligatorio.");
+
+    const branch = await getBranchById(cleanId);
+    if (!branch) {
+      throw new NotFoundError(`No existe la rama [${cleanId}].`);
+    }
+
+    if (updates.name) branch.name = String(updates.name).trim();
+    if (updates.description !== undefined) branch.description = String(updates.description).trim();
+    branch.updatedAt = Date.now();
+
+    const fs = getFS();
+    const ramaPath = `${RAG_ROOT}/${cleanId}/${RAMA_FILE}`;
+    const ramaMd = formatRamaMarkdown(branch);
+    await fs.writeFile(ramaPath, ramaMd);
+
+    return { ...branch };
+  }
+
+  async function deleteBranch(id) {
+    const cleanId = String(id || "").trim();
+    if (!cleanId) throw new ValidationError("El ID de la rama es obligatorio.");
+
+    const branch = await getBranchById(cleanId);
+    if (!branch) {
+      throw new NotFoundError(`No existe la rama [${cleanId}].`);
+    }
+
+    const fs = getFS();
+    const branchDir = `${RAG_ROOT}/${cleanId}`;
+
+    const headers = await getDocumentHeadersByBranch(cleanId);
+    const docCount = headers.length;
+
+    await fs.deleteDirectory(branchDir, { recursive: true });
+
+    // Limpiar índice en memoria
+    for (const [docId, loc] of Array.from(docLocationIndex.entries())) {
+      if (loc.branchId === cleanId) {
+        docLocationIndex.delete(docId);
       }
-    });
+    }
+
+    console.info(`[ChatRagStorage] Rama [${cleanId}] y ${docCount} documentos eliminados en cascada.`);
+    return { success: true, deletedBranchId: cleanId, deletedDocumentsCount: docCount };
   }
 
   // ==========================================================================
   // Métodos CRUD: Documentos (Documents)
   // ==========================================================================
 
-  /**
-   * Guarda o actualiza un documento con sus capítulos estructurados.
-   * @param {Object} documentData - Datos completos del documento.
-   * @returns {Promise<Object>} - El documento persistido.
-   */
-  async function saveDocument(documentData) {
+  async function saveDocument(documentData, rawFileContent = null) {
     const doc = validateDocument(documentData);
-    const db = await openDatabase();
+    const fs = getFS();
+    if (!fs) throw new RagStorageError("ChatFileSystem no está disponible.");
 
-    if (!db) {
-      // Verificar existencia de la rama en fallback
-      if (!memoryBranches.has(doc.branchId)) {
-        throw new NotFoundError(`La rama [${doc.branchId}] no existe.`);
-      }
-      // Actualizar updatedAt de la rama
-      const branch = memoryBranches.get(doc.branchId);
-      branch.updatedAt = Date.now();
-
-      memoryDocuments.set(doc.id, { ...doc });
-      console.info(`[${DB_NAME}] Documento guardado (en memoria): "${doc.title}" [${doc.id}] (${doc.chapters.length} capítulos)`);
-      return { ...doc };
+    // 1. Verificar que la rama existe
+    const branch = await getBranchById(doc.branchId);
+    if (!branch) {
+      throw new NotFoundError(`No se puede guardar el documento: La rama asociada [${doc.branchId}] no existe.`);
     }
 
-    return new Promise((resolve, reject) => {
+    // 2. Obtener bucket disponible (0001, 0002, ...)
+    const bucket = await getAvailableBucket(doc.branchId);
+    doc.bucket = bucket;
+
+    const bucketPath = `${RAG_ROOT}/${doc.branchId}/${bucket}`;
+    const baseName = doc.title;
+    const mdName = getSummaryMdFileName(baseName);
+
+    const mdPath = `${bucketPath}/${mdName}`;
+    const origPath = `${bucketPath}/${baseName}`;
+
+    // 3. Guardar archivo original si se proporciona
+    if (rawFileContent !== null && rawFileContent !== undefined) {
       try {
-        const tx = db.transaction([STORE_BRANCHES, STORE_DOCUMENTS], 'readwrite');
-        const branchStore = tx.objectStore(STORE_BRANCHES);
-        const docStore = tx.objectStore(STORE_DOCUMENTS);
-
-        // 1. Validar que la rama existe y actualizar updatedAt
-        const checkBranchReq = branchStore.get(doc.branchId);
-
-        checkBranchReq.onsuccess = () => {
-          const branch = checkBranchReq.result;
-          if (!branch) {
-            tx.abort();
-            return reject(new NotFoundError(`No se puede guardar el documento: La rama asociada [${doc.branchId}] no existe.`));
-          }
-
-          branch.updatedAt = Date.now();
-          branchStore.put(branch);
-
-          // 2. Guardar documento
-          const putDocReq = docStore.put(doc);
-          putDocReq.onerror = (e) => {
-            if (isQuotaError(e.target.error)) {
-              reject(new QuotaExceededError(undefined, { error: e.target.error }));
-            }
-          };
-        };
-
-        tx.oncomplete = () => {
-          console.info(`[${DB_NAME}] Documento guardado: "${doc.title}" [${doc.id}] (${doc.chapters.length} capítulos)`);
-          resolve({ ...doc });
-        };
-
-        tx.onerror = (e) => {
-          if (isQuotaError(e.target.error)) {
-            reject(new QuotaExceededError(undefined, { error: e.target.error }));
-          } else {
-            reject(new RagStorageError(`Error al guardar documento [${doc.id}]: ${e.target.error?.message || e.target.error}`));
-          }
-        };
+        await fs.writeFile(origPath, rawFileContent);
       } catch (err) {
-        if (isQuotaError(err)) {
-          reject(new QuotaExceededError(undefined, { error: err }));
-        } else {
-          reject(new RagStorageError(`Excepción al guardar documento [${doc.id}]: ${err.message}`));
-        }
+        console.warn(`[ChatRagStorage] No se pudo escribir archivo original en ${origPath}:`, err);
       }
+    }
+
+    // 4. Registrar imágenes de capítulos si existen
+    extractAndRegisterChapterImages(doc.id, doc.chapters);
+
+    // 5. Guardar archivo estructurado Markdown con resúmenes y capítulos
+    const mdContent = formatDocumentMarkdown(doc);
+    await fs.writeFile(mdPath, mdContent);
+
+    // 6. Actualizar rama updatedAt
+    await updateBranch(doc.branchId, { updatedAt: Date.now() });
+
+    // 7. Indexar ubicación en memoria
+    docLocationIndex.set(doc.id, {
+      branchId: doc.branchId,
+      bucket: bucket,
+      fileName: baseName,
+      mdPath: mdPath,
+      origPath: origPath
     });
+
+    console.info(`[ChatRagStorage] Documento guardado en disco: "${doc.title}" [${doc.id}] en ${bucketPath}/`);
+    return { ...doc };
   }
 
-  /**
-   * Obtiene todos los documentos completos de una rama.
-   * @param {string} branchId - Identificador de la rama.
-   * @returns {Promise<Array<Object>>}
-   */
   async function getDocumentsByBranch(branchId) {
-    if (!branchId) return [];
-    const cleanId = String(branchId).trim();
-    const db = await openDatabase();
+    const cleanId = String(branchId || "").trim();
+    if (!cleanId) return [];
 
-    if (!db) {
-      const results = [];
-      for (const doc of memoryDocuments.values()) {
-        if (doc.branchId === cleanId) {
-          results.push({ ...doc });
-        }
-      }
-      return results.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-    }
+    const fs = getFS();
+    if (!fs) return [];
 
-    return new Promise((resolve, reject) => {
-      try {
-        const tx = db.transaction([STORE_DOCUMENTS], 'readonly');
-        const store = tx.objectStore(STORE_DOCUMENTS);
-        const index = store.index(INDEX_BY_BRANCH);
-        const req = index.getAll(cleanId);
+    const buckets = await getBranchBuckets(cleanId);
+    const documents = [];
 
-        req.onsuccess = () => {
-          const list = (req.result || []).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-          resolve(list);
-        };
+    for (const b of buckets) {
+      const bucketPath = `${RAG_ROOT}/${cleanId}/${b}`;
+      const exists = await fs.exists(bucketPath);
+      if (!exists.exists) continue;
 
-        req.onerror = (e) => {
-          reject(new RagStorageError(`Error al obtener documentos de rama [${cleanId}]: ${e.target.error?.message || e.target.error}`));
-        };
-      } catch (err) {
-        reject(new RagStorageError(`Excepción al obtener documentos de rama [${cleanId}]: ${err.message}`));
-      }
-    });
-  }
+      const items = await fs.listDirectory(bucketPath, { recursive: false });
+      const mdFiles = items.filter(item => item.kind === "file" && item.name.endsWith(".md"));
 
-  /**
-   * Obtiene los documentos de una rama EXCLUYENDO el campo 'content' de cada capítulo
-   * para optimizar drásticamente el consumo de memoria y la velocidad de renderizado en UI.
-   * @param {string} branchId - Identificador de la rama.
-   * @returns {Promise<Array<Object>>}
-   */
-  async function getDocumentHeadersByBranch(branchId) {
-    if (!branchId) return [];
-    const cleanId = String(branchId).trim();
-    const db = await openDatabase();
-
-    function projectDocHeader(doc) {
-      return {
-        id: doc.id,
-        branchId: doc.branchId,
-        title: doc.title,
-        fileType: doc.fileType,
-        fileSize: doc.fileSize,
-        globalSummary: doc.globalSummary,
-        createdAt: doc.createdAt,
-        chapters: (doc.chapters || []).map(ch => ({
-          chapterId: ch.chapterId,
-          title: ch.title,
-          summary: ch.summary,
-          charCount: ch.charCount
-        }))
-      };
-    }
-
-    if (!db) {
-      const results = [];
-      for (const doc of memoryDocuments.values()) {
-        if (doc.branchId === cleanId) {
-          results.push(projectDocHeader(doc));
-        }
-      }
-      return results.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-    }
-
-    return new Promise((resolve, reject) => {
-      try {
-        const tx = db.transaction([STORE_DOCUMENTS], 'readonly');
-        const store = tx.objectStore(STORE_DOCUMENTS);
-        const index = store.index(INDEX_BY_BRANCH);
-        const results = [];
-
-        // Usamos cursor para proyectar los datos de forma eficiente
-        const req = index.openCursor(IDBKeyRange.only(cleanId));
-
-        req.onsuccess = (event) => {
-          const cursor = event.target.result;
-          if (cursor) {
-            results.push(projectDocHeader(cursor.value));
-            cursor.continue();
-          } else {
-            results.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-            resolve(results);
-          }
-        };
-
-        req.onerror = (e) => {
-          reject(new RagStorageError(`Error al consultar cabeceras de documentos [${cleanId}]: ${e.target.error?.message || e.target.error}`));
-        };
-      } catch (err) {
-        reject(new RagStorageError(`Excepción al consultar cabeceras de documentos [${cleanId}]: ${err.message}`));
-      }
-    });
-  }
-
-  /**
-   * Recupera directamente la propiedad 'content' de un capítulo específico.
-   * Utilizado por la tool 'read_chapter_content' para inyectar solo el texto demandado.
-   * @param {string} docId - Identificador del documento.
-   * @param {number|string} chapterId - Identificador numérico o ID del capítulo.
-   * @returns {Promise<string|null>} - El texto íntegro del capítulo o null si no se encuentra.
-   */
-  async function getChapterContent(docId, chapterId) {
-    if (!docId) return null;
-    const cleanDocId = String(docId).trim();
-    const targetChapId = parseInt(chapterId, 10);
-    const db = await openDatabase();
-
-    let doc = null;
-
-    if (!db) {
-      doc = memoryDocuments.get(cleanDocId);
-    } else {
-      doc = await new Promise((resolve, reject) => {
+      for (const f of mdFiles) {
+        const filePath = `${bucketPath}/${f.name}`;
         try {
-          const tx = db.transaction([STORE_DOCUMENTS], 'readonly');
-          const store = tx.objectStore(STORE_DOCUMENTS);
-          const req = store.get(cleanDocId);
+          const content = await fs.readFile(filePath, "text");
+          const doc = parseDocumentMarkdown(content, f.name.replace(/\.md$/, ""), b, cleanId);
+          documents.push(doc);
 
-          req.onsuccess = () => resolve(req.result || null);
-          req.onerror = (e) => reject(new RagStorageError(`Error al leer documento [${cleanDocId}]: ${e.target.error?.message || e.target.error}`));
+          extractAndRegisterChapterImages(doc.id, doc.chapters);
+
+          docLocationIndex.set(doc.id, {
+            branchId: cleanId,
+            bucket: b,
+            fileName: doc.title,
+            mdPath: filePath,
+            origPath: `${bucketPath}/${doc.title}`
+          });
         } catch (err) {
-          reject(new RagStorageError(`Excepción al leer documento [${cleanDocId}]: ${err.message}`));
+          console.warn(`[ChatRagStorage] Error al leer documento "${filePath}":`, err);
         }
-      });
+      }
     }
 
-    if (!doc || !Array.isArray(doc.chapters)) return null;
+    return documents.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  }
 
-    // Buscar por coincidencia exacta de chapterId o por índice
-    const chapter = doc.chapters.find(ch => ch.chapterId === targetChapId || String(ch.chapterId) === String(chapterId));
-    if (chapter && typeof chapter.content === 'string') {
-      return chapter.content;
+  async function getDocumentHeadersByBranch(branchId) {
+    const cleanId = String(branchId || "").trim();
+    if (!cleanId) return [];
+
+    const docs = await getDocumentsByBranch(cleanId);
+    return docs.map(doc => ({
+      id: doc.id,
+      branchId: doc.branchId,
+      title: doc.title,
+      fileType: doc.fileType,
+      fileSize: doc.fileSize,
+      bucket: doc.bucket,
+      createdAt: doc.createdAt,
+      globalSummary: doc.globalSummary,
+      chaptersCount: (doc.chapters || []).length,
+      chapters: (doc.chapters || []).map(ch => ({
+        chapterId: ch.chapterId,
+        title: ch.title,
+        summary: ch.summary,
+        charCount: ch.charCount
+      }))
+    }));
+  }
+
+  async function getDocumentById(docId) {
+    const cleanId = String(docId || "").trim();
+    if (!cleanId) return null;
+
+    const fs = getFS();
+    if (!fs) return null;
+
+    // 1. Intentar resolver por índice rápido
+    let loc = docLocationIndex.get(cleanId);
+    if (loc && loc.mdPath) {
+      const exists = await fs.exists(loc.mdPath);
+      if (exists.exists) {
+        const content = await fs.readFile(loc.mdPath, "text");
+        const doc = parseDocumentMarkdown(content, loc.fileName, loc.bucket, loc.branchId);
+        extractAndRegisterChapterImages(doc.id, doc.chapters);
+        return doc;
+      }
+    }
+
+    // 2. Búsqueda por escaneo de ramas
+    const branches = await getBranches();
+    for (const b of branches) {
+      const docs = await getDocumentsByBranch(b.id);
+      for (const d of docs) {
+        if (d.id === cleanId) {
+          return d;
+        }
+      }
     }
 
     return null;
   }
 
-  /**
-   * Recupera un documento completo por su ID.
-   * @param {string} docId - Identificador del documento.
-   * @returns {Promise<Object|null>}
-   */
-  async function getDocumentById(docId) {
-    if (!docId) return null;
-    const cleanDocId = String(docId).trim();
-    const db = await openDatabase();
-
-    if (!db) {
-      const doc = memoryDocuments.get(cleanDocId);
-      return doc ? { ...doc } : null;
-    }
-
-    return new Promise((resolve, reject) => {
-      try {
-        const tx = db.transaction([STORE_DOCUMENTS], 'readonly');
-        const store = tx.objectStore(STORE_DOCUMENTS);
-        const req = store.get(cleanDocId);
-
-        req.onsuccess = () => resolve(req.result || null);
-        req.onerror = (e) => reject(new RagStorageError(`Error al leer documento [${cleanDocId}]: ${e.target.error?.message || e.target.error}`));
-      } catch (err) {
-        reject(new RagStorageError(`Excepción al leer documento [${cleanDocId}]: ${err.message}`));
-      }
-    });
-  }
-
-  // ==========================================================================
-  // Caché y Resolución Dinámica de Imágenes RAG
-  // ==========================================================================
-
-  const ragImageCache = new Map();
-
-  /**
-   * Registra una imagen extraída en la caché rápida en memoria.
-   * @param {string} imgId - Identificador de la imagen (ej: 'img_7_12')
-   * @param {string} dataUrl - Cadena Data URI base64
-   * @param {string} [docId] - ID del documento opcional
-   */
-  function registerImage(imgId, dataUrl, docId = null) {
-    if (!imgId || !dataUrl) return;
-    const cleanId = String(imgId).trim();
-    ragImageCache.set(cleanId, dataUrl);
-    if (docId) {
-      ragImageCache.set(`${docId}:${cleanId}`, dataUrl);
-    }
-  }
-
-  /**
-   * Resuelve una referencia 'rag-image://...' o '#img_X_Y' a su cadena Data URI base64 real.
-   * @param {string} srcOrRef - Referencia de imagen
-   * @param {string} [activeBranchId] - Rama activa opcional para acelerar la búsqueda
-   * @returns {Promise<string>} - Cadena Data URI base64 o '' si no se encuentra
-   */
-  async function resolveImageSrc(srcOrRef, activeBranchId = null) {
-    if (!srcOrRef || typeof srcOrRef !== 'string') return '';
-    const trimmed = srcOrRef.trim();
-
-    // 1. Si ya es una URI válida directa (data:, blob:, http/https)
-    if (/^(?:data:image\/|blob:|https?:\/\/)/i.test(trimmed)) {
-      return trimmed;
-    }
-
-    // 2. Extraer imgId y docId
-    let docId = null;
-    let imgId = '';
-
-    if (trimmed.startsWith('rag-image://')) {
-      const rest = trimmed.replace('rag-image://', '').replace(/^\/+/, '');
-      const parts = rest.split('/');
-      if (parts.length === 1) {
-        imgId = parts[0];
-      } else if (parts.length === 2) {
-        docId = parts[0];
-        imgId = parts[1];
-      } else if (parts.length >= 3) {
-        docId = parts[0];
-        imgId = parts[parts.length - 1];
-      }
-    } else {
-      const match = trimmed.match(/#(?:img_)?([0-9]+(?:_[0-9]+)?)/i) || trimmed.match(/^(?:img_)?([0-9]+(?:_[0-9]+)?)$/i);
-      if (match) {
-        imgId = match[1].startsWith('img_') ? match[1] : `img_${match[1]}`;
-      } else {
-        imgId = trimmed.replace(/^#/, '');
-      }
-    }
-
-    if (!imgId) return '';
-
-    const cleanImgId = imgId.replace(/^img_/, '');
-    const parts = cleanImgId.split('_');
-    const candidateKeys = [
-      imgId,
-      `img_${cleanImgId}`,
-      cleanImgId,
-      `#${imgId}`,
-      `#img_${cleanImgId}`
-    ];
-
-    if (parts.length === 2) {
-      const pageNum = parts[0];
-      const counter = parts[1];
-      candidateKeys.push(
-        `img_${counter}`,
-        counter,
-        `#img_${counter}`,
-        `#${counter}`,
-        `img_${pageNum}`,
-        pageNum
-      );
-    }
-
-    if (docId) {
-      for (const k of candidateKeys) {
-        if (ragImageCache.has(`${docId}:${k}`)) {
-          return ragImageCache.get(`${docId}:${k}`);
-        }
-      }
-    }
-
-    for (const k of candidateKeys) {
-      if (ragImageCache.has(k)) {
-        return ragImageCache.get(k);
-      }
-    }
-
-    // 3. Búsqueda en base de datos IndexedDB / Memoria
+  async function getChapterContent(docId, chapterId) {
     try {
-      let docsToSearch = [];
-      if (docId) {
-        const d = await getDocumentById(docId);
-        if (d) docsToSearch.push(d);
+      const doc = await getDocumentById(docId);
+      if (!doc) return null;
+      const chId = Number(chapterId);
+      const chapter = (doc.chapters || []).find(ch => ch.chapterId === chId);
+      if (!chapter) {
+        return null;
       }
-      if (docsToSearch.length === 0 && activeBranchId) {
-        docsToSearch = await getDocumentsByBranch(activeBranchId);
-      }
-      if (docsToSearch.length === 0) {
-        const branches = await getBranches();
-        for (const b of branches) {
-          const docs = await getDocumentsByBranch(b.id);
-          docsToSearch.push(...docs);
-        }
-      }
-
-      for (const doc of docsToSearch) {
-        if (!doc || !Array.isArray(doc.chapters)) continue;
-        for (const chap of doc.chapters) {
-          if (!chap.content || !chap.content.includes('data:image/')) continue;
-          const imgRegex = /!\[([^\]]*)\]\((data:image\/[^)]+)\)/g;
-          let m;
-          while ((m = imgRegex.exec(chap.content)) !== null) {
-            const alt = m[1];
-            const dataUrl = m[2];
-            const tagMatch = alt.match(/#(?:img_)?([0-9]+(?:_[0-9]+)?)/i);
-            if (tagMatch) {
-              const foundId = `img_${tagMatch[1].replace(/^img_/, '')}`;
-              const fParts = tagMatch[1].replace(/^img_/, '').split('_');
-              registerImage(foundId, dataUrl, doc.id);
-              if (fParts.length === 2) {
-                registerImage(`img_${fParts[1]}`, dataUrl, doc.id);
-              }
-            }
-            if (alt.includes(imgId) || alt.includes(cleanImgId)) {
-              registerImage(imgId, dataUrl, doc.id);
-              return dataUrl;
-            }
-            if (parts.length === 2 && (alt.includes(`_${parts[1]}`) || alt.includes(`#img_${parts[1]}`))) {
-              registerImage(imgId, dataUrl, doc.id);
-              return dataUrl;
-            }
-          }
-        }
-      }
-    } catch (e) {
-      console.warn(`[${DB_NAME}] Error al resolver imagen RAG [${trimmed}]:`, e);
+      return chapter.content || "";
+    } catch (_) {
+      return null;
     }
-
-    return '';
   }
 
-  /**
-   * Elimina un documento específico por su ID.
-   * @param {string} docId - Identificador del documento a eliminar.
-   * @returns {Promise<boolean>}
-   */
   async function deleteDocument(docId) {
-    if (!docId) throw new ValidationError('docId es requerido para eliminar un documento.');
-    const cleanDocId = String(docId).trim();
-    const db = await openDatabase();
+    const cleanId = String(docId || "").trim();
+    if (!cleanId) throw new ValidationError("El docId es obligatorio.");
 
-    if (!db) {
-      const existed = memoryDocuments.delete(cleanDocId);
-      console.info(`[${DB_NAME}] Documento [${cleanDocId}] eliminado (en memoria).`);
-      return existed;
+    const doc = await getDocumentById(docId);
+    if (!doc) return false;
+
+    const fs = getFS();
+    if (!fs) throw new RagStorageError("ChatFileSystem no está disponible.");
+
+    const bucketPath = `${RAG_ROOT}/${doc.branchId}/${doc.bucket || "0001"}`;
+    const baseName = doc.title;
+    const mdName = getSummaryMdFileName(baseName);
+
+    const mdPath = `${bucketPath}/${mdName}`;
+    const origPath = `${bucketPath}/${baseName}`;
+
+    try { await fs.deleteFile(mdPath); } catch (_) {}
+    if (origPath !== mdPath) {
+      try { await fs.deleteFile(origPath); } catch (_) {}
     }
 
-    return new Promise((resolve, reject) => {
-      try {
-        const tx = db.transaction([STORE_DOCUMENTS], 'readwrite');
-        const store = tx.objectStore(STORE_DOCUMENTS);
-        const req = store.delete(cleanDocId);
-
-        req.onsuccess = () => {
-          console.info(`[${DB_NAME}] Documento [${cleanDocId}] eliminado con éxito.`);
-          resolve(true);
-        };
-
-        req.onerror = (e) => {
-          reject(new RagStorageError(`Error al eliminar documento [${cleanDocId}]: ${e.target.error?.message || e.target.error}`));
-        };
-      } catch (err) {
-        reject(new RagStorageError(`Excepción al eliminar documento [${cleanDocId}]: ${err.message}`));
-      }
-    });
+    docLocationIndex.delete(cleanId);
+    console.info(`[ChatRagStorage] Documento [${cleanId}] eliminado de ${bucketPath}/`);
+    return true;
   }
 
   // ==========================================================================
-  // Estimación de Cuota, Exportación e Importación de Ramas
+  // Exportación e Importación
   // ==========================================================================
 
-  /**
-   * Consulta el uso y cuota disponible de almacenamiento con navigator.storage.estimate().
-   * @returns {Promise<{ usage: number, quota: number, usagePercent: string, available: number, supported: boolean }>}
-   */
-  async function getStorageEstimate() {
-    if (typeof navigator !== 'undefined' && navigator.storage && typeof navigator.storage.estimate === 'function') {
-      try {
-        const estimate = await navigator.storage.estimate();
-        const usage = estimate.usage || 0;
-        const quota = estimate.quota || 0;
-        const usagePercent = quota > 0 ? ((usage / quota) * 100).toFixed(1) : '0';
-        return {
-          usage,
-          quota,
-          usagePercent,
-          available: Math.max(0, quota - usage),
-          supported: true
-        };
-      } catch (err) {
-        return { usage: 0, quota: 0, usagePercent: '0', available: 0, supported: false, error: err?.message };
-      }
-    }
-    return { usage: 0, quota: 0, usagePercent: '0', available: 0, supported: false };
-  }
-
-  /**
-   * Exporta una rama completa y todos sus documentos/capítulos a un objeto JSON serializable.
-   * @param {string} branchId - ID de la rama a exportar.
-   * @returns {Promise<Object>} - Paquete JSON listo para guardar o descargar.
-   */
   async function exportBranchToJson(branchId) {
     const branch = await getBranchById(branchId);
-    if (!branch) {
-      throw new NotFoundError(`No se encontró la rama con ID: ${branchId}`);
-    }
-
+    if (!branch) throw new NotFoundError(`No existe la rama [${branchId}].`);
     const docs = await getDocumentsByBranch(branchId);
+
     return {
+      schema: "ChatCLI_RAG_Branch_v1",
       version: 1,
-      schema: 'ChatCLI_RAG_Branch_v1',
       exportedAt: Date.now(),
       branch: {
         id: branch.id,
         name: branch.name,
-        description: branch.description || '',
+        description: branch.description,
         createdAt: branch.createdAt,
         updatedAt: branch.updatedAt
       },
-      documents: docs.map((doc) => ({
-        id: doc.id,
-        title: doc.title,
-        fileType: doc.fileType,
-        fileSize: doc.fileSize,
-        globalSummary: doc.globalSummary || '',
-        createdAt: doc.createdAt,
-        updatedAt: doc.updatedAt,
-        chapters: (doc.chapters || []).map((ch) => ({
+      documents: docs.map(d => ({
+        id: d.id,
+        title: d.title,
+        fileType: d.fileType,
+        fileSize: d.fileSize,
+        globalSummary: d.globalSummary,
+        chapters: (d.chapters || []).map(ch => ({
           chapterId: ch.chapterId,
           title: ch.title,
-          summary: ch.summary || '',
-          content: ch.content || ''
+          summary: ch.summary,
+          content: ch.content
         }))
       }))
     };
   }
 
-  /**
-   * Importa una rama y sus documentos desde un objeto o JSON string.
-   * @param {Object|string} branchData - Datos exportados.
-   * @param {Object} [options={}] - Opciones ({ createNewId: boolean }).
-   * @returns {Promise<{ branch: Object, documentCount: number }>}
-   */
   async function importBranchFromJson(branchData, options = {}) {
     let payload = branchData;
-    if (typeof payload === 'string') {
+    if (typeof payload === "string") {
       try {
         payload = JSON.parse(payload);
       } catch (e) {
-        throw new ValidationError('El archivo importado no contiene un formato JSON válido.');
+        throw new ValidationError("El archivo importado no contiene un formato JSON válido.");
       }
     }
 
@@ -1023,10 +864,9 @@
     }
 
     const branchName = String(payload.branch.name).trim();
-    const branchDesc = String(payload.branch.description || '').trim();
+    const branchDesc = String(payload.branch.description || "").trim();
     const rawDocs = Array.isArray(payload.documents) ? payload.documents : [];
 
-    // Crear o preservar la rama
     const existingBranch = payload.branch.id ? await getBranchById(payload.branch.id).catch(() => null) : null;
     const shouldCreateNew = options.createNewId || Boolean(existingBranch);
 
@@ -1035,7 +875,6 @@
       const importedName = existingBranch ? `${branchName} (Copia)` : branchName;
       targetBranch = await createBranch(importedName, branchDesc);
     } else {
-      const branchId = payload.branch.id || generateId('branch');
       targetBranch = await createBranch(branchName, branchDesc);
     }
 
@@ -1043,17 +882,17 @@
     for (const rawDoc of rawDocs) {
       if (!rawDoc.title) continue;
       const docToSave = {
-        id: generateId('doc'),
+        id: generateId("doc"),
         branchId: targetBranch.id,
         title: String(rawDoc.title).trim(),
-        fileType: rawDoc.fileType || 'txt',
+        fileType: rawDoc.fileType || "txt",
         fileSize: Number(rawDoc.fileSize) || 0,
-        globalSummary: String(rawDoc.globalSummary || ''),
+        globalSummary: String(rawDoc.globalSummary || ""),
         chapters: Array.isArray(rawDoc.chapters) ? rawDoc.chapters.map((ch, idx) => ({
-          chapterId: typeof ch.chapterId === 'number' ? ch.chapterId : (idx + 1),
+          chapterId: typeof ch.chapterId === "number" ? ch.chapterId : (idx + 1),
           title: String(ch.title || `Capítulo ${idx + 1}`),
-          summary: String(ch.summary || ''),
-          content: String(ch.content || '')
+          summary: String(ch.summary || ""),
+          content: String(ch.content || "")
         })) : []
       };
 
@@ -1067,43 +906,58 @@
     };
   }
 
-  /**
-   * Limpia toda la base de datos RAG (útil para reinicios y pruebas).
-   */
-  async function clearAllData() {
-    memoryBranches.clear();
-    memoryDocuments.clear();
+  async function getStorageEstimate() {
+    const fs = getFS();
+    if (!fs) return { usage: 0, quota: 0, usageFormatted: "0 B", quotaFormatted: "10 GB", percentUsed: 0, isPersisted: true };
 
-    const db = await openDatabase();
-    if (!db) return true;
+    const branches = await getBranches();
+    let totalDocs = 0;
+    let totalSize = 0;
 
-    return new Promise((resolve, reject) => {
-      try {
-        const tx = db.transaction([STORE_BRANCHES, STORE_DOCUMENTS], 'readwrite');
-        tx.objectStore(STORE_BRANCHES).clear();
-        tx.objectStore(STORE_DOCUMENTS).clear();
-
-        tx.oncomplete = () => {
-          console.info(`[${DB_NAME}] Todos los datos de ramas y documentos han sido limpiados.`);
-          resolve(true);
-        };
-
-        tx.onerror = (e) => reject(new RagStorageError(`Error al vaciar base de datos: ${e.target.error?.message || e.target.error}`));
-      } catch (err) {
-        reject(new RagStorageError(`Excepción al vaciar base de datos: ${err.message}`));
+    for (const b of branches) {
+      const docs = await getDocumentsByBranch(b.id);
+      totalDocs += docs.length;
+      for (const d of docs) {
+        totalSize += d.fileSize || 0;
       }
-    });
+    }
+
+    const quota = 10 * 1024 * 1024 * 1024;
+    return {
+      usage: totalSize,
+      quota: quota,
+      usagePercent: `${((totalSize / quota) * 100).toFixed(2)}%`,
+      usageFormatted: formatBytes(totalSize),
+      quotaFormatted: formatBytes(quota),
+      percentUsed: Number(((totalSize / quota) * 100).toFixed(2)),
+      isPersisted: true,
+      totalBranches: branches.length,
+      totalDocuments: totalDocs
+    };
   }
 
-  /**
-   * Cierra la conexión a la base de datos.
-   */
-  async function closeDB() {
-    if (dbPromise) {
-      const db = await dbPromise;
-      if (db) db.close();
-      dbPromise = null;
+  async function clearAllData() {
+    const fs = getFS();
+    if (fs) {
+      try {
+        await fs.deleteDirectory(RAG_ROOT, { recursive: true });
+      } catch (_) {}
     }
+    docLocationIndex.clear();
+    ragImageCache.clear();
+    return true;
+  }
+
+  async function openDatabase() {
+    return true;
+  }
+
+  async function closeDB() {
+    return true;
+  }
+
+  async function requestPersistentStorage() {
+    return true;
   }
 
   // ==========================================================================
@@ -1111,6 +965,9 @@
   // ==========================================================================
 
   return {
+    RAG_ROOT,
+    MAX_FILES_PER_BUCKET,
+    RAMA_FILE,
     DB_NAME,
     DB_VERSION,
     STORE_BRANCHES,
@@ -1122,7 +979,7 @@
     QuotaExceededError,
     NotFoundError,
 
-    // Métodos de Conexión y Cuota
+    // Conexión y utilidades
     openDatabase,
     requestPersistentStorage,
     getStorageEstimate,
@@ -1152,4 +1009,3 @@
     ragImageCache
   };
 });
-
