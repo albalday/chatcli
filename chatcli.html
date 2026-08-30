@@ -14,20 +14,29 @@
 <script>
 (async () => {
   try {
+    // 1. Leer el string Base64 de la etiqueta #compressed-js
     const el = document.getElementById('compressed-js');
-    if (!el) return;
+    if (!el) throw new Error('Elemento #compressed-js no encontrado.');
     const b64 = el.textContent.trim();
+
+    // 2. Decodificar Base64 a Uint8Array
     const binStr = atob(b64);
     const bytes = new Uint8Array(binStr.length);
     for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+
+    // 3. Descomprimir utilizando la API nativa DecompressionStream('gzip')
     const ds = new DecompressionStream('gzip');
     const stream = new Blob([bytes], { type: 'application/gzip' }).stream().pipeThrough(ds);
-    const text = await new Response(stream).text();
+
+    // 4. Convertir el stream resultante a texto
+    const jsCode = await new Response(stream).text();
+
+    // 5. Inyectar en el DOM como un nuevo nodo <script> para ejecución
     const script = document.createElement('script');
-    script.textContent = text;
+    script.textContent = jsCode;
     document.body.appendChild(script);
   } catch (err) {
-    console.error('Error al descomprimir JavaScript:', err);
+    console.error('Error al inicializar JavaScript comprimido:', err);
   }
 })();
 </script></body></html>
