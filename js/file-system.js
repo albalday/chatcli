@@ -1,17 +1,16 @@
 /**
  * ZeroChat Local File System Module (ChatFileSystem)
  * 
- * Capa de abstracción para el acceso y persistencia en el sistema de archivos local
- * del usuario mediante la File System Access API estándar del navegador (window.showDirectoryPicker).
+ * Capa nativa para el acceso y persistencia en el sistema de archivos local
+ * del usuario mediante la File System Access API estándar (window.showDirectoryPicker).
  *
- * Características principales:
+ * Características:
  * - Persistencia del handle de la carpeta raíz ("zerochat") en IndexedDB para minimizar peticiones de permiso.
- * - Comprobación no intrusiva de permisos (queryPermission vs requestPermission solo con gesto de usuario).
+ * - Comprobación no intrusiva de permisos (queryPermission vs requestPermission con interacción de usuario).
  * - Creación recursiva de directorios y navegación jerárquica por rutas relativas.
  * - Lectura y escritura atómica de ficheros completos (Texto, JSON, Binario / ArrayBuffer, Uint8Array, Blob).
  * - Listado de directorios con metadatos (tamaño, fecha de modificación, tipo).
  * - Eliminación segura de ficheros y directorios recursivos.
- * - Motor de fallback en memoria virtual (MemoryFileSystem) transparente para tests unitarios y Node.js.
  */
 
 (function (root, factory) {
@@ -114,216 +113,16 @@
   }
 
   // ==========================================================================
-  // Motor Virtual en Memoria (Fallback para Node.js y Entornos sin API Nativa)
-  // ==========================================================================
-
-  class MemoryFileSystemBackend {
-    constructor() {
-      this.rootName = "zerochat";
-      this.files = new Map(); // path -> { content: Uint8Array|string, size: number, lastModified: number }
-      this.directories = new Set([""]); // Set de rutas de directorios normalizadas
-      this.hasGrantedPermission = true;
-    }
-
-    async verifyPermission() {
-      return this.hasGrantedPermission;
-    }
-
-    async createDirectory(normalizedPath) {
-      if (!normalizedPath) return true;
-      const parts = normalizedPath.split("/");
-      let current = "";
-      for (const part of parts) {
-        current = current ? `${current}/${part}` : part;
-        this.directories.add(current);
-      }
-      return true;
-    }
-
-    async writeFile(normalizedPath, data) {
-      const parent = ChatFileSystemImpl.getParentPath(normalizedPath);
-      if (parent) {
-        await this.createDirectory(parent);
-      }
-
-      let contentBuffer;
-      let size = 0;
-
-      if (typeof data === "string") {
-        contentBuffer = data;
-        size = new TextEncoder().encode(data).length;
-      } else if (data instanceof Uint8Array) {
-        contentBuffer = data;
-        size = data.byteLength;
-      } else if (data instanceof ArrayBuffer) {
-        contentBuffer = new Uint8Array(data);
-        size = data.byteLength;
-      } else if (typeof Blob !== "undefined" && data instanceof Blob) {
-        const buf = await data.arrayBuffer();
-        contentBuffer = new Uint8Array(buf);
-        size = buf.byteLength;
-      } else if (typeof data === "object" && data !== null) {
-        const jsonStr = JSON.stringify(data, null, 2);
-        contentBuffer = jsonStr;
-        size = new TextEncoder().encode(jsonStr).length;
-      } else {
-        const str = String(data);
-        contentBuffer = str;
-        size = new TextEncoder().encode(str).length;
-      }
-
-      const now = Date.now();
-      this.files.set(normalizedPath, {
-        content: contentBuffer,
-        size: size,
-        lastModified: now
-      });
-
-      return { path: normalizedPath, size, lastModified: now, success: true };
-    }
-
-    async readFile(normalizedPath, format = "text") {
-      const entry = this.files.get(normalizedPath);
-      if (!entry) {
-        throw new NotFoundError(normalizedPath);
-      }
-
-      const raw = entry.content;
-      if (format === "json") {
-        const text = typeof raw === "string" ? raw : new TextDecoder().decode(raw);
-        return JSON.parse(text);
-      }
-      if (format === "text") {
-        return typeof raw === "string" ? raw : new TextDecoder().decode(raw);
-      }
-      if (format === "uint8Array") {
-        return typeof raw === "string" ? new TextEncoder().encode(raw) : raw;
-      }
-      if (format === "arrayBuffer") {
-        const u8 = typeof raw === "string" ? new TextEncoder().encode(raw) : raw;
-        return u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength);
-      }
-      if (format === "blob") {
-        const u8 = typeof raw === "string" ? new TextEncoder().encode(raw) : raw;
-        return new Blob([u8]);
-      }
-
-      return raw;
-    }
-
-    async deleteFile(normalizedPath) {
-      if (!this.files.has(normalizedPath)) {
-        throw new NotFoundError(normalizedPath);
-      }
-      this.files.delete(normalizedPath);
-      return true;
-    }
-
-    async deleteDirectory(normalizedPath, recursive = true) {
-      if (!this.directories.has(normalizedPath)) {
-        throw new NotFoundError(normalizedPath);
-      }
-
-      const prefix = `${normalizedPath}/`;
-      if (!recursive) {
-        for (const f of this.files.keys()) {
-          if (f.startsWith(prefix)) throw new FileSystemError(`El directorio no está vacío: "${normalizedPath}"`, "DIR_NOT_EMPTY");
-        }
-        for (const d of this.directories) {
-          if (d.startsWith(prefix)) throw new FileSystemError(`El directorio no está vacío: "${normalizedPath}"`, "DIR_NOT_EMPTY");
-        }
-      }
-
-      for (const f of Array.from(this.files.keys())) {
-        if (f.startsWith(prefix) || f === normalizedPath) this.files.delete(f);
-      }
-      for (const d of Array.from(this.directories)) {
-        if (d.startsWith(prefix) || d === normalizedPath) this.directories.delete(d);
-      }
-      return true;
-    }
-
-    async exists(normalizedPath) {
-      if (!normalizedPath) return { exists: true, kind: "directory" };
-      if (this.files.has(normalizedPath)) return { exists: true, kind: "file" };
-      if (this.directories.has(normalizedPath)) return { exists: true, kind: "directory" };
-      return { exists: false, kind: null };
-    }
-
-    async listDirectory(normalizedPath = "", recursive = false) {
-      const results = [];
-      const prefix = normalizedPath ? `${normalizedPath}/` : "";
-      const visitedDirs = new Set();
-
-      for (const d of this.directories) {
-        if (d === normalizedPath || !d.startsWith(prefix)) continue;
-        const rel = d.slice(prefix.length);
-        const isDirectChild = !rel.includes("/");
-        if (recursive || isDirectChild) {
-          const dirPath = isDirectChild ? (normalizedPath ? `${normalizedPath}/${rel}` : rel) : d;
-          if (!visitedDirs.has(dirPath)) {
-            visitedDirs.add(dirPath);
-            results.push({
-              name: rel.split("/")[0],
-              path: d,
-              kind: "directory"
-            });
-          }
-        }
-      }
-
-      for (const [fPath, meta] of this.files.entries()) {
-        if (!fPath.startsWith(prefix)) continue;
-        const rel = fPath.slice(prefix.length);
-        const isDirectChild = !rel.includes("/");
-        if (recursive || isDirectChild) {
-          results.push({
-            name: rel.split("/").pop(),
-            path: fPath,
-            kind: "file",
-            size: meta.size,
-            lastModified: meta.lastModified
-          });
-        }
-      }
-
-      return results;
-    }
-
-    async getFileStats(normalizedPath) {
-      const entry = this.files.get(normalizedPath);
-      if (!entry) throw new NotFoundError(normalizedPath);
-      return {
-        name: normalizedPath.split("/").pop(),
-        path: normalizedPath,
-        kind: "file",
-        size: entry.size,
-        lastModified: entry.lastModified
-      };
-    }
-  }
-
-  // ==========================================================================
-  // Implementación Principal de ChatFileSystem
+  // Implementación de ChatFileSystem
   // ==========================================================================
 
   class ChatFileSystemImpl {
     constructor() {
       this._rootHandle = null;
-      this._memoryBackend = null;
-      this._forceMemoryMode = false;
     }
 
     isSupported() {
       return typeof window !== "undefined" && typeof window.showDirectoryPicker === "function";
-    }
-
-    useMemoryBackend(enable = true) {
-      this._forceMemoryMode = enable;
-      if (enable && !this._memoryBackend) {
-        this._memoryBackend = new MemoryFileSystemBackend();
-      }
-      return this;
     }
 
     normalizePath(pathStr) {
@@ -379,9 +178,8 @@
     }
 
     async selectRootDirectory(options = {}) {
-      if (this._forceMemoryMode || !this.isSupported()) {
-        if (!this._memoryBackend) this._memoryBackend = new MemoryFileSystemBackend();
-        return { success: true, mode: "memory", name: "zerochat" };
+      if (!this.isSupported()) {
+        throw new FileSystemError("La File System Access API no está disponible en este navegador.", "NOT_SUPPORTED");
       }
 
       try {
@@ -404,11 +202,6 @@
     }
 
     async getRootDirectory(requestIfPrompt = false) {
-      if (this._forceMemoryMode || !this.isSupported()) {
-        if (!this._memoryBackend) this._memoryBackend = new MemoryFileSystemBackend();
-        return this._memoryBackend;
-      }
-
       if (this._rootHandle) {
         const ok = await this.verifyPermission(this._rootHandle, true, requestIfPrompt);
         if (ok) return this._rootHandle;
@@ -426,19 +219,21 @@
       return null;
     }
 
-    async disconnectRootDirectory() {
-      this._rootHandle = null;
-      await HandleStorage.removeHandle(ROOT_HANDLE_KEY);
-      if (this._memoryBackend) {
-        this._memoryBackend = new MemoryFileSystemBackend();
+    async setRootDirectoryHandle(handle) {
+      this._rootHandle = handle;
+      if (handle) {
+        await HandleStorage.saveHandle(ROOT_HANDLE_KEY, handle);
       }
       return true;
     }
 
+    async disconnectRootDirectory() {
+      this._rootHandle = null;
+      await HandleStorage.removeHandle(ROOT_HANDLE_KEY);
+      return true;
+    }
+
     async isConfigured() {
-      if (this._forceMemoryMode || !this.isSupported()) {
-        return !!this._memoryBackend;
-      }
       const root = await this.getRootDirectory(false);
       return !!root;
     }
@@ -467,10 +262,6 @@
       const root = await this.getRootDirectory(true);
       if (!root) throw new PermissionDeniedError();
 
-      if (root instanceof MemoryFileSystemBackend || this._forceMemoryMode) {
-        return root.createDirectory(normalized);
-      }
-
       await this._getNativeDirHandle(root, normalized, true);
       return true;
     }
@@ -481,10 +272,6 @@
 
       const root = await this.getRootDirectory(true);
       if (!root) throw new PermissionDeniedError();
-
-      if (root instanceof MemoryFileSystemBackend || this._forceMemoryMode) {
-        return root.writeFile(normalized, data);
-      }
 
       const parentPath = this.getParentPath(normalized);
       const fileName = this.getBaseName(normalized);
@@ -522,10 +309,6 @@
 
       const root = await this.getRootDirectory(true);
       if (!root) throw new PermissionDeniedError();
-
-      if (root instanceof MemoryFileSystemBackend || this._forceMemoryMode) {
-        return root.readFile(normalized, format);
-      }
 
       const parentPath = this.getParentPath(normalized);
       const fileName = this.getBaseName(normalized);
@@ -578,10 +361,6 @@
       const root = await this.getRootDirectory(true);
       if (!root) throw new PermissionDeniedError();
 
-      if (root instanceof MemoryFileSystemBackend || this._forceMemoryMode) {
-        return root.deleteFile(normalized);
-      }
-
       const parentPath = this.getParentPath(normalized);
       const fileName = this.getBaseName(normalized);
 
@@ -603,10 +382,6 @@
       const root = await this.getRootDirectory(true);
       if (!root) throw new PermissionDeniedError();
 
-      if (root instanceof MemoryFileSystemBackend || this._forceMemoryMode) {
-        return root.deleteDirectory(normalized, recursive);
-      }
-
       const parentPath = this.getParentPath(normalized);
       const dirName = this.getBaseName(normalized);
 
@@ -624,10 +399,6 @@
       const normalized = this.normalizePath(pathStr);
       const root = await this.getRootDirectory(true);
       if (!root) return { exists: false, kind: null };
-
-      if (root instanceof MemoryFileSystemBackend || this._forceMemoryMode) {
-        return root.exists(normalized);
-      }
 
       if (!normalized) return { exists: true, kind: "directory" };
 
@@ -658,10 +429,6 @@
 
       const root = await this.getRootDirectory(true);
       if (!root) throw new PermissionDeniedError();
-
-      if (root instanceof MemoryFileSystemBackend || this._forceMemoryMode) {
-        return root.listDirectory(normalized, recursive);
-      }
 
       const targetDir = normalized ? await this._getNativeDirHandle(root, normalized, false) : root;
       const entries = [];
@@ -702,10 +469,6 @@
       const root = await this.getRootDirectory(true);
       if (!root) throw new PermissionDeniedError();
 
-      if (root instanceof MemoryFileSystemBackend || this._forceMemoryMode) {
-        return root.getFileStats(normalized);
-      }
-
       const parentPath = this.getParentPath(normalized);
       const fileName = this.getBaseName(normalized);
 
@@ -730,7 +493,6 @@
   instance.FileSystemError = FileSystemError;
   instance.PermissionDeniedError = PermissionDeniedError;
   instance.NotFoundError = NotFoundError;
-  instance.MemoryFileSystemBackend = MemoryFileSystemBackend;
 
   return instance;
 });

@@ -1,8 +1,14 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
+const ChatFileSystem = require('../js/file-system.js');
 const RagStorage = require('../js/ragStorage.js');
 const ChatService = require('../js/chatService.js');
 const AgentCore = require('../js/agent-core.js');
+const { createMockDirectoryHandle } = require('./mock_file_system_handle.js');
+
+// Configurar mock de directorio para el entorno de test en Node.js
+const mockRoot = createMockDirectoryHandle('zerochat');
+ChatFileSystem.setRootDirectoryHandle(mockRoot);
 
 test('ChatService - READ_CHAPTER_TOOL_DEFINITION cumple con la especificación de OpenAI Tool Calling', () => {
   const def = ChatService.READ_CHAPTER_TOOL_DEFINITION;

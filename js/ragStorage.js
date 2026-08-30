@@ -84,11 +84,7 @@
     }
     if (typeof require !== "undefined") {
       try {
-        const fsMod = require("./file-system.js");
-        if (fsMod && !fsMod.isSupported()) {
-          fsMod.useMemoryBackend(true);
-        }
-        return fsMod;
+        return require("./file-system.js");
       } catch (e) {}
     }
     return null;

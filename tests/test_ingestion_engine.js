@@ -1,8 +1,14 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
+const ChatFileSystem = require('../js/file-system.js');
 const RagStorage = require('../js/ragStorage.js');
 const IngestionEngine = require('../js/ingestionEngine.js');
 const FileParser = require('../js/file-parser.js');
+const { createMockDirectoryHandle } = require('./mock_file_system_handle.js');
+
+// Configurar mock de directorio para el entorno de test en Node.js
+const mockRoot = createMockDirectoryHandle('zerochat');
+ChatFileSystem.setRootDirectoryHandle(mockRoot);
 
 test('IngestionEngine - Normalización y extracción de texto plano', async () => {
   const rawText = 'Línea 1\r\nLínea 2\x00\x07 con caracteres especiales y acentos: acción.';

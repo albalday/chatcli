@@ -2,9 +2,11 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const ChatFileSystem = require("../js/file-system.js");
 const RagStorage = require("../js/ragStorage.js");
+const { createMockDirectoryHandle } = require("./mock_file_system_handle.js");
 
 test("RAG FileSystem Structure - Creación de rama y archivo rama.md", async () => {
-  ChatFileSystem.useMemoryBackend(true);
+  const mockRoot = createMockDirectoryHandle("zerochat");
+  await ChatFileSystem.setRootDirectoryHandle(mockRoot);
   await RagStorage.clearAllData();
 
   const branch = await RagStorage.createBranch(
@@ -32,7 +34,8 @@ test("RAG FileSystem Structure - Creación de rama y archivo rama.md", async () 
 });
 
 test("RAG FileSystem Structure - Guardado de documento original y archivo .md con resúmenes y diagramas", async () => {
-  ChatFileSystem.useMemoryBackend(true);
+  const mockRoot = createMockDirectoryHandle("zerochat");
+  await ChatFileSystem.setRootDirectoryHandle(mockRoot);
   await RagStorage.clearAllData();
 
   const branch = await RagStorage.createBranch("Placas Base");
@@ -79,7 +82,8 @@ test("RAG FileSystem Structure - Guardado de documento original y archivo .md co
 });
 
 test("RAG FileSystem Structure - Paginación en subdirectorios 0001, 0002 cuando hay más de 100 archivos", async () => {
-  ChatFileSystem.useMemoryBackend(true);
+  const mockRoot = createMockDirectoryHandle("zerochat");
+  await ChatFileSystem.setRootDirectoryHandle(mockRoot);
   await RagStorage.clearAllData();
 
   const branch = await RagStorage.createBranch("Documentos Masivos");

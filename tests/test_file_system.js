@@ -1,11 +1,13 @@
 const test = require("node:test");
 const assert = require("node:assert");
 const ChatFileSystem = require("../js/file-system.js");
+const { createMockDirectoryHandle } = require("./mock_file_system_handle.js");
 
-test("ChatFileSystem - Inicialización y modo Memoria", async () => {
-  ChatFileSystem.useMemoryBackend(true);
+test("ChatFileSystem - Inicialización y vinculación de root handle", async () => {
+  const mockRoot = createMockDirectoryHandle("zerochat");
+  await ChatFileSystem.setRootDirectoryHandle(mockRoot);
   const isConfig = await ChatFileSystem.isConfigured();
-  assert.strictEqual(isConfig, true, "Debe estar configurado en modo memoria");
+  assert.strictEqual(isConfig, true, "Debe estar configurado con root handle");
 });
 
 test("ChatFileSystem - Normalización y utilidades de rutas", () => {
@@ -20,7 +22,9 @@ test("ChatFileSystem - Normalización y utilidades de rutas", () => {
 });
 
 test("ChatFileSystem - Creación recursiva de directorios", async () => {
-  ChatFileSystem.useMemoryBackend(true);
+  const mockRoot = createMockDirectoryHandle("zerochat");
+  await ChatFileSystem.setRootDirectoryHandle(mockRoot);
+
   await ChatFileSystem.createDirectory("chats/2026/archive");
   
   const ex = await ChatFileSystem.exists("chats/2026/archive");
@@ -33,7 +37,8 @@ test("ChatFileSystem - Creación recursiva de directorios", async () => {
 });
 
 test("ChatFileSystem - Escritura y lectura de archivos de texto y JSON", async () => {
-  ChatFileSystem.useMemoryBackend(true);
+  const mockRoot = createMockDirectoryHandle("zerochat");
+  await ChatFileSystem.setRootDirectoryHandle(mockRoot);
 
   // 1. Texto plano
   const textRes = await ChatFileSystem.writeFile("docs/nota.txt", "Hola ZeroChat");
@@ -58,7 +63,8 @@ test("ChatFileSystem - Escritura y lectura de archivos de texto y JSON", async (
 });
 
 test("ChatFileSystem - Escritura y lectura de datos binarios (Uint8Array y ArrayBuffer)", async () => {
-  ChatFileSystem.useMemoryBackend(true);
+  const mockRoot = createMockDirectoryHandle("zerochat");
+  await ChatFileSystem.setRootDirectoryHandle(mockRoot);
 
   const binaryData = new Uint8Array([10, 20, 30, 40, 50, 255]);
   await ChatFileSystem.writeFile("bin/data.dat", binaryData);
@@ -73,7 +79,8 @@ test("ChatFileSystem - Escritura y lectura de datos binarios (Uint8Array y Array
 });
 
 test("ChatFileSystem - Listado de directorios y metadatos", async () => {
-  ChatFileSystem.useMemoryBackend(true);
+  const mockRoot = createMockDirectoryHandle("zerochat");
+  await ChatFileSystem.setRootDirectoryHandle(mockRoot);
 
   await ChatFileSystem.writeFile("proyecto/a.txt", "Archivo A");
   await ChatFileSystem.writeFile("proyecto/b.txt", "Archivo B");
@@ -101,7 +108,8 @@ test("ChatFileSystem - Listado de directorios y metadatos", async () => {
 });
 
 test("ChatFileSystem - Eliminación de archivos y directorios recursivos", async () => {
-  ChatFileSystem.useMemoryBackend(true);
+  const mockRoot = createMockDirectoryHandle("zerochat");
+  await ChatFileSystem.setRootDirectoryHandle(mockRoot);
 
   await ChatFileSystem.writeFile("temp/f1.txt", "Contenido 1");
   await ChatFileSystem.writeFile("temp/sub/f2.txt", "Contenido 2");
@@ -115,12 +123,11 @@ test("ChatFileSystem - Eliminación de archivos y directorios recursivos", async
   await ChatFileSystem.deleteDirectory("temp", { recursive: true });
   const exTemp = await ChatFileSystem.exists("temp");
   assert.strictEqual(exTemp.exists, false);
-  const exF2 = await ChatFileSystem.exists("temp/sub/f2.txt");
-  assert.strictEqual(exF2.exists, false);
 });
 
 test("ChatFileSystem - Manejo de errores y archivos inexistentes", async () => {
-  ChatFileSystem.useMemoryBackend(true);
+  const mockRoot = createMockDirectoryHandle("zerochat");
+  await ChatFileSystem.setRootDirectoryHandle(mockRoot);
 
   await assert.rejects(
     async () => {

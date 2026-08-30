@@ -1,6 +1,12 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
+const ChatFileSystem = require('../js/file-system.js');
 const RagStorage = require('../js/ragStorage.js');
+const { createMockDirectoryHandle } = require('./mock_file_system_handle.js');
+
+// Configurar mock de directorio para el entorno de test en Node.js
+const mockRoot = createMockDirectoryHandle('zerochat');
+ChatFileSystem.setRootDirectoryHandle(mockRoot);
 
 test('RagStorage - Inicialización y configuración de base de datos', async () => {
   assert.equal(RagStorage.DB_NAME, 'LocalRAG_DB');
