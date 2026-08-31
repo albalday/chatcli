@@ -34,6 +34,7 @@
       sug_ideas_prompt: 'Dame 3 ideas de proyectos web interesantes que utilicen HTML5 y JavaScript Vanilla.',
 
       // Barra de herramientas superior
+      profile_badge_title: 'Perfil de conexión activo (clic para abrir Configuración)',
       server_badge_title: 'Servidor configurado (clic para cambiar)',
       model_badge_title: 'Modelo activo (clic para cambiar)',
       no_model: '(Sin modelo)',
@@ -381,6 +382,7 @@
       sug_ideas_prompt: 'Give me 3 interesting web project ideas using HTML5 and Vanilla JavaScript.',
 
       // Barra de herramientas superior
+      profile_badge_title: 'Active connection profile (click to open Settings)',
       server_badge_title: 'Configured server (click to change)',
       model_badge_title: 'Active model (click to change)',
       no_model: '(No model)',

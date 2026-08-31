@@ -1090,18 +1090,21 @@ body {
   color: var(--primary);
 }
 
-.badge-server {
+.badge-server,
+.badge-profile {
   color: #0369a1;
   background-color: #f0f9ff;
   border-color: #bae6fd;
 }
 
-.badge-server:hover {
+.badge-server:hover,
+.badge-profile:hover {
   background-color: #e0f2fe;
   border-color: #0284c7;
 }
 
-.server-icon {
+.server-icon,
+.profile-icon {
   font-size: 0.85rem;
   line-height: 1;
 }
@@ -2469,13 +2472,15 @@ body.dark .btn-delete-profile:hover {
   border-color: var(--primary);
 }
 
-[data-theme="dark"] .badge-server {
-  background-color: rgba(56, 189, 248, 0.12);
+[data-theme="dark"] .badge-server,
+[data-theme="dark"] .badge-profile {
   color: #38bdf8;
-  border-color: rgba(56, 189, 248, 0.25);
+  background-color: rgba(56, 189, 248, 0.12);
+  border-color: rgba(56, 189, 248, 0.35);
 }
 
-[data-theme="dark"] .badge-server:hover {
+[data-theme="dark"] .badge-server:hover,
+[data-theme="dark"] .badge-profile:hover {
   background-color: rgba(56, 189, 248, 0.22);
   border-color: #38bdf8;
 }

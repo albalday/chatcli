@@ -103,6 +103,8 @@
       btnExportJson: document.getElementById('btn-export-json'),
       btnExportPrint: document.getElementById('btn-export-print'),
 
+      badgeProfile: document.getElementById('badge-profile'),
+      currentProfileName: document.getElementById('current-profile-name'),
       badgeServer: document.getElementById('badge-server'),
       currentServerUrl: document.getElementById('current-server-url'),
       badgeModel: document.getElementById('badge-model'),
@@ -505,7 +507,11 @@
     if (elements.sugCardCode) elements.sugCardCode.setAttribute('data-prompt', t('sug_code_prompt'));
     if (elements.sugCardIdeas) elements.sugCardIdeas.setAttribute('data-prompt', t('sug_ideas_prompt'));
 
-    // Actualizar modelo y servidor en badges
+    // Actualizar modelo y perfil en badges
+    if (elements.currentProfileName) {
+      const activeProf = (Storage.getActiveProfileName ? Storage.getActiveProfileName() : appConfig.activeProfileName) || appConfig.activeProfileName || 'LM Studio Local';
+      elements.currentProfileName.textContent = activeProf;
+    }
     if (elements.currentModelName) {
       elements.currentModelName.textContent = appConfig.model ? appConfig.model : t('no_model');
     }
@@ -1093,6 +1099,10 @@
   }
 
   function updateUIFromConfig() {
+    if (elements.currentProfileName) {
+      const activeProf = (Storage.getActiveProfileName ? Storage.getActiveProfileName() : appConfig.activeProfileName) || appConfig.activeProfileName || 'LM Studio Local';
+      elements.currentProfileName.textContent = activeProf;
+    }
     if (elements.currentServerUrl) {
       elements.currentServerUrl.textContent = appConfig.apiUrl || 'http://localhost:1234/v1';
     }
@@ -3391,6 +3401,9 @@
 
     if (elements.btnOpenSettings) {
       elements.btnOpenSettings.addEventListener('click', openSettingsModal);
+    }
+    if (elements.badgeProfile) {
+      elements.badgeProfile.addEventListener('click', openSettingsModal);
     }
     if (elements.badgeServer) {
       elements.badgeServer.addEventListener('click', openSettingsModal);
