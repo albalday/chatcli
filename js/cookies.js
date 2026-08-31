@@ -142,11 +142,11 @@
   }
 
   const DEFAULT_PROFILES = {
-    'LM Studio Local': {
+    'Local chat': {
       apiUrl: 'http://localhost:1234/v1',
       apiType: 'openai',
       apiKey: '',
-      model: '',
+      model: 'google/gemma-4-26b-a4b-qat',
       systemPrompt: '',
       temperature: '0.7',
       reasoningEffort: 'none',
@@ -161,66 +161,66 @@
       sendDateTime: true,
       ragContextLimitK: 64
     },
-    'Ollama Local': {
-      apiUrl: 'http://localhost:11434',
-      apiType: 'ollama',
-      apiKey: '',
-      model: '',
-      systemPrompt: '',
-      temperature: '0.7',
-      reasoningEffort: 'none',
-      modelReasoningConfig: null,
-      enableAgentJs: true,
-      enableAgentWeb: true,
-      enableAgentSearch: true,
-      enableAgentChart: true,
-      enableContextCache: true,
-      enableRawLogs: false,
-      enableDebugMessages: false,
-      sendDateTime: true,
-      ragContextLimitK: 64
-    },
-    'OpenRouter': {
-      apiUrl: 'https://openrouter.ai/api/v1',
-      apiType: 'openrouter',
-      apiKey: '',
-      model: '',
-      systemPrompt: '',
-      temperature: '0.7',
-      reasoningEffort: 'none',
-      modelReasoningConfig: null,
-      enableAgentJs: true,
-      enableAgentWeb: true,
-      enableAgentSearch: true,
-      enableAgentChart: true,
-      enableContextCache: true,
-      enableRawLogs: false,
-      enableDebugMessages: false,
-      sendDateTime: true,
-      ragContextLimitK: 64
-    },
-    'Anthropic Claude': {
-      apiUrl: 'https://api.anthropic.com/v1',
-      apiType: 'claude',
-      apiKey: '',
-      model: '',
-      systemPrompt: '',
-      temperature: '0.7',
-      reasoningEffort: 'none',
-      modelReasoningConfig: null,
-      enableAgentJs: true,
-      enableAgentWeb: true,
-      enableAgentSearch: true,
-      enableAgentChart: true,
-      enableContextCache: true,
-      enableRawLogs: false,
-      enableDebugMessages: false,
-      sendDateTime: true,
-      ragContextLimitK: 64
-    },
-    'Google Gemini': {
+    'Remoto chat': {
       apiUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
       apiType: 'gemini',
+      apiKey: '',
+      model: 'gemini-3.6-flash',
+      systemPrompt: '',
+      temperature: '0.7',
+      reasoningEffort: 'none',
+      modelReasoningConfig: null,
+      enableAgentJs: true,
+      enableAgentWeb: true,
+      enableAgentSearch: true,
+      enableAgentChart: true,
+      enableContextCache: true,
+      enableRawLogs: false,
+      enableDebugMessages: false,
+      sendDateTime: true,
+      ragContextLimitK: 64
+    },
+    'Local resumen': {
+      apiUrl: 'http://localhost:1234/v1',
+      apiType: 'openai',
+      apiKey: '',
+      model: 'google/gemma-4-e4b',
+      systemPrompt: '',
+      temperature: '0.7',
+      reasoningEffort: 'none',
+      modelReasoningConfig: null,
+      enableAgentJs: true,
+      enableAgentWeb: true,
+      enableAgentSearch: true,
+      enableAgentChart: true,
+      enableContextCache: true,
+      enableRawLogs: false,
+      enableDebugMessages: false,
+      sendDateTime: true,
+      ragContextLimitK: 64
+    },
+    'Remoto resumen': {
+      apiUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
+      apiType: 'gemini',
+      apiKey: '',
+      model: 'gemini-3.6-flash',
+      systemPrompt: '',
+      temperature: '0.7',
+      reasoningEffort: 'none',
+      modelReasoningConfig: null,
+      enableAgentJs: true,
+      enableAgentWeb: true,
+      enableAgentSearch: true,
+      enableAgentChart: true,
+      enableContextCache: true,
+      enableRawLogs: false,
+      enableDebugMessages: false,
+      sendDateTime: true,
+      ragContextLimitK: 64
+    },
+    'Nuevo': {
+      apiUrl: '',
+      apiType: 'openai',
       apiKey: '',
       model: '',
       systemPrompt: '',
@@ -255,6 +255,7 @@
     // Si no existen, inicializar con DEFAULT_PROFILES
     const initial = JSON.parse(JSON.stringify(DEFAULT_PROFILES));
     setStorageItem('profiles', JSON.stringify(initial));
+    setActiveProfileName('Local chat');
     return initial;
   }
 
@@ -267,7 +268,7 @@
     if (active && profiles[active]) {
       return active;
     }
-    const firstKey = Object.keys(profiles)[0] || 'LM Studio Local';
+    const firstKey = Object.keys(profiles)[0] || 'Local chat';
     return firstKey;
   }
 
@@ -347,7 +348,7 @@
     if (Object.keys(profiles).length === 0) {
       const restored = JSON.parse(JSON.stringify(DEFAULT_PROFILES));
       setStorageItem('profiles', JSON.stringify(restored));
-      setActiveProfileName(Object.keys(restored)[0]);
+      setActiveProfileName('Local chat');
       return true;
     }
 
@@ -362,7 +363,7 @@
   function loadConfig() {
     const activeProfileName = getActiveProfileName();
     const profiles = getProfiles();
-    const activeProfile = profiles[activeProfileName] || DEFAULT_PROFILES['LM Studio Local'];
+    const activeProfile = profiles[activeProfileName] || DEFAULT_PROFILES['Local chat'];
 
     const apiUrl = getStorageItem('apiUrl');
     const apiType = getStorageItem('apiType');

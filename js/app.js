@@ -509,7 +509,7 @@
 
     // Actualizar modelo y perfil en badges
     if (elements.currentProfileName) {
-      const activeProf = (Storage.getActiveProfileName ? Storage.getActiveProfileName() : appConfig.activeProfileName) || appConfig.activeProfileName || 'LM Studio Local';
+      const activeProf = (Storage.getActiveProfileName ? Storage.getActiveProfileName() : appConfig.activeProfileName) || appConfig.activeProfileName || 'Local chat';
       elements.currentProfileName.textContent = activeProf;
     }
     if (elements.currentModelName) {
@@ -1100,7 +1100,7 @@
 
   function updateUIFromConfig() {
     if (elements.currentProfileName) {
-      const activeProf = (Storage.getActiveProfileName ? Storage.getActiveProfileName() : appConfig.activeProfileName) || appConfig.activeProfileName || 'LM Studio Local';
+      const activeProf = (Storage.getActiveProfileName ? Storage.getActiveProfileName() : appConfig.activeProfileName) || appConfig.activeProfileName || 'Local chat';
       elements.currentProfileName.textContent = activeProf;
     }
     if (elements.currentServerUrl) {
@@ -2563,7 +2563,7 @@
    * Recoge la configuración completa de todos los campos actuales del formulario.
    */
   function gatherCurrentFormConfig() {
-    const profileName = elements.settingProfileName ? elements.settingProfileName.value.trim() : (appConfig.activeProfileName || 'LM Studio Local');
+    const profileName = elements.settingProfileName ? elements.settingProfileName.value.trim() : (appConfig.activeProfileName || 'Local chat');
     const selectedModel = elements.settingModel ? elements.settingModel.value.trim() : '';
 
     return {
@@ -2627,7 +2627,7 @@
 
     if (Storage.deleteProfile) {
       Storage.deleteProfile(name);
-      const newActive = Storage.getActiveProfileName ? Storage.getActiveProfileName() : 'LM Studio Local';
+      const newActive = Storage.getActiveProfileName ? Storage.getActiveProfileName() : 'Local chat';
       populateProfileSelector(newActive);
       const newProfileData = Storage.getProfile ? Storage.getProfile(newActive) : null;
       if (newProfileData) {
@@ -2638,7 +2638,7 @@
   }
 
   function openSettingsModal() {
-    const activeProfileName = (Storage.getActiveProfileName ? Storage.getActiveProfileName() : appConfig.activeProfileName) || 'LM Studio Local';
+    const activeProfileName = (Storage.getActiveProfileName ? Storage.getActiveProfileName() : appConfig.activeProfileName) || 'Local chat';
     populateProfileSelector(activeProfileName);
 
     if (elements.settingApiType) {

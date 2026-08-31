@@ -44,9 +44,11 @@ test('Storage - Guardar configuración completa y resetear', () => {
 test('Storage - Gestión completa de perfiles (crear, listar, conmutar, actualizar y borrar)', () => {
   // 1. Obtener perfiles iniciales
   const profiles = Storage.getProfiles();
-  assert.ok(profiles['LM Studio Local']);
-  assert.ok(profiles['Ollama Local']);
-  assert.ok(profiles['OpenRouter']);
+  assert.ok(profiles['Local chat']);
+  assert.ok(profiles['Remoto chat']);
+  assert.ok(profiles['Local resumen']);
+  assert.ok(profiles['Remoto resumen']);
+  assert.ok(profiles['Nuevo']);
 
   // 2. Guardar nuevo perfil personalizado con todos los campos
   const customProfile = {
@@ -82,8 +84,8 @@ test('Storage - Gestión completa de perfiles (crear, listar, conmutar, actualiz
   assert.equal(retrieved.ragContextLimitK, 128);
 
   // 4. Cambiar de perfil activo
-  Storage.setActiveProfileName('Ollama Local');
-  assert.equal(Storage.getActiveProfileName(), 'Ollama Local');
+  Storage.setActiveProfileName('Remoto chat');
+  assert.equal(Storage.getActiveProfileName(), 'Remoto chat');
 
   // 5. Borrar perfil personalizado
   const deleted = Storage.deleteProfile('Servidor Oficina');
