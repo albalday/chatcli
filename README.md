@@ -104,14 +104,15 @@ zerochat/
 2. Haz doble clic sobre el archivo para abrirlo en tu navegador favorito (Chrome, Firefox, Edge, Safari, Brave, Opera).
 3. Pulsa el botón **⚙️ Configuración**, selecciona tu proveedor o introduce la URL de tu servidor local (ej. `http://localhost:1234/v1` para LM Studio u `http://localhost:11434` para Ollama), pulsa **🔍 Query** para detectar tus modelos y ¡comienza a chatear!
 
-### Para Desarrolladores (Compilación del Bundle):
-Si modificas los archivos modulares del código fuente:
+### Para Desarrolladores (Compilación del Bundle & Guía para Agentes IA):
+Para cualquier modificación en el proyecto, consulta la guía estándar en [**`AGENT_GUIDELINES.md`**](AGENT_GUIDELINES.md).
+
 ```bash
+# Ejecutar la suite completa de pruebas unitarias
+node --test tests/test_*.js
+
 # Compilar y generar zerochat.html con compresión Gzip Base64
 python3 bundle.py
-
-# Ejecutar la suite completa de pruebas unitarias
-node --test tests/*.js
 ```
 
 ---
