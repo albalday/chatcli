@@ -596,7 +596,7 @@
    */
   async function callLLM(llmClient, prompt, systemPrompt = '') {
     if (!llmClient) {
-      throw new Error('No se proporcionó un cliente LLM válido para la generación de resúmenes.');
+      throw new Error('No se ha configurado un cliente LLM activo. Revisa la configuración de API/Modelo.');
     }
 
     // 1. Si llmClient es una función directa async (prompt, systemPrompt)
@@ -628,6 +628,10 @@
         const apiKey = clientCfg.apiKey !== undefined ? clientCfg.apiKey : (appCfg.apiKey || '');
         const model = clientCfg.model || appCfg.model || '';
 
+        if (!apiUrl || !apiUrl.trim()) {
+          return reject(new Error('La URL de la API del LLM no está configurada.'));
+        }
+
         const apiMethod = llmClient.streamChatCompletion || llmClient.sendChatCompletion;
         apiMethod.call(llmClient, {
           apiUrl,
@@ -646,13 +650,13 @@
             resolve(typeof finalText === 'string' ? finalText : (finalText?.text || accumulatedText));
           },
           onError: (err) => {
-            reject(new Error(typeof err === 'string' ? err : err?.message || 'Error en llamada LLM'));
+            reject(new Error(typeof err === 'string' ? err : err?.message || 'Error de conexión o respuesta del LLM'));
           }
         });
       });
     }
 
-    throw new Error('El objeto llmClient no implementa una interfaz reconocida (complete o function).');
+    throw new Error('El objeto llmClient no implementa una interfaz reconocida (complete o streamChatCompletion).');
   }
 
   /**
@@ -867,17 +871,16 @@ ${sampleText}`;
       const sampleText = cleanedSample.length > maxSampleChars ? (cleanedSample.slice(0, maxSampleChars) + '...') : cleanedSample;
       const chapPrompt = buildChapterPromptPayload(cand, sampleText);
 
-      let chapSummary = '';
-      try {
-        chapSummary = await callLLM(llmClient, chapPrompt, 'Eres un indexador técnico con visión multimodal y ultra-conciso para un sistema RAG jerárquico. Responde ÚNICAMENTE con 1-2 frases directas y telegráficas con máxima densidad de palabras clave, fechas/logs y diagramas, sin introducciones ni texto conversacional.');
-        chapSummary = chapSummary.trim()
-          .replace(/^Resumen:\s*/i, '')
-          .replace(/^En esta sección se\s+/i, '')
-          .replace(/^En este capítulo se\s+/i, '')
-          .replace(/^Esta sección describe\s+/i, '')
-          .replace(/^Este documento describe\s+/i, '')
-          .replace(/^Capítulo \d+:\s*/i, '');
-      } catch (e) {
+      let chapSummary = await callLLM(llmClient, chapPrompt, 'Eres un indexador técnico con visión multimodal y ultra-conciso para un sistema RAG jerárquico. Responde ÚNICAMENTE con 1-2 frases directas y telegráficas con máxima densidad de palabras clave, fechas/logs y diagramas, sin introducciones ni texto conversacional.');
+      chapSummary = (chapSummary || '').trim()
+        .replace(/^Resumen:\s*/i, '')
+        .replace(/^En esta sección se\s+/i, '')
+        .replace(/^En este capítulo se\s+/i, '')
+        .replace(/^Esta sección describe\s+/i, '')
+        .replace(/^Este documento describe\s+/i, '')
+        .replace(/^Capítulo \d+:\s*/i, '');
+
+      if (!chapSummary) {
         chapSummary = `${cand.title}.`;
       }
 
@@ -893,16 +896,16 @@ ${sampleText}`;
 
     // Generar resumen global a partir de los micro-resúmenes
     let globalSummary = '';
-    try {
-      const summariesBlock = chapterSummaries.join('\n').slice(0, 4000);
-      const globalPrompt = `A partir de los siguientes resúmenes de sección, genera un resumen global denso y conciso (1-2 frases directas, máx. 40 palabras) del documento "${filename}".
+    const summariesBlock = chapterSummaries.join('\n').slice(0, 4000);
+    const globalPrompt = `A partir de los siguientes resúmenes de sección, genera un resumen global denso y conciso (1-2 frases directas, máx. 40 palabras) del documento "${filename}".
 Destaca el propósito central, tecnologías/entidades clave, versiones/fechas relevantes y alcance general:\n\n${summariesBlock}`;
-      globalSummary = await callLLM(llmClient, globalPrompt, 'Eres un redactor técnico de alta densidad. Responde ÚNICAMENTE con 1 o 2 frases directas resumiendo el propósito, tecnologías clave y alcance, sin prefacios ni relleno.');
-      globalSummary = globalSummary.trim()
-        .replace(/^Resumen Global:\s*/i, '')
-        .replace(/^Resumen:\s*/i, '')
-        .replace(/^En este documento se\s+/i, '');
-    } catch (e) {
+    globalSummary = await callLLM(llmClient, globalPrompt, 'Eres un redactor técnico de alta densidad. Responde ÚNICAMENTE con 1 o 2 frases directas resumiendo el propósito, tecnologías clave y alcance, sin prefacios ni relleno.');
+    globalSummary = (globalSummary || '').trim()
+      .replace(/^Resumen Global:\s*/i, '')
+      .replace(/^Resumen:\s*/i, '')
+      .replace(/^En este documento se\s+/i, '');
+
+    if (!globalSummary) {
       globalSummary = `Documento ${filename} (${processedChapters.length} secciones).`;
     }
 

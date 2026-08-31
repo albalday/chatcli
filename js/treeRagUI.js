@@ -708,12 +708,19 @@
         ? window.appConfig
         : ((getStorage && getStorage()?.loadConfig) ? getStorage().loadConfig() : {});
 
+      const apiUrl = appCfg.apiUrl || 'http://localhost:1234/v1';
+      const model = appCfg.model || '';
+
+      if (!apiUrl || !apiUrl.trim()) {
+        throw new Error('No se ha configurado la URL de la API del LLM. Ve a Configuración y establece el endpoint.');
+      }
+
       const llmClient = (typeof window !== 'undefined' && window.ChatAPI) ? {
         streamChatCompletion: (params) => window.ChatAPI.streamChatCompletion({
-          apiUrl: appCfg.apiUrl || 'http://localhost:1234/v1',
+          apiUrl: apiUrl,
           apiType: appCfg.apiType || 'openai',
           apiKey: appCfg.apiKey || '',
-          model: appCfg.model || '',
+          model: model,
           enableTools: false,
           enableContextCache: false,
           ...params
@@ -721,11 +728,21 @@
         config: appCfg
       } : null;
 
+      if (!llmClient) {
+        throw new Error('No se encontró el módulo de cliente LLM (ChatAPI).');
+      }
+
       const contextLimitK = parseInt(appCfg.ragContextLimitK || '16', 10) || 16;
-      await IngestionEngine.processDocumentQueue(files, branchId, llmClient, onProgress, { ragContextLimitK: contextLimitK });
+      const queueResult = await IngestionEngine.processDocumentQueue(files, branchId, llmClient, onProgress, { ragContextLimitK: contextLimitK });
 
       progressBarFill.style.width = '100%';
-      progressSummaryTitle.textContent = `✅ Ingesta completada con éxito (${files.length} archivos procesados).`;
+      if (queueResult.failed > 0 && queueResult.processed === 0) {
+        progressSummaryTitle.textContent = `❌ Ingesta fallida: No se pudo procesar ningún documento (${queueResult.failed} con error).`;
+      } else if (queueResult.failed > 0) {
+        progressSummaryTitle.textContent = `⚠️ Ingesta parcial: ${queueResult.processed} procesado(s), ${queueResult.failed} fallido(s).`;
+      } else {
+        progressSummaryTitle.textContent = `✅ Ingesta completada con éxito (${queueResult.processed} archivo(s) procesados).`;
+      }
 
       // Refrescar lista de documentos tras un breve instante
       setTimeout(() => {

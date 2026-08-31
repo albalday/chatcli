@@ -485,5 +485,44 @@ Ambas partes mantendrán el secreto profesional sobre la información compartida
   assert.ok(titles.some(t => t.includes('POLÍTICA DE CONFIDENCIALIDAD')));
 });
 
+test('IngestionEngine - Fallo de red/conexión con LLM aborta el archivo y no lo guarda', async () => {
+  const branch = await RagStorage.createBranch('Rama Test LLM Error', 'Rama para verificar errores de conexión');
+  const progressEvents = [];
 
+  const files = [
+    {
+      name: 'doc_fallo_llm.txt',
+      content: 'Contenido técnico de prueba que requiere ser resumido por el LLM antes de ser persistido en disco.'
+    }
+  ];
+
+  // Simulación de LLM desconectado o error de fetch
+  const offlineLLM = async () => {
+    throw new Error('TypeError: Failed to fetch (Servidor LLM apagado o inalcanzable)');
+  };
+
+  const result = await IngestionEngine.processDocumentQueue(files, branch.id, offlineLLM, (p) => progressEvents.push(p));
+
+  // El proceso debe reportar fallo en el documento
+  assert.equal(result.total, 1);
+  assert.equal(result.failed, 1);
+  assert.equal(result.processed, 0);
+  assert.equal(result.errors.length, 1);
+  assert.ok(result.errors[0].error.includes('Failed to fetch') || result.errors[0].error.includes('Servidor LLM'));
+
+  // Verificar que el documento NO se guardó en RagStorage
+  const docs = await RagStorage.getDocumentsByBranch(branch.id);
+  assert.equal(docs.length, 0, 'No se debe persistir el documento si el LLM falló al generar los resúmenes');
+});
+
+test('IngestionEngine - callLLM sin llmClient arroja excepción inmediata', async () => {
+  await assert.rejects(
+    async () => {
+      await IngestionEngine.analyzeDocumentStructure('Texto de prueba', 'test.txt', null);
+    },
+    {
+      message: /No se ha configurado un cliente LLM activo/
+    }
+  );
+});
 
