@@ -2087,6 +2087,40 @@ input:checked + .slider:before {
   align-items: center;
 }
 
+/* Tarjeta enmarcada para visualizar y agrupar los parámetros del perfil */
+.profile-values-card {
+  background-color: var(--bg-app);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 1.1rem;
+  margin-top: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.02);
+}
+
+.profile-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-main);
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.profile-card-icon {
+  font-size: 1rem;
+}
+
+[data-theme="dark"] .profile-values-card {
+  background-color: rgba(15, 23, 42, 0.45);
+  border-color: var(--border-color);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
 .profile-combobox-wrapper input {
   flex: 1;
   min-width: 140px;

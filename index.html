@@ -335,82 +335,90 @@
             <div id="profile-action-feedback" class="server-query-status" style="display: none;"></div>
           </div>
 
-          <div class="form-field">
-            <label for="setting-api-type">
-              <strong data-i18n="field_api_type">Tipo de Interfaz / Protocolo</strong>
-              <span class="label-hint" data-i18n="field_api_type_hint">Determina el formato del JSON de petición y las opciones de razonamiento.</span>
-            </label>
-            <select id="setting-api-type" class="combobox-select-helper" style="width: 100%;">
-              <option value="openai" selected>🤖 OpenAI / LM Studio / LocalAI / vLLM (/v1)</option>
-              <option value="ollama">🦙 Ollama (/api/tags)</option>
-              <option value="openrouter">🔀 OpenRouter (/api/v1)</option>
-              <option value="claude">🎭 Anthropic Claude (/v1)</option>
-              <option value="gemini">✨ Google Gemini (OpenAI compat)</option>
-              <option value="custom">⚙️ Personalizado</option>
-            </select>
-          </div>
-
-          <div class="form-field">
-            <label for="setting-api-url">
-              <strong data-i18n="field_api_url">URL del Servidor / Endpoint de Chat</strong>
-              <span class="label-hint" data-i18n="field_api_url_hint">Compatible con OpenAI, LM Studio, Ollama, LocalAI, vLLM, OpenRouter, Claude, Gemini, etc.</span>
-            </label>
-            <div class="input-with-button-wrapper">
-              <input
-                type="url"
-                id="setting-api-url"
-                placeholder="http://localhost:1234/v1"
-                required
-              >
-              <button type="button" id="btn-query-server" class="btn-query-server" data-i18n-title="btn_query_title" title="Consultar modelos disponibles y capacidades de la API en el servidor">
-                <svg class="query-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <circle cx="11" cy="11" r="8"></circle>
-                  <line x1="21" y1="2" x2="16.65" y2="16.65"></line>
-                </svg>
-                <span class="query-btn-text" data-i18n="btn_query_text">Query</span>
-              </button>
+          <!-- Contenedor Enmarcado con los Valores del Perfil Activo -->
+          <div class="profile-values-card">
+            <div class="profile-card-header">
+              <span class="profile-card-icon">⚙️</span>
+              <span class="profile-card-title" data-i18n="profile_card_title">Configuración del Perfil</span>
             </div>
-            <div id="server-query-status" class="server-query-status" style="display: none;"></div>
-          </div>
 
-          <div class="form-field">
-            <label for="setting-api-key">
-              <strong data-i18n="field_api_key">Clave de API (API Key)</strong>
-              <span class="label-hint" data-i18n="field_api_key_hint">Opcional si usas un servidor local (LM Studio / Ollama / LocalAI).</span>
-            </label>
-            <div class="input-password-wrapper">
-              <input
-                type="password"
-                id="setting-api-key"
-                placeholder="sk-..."
-                autocomplete="off"
-              >
-              <button type="button" id="btn-toggle-key" class="btn-toggle-visibility" data-i18n-title="btn_toggle_key_title" title="Mostrar/Ocultar clave">
-                👁️
-              </button>
-            </div>
-          </div>
-
-          <div class="form-field">
-            <label for="setting-model">
-              <strong data-i18n="field_model">Nombre del Modelo</strong>
-              <span class="label-hint" data-i18n="field_model_hint">Selecciona de la lista del servidor o escribe cualquier nombre personalizado.</span>
-            </label>
-            <div class="combobox-wrapper">
-              <input
-                type="text"
-                id="setting-model"
-                list="model-datalist"
-                data-i18n-placeholder="field_model_placeholder"
-                placeholder="Escribe o pulsa Query para consultar modelos..."
-                autocomplete="off"
-              >
-              <select id="model-select-helper" class="combobox-select-helper" title="Seleccionar modelo de la lista">
-                <option value="" disabled selected data-i18n="model_select_default">▾ Elegir modelo detectado...</option>
+            <div class="form-field">
+              <label for="setting-api-type">
+                <strong data-i18n="field_api_type">Tipo de Interfaz / Protocolo</strong>
+                <span class="label-hint" data-i18n="field_api_type_hint">Determina el formato del JSON de petición y las opciones de razonamiento.</span>
+              </label>
+              <select id="setting-api-type" class="combobox-select-helper" style="width: 100%;">
+                <option value="openai" selected>🤖 OpenAI / LM Studio / LocalAI / vLLM (/v1)</option>
+                <option value="ollama">🦙 Ollama (/api/tags)</option>
+                <option value="openrouter">🔀 OpenRouter (/api/v1)</option>
+                <option value="claude">🎭 Anthropic Claude (/v1)</option>
+                <option value="gemini">✨ Google Gemini (OpenAI compat)</option>
+                <option value="custom">⚙️ Personalizado</option>
               </select>
-              <datalist id="model-datalist">
-                <!-- Se puebla automáticamente al pulsar Query -->
-              </datalist>
+            </div>
+
+            <div class="form-field">
+              <label for="setting-api-url">
+                <strong data-i18n="field_api_url">URL del Servidor / Endpoint de Chat</strong>
+                <span class="label-hint" data-i18n="field_api_url_hint">Compatible con OpenAI, LM Studio, Ollama, LocalAI, vLLM, OpenRouter, Claude, Gemini, etc.</span>
+              </label>
+              <div class="input-with-button-wrapper">
+                <input
+                  type="url"
+                  id="setting-api-url"
+                  placeholder="http://localhost:1234/v1"
+                  required
+                >
+                <button type="button" id="btn-query-server" class="btn-query-server" data-i18n-title="btn_query_title" title="Consultar modelos disponibles y capacidades de la API en el servidor">
+                  <svg class="query-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="2" x2="16.65" y2="16.65"></line>
+                  </svg>
+                  <span class="query-btn-text" data-i18n="btn_query_text">Query</span>
+                </button>
+              </div>
+              <div id="server-query-status" class="server-query-status" style="display: none;"></div>
+            </div>
+
+            <div class="form-field">
+              <label for="setting-api-key">
+                <strong data-i18n="field_api_key">Clave de API (API Key)</strong>
+                <span class="label-hint" data-i18n="field_api_key_hint">Opcional si usas un servidor local (LM Studio / Ollama / LocalAI).</span>
+              </label>
+              <div class="input-password-wrapper">
+                <input
+                  type="password"
+                  id="setting-api-key"
+                  placeholder="sk-..."
+                  autocomplete="off"
+                >
+                <button type="button" id="btn-toggle-key" class="btn-toggle-visibility" data-i18n-title="btn_toggle_key_title" title="Mostrar/Ocultar clave">
+                  👁️
+                </button>
+              </div>
+            </div>
+
+            <div class="form-field" style="margin-bottom: 0;">
+              <label for="setting-model">
+                <strong data-i18n="field_model">Nombre del Modelo</strong>
+                <span class="label-hint" data-i18n="field_model_hint">Selecciona de la lista del servidor o escribe cualquier nombre personalizado.</span>
+              </label>
+              <div class="combobox-wrapper">
+                <input
+                  type="text"
+                  id="setting-model"
+                  list="model-datalist"
+                  data-i18n-placeholder="field_model_placeholder"
+                  placeholder="Escribe o pulsa Query para consultar modelos..."
+                  autocomplete="off"
+                >
+                <select id="model-select-helper" class="combobox-select-helper" title="Seleccionar modelo de la lista">
+                  <option value="" disabled selected data-i18n="model_select_default">▾ Elegir modelo detectado...</option>
+                </select>
+                <datalist id="model-datalist">
+                  <!-- Se puebla automáticamente al pulsar Query -->
+                </datalist>
+              </div>
             </div>
           </div>
         </div>
