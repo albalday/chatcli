@@ -219,11 +219,47 @@
   }
 
   /**
-   * Pestaña 1: Renderiza la tarjeta principal de estado y cada rama como una caja con un check/switch de activar.
+   * Pestaña 1: Renderiza el selector de perfil de resumen, la tarjeta principal de estado y cada rama como una caja con un check/switch de activar.
    */
   async function renderActiveBranchTab() {
     if (typeof document === 'undefined') return;
     await renderFileSystemStatusBanners();
+
+    // Poblar y sincronizar el selector de perfil de resumen para RAG
+    const summaryProfileSelect = document.getElementById('setting-rag-summary-profile');
+    if (summaryProfileSelect) {
+      const Storage = getStorage();
+      const profiles = Storage && Storage.getProfiles ? Storage.getProfiles() : {};
+      const profileNames = Object.keys(profiles);
+      const curCfg = (typeof window !== 'undefined' && window.appConfig) ? window.appConfig : (Storage?.loadConfig ? Storage.loadConfig() : {});
+      const activeSummaryProf = curCfg.ragSummaryProfile || 'Local resumen';
+
+      summaryProfileSelect.innerHTML = '';
+      profileNames.forEach(name => {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = `⚡ ${name}`;
+        if (name === activeSummaryProf) {
+          opt.selected = true;
+        }
+        summaryProfileSelect.appendChild(opt);
+      });
+
+      // Si no coincide con ninguno existente, seleccionar el primero disponible
+      if (!profileNames.includes(activeSummaryProf) && profileNames.length > 0) {
+        summaryProfileSelect.value = profileNames[0];
+      }
+
+      summaryProfileSelect.onchange = () => {
+        const chosen = summaryProfileSelect.value;
+        if (typeof window !== 'undefined' && window.appConfig) {
+          window.appConfig.ragSummaryProfile = chosen;
+        }
+        if (Storage && Storage.saveConfig) {
+          Storage.saveConfig({ ragSummaryProfile: chosen });
+        }
+      };
+    }
 
     const list = document.getElementById('rag-active-branch-list') || document.getElementById('rag-active-branch-grid');
     const titleEl = document.getElementById('rag-active-status-title');
@@ -703,34 +739,41 @@
         }
       };
 
-      // Cliente LLM configurado en la app
+      // Cliente LLM configurado para RAG a través del perfil de resumen
+      const Storage = getStorage();
       const appCfg = (typeof window !== 'undefined' && window.appConfig)
         ? window.appConfig
-        : ((getStorage && getStorage()?.loadConfig) ? getStorage().loadConfig() : {});
+        : ((Storage && Storage.loadConfig) ? Storage.loadConfig() : {});
 
-      const apiUrl = appCfg.apiUrl || 'http://localhost:1234/v1';
-      const model = appCfg.model || '';
+      const summaryProfileName = appCfg.ragSummaryProfile || 'Local resumen';
+      const summaryProfileData = (Storage && Storage.getProfile) ? Storage.getProfile(summaryProfileName) : null;
+
+      const effectiveSummaryConfig = summaryProfileData || appCfg;
+      const apiUrl = effectiveSummaryConfig.apiUrl || appCfg.apiUrl || 'http://localhost:1234/v1';
+      const apiType = effectiveSummaryConfig.apiType || appCfg.apiType || 'openai';
+      const apiKey = effectiveSummaryConfig.apiKey !== undefined ? effectiveSummaryConfig.apiKey : (appCfg.apiKey || '');
+      const model = effectiveSummaryConfig.model !== undefined ? effectiveSummaryConfig.model : (appCfg.model || '');
 
       if (!apiUrl || !apiUrl.trim()) {
-        throw new Error('No se ha configurado la URL de la API del LLM. Ve a Configuración y establece el endpoint.');
+        throw new Error(`El perfil de resumen "${summaryProfileName}" no tiene configurada la URL de la API del LLM.`);
       }
 
       const llmClient = (typeof window !== 'undefined' && window.ChatAPI) ? {
         streamChatCompletion: (params) => window.ChatAPI.streamChatCompletion({
           apiUrl: apiUrl,
-          apiType: appCfg.apiType || 'openai',
-          apiKey: appCfg.apiKey || '',
+          apiType: apiType,
+          apiKey: apiKey,
           model: model,
           ...params
         }),
-        config: appCfg
+        config: effectiveSummaryConfig
       } : null;
 
       if (!llmClient) {
         throw new Error('No se encontró el módulo de cliente LLM (ChatAPI).');
       }
 
-      const contextLimitK = parseInt(appCfg.ragContextLimitK || '16', 10) || 16;
+      const contextLimitK = parseInt(effectiveSummaryConfig.ragContextLimitK || appCfg.ragContextLimitK || '16', 10) || 16;
       const queueResult = await IngestionEngine.processDocumentQueue(files, branchId, llmClient, onProgress, { ragContextLimitK: contextLimitK });
 
       progressBarFill.style.width = '100%';
@@ -1173,6 +1216,17 @@
             }
           } catch (_) {}
         }
+      }
+
+      // Restablecer navegación por pestañas para que inicie por defecto en la primera pestaña ("Activar RAG")
+      if (tabBtns && tabBtns.length > 0) {
+        tabBtns.forEach(b => b.classList.toggle('active', b.getAttribute('data-rag-tab') === 'tab-rag-active'));
+      }
+      if (modalDialog) {
+        const panes = modalDialog.querySelectorAll('.modal-tab-pane');
+        panes.forEach(pane => {
+          pane.classList.toggle('active', pane.id === 'tab-rag-active');
+        });
       }
 
       await renderActiveBranchTab();

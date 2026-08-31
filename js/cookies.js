@@ -41,7 +41,8 @@
     enableDebugMessages: false,
     sendDateTime: true,
     activeRagBranchId: '',
-    ragContextLimitK: 64
+    ragContextLimitK: 64,
+    ragSummaryProfile: 'Local resumen'
   };
 
   const STORAGE_PREFIX = 'zerochat_';
@@ -443,6 +444,7 @@
       enableDebugMessages: parseBool(enableDebugMessages, activeProfile.enableDebugMessages !== undefined ? activeProfile.enableDebugMessages : DEFAULT_CONFIG.enableDebugMessages),
       sendDateTime: parseBool(sendDateTime, activeProfile.sendDateTime !== undefined ? activeProfile.sendDateTime : DEFAULT_CONFIG.sendDateTime),
       activeRagBranchId: activeRagBranchId !== null ? activeRagBranchId : DEFAULT_CONFIG.activeRagBranchId,
+      ragSummaryProfile: getStorageItem('ragSummaryProfile') || DEFAULT_CONFIG.ragSummaryProfile,
       ragContextLimitK: (() => {
         const val = parseInt(ragContextLimitK !== null ? ragContextLimitK : activeProfile.ragContextLimitK, 10);
         if (isNaN(val) || val < 16) return DEFAULT_CONFIG.ragContextLimitK;
@@ -479,6 +481,7 @@
     if (config.enableDebugMessages !== undefined) setStorageItem('enableDebugMessages', String(config.enableDebugMessages));
     if (config.sendDateTime !== undefined) setStorageItem('sendDateTime', String(config.sendDateTime));
     if (config.activeRagBranchId !== undefined) setStorageItem('activeRagBranchId', String(config.activeRagBranchId));
+    if (config.ragSummaryProfile !== undefined) setStorageItem('ragSummaryProfile', String(config.ragSummaryProfile).trim());
     if (config.ragContextLimitK !== undefined) {
       let k = parseInt(config.ragContextLimitK, 10);
       if (isNaN(k) || k < 16) k = 16;
