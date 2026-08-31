@@ -141,7 +141,229 @@
     return val === 'true' || val === true || val === '1';
   }
 
+  const DEFAULT_PROFILES = {
+    'LM Studio Local': {
+      apiUrl: 'http://localhost:1234/v1',
+      apiType: 'openai',
+      apiKey: '',
+      model: '',
+      systemPrompt: '',
+      temperature: '0.7',
+      reasoningEffort: 'none',
+      modelReasoningConfig: null,
+      enableAgentJs: true,
+      enableAgentWeb: true,
+      enableAgentSearch: true,
+      enableAgentChart: true,
+      enableContextCache: true,
+      enableRawLogs: false,
+      enableDebugMessages: false,
+      sendDateTime: true,
+      ragContextLimitK: 64
+    },
+    'Ollama Local': {
+      apiUrl: 'http://localhost:11434',
+      apiType: 'ollama',
+      apiKey: '',
+      model: '',
+      systemPrompt: '',
+      temperature: '0.7',
+      reasoningEffort: 'none',
+      modelReasoningConfig: null,
+      enableAgentJs: true,
+      enableAgentWeb: true,
+      enableAgentSearch: true,
+      enableAgentChart: true,
+      enableContextCache: true,
+      enableRawLogs: false,
+      enableDebugMessages: false,
+      sendDateTime: true,
+      ragContextLimitK: 64
+    },
+    'OpenRouter': {
+      apiUrl: 'https://openrouter.ai/api/v1',
+      apiType: 'openrouter',
+      apiKey: '',
+      model: '',
+      systemPrompt: '',
+      temperature: '0.7',
+      reasoningEffort: 'none',
+      modelReasoningConfig: null,
+      enableAgentJs: true,
+      enableAgentWeb: true,
+      enableAgentSearch: true,
+      enableAgentChart: true,
+      enableContextCache: true,
+      enableRawLogs: false,
+      enableDebugMessages: false,
+      sendDateTime: true,
+      ragContextLimitK: 64
+    },
+    'Anthropic Claude': {
+      apiUrl: 'https://api.anthropic.com/v1',
+      apiType: 'claude',
+      apiKey: '',
+      model: '',
+      systemPrompt: '',
+      temperature: '0.7',
+      reasoningEffort: 'none',
+      modelReasoningConfig: null,
+      enableAgentJs: true,
+      enableAgentWeb: true,
+      enableAgentSearch: true,
+      enableAgentChart: true,
+      enableContextCache: true,
+      enableRawLogs: false,
+      enableDebugMessages: false,
+      sendDateTime: true,
+      ragContextLimitK: 64
+    },
+    'Google Gemini': {
+      apiUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
+      apiType: 'gemini',
+      apiKey: '',
+      model: '',
+      systemPrompt: '',
+      temperature: '0.7',
+      reasoningEffort: 'none',
+      modelReasoningConfig: null,
+      enableAgentJs: true,
+      enableAgentWeb: true,
+      enableAgentSearch: true,
+      enableAgentChart: true,
+      enableContextCache: true,
+      enableRawLogs: false,
+      enableDebugMessages: false,
+      sendDateTime: true,
+      ragContextLimitK: 64
+    }
+  };
+
+  /**
+   * Obtiene todos los perfiles de configuración guardados, o inicializa con los predeterminados.
+   */
+  function getProfiles() {
+    const raw = getStorageItem('profiles');
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
+          return parsed;
+        }
+      } catch (e) {}
+    }
+    // Si no existen, inicializar con DEFAULT_PROFILES
+    const initial = JSON.parse(JSON.stringify(DEFAULT_PROFILES));
+    setStorageItem('profiles', JSON.stringify(initial));
+    return initial;
+  }
+
+  /**
+   * Obtiene el nombre del perfil activo actual.
+   */
+  function getActiveProfileName() {
+    const active = getStorageItem('active_profile');
+    const profiles = getProfiles();
+    if (active && profiles[active]) {
+      return active;
+    }
+    const firstKey = Object.keys(profiles)[0] || 'LM Studio Local';
+    return firstKey;
+  }
+
+  /**
+   * Establece el perfil activo actual por su nombre.
+   */
+  function setActiveProfileName(name) {
+    if (typeof name === 'string' && name.trim()) {
+      setStorageItem('active_profile', name.trim());
+    }
+  }
+
+  /**
+   * Obtiene la configuración completa de un perfil por nombre.
+   */
+  function getProfile(name) {
+    const profiles = getProfiles();
+    if (profiles && profiles[name]) {
+      return JSON.parse(JSON.stringify(profiles[name]));
+    }
+    return null;
+  }
+
+  /**
+   * Guarda o actualiza un perfil con todos sus campos específicos.
+   */
+  function saveProfile(name, profileData) {
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      throw new Error('El nombre del perfil no puede estar vacío.');
+    }
+    const cleanName = name.trim();
+    const profiles = getProfiles();
+    
+    // Extraer y normalizar todos los campos de configuración
+    profiles[cleanName] = {
+      apiUrl: profileData.apiUrl !== undefined ? String(profileData.apiUrl).trim() : 'http://localhost:1234/v1',
+      apiType: profileData.apiType !== undefined ? String(profileData.apiType).trim() : 'openai',
+      apiKey: profileData.apiKey !== undefined ? String(profileData.apiKey).trim() : '',
+      model: profileData.model !== undefined ? String(profileData.model).trim() : '',
+      systemPrompt: profileData.systemPrompt !== undefined ? String(profileData.systemPrompt).trim() : '',
+      temperature: profileData.temperature !== undefined ? String(profileData.temperature) : '0.7',
+      reasoningEffort: profileData.reasoningEffort || 'none',
+      modelReasoningConfig: profileData.modelReasoningConfig || null,
+      enableAgentJs: profileData.enableAgentJs !== false,
+      enableAgentWeb: profileData.enableAgentWeb !== false,
+      enableAgentSearch: profileData.enableAgentSearch !== false,
+      enableAgentChart: profileData.enableAgentChart !== false,
+      enableContextCache: profileData.enableContextCache !== false,
+      enableRawLogs: profileData.enableRawLogs === true,
+      enableDebugMessages: profileData.enableDebugMessages === true,
+      sendDateTime: profileData.sendDateTime !== false,
+      ragContextLimitK: (() => {
+        const val = parseInt(profileData.ragContextLimitK, 10);
+        if (isNaN(val) || val < 16) return 64;
+        if (val > 1024) return 1024;
+        return val;
+      })()
+    };
+
+    setStorageItem('profiles', JSON.stringify(profiles));
+    setActiveProfileName(cleanName);
+    return profiles[cleanName];
+  }
+
+  /**
+   * Elimina un perfil por nombre. Si era el activo, conmuta al primero disponible.
+   */
+  function deleteProfile(name) {
+    if (!name) return false;
+    const cleanName = String(name).trim();
+    const profiles = getProfiles();
+    if (!profiles[cleanName]) return false;
+
+    delete profiles[cleanName];
+    
+    // Si no quedan perfiles, restaurar DEFAULT_PROFILES
+    if (Object.keys(profiles).length === 0) {
+      const restored = JSON.parse(JSON.stringify(DEFAULT_PROFILES));
+      setStorageItem('profiles', JSON.stringify(restored));
+      setActiveProfileName(Object.keys(restored)[0]);
+      return true;
+    }
+
+    setStorageItem('profiles', JSON.stringify(profiles));
+    const currentActive = getActiveProfileName();
+    if (currentActive === cleanName) {
+      setActiveProfileName(Object.keys(profiles)[0]);
+    }
+    return true;
+  }
+
   function loadConfig() {
+    const activeProfileName = getActiveProfileName();
+    const profiles = getProfiles();
+    const activeProfile = profiles[activeProfileName] || DEFAULT_PROFILES['LM Studio Local'];
+
     const apiUrl = getStorageItem('apiUrl');
     const apiType = getStorageItem('apiType');
     const apiKey = getStorageItem('apiKey');
@@ -163,7 +385,7 @@
     const ragContextLimitK = getStorageItem('ragContextLimitK');
     const modelReasoningConfigRaw = getStorageItem('modelReasoningConfig');
 
-    let effectiveApiUrl = apiUrl;
+    let effectiveApiUrl = apiUrl !== null ? apiUrl : (activeProfile.apiUrl || DEFAULT_CONFIG.apiUrl);
     if (!effectiveApiUrl || effectiveApiUrl === 'https://api.openai.com/v1') {
       effectiveApiUrl = DEFAULT_CONFIG.apiUrl;
     }
@@ -182,16 +404,16 @@
       }
     }
 
-    let parsedReasoningConfig = null;
+    let parsedReasoningConfig = activeProfile.modelReasoningConfig || null;
     try {
       if (modelReasoningConfigRaw) {
         parsedReasoningConfig = JSON.parse(modelReasoningConfigRaw);
       }
     } catch (e) {}
 
-    let effectiveApiType = (apiType && apiType !== 'auto') ? apiType : DEFAULT_CONFIG.apiType;
+    let effectiveApiType = (apiType && apiType !== 'auto') ? apiType : (activeProfile.apiType || DEFAULT_CONFIG.apiType);
 
-    let effectiveSystemPrompt = systemPrompt !== null ? systemPrompt : DEFAULT_CONFIG.systemPrompt;
+    let effectiveSystemPrompt = systemPrompt !== null ? systemPrompt : (activeProfile.systemPrompt !== undefined ? activeProfile.systemPrompt : DEFAULT_CONFIG.systemPrompt);
     if (effectiveSystemPrompt && (
       effectiveSystemPrompt.startsWith('Eres un asistente de IA útil') ||
       effectiveSystemPrompt.startsWith('You are a helpful, concise and precise AI assistant')
@@ -200,27 +422,28 @@
     }
 
     return {
+      activeProfileName: activeProfileName,
       apiUrl: effectiveApiUrl,
       apiType: effectiveApiType,
-      apiKey: apiKey !== null ? apiKey : DEFAULT_CONFIG.apiKey,
-      model: model !== null && model !== '' ? model : DEFAULT_CONFIG.model,
+      apiKey: apiKey !== null ? apiKey : (activeProfile.apiKey !== undefined ? activeProfile.apiKey : DEFAULT_CONFIG.apiKey),
+      model: model !== null && model !== '' ? model : (activeProfile.model !== undefined ? activeProfile.model : DEFAULT_CONFIG.model),
       systemPrompt: effectiveSystemPrompt,
-      temperature: temperature !== null && temperature !== '' ? temperature : DEFAULT_CONFIG.temperature,
-      reasoningEffort: (reasoningEffort === 'off' || reasoningEffort === 'none') ? 'none' : (reasoningEffort !== null && reasoningEffort !== '' ? reasoningEffort : DEFAULT_CONFIG.reasoningEffort),
+      temperature: temperature !== null && temperature !== '' ? temperature : (activeProfile.temperature !== undefined ? activeProfile.temperature : DEFAULT_CONFIG.temperature),
+      reasoningEffort: (reasoningEffort === 'off' || reasoningEffort === 'none') ? 'none' : (reasoningEffort !== null && reasoningEffort !== '' ? reasoningEffort : (activeProfile.reasoningEffort || DEFAULT_CONFIG.reasoningEffort)),
       modelReasoningConfig: parsedReasoningConfig,
       theme: effectiveTheme,
       language: effectiveLanguage,
-      enableAgentJs: parseBool(enableAgentJs, DEFAULT_CONFIG.enableAgentJs),
-      enableAgentWeb: parseBool(enableAgentWeb, DEFAULT_CONFIG.enableAgentWeb),
-      enableAgentSearch: parseBool(enableAgentSearch, DEFAULT_CONFIG.enableAgentSearch),
-      enableAgentChart: parseBool(enableAgentChart, DEFAULT_CONFIG.enableAgentChart),
-      enableContextCache: parseBool(enableContextCache, DEFAULT_CONFIG.enableContextCache),
-      enableRawLogs: parseBool(enableRawLogs, DEFAULT_CONFIG.enableRawLogs),
-      enableDebugMessages: parseBool(enableDebugMessages, DEFAULT_CONFIG.enableDebugMessages),
-      sendDateTime: parseBool(sendDateTime, DEFAULT_CONFIG.sendDateTime),
+      enableAgentJs: parseBool(enableAgentJs, activeProfile.enableAgentJs !== undefined ? activeProfile.enableAgentJs : DEFAULT_CONFIG.enableAgentJs),
+      enableAgentWeb: parseBool(enableAgentWeb, activeProfile.enableAgentWeb !== undefined ? activeProfile.enableAgentWeb : DEFAULT_CONFIG.enableAgentWeb),
+      enableAgentSearch: parseBool(enableAgentSearch, activeProfile.enableAgentSearch !== undefined ? activeProfile.enableAgentSearch : DEFAULT_CONFIG.enableAgentSearch),
+      enableAgentChart: parseBool(enableAgentChart, activeProfile.enableAgentChart !== undefined ? activeProfile.enableAgentChart : DEFAULT_CONFIG.enableAgentChart),
+      enableContextCache: parseBool(enableContextCache, activeProfile.enableContextCache !== undefined ? activeProfile.enableContextCache : DEFAULT_CONFIG.enableContextCache),
+      enableRawLogs: parseBool(enableRawLogs, activeProfile.enableRawLogs !== undefined ? activeProfile.enableRawLogs : DEFAULT_CONFIG.enableRawLogs),
+      enableDebugMessages: parseBool(enableDebugMessages, activeProfile.enableDebugMessages !== undefined ? activeProfile.enableDebugMessages : DEFAULT_CONFIG.enableDebugMessages),
+      sendDateTime: parseBool(sendDateTime, activeProfile.sendDateTime !== undefined ? activeProfile.sendDateTime : DEFAULT_CONFIG.sendDateTime),
       activeRagBranchId: activeRagBranchId !== null ? activeRagBranchId : DEFAULT_CONFIG.activeRagBranchId,
       ragContextLimitK: (() => {
-        const val = parseInt(ragContextLimitK, 10);
+        const val = parseInt(ragContextLimitK !== null ? ragContextLimitK : activeProfile.ragContextLimitK, 10);
         if (isNaN(val) || val < 16) return DEFAULT_CONFIG.ragContextLimitK;
         if (val > 1024) return 1024;
         return val;
@@ -229,6 +452,11 @@
   }
 
   function saveConfig(config) {
+    if (config.activeProfileName !== undefined && config.activeProfileName) {
+      setActiveProfileName(config.activeProfileName);
+      // Auto-actualizar el perfil guardado con los nuevos valores
+      saveProfile(config.activeProfileName, config);
+    }
     if (config.apiUrl !== undefined) setStorageItem('apiUrl', config.apiUrl.trim());
     if (config.apiType !== undefined) setStorageItem('apiType', config.apiType.trim());
     if (config.apiKey !== undefined) setStorageItem('apiKey', config.apiKey.trim());
@@ -265,6 +493,10 @@
 
   function getDefaultConfig() {
     return { ...DEFAULT_CONFIG };
+  }
+
+  function getDefaultProfiles() {
+    return JSON.parse(JSON.stringify(DEFAULT_PROFILES));
   }
 
   function clearAllStorage() {
@@ -780,6 +1012,13 @@
     saveConfig,
     resetConfigToDefaults,
     getDefaultConfig,
+    getDefaultProfiles,
+    getProfiles,
+    getProfile,
+    saveProfile,
+    deleteProfile,
+    getActiveProfileName,
+    setActiveProfileName,
     clearAllStorage,
 
     // Persistencia Asíncrona en IndexedDB (Conversaciones & Mensajes)

@@ -172,6 +172,12 @@
       btnResetSettings: document.getElementById('btn-reset-settings'),
       btnClearAllData: document.getElementById('btn-clear-all-data'),
       btnToggleKey: document.getElementById('btn-toggle-key'),
+      settingProfileName: document.getElementById('setting-profile-name'),
+      profileSelectHelper: document.getElementById('profile-select-helper'),
+      profileDatalist: document.getElementById('profile-datalist'),
+      btnSaveProfile: document.getElementById('btn-save-profile'),
+      btnDeleteProfile: document.getElementById('btn-delete-profile'),
+      profileActionFeedback: document.getElementById('profile-action-feedback'),
       settingApiType: document.getElementById('setting-api-type'),
       settingApiUrl: document.getElementById('setting-api-url'),
       btnQueryServer: document.getElementById('btn-query-server'),
@@ -2452,10 +2458,179 @@
   }
 
   // ==========================================================================
-  // Modal de Configuración
+  // Modal de Configuración & Gestión de Perfiles
   // ==========================================================================
 
+  /**
+   * Puebla el combobox auxiliar y el datalist con todos los perfiles disponibles.
+   */
+  function populateProfileSelector(selectedProfileName) {
+    if (!Storage.getProfiles) return;
+    const profiles = Storage.getProfiles();
+    const profileNames = Object.keys(profiles);
+
+    if (elements.profileDatalist) {
+      elements.profileDatalist.innerHTML = '';
+      profileNames.forEach(name => {
+        const opt = document.createElement('option');
+        opt.value = name;
+        elements.profileDatalist.appendChild(opt);
+      });
+    }
+
+    if (elements.profileSelectHelper) {
+      elements.profileSelectHelper.innerHTML = `<option value="" disabled data-i18n="profile_select_default">▾ Elegir perfil guardado...</option>`;
+      profileNames.forEach(name => {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        if (name === selectedProfileName) {
+          opt.selected = true;
+        }
+        elements.profileSelectHelper.appendChild(opt);
+      });
+    }
+
+    if (elements.settingProfileName) {
+      elements.settingProfileName.value = selectedProfileName || '';
+    }
+  }
+
+  /**
+   * Rellena todos los campos de todas las pestañas de configuración con los valores de un perfil.
+   */
+  function applyProfileToForm(profileData) {
+    if (!profileData) return;
+
+    if (elements.settingApiType && profileData.apiType !== undefined) {
+      elements.settingApiType.value = profileData.apiType;
+    }
+    if (elements.settingApiUrl && profileData.apiUrl !== undefined) {
+      elements.settingApiUrl.value = profileData.apiUrl;
+    }
+    if (elements.settingApiKey && profileData.apiKey !== undefined) {
+      elements.settingApiKey.value = profileData.apiKey;
+    }
+    if (elements.settingModel && profileData.model !== undefined) {
+      elements.settingModel.value = profileData.model;
+    }
+    if (elements.modelSelectHelper && profileData.model !== undefined) {
+      elements.modelSelectHelper.value = profileData.model;
+    }
+    if (elements.settingSystemPrompt && profileData.systemPrompt !== undefined) {
+      elements.settingSystemPrompt.value = profileData.systemPrompt;
+    }
+    if (elements.settingTemperature && profileData.temperature !== undefined) {
+      elements.settingTemperature.value = profileData.temperature;
+      if (elements.temperatureVal) {
+        elements.temperatureVal.textContent = profileData.temperature;
+      }
+    }
+    if (elements.settingEnableAgentJs && profileData.enableAgentJs !== undefined) {
+      elements.settingEnableAgentJs.checked = profileData.enableAgentJs !== false;
+    }
+    if (elements.settingEnableAgentWeb && profileData.enableAgentWeb !== undefined) {
+      elements.settingEnableAgentWeb.checked = profileData.enableAgentWeb !== false;
+    }
+    if (elements.settingEnableAgentSearch && profileData.enableAgentSearch !== undefined) {
+      elements.settingEnableAgentSearch.checked = profileData.enableAgentSearch !== false;
+    }
+    if (elements.settingEnableAgentChart && profileData.enableAgentChart !== undefined) {
+      elements.settingEnableAgentChart.checked = profileData.enableAgentChart !== false;
+    }
+    if (elements.settingEnableContextCache && profileData.enableContextCache !== undefined) {
+      elements.settingEnableContextCache.checked = profileData.enableContextCache !== false;
+    }
+    if (elements.settingEnableRawLogs && profileData.enableRawLogs !== undefined) {
+      elements.settingEnableRawLogs.checked = profileData.enableRawLogs === true;
+    }
+    if (elements.settingSendDateTime && profileData.sendDateTime !== undefined) {
+      elements.settingSendDateTime.checked = profileData.sendDateTime !== false;
+    }
+  }
+
+  /**
+   * Recoge la configuración completa de todos los campos actuales del formulario.
+   */
+  function gatherCurrentFormConfig() {
+    const profileName = elements.settingProfileName ? elements.settingProfileName.value.trim() : (appConfig.activeProfileName || 'LM Studio Local');
+    const selectedModel = elements.settingModel ? elements.settingModel.value.trim() : '';
+
+    return {
+      activeProfileName: profileName,
+      apiUrl: elements.settingApiUrl ? elements.settingApiUrl.value.trim() : (appConfig.apiUrl || 'http://localhost:1234/v1'),
+      apiType: elements.settingApiType ? elements.settingApiType.value : (appConfig.apiType || 'openai'),
+      apiKey: elements.settingApiKey ? elements.settingApiKey.value.trim() : '',
+      model: selectedModel,
+      systemPrompt: elements.settingSystemPrompt ? elements.settingSystemPrompt.value.trim() : '',
+      temperature: elements.settingTemperature ? elements.settingTemperature.value : '0.7',
+      reasoningEffort: appConfig.reasoningEffort || 'none',
+      modelReasoningConfig: appConfig.modelReasoningConfig || null,
+      theme: appConfig.theme || 'light',
+      language: appConfig.language || 'es',
+      enableAgentJs: elements.settingEnableAgentJs ? elements.settingEnableAgentJs.checked : true,
+      enableAgentWeb: elements.settingEnableAgentWeb ? elements.settingEnableAgentWeb.checked : true,
+      enableAgentSearch: elements.settingEnableAgentSearch ? elements.settingEnableAgentSearch.checked : true,
+      enableAgentChart: elements.settingEnableAgentChart ? elements.settingEnableAgentChart.checked : true,
+      enableContextCache: elements.settingEnableContextCache ? elements.settingEnableContextCache.checked : true,
+      enableRawLogs: elements.settingEnableRawLogs ? elements.settingEnableRawLogs.checked : Boolean(appConfig.enableRawLogs),
+      enableDebugMessages: Boolean(appConfig.enableDebugMessages),
+      sendDateTime: elements.settingSendDateTime ? elements.settingSendDateTime.checked : true,
+      activeRagBranchId: appConfig.activeRagBranchId || '',
+      ragContextLimitK: appConfig.ragContextLimitK || 64
+    };
+  }
+
+  function showProfileFeedback(msg, type = 'success') {
+    if (!elements.profileActionFeedback) return;
+    elements.profileActionFeedback.style.display = 'block';
+    elements.profileActionFeedback.className = `server-query-status status-${type}`;
+    elements.profileActionFeedback.textContent = msg;
+    setTimeout(() => {
+      if (elements.profileActionFeedback) {
+        elements.profileActionFeedback.style.display = 'none';
+      }
+    }, 4000);
+  }
+
+  function handleSaveProfile() {
+    const name = elements.settingProfileName ? elements.settingProfileName.value.trim() : '';
+    if (!name) {
+      showProfileFeedback(t('err_profile_name_empty') || 'Por favor, escribe un nombre para el perfil.', 'error');
+      return;
+    }
+
+    const currentConfig = gatherCurrentFormConfig();
+    if (Storage.saveProfile) {
+      Storage.saveProfile(name, currentConfig);
+      populateProfileSelector(name);
+      showProfileFeedback(t('msg_profile_saved', { name: name }) || `Perfil "${name}" guardado con éxito.`, 'success');
+    }
+  }
+
+  function handleDeleteProfile() {
+    const name = elements.settingProfileName ? elements.settingProfileName.value.trim() : '';
+    if (!name) return;
+
+    const confirmMsg = t('confirm_delete_profile', { name: name }) || `¿Estás seguro de que deseas eliminar el perfil "${name}"?`;
+    if (!confirm(confirmMsg)) return;
+
+    if (Storage.deleteProfile) {
+      Storage.deleteProfile(name);
+      const newActive = Storage.getActiveProfileName ? Storage.getActiveProfileName() : 'LM Studio Local';
+      populateProfileSelector(newActive);
+      const newProfileData = Storage.getProfile ? Storage.getProfile(newActive) : null;
+      if (newProfileData) {
+        applyProfileToForm(newProfileData);
+      }
+      showProfileFeedback(t('msg_profile_deleted', { name: name }) || `Perfil "${name}" eliminado.`, 'success');
+    }
+  }
+
   function openSettingsModal() {
+    const activeProfileName = (Storage.getActiveProfileName ? Storage.getActiveProfileName() : appConfig.activeProfileName) || 'LM Studio Local';
+    populateProfileSelector(activeProfileName);
+
     if (elements.settingApiType) {
       elements.settingApiType.value = appConfig.apiType || 'openai';
     }
@@ -2470,6 +2645,9 @@
 
     if (elements.serverQueryStatus) {
       elements.serverQueryStatus.style.display = 'none';
+    }
+    if (elements.profileActionFeedback) {
+      elements.profileActionFeedback.style.display = 'none';
     }
 
     loadCachedModels();
@@ -2514,29 +2692,7 @@
   function handleSaveSettings(e) {
     e.preventDefault();
 
-    const selectedModel = elements.settingModel.value.trim();
-
-    const newConfig = {
-      apiUrl: elements.settingApiUrl.value.trim(),
-      apiType: elements.settingApiType ? elements.settingApiType.value : (appConfig.apiType || 'openai'),
-      apiKey: elements.settingApiKey.value.trim(),
-      model: selectedModel,
-      systemPrompt: elements.settingSystemPrompt.value.trim(),
-      temperature: elements.settingTemperature.value,
-      reasoningEffort: appConfig.reasoningEffort || 'none',
-      theme: appConfig.theme || 'light',
-      language: appConfig.language || 'es',
-      enableAgentJs: elements.settingEnableAgentJs ? elements.settingEnableAgentJs.checked : true,
-      enableAgentWeb: elements.settingEnableAgentWeb ? elements.settingEnableAgentWeb.checked : true,
-      enableAgentSearch: elements.settingEnableAgentSearch ? elements.settingEnableAgentSearch.checked : true,
-      enableAgentChart: elements.settingEnableAgentChart ? elements.settingEnableAgentChart.checked : true,
-      enableContextCache: elements.settingEnableContextCache ? elements.settingEnableContextCache.checked : true,
-      enableRawLogs: elements.settingEnableRawLogs ? elements.settingEnableRawLogs.checked : Boolean(appConfig.enableRawLogs),
-      enableDebugMessages: Boolean(appConfig.enableDebugMessages),
-      sendDateTime: elements.settingSendDateTime ? elements.settingSendDateTime.checked : true,
-      activeRagBranchId: appConfig.activeRagBranchId || '',
-      ragContextLimitK: appConfig.ragContextLimitK || 16
-    };
+    const newConfig = gatherCurrentFormConfig();
 
     if (Storage.saveConfig) {
       Storage.saveConfig(newConfig);
@@ -3405,13 +3561,59 @@
       }
     });
 
-    // Modal de Configuración
+    // Modal de Configuración & Perfiles
     elements.btnCloseSettings.addEventListener('click', closeSettingsModal);
     elements.btnCancelSettings.addEventListener('click', closeSettingsModal);
     elements.settingsForm.addEventListener('submit', handleSaveSettings);
     elements.btnResetSettings.addEventListener('click', handleResetSettings);
     if (elements.btnClearAllData) {
       elements.btnClearAllData.addEventListener('click', handleClearAllData);
+    }
+
+    if (elements.profileSelectHelper) {
+      elements.profileSelectHelper.addEventListener('change', function () {
+        const selectedName = this.value;
+        if (!selectedName) return;
+        if (elements.settingProfileName) {
+          elements.settingProfileName.value = selectedName;
+        }
+        if (Storage.getProfile) {
+          const prof = Storage.getProfile(selectedName);
+          if (prof) {
+            applyProfileToForm(prof);
+          }
+        }
+      });
+    }
+
+    if (elements.settingProfileName) {
+      elements.settingProfileName.addEventListener('change', function () {
+        const typedName = this.value.trim();
+        if (!typedName) return;
+        if (Storage.getProfile) {
+          const prof = Storage.getProfile(typedName);
+          if (prof) {
+            applyProfileToForm(prof);
+            if (elements.profileSelectHelper) {
+              elements.profileSelectHelper.value = typedName;
+            }
+          }
+        }
+      });
+    }
+
+    if (elements.btnSaveProfile) {
+      elements.btnSaveProfile.addEventListener('click', (e) => {
+        e.preventDefault();
+        handleSaveProfile();
+      });
+    }
+
+    if (elements.btnDeleteProfile) {
+      elements.btnDeleteProfile.addEventListener('click', (e) => {
+        e.preventDefault();
+        handleDeleteProfile();
+      });
     }
 
     if (elements.settingApiType) {
