@@ -3049,11 +3049,17 @@
     if (!elements.chatSidebar) return;
     const isHidden = elements.chatSidebar.style.display === 'none' || !elements.chatSidebar.style.display;
     elements.chatSidebar.style.display = isHidden ? 'flex' : 'none';
+    if (elements.btnToggleSidebar) {
+      elements.btnToggleSidebar.style.display = isHidden ? 'none' : 'inline-flex';
+    }
   }
 
   function closeSidebar() {
     if (elements.chatSidebar) {
       elements.chatSidebar.style.display = 'none';
+    }
+    if (elements.btnToggleSidebar) {
+      elements.btnToggleSidebar.style.display = 'inline-flex';
     }
   }
 

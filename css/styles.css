@@ -177,12 +177,12 @@ body {
   padding: 0 1rem;
 }
 
-/* Botón flotante de Chats en la esquina superior izquierda */
+/* Botón flotante para abrir historial en la extrema izquierda superior */
 .btn-top-left-sidebar {
-  position: absolute;
+  position: fixed;
   top: 0.85rem;
-  left: 1rem;
-  z-index: 15;
+  left: 0.85rem;
+  z-index: 100;
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
@@ -205,13 +205,13 @@ body {
   box-shadow: var(--shadow-md);
 }
 
-body.dark .btn-top-left-sidebar {
+[data-theme="dark"] .btn-top-left-sidebar {
   background-color: var(--bg-surface);
   color: var(--text-main);
   border-color: var(--border-color);
 }
 
-body.dark .btn-top-left-sidebar:hover {
+[data-theme="dark"] .btn-top-left-sidebar:hover {
   background-color: #1e293b;
   border-color: #3b82f6;
   color: #60a5fa;

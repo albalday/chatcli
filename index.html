@@ -51,14 +51,14 @@
     </div>
   </aside>
 
+  <!-- Botón flotante para abrir el historial de conversaciones en la esquina superior izquierda de la pantalla -->
+  <button type="button" id="btn-toggle-sidebar" class="btn-top-left-sidebar" data-i18n-title="btn_sidebar_title" title="Abrir historial de conversaciones">
+    <span>💬</span>
+    <span data-i18n="btn_open_history">Abrir historial</span>
+  </button>
+
   <!-- Contenedor Principal del Chat (Usa todo el alto de la página: 100vh) -->
   <main class="chat-container">
-    <!-- Botón flotante de Chats en la esquina superior izquierda -->
-    <button type="button" id="btn-toggle-sidebar" class="btn-top-left-sidebar" data-i18n-title="btn_sidebar_title" title="Abrir/Cerrar historial de chats">
-      <span>💬</span>
-      <span data-i18n="btn_chats_history">Chats</span>
-    </button>
-
     <div id="messages-list" class="messages-list">
       <!-- Estado de Bienvenida inicial -->
       <div id="welcome-banner" class="welcome-banner">

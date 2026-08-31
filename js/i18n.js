@@ -328,8 +328,9 @@
 
       // Barra lateral e Historial de Conversaciones (Sidebar)
       sidebar_title: 'Conversaciones',
-      btn_sidebar_title: 'Abrir/Cerrar historial de chats',
-      btn_chats_history: 'Chats',
+      btn_sidebar_title: 'Abrir historial de conversaciones',
+      btn_chats_history: 'Abrir historial',
+      btn_open_history: 'Abrir historial',
       btn_new_chat_sidebar_title: 'Crear nueva conversación',
       btn_close_sidebar_title: 'Cerrar barra lateral',
       sidebar_search_placeholder: 'Buscar en historial...',
@@ -677,8 +678,9 @@
 
       // Sidebar & Conversation History
       sidebar_title: 'Conversations',
-      btn_sidebar_title: 'Toggle chat history',
-      btn_chats_history: 'Chats',
+      btn_sidebar_title: 'Open conversation history',
+      btn_chats_history: 'Open history',
+      btn_open_history: 'Open history',
       btn_new_chat_sidebar_title: 'Create new conversation',
       btn_close_sidebar_title: 'Close sidebar',
       sidebar_search_placeholder: 'Search history...',
