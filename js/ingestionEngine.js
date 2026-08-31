@@ -552,6 +552,7 @@
 
   /**
    * Invoca al LLM provisto de forma segura y devuelve su respuesta en texto.
+   * Soporta tanto prompts de texto plano como payloads multimodales estructurados (arrays con texto e imágenes).
    */
   async function callLLM(llmClient, prompt, systemPrompt = '') {
     if (!llmClient) {
@@ -574,6 +575,8 @@
         let accumulatedText = '';
         const messages = [];
         if (systemPrompt) messages.push({ role: 'system', content: systemPrompt });
+
+        // Si prompt es un array de content parts (multimodal) o string
         messages.push({ role: 'user', content: prompt });
 
         const Storage = getStorage();
@@ -651,14 +654,17 @@
 
   /**
    * Analiza la estructura semántica de un documento utilizando el LLM conectado.
-   * Filtra cadenas base64 de imágenes reemplazándolas por su contexto descriptivo (~10 líneas).
+   * Soporta generación multimodal de resúmenes pasando texto e imágenes in-line al LLM.
    *
-   * @param {string} text - Texto limpio del documento.
+   * @param {string|String} text - Texto limpio del documento (puede incluir propiedad .images).
    * @param {string} filename - Nombre del archivo.
    * @param {Object|Function} llmClient - Cliente de invocación del LLM.
+   * @param {Function} [onChapterProgress] - Callback de progreso por capítulo.
+   * @param {number} [contextLimitK=16] - Límite de contexto en miles de tokens.
+   * @param {Object} [options={}] - Opciones adicionales (ej: { images: Array, rawBytes: Uint8Array|ArrayBuffer }).
    * @returns {Promise<{ globalSummary: string, chapters: Array<{ chapterId: number, title: string, summary: string, content: string, charCount: number }> }>}
    */
-  async function analyzeDocumentStructure(text, filename, llmClient, onChapterProgress, contextLimitK = 16) {
+  async function analyzeDocumentStructure(text, filename, llmClient, onChapterProgress, contextLimitK = 16, options = {}) {
     const cleanText = normalizeExtractedText(text);
     if (!cleanText) {
       return {
@@ -667,8 +673,13 @@
       };
     }
 
-    const SYSTEM_PROMPT = `Eres un indexador semántico de alta precisión y densidad informativa para un sistema RAG jerárquico.
+    const allImages = options.images || (text && text.images) || [];
+    const rawBytes = options.rawBytes || options.fileBytes || null;
+    const FileParser = getFileParser();
+
+    const SYSTEM_PROMPT = `Eres un indexador semántico y de visión multimodal de alta precisión y densidad informativa para un sistema RAG jerárquico.
 Tu misión es estructurar el contenido en un objeto JSON válido con máxima concisión y anclaje de palabras clave esenciales.
+Si se proporcionan diagramas, esquemas o imágenes, analiza cuidadosamente su contenido visual y descríbelo con precisión técnica.
 
 Estructura requerida:
 {
@@ -677,7 +688,7 @@ Estructura requerida:
     {
       "chapterId": 1,
       "title": "Título descriptivo y preciso de la sección",
-      "summary": "Micro-resumen telegráfico de alta densidad (1-2 frases, máx. 25-30 palabras): palabras clave exactas, APIs/comandos, rangos de fecha/hora o eventos/logs (si aplica), tags/fuentes y mención explícita de diagramas.",
+      "summary": "Micro-resumen telegráfico de alta densidad (1-2 frases, máx. 25-30 palabras): palabras clave exactas, APIs/comandos, rangos de fecha/hora o eventos/logs (si aplica), tags/fuentes y síntesis de diagramas visuales con su etiqueta #img_X_Y.",
       "content": "Texto original íntegro de la sección."
     }
   ]
@@ -688,7 +699,72 @@ Reglas estrictas de indexación RAG:
 2. PALABRAS CLAVE Y ENTIDADES: Conserva términos técnicos literales, identificadores de funciones/APIs, endpoints, librerías, parámetros y acrónimos clave.
 3. LOGS, FECHAS Y REGISTROS: Si el texto contiene logs, registros o eventos cronológicos, incluye el rango de fechas/horas, niveles de severidad (ERROR, WARN) o códigos de estado relevantes.
 4. FUENTES Y TAGS: Si hay etiquetas (#tag), nombres de archivo, metadatos de autor o versiones (vX.Y), inclúyelos.
-5. ESQUEMAS Y DIAGRAMAS: Si aparecen marcas [IMAGEN / ESQUEMA: ...], enumera qué diagramas o ilustraciones clave contiene (ej: "Diagrama pinout GPIO", "Esquema arquitectura").`;
+5. ESQUEMAS, DIAGRAMAS Y VISIÓN: Si se adjuntan imágenes o aparecen marcas [IMAGEN / ESQUEMA: ...] o #img_X_Y, sintetiza qué muestra el diagrama visual (ej: "Diagrama #img_1_1: Pinout de conectores de audio 7.1", "Esquema #img_2_1: Conexión de alimentación PCIe").`;
+
+    // Función auxiliar para construir el payload del prompt (texto + imágenes multimodales)
+    function buildChapterPromptPayload(cand, sampleText) {
+      const promptText = `Genera un micro-resumen telegráfico de alta densidad semántica (1-2 frases concisas, máx. 25-30 palabras) para la sección "${cand.title}" del documento "${filename}".
+
+Reglas estrictas de indexación RAG:
+- Cero muletillas ("En esta sección se explica...", "Este capítulo trata..."). Sé directo.
+- Incluye palabras clave técnicas exactas, nombres de componentes, comandos, parámetros, librerías o funciones.
+- Si contiene logs, auditorías o registros temporales, captura el rango de fecha/hora, tags (#tag) o eventos críticos.
+- Si observas diagramas o esquemas adjuntos o marcas [IMAGEN / ESQUEMA: ...], describe explícitamente qué componentes o flujos muestra la imagen citando su identificador (ej: "Incluye diagrama #img_X_Y con pinout de audio", "Esquema #img_X_Y de zócalo CPU").
+
+Contenido del capítulo:
+${sampleText}`;
+
+      // Extraer imágenes asociadas al capítulo
+      const chapterImgs = [];
+      if (allImages && allImages.length > 0) {
+        if (cand.pageRange && cand.pageRange.start && cand.pageRange.end) {
+          allImages.forEach(img => {
+            if (img.page >= cand.pageRange.start && img.page <= cand.pageRange.end) {
+              chapterImgs.push(img);
+            }
+          });
+        } else {
+          // Documentos no paginados: buscar referencias a id o filename en el contenido del capítulo
+          allImages.forEach(img => {
+            if (img.id && (cand.content.includes(img.id) || (img.name && cand.content.includes(img.name)))) {
+              chapterImgs.push(img);
+            }
+          });
+        }
+      }
+
+      // Obtener dataUrls de hasta 4 imágenes principales por capítulo para no saturar visión
+      const visualParts = [];
+      const limitedImgs = chapterImgs.slice(0, 4);
+
+      for (const imgMeta of limitedImgs) {
+        let dataUrl = imgMeta.dataUrl || null;
+        if (!dataUrl && rawBytes && FileParser && typeof FileParser.extractImageFromPdfBytes === 'function') {
+          try {
+            dataUrl = FileParser.extractImageFromPdfBytes(rawBytes, imgMeta);
+          } catch (e) {}
+        }
+        if (dataUrl && typeof dataUrl === 'string' && dataUrl.startsWith('data:image/')) {
+          visualParts.push({
+            type: 'image_url',
+            image_url: { url: dataUrl },
+            caption: imgMeta.caption || imgMeta.id || 'Diagrama'
+          });
+        }
+      }
+
+      if (visualParts.length > 0) {
+        return [
+          { type: 'text', text: promptText },
+          ...visualParts.map(vp => ({
+            type: 'image_url',
+            image_url: { url: vp.image_url.url }
+          }))
+        ];
+      }
+
+      return promptText;
+    }
 
     // Si el texto es ultra-breve (un solo fragmento sin páginas ni secciones, <= 2.500 caracteres)
     const hasMultiplePagesOrSections = cleanText.includes('--- Página') || cleanText.includes('[Página') || cleanText.length > 2500;
@@ -749,20 +825,11 @@ Reglas estrictas de indexación RAG:
       const maxSampleChars = Math.min(32000, Math.max(4000, kVal * 200));
       const cleanedSample = prepareTextForSummarization(cand.content);
       const sampleText = cleanedSample.length > maxSampleChars ? (cleanedSample.slice(0, maxSampleChars) + '...') : cleanedSample;
-      const chapPrompt = `Genera un micro-resumen telegráfico de alta densidad semántica (1-2 frases concisas, máx. 25-30 palabras) para la sección "${cand.title}" del documento "${filename}".
-
-Reglas estrictas de indexación RAG:
-- Cero muletillas ("En esta sección se explica...", "Este capítulo trata..."). Sé directo.
-- Incluye palabras clave técnicas exactas, nombres de componentes, comandos, parámetros, librerías o funciones.
-- Si contiene logs, auditorías o registros temporales, captura el rango de fecha/hora, tags (#tag) o eventos críticos.
-- Si contiene esquemas, imágenes o diagramas visuales ([IMAGEN / ESQUEMA: ...]), especifícalos explícitamente (ej: "Incluye diagrama de conectores de audio 7.1", "Esquema del zócalo CPU").
-
-Contenido:
-${sampleText}`;
+      const chapPrompt = buildChapterPromptPayload(cand, sampleText);
 
       let chapSummary = '';
       try {
-        chapSummary = await callLLM(llmClient, chapPrompt, 'Eres un indexador técnico ultra-conciso para un sistema RAG jerárquico. Responde ÚNICAMENTE con 1-2 frases directas y telegráficas con máxima densidad de palabras clave, fechas/logs y diagramas, sin introducciones ni texto conversacional.');
+        chapSummary = await callLLM(llmClient, chapPrompt, 'Eres un indexador técnico con visión multimodal y ultra-conciso para un sistema RAG jerárquico. Responde ÚNICAMENTE con 1-2 frases directas y telegráficas con máxima densidad de palabras clave, fechas/logs y diagramas, sin introducciones ni texto conversacional.');
         chapSummary = chapSummary.trim()
           .replace(/^Resumen:\s*/i, '')
           .replace(/^En esta sección se\s+/i, '')
@@ -895,10 +962,23 @@ Destaca el propósito central, tecnologías/entidades clave, versiones/fechas re
         }
 
         let rawText = '';
+        let fileRawBytes = null;
+
+        if (file instanceof ArrayBuffer) {
+          fileRawBytes = new Uint8Array(file);
+        } else if (file instanceof Uint8Array) {
+          fileRawBytes = file;
+        } else if (file && typeof file.arrayBuffer === 'function') {
+          try {
+            const ab = await file.arrayBuffer();
+            fileRawBytes = new Uint8Array(ab);
+          } catch (_) {}
+        }
+
         if (typeof file.content === 'string') {
           rawText = normalizeExtractedText(file.content);
         } else if (fileType === 'pdf') {
-          rawText = await extractTextFromPDF(file);
+          rawText = await extractTextFromPDF(fileRawBytes || file);
         } else {
           rawText = await extractTextFromPlainText(file);
         }
@@ -906,6 +986,8 @@ Destaca el propósito central, tecnologías/entidades clave, versiones/fechas re
         if (!rawText || rawText.trim().length === 0) {
           throw new Error(`El archivo "${fileName}" no contiene texto extraíble.`);
         }
+
+        const docImages = (rawText && rawText.images) ? rawText.images : (file.images || []);
 
         // Paso 2: Análisis Estructurado y Generación de Resúmenes vía LLM con seguimiento granular de capítulos
         emitProgress(index, fileName, 'generating_summaries', `Analizando estructura y preparando resúmenes (${index + 1}/${totalFiles})...`, null, basePercent + 15);
@@ -921,7 +1003,10 @@ Destaca el propósito central, tecnologías/entidades clave, versiones/fechas re
             null,
             currentPct
           );
-        }, contextLimitK);
+        }, contextLimitK, {
+          images: docImages,
+          rawBytes: fileRawBytes
+        });
 
         // Paso 3: Persistencia en Sistema de Ficheros Local (RAG/<branch_id>/<bucket>/)
         emitProgress(index, fileName, 'saving', `Guardando capítulos y archivo en sistema de ficheros (${index + 1}/${totalFiles})...`, null, basePercent + 90);
@@ -932,7 +1017,7 @@ Destaca el propósito central, tecnologías/entidades clave, versiones/fechas re
           fileSize: fileSize,
           globalSummary: structure.globalSummary,
           chapters: structure.chapters,
-          images: (rawText && rawText.images) ? rawText.images : (file.images || [])
+          images: docImages
         };
 
         const savedDoc = await RagStorage.saveDocument(docPayload, file);

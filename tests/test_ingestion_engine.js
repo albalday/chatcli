@@ -377,3 +377,55 @@ endobj
   assert.ok(!extracted.includes('Typeface Monotype Arial'), 'Debe ignorar por completo streams de fuentes (/FontFile2)');
 });
 
+test('IngestionEngine - Generación de payload multimodal con imágenes in-line para el LLM', async () => {
+  const paginatedDoc = `
+--- Página 1 ---
+# Overview
+Introducción a la placa base.
+
+--- Página 2 ---
+## Panel Trasero
+Detalles de conectores y puertos traseros.
+![Diagrama E/S #img_2_1](rag-image://img_2_1)
+`.trim();
+
+  const mockImages = [
+    {
+      id: 'img_2_1',
+      page: 2,
+      caption: 'Diagrama E/S (Pág. 2)',
+      dataUrl: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP...'
+    }
+  ];
+
+  const receivedCalls = [];
+
+  const mockMultimodalLLM = async (prompt, systemPrompt) => {
+    receivedCalls.push({ prompt, systemPrompt });
+    return 'Resumen de prueba con diagrama #img_2_1';
+  };
+
+  const result = await IngestionEngine.analyzeDocumentStructure(
+    paginatedDoc,
+    'manual.pdf',
+    mockMultimodalLLM,
+    null,
+    16,
+    { images: mockImages }
+  );
+
+  assert.ok(result);
+  assert.ok(result.chapters.length >= 1);
+  
+  // Buscar la llamada de capítulo que contenía la imagen de la página 2
+  const multimodalCall = receivedCalls.find(c => Array.isArray(c.prompt) && c.prompt.some(p => p.type === 'image_url'));
+  assert.ok(multimodalCall, 'Debe haber al menos una llamada multimodal con array de prompt e imágenes');
+  assert.ok(multimodalCall.systemPrompt.includes('visión multimodal'), 'System prompt del capítulo debe instruir visión multimodal');
+  
+  const textPart = multimodalCall.prompt.find(p => p.type === 'text');
+  const imgPart = multimodalCall.prompt.find(p => p.type === 'image_url');
+  assert.ok(textPart && textPart.text.includes('Panel Trasero'));
+  assert.ok(imgPart && imgPart.image_url.url.startsWith('data:image/jpeg;base64,'));
+});
+
+
