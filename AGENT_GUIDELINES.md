@@ -108,3 +108,4 @@ Si los cambios afectan a:
 - Requisitos del proyecto o estructura de archivos ➜ Actualizar `README.md`.
 - Flujos de trabajo, comandos o reglas para agentes ➜ Actualizar `AGENT_GUIDELINES.md`.
 - Comentarios JSDoc / API en módulos ➜ Actualizar los comentarios del código fuente.
+
