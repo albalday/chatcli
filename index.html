@@ -772,7 +772,7 @@
     <!-- Navegación por pestañas unificadas -->
     <div class="modal-tabs-nav rag-tabs-nav" id="rag-modal-tabs-nav">
       <button type="button" class="modal-tab-btn active" data-rag-tab="tab-rag-active">
-        <span data-i18n="rag_tab_active">🌿 Rama Activa en Chat</span>
+        <span data-i18n="rag_tab_active">Activar RAG</span>
       </button>
       <button type="button" class="modal-tab-btn" data-rag-tab="tab-rag-manage">
         <span data-i18n="rag_tab_manage">📁 Gestión de Ramas y Documentos</span>
@@ -783,7 +783,7 @@
     </div>
 
     <div class="modal-body rag-modal-body-tabbed">
-      <!-- PESTAÑA 1: Activar / Desactivar y Escoger Rama Activa para el Chat -->
+      <!-- PESTAÑA 1: Activar RAG, Perfil de Resumen y Selección de Rama -->
       <div id="tab-rag-active" class="modal-tab-pane active">
         <!-- Banner de Estado de Carpeta Local -->
         <div id="rag-fs-banner-active" class="rag-fs-banner-container"></div>
@@ -803,7 +803,30 @@
           </button>
         </div>
 
-        <div class="form-field" style="margin-top: 1rem;">
+        <!-- Selección del Perfil de Conexión para Resumen de Documentos (RAG) -->
+        <div class="form-field" style="margin-top: 0.5rem;">
+          <label for="setting-rag-summary-profile">
+            <strong data-i18n="rag_summary_profile_title">Perfil de Conexión para Resumen de Documentos</strong>
+            <span class="label-hint" data-i18n="rag_summary_profile_hint">Selecciona el perfil de conexión que procesará el análisis e ingesta de documentos:</span>
+          </label>
+          <div class="combobox-wrapper">
+            <select id="setting-rag-summary-profile" class="combobox-select-helper" style="width: 100%; max-width: 100%; font-weight: 500;">
+              <!-- Se puebla dinámicamente con los perfiles existentes -->
+            </select>
+          </div>
+          <div class="setting-toggle-card" style="margin-top: 0.45rem; background: var(--bg-app); border-style: dashed;">
+            <div class="toggle-card-info">
+              <div class="toggle-card-title" style="font-size: 0.78rem;">
+                <span data-i18n="rag_summary_profile_warning_title">💡 Elección recomendada del modelo para ingesta y resumen:</span>
+              </div>
+              <p class="toggle-card-desc" style="font-size: 0.72rem; line-height: 1.4;" data-i18n="rag_summary_profile_warning_desc">
+                Se recomienda usar un modelo <strong>multimodal</strong>, de <strong>bajo coste</strong> (o local) y con una <strong>ventana de contexto lo más grande posible</strong>. <span style="color: var(--danger, #ef4444); font-weight: 600;">⚠️ Atención: El procesamiento automático de documentos extensos o PDFs puede generar costes de API elevados si utilizas un modelo generalista de pago por token.</span>
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-field" style="margin-top: 0.5rem;">
           <label>
             <strong data-i18n="rag_select_branch_chat">Ramas de Conocimiento Disponibles</strong>
             <span class="label-hint" data-i18n="rag_select_branch_chat_hint">Activa el interruptor de la rama que desees utilizar como contexto en el chat:</span>
