@@ -41,7 +41,7 @@
     enableDebugMessages: false,
     sendDateTime: true,
     activeRagBranchId: '',
-    ragContextLimitK: 64,
+    ragContextLimitK: 128,
     ragSummaryProfile: 'Local resumen'
   };
 
@@ -160,7 +160,7 @@
       enableRawLogs: false,
       enableDebugMessages: false,
       sendDateTime: true,
-      ragContextLimitK: 64
+      ragContextLimitK: 128
     },
     'Remoto chat': {
       apiUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
@@ -179,7 +179,7 @@
       enableRawLogs: false,
       enableDebugMessages: false,
       sendDateTime: true,
-      ragContextLimitK: 64
+      ragContextLimitK: 128
     },
     'Local resumen': {
       apiUrl: 'http://localhost:1234/v1',
@@ -198,7 +198,7 @@
       enableRawLogs: false,
       enableDebugMessages: false,
       sendDateTime: true,
-      ragContextLimitK: 64
+      ragContextLimitK: 128
     },
     'Remoto resumen': {
       apiUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
@@ -217,7 +217,7 @@
       enableRawLogs: false,
       enableDebugMessages: false,
       sendDateTime: true,
-      ragContextLimitK: 64
+      ragContextLimitK: 128
     },
     'Nuevo': {
       apiUrl: '',
@@ -236,7 +236,7 @@
       enableRawLogs: false,
       enableDebugMessages: false,
       sendDateTime: true,
-      ragContextLimitK: 64
+      ragContextLimitK: 128
     }
   };
 
@@ -447,7 +447,7 @@
       ragSummaryProfile: getStorageItem('ragSummaryProfile') || DEFAULT_CONFIG.ragSummaryProfile,
       ragContextLimitK: (() => {
         const val = parseInt(ragContextLimitK !== null ? ragContextLimitK : activeProfile.ragContextLimitK, 10);
-        if (isNaN(val) || val < 16) return DEFAULT_CONFIG.ragContextLimitK;
+        if (isNaN(val) || val < 32) return DEFAULT_CONFIG.ragContextLimitK;
         if (val > 1024) return 1024;
         return val;
       })()
@@ -484,7 +484,7 @@
     if (config.ragSummaryProfile !== undefined) setStorageItem('ragSummaryProfile', String(config.ragSummaryProfile).trim());
     if (config.ragContextLimitK !== undefined) {
       let k = parseInt(config.ragContextLimitK, 10);
-      if (isNaN(k) || k < 16) k = 16;
+      if (isNaN(k) || k < 32) k = 128;
       if (k > 1024) k = 1024;
       setStorageItem('ragContextLimitK', String(k));
     }

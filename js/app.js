@@ -2587,7 +2587,7 @@
       enableDebugMessages: Boolean(appConfig.enableDebugMessages),
       sendDateTime: elements.settingSendDateTime ? elements.settingSendDateTime.checked : true,
       activeRagBranchId: appConfig.activeRagBranchId || '',
-      ragContextLimitK: appConfig.ragContextLimitK || 64
+      ragContextLimitK: appConfig.ragContextLimitK || 128
     };
   }
 

@@ -820,7 +820,6 @@
                 <span data-i18n="rag_summary_profile_warning_title">💡 Elección recomendada del modelo para ingesta y resumen:</span>
               </div>
               <p class="toggle-card-desc" style="font-size: 0.72rem; line-height: 1.4;" data-i18n-html="rag_summary_profile_warning_desc">
-                Se recomienda usar un modelo <strong>multimodal</strong>, de <strong>bajo coste</strong> (o local) y con una <strong>ventana de contexto lo más grande posible</strong>. <span style="color: var(--danger, #ef4444); font-weight: 600;">⚠️ Atención: El procesamiento automático de documentos extensos o PDFs puede generar costes de API elevados si utilizas un modelo generalista de pago por token.</span>
               </p>
             </div>
           </div>
@@ -873,10 +872,9 @@
           </div>
           <div class="rag-chunk-select-wrapper" style="min-width: 250px;">
             <select id="setting-rag-context-limit-k" class="combobox-select-helper" style="width: 100%;">
-              <option value="16">16K tokens (~64 KB texto) - Mínimo</option>
-              <option value="32">32K tokens (~128 KB texto)</option>
-              <option value="64" selected>64K tokens (~256 KB texto) - Estándar</option>
-              <option value="128">128K tokens (~512 KB texto)</option>
+              <option value="32">32K tokens (~128 KB texto) - Mínimo</option>
+              <option value="64">64K tokens (~256 KB texto)</option>
+              <option value="128" selected>128K tokens (~512 KB texto) - Estándar</option>
               <option value="256">256K tokens (~1 MB texto) - Modelos 256K</option>
               <option value="512">512K tokens (~2 MB texto)</option>
               <option value="1024">1M tokens (~4 MB texto) - Máximo</option>

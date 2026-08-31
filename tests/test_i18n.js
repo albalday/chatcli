@@ -26,10 +26,10 @@ test('I18n - Reemplazo dinámico de parámetros en t()', () => {
 test('I18n - Traducciones de configuración de límite de contexto RAG', () => {
   I18n.setLanguage('es', false);
   assert.ok(I18n.t('rag_context_limit_title').includes('Tamaño de Contexto'));
-  assert.ok(I18n.t('rag_context_limit_desc').includes('16K a 1M'));
+  assert.ok(I18n.t('rag_context_limit_desc').includes('32K a 1M'));
 
   I18n.setLanguage('en', false);
   assert.ok(I18n.t('rag_context_limit_title').includes('Chapter Context Size'));
-  assert.ok(I18n.t('rag_context_limit_desc').includes('16K to 1M'));
+  assert.ok(I18n.t('rag_context_limit_desc').includes('32K to 1M'));
 });
 

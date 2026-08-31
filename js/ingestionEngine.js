@@ -946,7 +946,7 @@ Destaca el propósito central, tecnologías/entidades clave, versiones/fechas re
     const RagStorage = getRagStorage();
     const Storage = getStorage();
     const appCfg = (typeof window !== 'undefined' && window.appConfig) ? window.appConfig : (Storage?.loadConfig ? Storage.loadConfig() : {});
-    const contextLimitK = options.ragContextLimitK || llmClient?.config?.ragContextLimitK || appCfg?.ragContextLimitK || 16;
+    const contextLimitK = options.ragContextLimitK || llmClient?.config?.ragContextLimitK || appCfg?.ragContextLimitK || 128;
 
     if (!RagStorage) {
       throw new Error('ChatRagStorage no está disponible para persistir los documentos de la cola.');

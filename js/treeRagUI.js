@@ -773,7 +773,7 @@
         throw new Error('No se encontró el módulo de cliente LLM (ChatAPI).');
       }
 
-      const contextLimitK = parseInt(effectiveSummaryConfig.ragContextLimitK || appCfg.ragContextLimitK || '16', 10) || 16;
+      const contextLimitK = parseInt(effectiveSummaryConfig.ragContextLimitK || appCfg.ragContextLimitK || '128', 10) || 128;
       const queueResult = await IngestionEngine.processDocumentQueue(files, branchId, llmClient, onProgress, { ragContextLimitK: contextLimitK });
 
       progressBarFill.style.width = '100%';
@@ -1336,13 +1336,13 @@
     if (selectChunkLimitK) {
       const Storage = getStorage();
       const curCfg = (typeof window !== 'undefined' && window.appConfig) ? window.appConfig : (Storage?.loadConfig ? Storage.loadConfig() : {});
-      const savedK = String(curCfg.ragContextLimitK || 16);
+      const savedK = String(curCfg.ragContextLimitK || 128);
       if (selectChunkLimitK.querySelector(`option[value="${savedK}"]`)) {
         selectChunkLimitK.value = savedK;
       }
 
       selectChunkLimitK.addEventListener('change', () => {
-        const valK = parseInt(selectChunkLimitK.value, 10) || 16;
+        const valK = parseInt(selectChunkLimitK.value, 10) || 128;
         if (typeof window !== 'undefined' && window.appConfig) {
           window.appConfig.ragContextLimitK = valK;
         }
