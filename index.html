@@ -105,10 +105,6 @@
             <span>🌿</span>
             <span data-i18n="btn_tree_rag">Conocimiento</span>
           </button>
-          <button type="button" id="btn-lang-quick" class="btn-tool-mini btn-lang-quick" data-i18n-title="lang_switcher_title" title="Cambiar idioma / Switch language">
-            <span>🌐</span>
-            <span id="current-lang-label">ES</span>
-          </button>
           <button type="button" id="btn-quick-export" class="btn-tool-mini" data-i18n-title="btn_export_chat_title" title="Exportar conversación (Markdown, JSON, PDF)">
             <span>📤</span>
             <span data-i18n="btn_export_short">Exportar</span>
@@ -284,6 +280,9 @@
       <button type="button" class="modal-tab-btn" data-tab="tab-model">
         <span data-i18n="tab_model">⚙️ Modelo</span>
       </button>
+      <button type="button" class="modal-tab-btn" data-tab="tab-appearance">
+        <span data-i18n="tab_appearance">🎨 Visualización</span>
+      </button>
       <button type="button" class="modal-tab-btn" data-tab="tab-inspector">
         <span data-i18n="tab_inspector">🔍 Inspector</span>
       </button>
@@ -410,21 +409,6 @@
               <datalist id="model-datalist">
                 <!-- Se puebla automáticamente al pulsar Query -->
               </datalist>
-            </div>
-          </div>
-
-          <div class="form-field">
-            <label>
-              <strong data-i18n="field_theme">Tema Visual de la Interfaz</strong>
-              <span class="label-hint" data-i18n="field_theme_hint">Selecciona el modo de visualización.</span>
-            </label>
-            <div class="theme-switcher-group" id="theme-switcher-group">
-              <button type="button" class="btn-theme-toggle active" id="btn-theme-light" data-theme="light">
-                <span data-i18n="theme_light">☀️ Modo Claro</span>
-              </button>
-              <button type="button" class="btn-theme-toggle" id="btn-theme-dark" data-theme="dark">
-                <span data-i18n="theme_dark">🌙 Modo Oscuro</span>
-              </button>
             </div>
           </div>
         </div>
@@ -566,7 +550,40 @@
           </div>
         </div>
 
-        <!-- Pestaña 4: Inspector de Proveedor -->
+        <!-- Pestaña 4: Visualización e Idioma -->
+        <div id="tab-appearance" class="modal-tab-pane">
+          <div class="form-field">
+            <label>
+              <strong data-i18n="field_theme">Tema Visual de la Interfaz</strong>
+              <span class="label-hint" data-i18n="field_theme_hint">Selecciona el modo de visualización.</span>
+            </label>
+            <div class="theme-switcher-group" id="theme-switcher-group">
+              <button type="button" class="btn-theme-toggle active" id="btn-theme-light" data-theme="light">
+                <span data-i18n="theme_light">☀️ Modo Claro</span>
+              </button>
+              <button type="button" class="btn-theme-toggle" id="btn-theme-dark" data-theme="dark">
+                <span data-i18n="theme_dark">🌙 Modo Oscuro</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="form-field">
+            <label>
+              <strong data-i18n="field_language">Idioma de la Interfaz (Language)</strong>
+              <span class="label-hint" data-i18n="field_language_hint">Selecciona el idioma visual de la aplicación.</span>
+            </label>
+            <div class="theme-switcher-group" id="lang-switcher-group">
+              <button type="button" class="btn-lang-toggle active" id="btn-lang-es" data-lang="es">
+                <span>🇪🇸 Español</span>
+              </button>
+              <button type="button" class="btn-lang-toggle" id="btn-lang-en" data-lang="en">
+                <span>🇬🇧 English</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Pestaña 5: Inspector de Proveedor -->
         <div id="tab-inspector" class="modal-tab-pane">
           <div class="inspector-intro-card">
             <div class="inspector-intro-header">
