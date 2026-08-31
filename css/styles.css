@@ -2126,7 +2126,8 @@ input:checked + .slider:before {
 .form-field.form-field-inline select,
 .select-inline {
   flex: 1 1 auto !important;
-  width: auto !important;
+  width: 100% !important;
+  max-width: none !important;
   min-width: 0 !important;
 }
 
