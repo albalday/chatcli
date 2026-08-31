@@ -1,0 +1,11 @@
+# AGENT INSTRUCTIONS / CURSOR RULES
+# Este archivo referencia la guía principal de reglas del proyecto para cualquier agente de IA.
+
+Por favor, antes de realizar cualquier modificación, consulta y sigue estrictamente las directrices definidas en:
+-> AGENT_GUIDELINES.md
+
+Puntos clave:
+1. NUNCA edites zerochat.html directamente. Edita js/*.js, css/styles.css o index.html.
+2. Ejecuta siempre los tests con `node --test tests/test_*.js`.
+3. Recompila el paquete final ejecutando `python3 bundle.py`.
+4. Haz commits siempre en la rama `dev` usando Conventional Commits (`feat:`, `fix:`, `refactor:`, `docs:`, `test:`).
