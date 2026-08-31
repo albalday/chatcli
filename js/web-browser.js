@@ -1,5 +1,5 @@
 /**
- * Módulo de Consulta, Extracción Web y Documentos PDF Desacoplado (ChatWebBrowser) para ChatCLI.
+ * Módulo de Consulta, Extracción Web y Documentos PDF Desacoplado (ChatWebBrowser) para ZeroChat.
  *
  * ==============================================================================================
  * DOCUMENTACIÓN DEL MODELO DE SEGURIDAD Y LIMITACIONES DEL NAVEGADOR
@@ -9,13 +9,13 @@
  *      directamente al contenido de orígenes web de terceros mediante fetch() o XMLHttpRequest
  *      a menos que el servidor de destino emita cabeceras 'Access-Control-Allow-Origin'.
  *    - Para permitir la lectura universal de artículos y páginas web públicas solicitadas por
- *      el modelo agéntico, ChatCLI utiliza estrategias desacopladas:
+ *      el modelo agéntico, ZeroChat utiliza estrategias desacopladas:
  *        a) Gateway Reader para LLMs (ej: Jina Reader / r.jina.ai): Procesa y devuelve Markdown limpio.
  *        b) Petición Directa (DirectFetch): Utilizada para servidores con CORS habilitado o endpoints locales.
  *        c) Proxy CORS (AllOrigins): Fallback de contingencia para obtener el HTML crudo.
  *
  * 2. Mitigación de SSRF (Server-Side Request Forgery) en el Cliente Web:
- *    - Los agentes LLM pueden recibir o generar URLs arbitrarias. ChatCLI aplica validación estricta
+ *    - Los agentes LLM pueden recibir o generar URLs arbitrarias. ZeroChat aplica validación estricta
  *      antes de despachar cualquier petición:
  *        a) Protocolos: Exclusivamente http:// y https://. Se rechazan esquemas como file://, data://,
  *           javascript://, vbscript://, blob://, etc.

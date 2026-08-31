@@ -1,7 +1,7 @@
 /**
  * Módulo de almacenamiento y persistencia de configuración y conversaciones (ChatStorage).
  * - Configuración síncrona en localStorage / cookies (preferencias ligeras y API keys).
- * - Persistencia estructurada y asíncrona de conversaciones, mensajes y adjuntos en IndexedDB (ChatCLIDB).
+ * - Persistencia estructurada y asíncrona de conversaciones, mensajes y adjuntos en IndexedDB (ZeroChatDB).
  * - Migración automática de sesiones legacy desde localStorage sin pérdida de datos.
  * - Carga bajo demanda de mensajes para optimizar el consumo de memoria.
  * - Fallback transparente para entornos sin soporte de IndexedDB.
@@ -16,7 +16,7 @@
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  const DB_NAME = 'ChatCLIDB';
+  const DB_NAME = 'ZeroChatDB';
   const DB_VERSION = 1;
   const STORE_CONVERSATIONS = 'conversations';
   const STORE_MESSAGES = 'messages';
@@ -44,7 +44,7 @@
     ragContextLimitK: 64
   };
 
-  const STORAGE_PREFIX = 'chatcli_';
+  const STORAGE_PREFIX = 'zerochat_';
   const DEFAULT_EXPIRY_DAYS = 365;
 
   const memoryStorage = new Map();
@@ -54,7 +54,10 @@
 
   function isLocalStorageAvailable() {
     try {
-      const testKey = '__chatcli_test__';
+      const testKey = '__zerochat_test__';
+      localStorage.setItem(testKey, testKey);
+      localStorage.removeItem(testKey);
+      return true;
       localStorage.setItem(testKey, testKey);
       localStorage.removeItem(testKey);
       return true;
@@ -270,7 +273,7 @@
         const keysToRemove = [];
         for (let i = 0; i < localStorage.length; i++) {
           const k = localStorage.key(i);
-          if (k && (k.startsWith(STORAGE_PREFIX) || k === 'chat_sessions' || k.startsWith('chatcli'))) {
+          if (k && (k.startsWith(STORAGE_PREFIX) || k === 'chat_sessions' || k.startsWith('chatcli') || k.startsWith('zerochat'))) {
             keysToRemove.push(k);
           }
         }

@@ -1,5 +1,5 @@
 /**
- * Módulo de Gestión Inteligente del Contexto (ChatContextManager) para ChatCLI.
+ * Módulo de Gestión Inteligente del Contexto (ChatContextManager) para ZeroChat.
  * Gestiona el presupuesto de tokens, estimación adaptable por modelo,
  * ventana deslizante segura con preservación de pares agénticos, control de resultados de herramientas
  * y sistema de compresión/resumen estructurado del historial.

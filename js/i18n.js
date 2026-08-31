@@ -1,5 +1,5 @@
 /**
- * Módulo de Internacionalización y Multi-idioma (ChatI18n) para ChatCLI v5.0.
+ * Módulo de Internacionalización y Multi-idioma (ChatI18n) para ZeroChat v5.2.
  * Gestiona diccionarios en Español e Inglés, formateo de fechas y reactividad de UI.
  */
 

@@ -1011,7 +1011,7 @@
     }
 
     const packageData = {
-      schema: "ChatCLI_RAG_Branch_Directory_v1",
+      schema: "ZeroChat_RAG_Branch_Directory_v1",
       version: 1,
       exportedAt: Date.now(),
       branch: {
@@ -1127,7 +1127,7 @@
     const docs = await getDocumentsByBranch(branchId);
 
     return {
-      schema: "ChatCLI_RAG_Branch_v1",
+      schema: "ZeroChat_RAG_Branch_v1",
       version: 1,
       exportedAt: Date.now(),
       branch: {

@@ -1,5 +1,5 @@
 /**
- * Aplicación principal del cliente de chat Web (ChatCLI v4.0).
+ * Aplicación principal del cliente de chat Web (ZeroChat v5.2).
  * Incluye:
  * - Soporte Multi-idioma (Castellano / Inglés) con autodetección por navegador y persistencia.
  * - Selector de nivel de razonamiento (Thinking/CoT) con detección automática de capacidades del modelo.
@@ -3070,7 +3070,7 @@
 
   function exportConversationAsMarkdown() {
     const sess = savedSessions.find(s => s.id === currentSessionId);
-    const title = (sess && sess.title) || 'ChatCLI_Conversation';
+    const title = (sess && sess.title) || 'ZeroChat_Conversation';
     const dateStr = new Date().toISOString().slice(0, 10);
     const md = Export.buildMarkdownExport ? Export.buildMarkdownExport(chatHistory, { title, model: appConfig.model }) : '';
     if (Export.downloadFile) {
@@ -3081,7 +3081,7 @@
 
   function exportConversationAsJson() {
     const sess = savedSessions.find(s => s.id === currentSessionId);
-    const title = (sess && sess.title) || 'ChatCLI_Conversation';
+    const title = (sess && sess.title) || 'ZeroChat_Conversation';
     const dateStr = new Date().toISOString().slice(0, 10);
     const jsonStr = Export.buildJsonExport ? Export.buildJsonExport(sess, chatHistory, appConfig) : '{}';
     if (Export.downloadFile) {

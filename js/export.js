@@ -1,5 +1,5 @@
 /**
- * Módulo de Exportación e Importación (ChatExport) para ChatCLI.
+ * Módulo de Exportación e Importación (ChatExport) para ZeroChat.
  * Gestiona la serialización a Markdown, JSON estructurado, impresión y parseo de archivos importados.
  */
 (function (root, factory) {
@@ -31,7 +31,7 @@
   }
 
   function buildMarkdownExport(chatHistory, options = {}) {
-    const title = options.title || 'ChatCLI_Conversation';
+    const title = options.title || 'ZeroChat_Conversation';
     const model = options.model || 'No especificado';
     const dateStr = options.date || new Date().toLocaleString();
 

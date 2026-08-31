@@ -346,7 +346,7 @@ test('RagStorage - exportBranchToJson e importBranchFromJson exportan e importan
   const exported = await RagStorage.exportBranchToJson(branch.id);
   assert.ok(exported);
   assert.equal(exported.version, 1);
-  assert.equal(exported.schema, 'ChatCLI_RAG_Branch_v1');
+  assert.equal(exported.schema, 'ZeroChat_RAG_Branch_v1');
   assert.equal(exported.branch.name, 'Rama Export');
   assert.equal(exported.documents.length, 1);
   assert.equal(exported.documents[0].chapters.length, 2);

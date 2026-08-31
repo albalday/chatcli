@@ -7,7 +7,7 @@
  * 3. Monitor en vivo de la cola de ingesta secuencial con barras de progreso y badges.
  * 4. Visor de estructura de documento (Árbol de conocimiento, resumen global y lector de capítulos).
  *
- * Integrado 100% con los estilos y temas visuales (Claro/Oscuro) de ChatCLI.
+ * Integrado 100% con los estilos y temas visuales (Claro/Oscuro) de ZeroChat.
  */
 
 (function (root, factory) {

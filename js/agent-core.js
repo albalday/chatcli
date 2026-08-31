@@ -1,5 +1,5 @@
 /**
- * Módulo de Núcleo Agéntico y Sistema Modular de Herramientas (ChatAgentCore) para ChatCLI.
+ * Módulo de Núcleo Agéntico y Sistema Modular de Herramientas (ChatAgentCore) para ZeroChat.
  *
  * Arquitectura:
  * Model -> AgentCore -> ToolRegistry -> Tool -> ToolExecutor
@@ -145,12 +145,12 @@
   }
 
   /**
-   * Proveedor de herramientas nativas de ChatCLI (BuiltinToolProvider).
+   * Proveedor de herramientas nativas de ZeroChat (BuiltinToolProvider).
    * Provee: execute_javascript, search_web, fetch_web_page, download_pdf, render_chart.
    */
   class BuiltinToolProvider extends BaseToolProvider {
     constructor() {
-      super({ id: 'builtin', name: 'ChatCLI Built-in Tools' });
+      super({ id: 'builtin', name: 'ZeroChat Built-in Tools' });
     }
 
     getTools() {

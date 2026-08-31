@@ -1,5 +1,5 @@
 /**
- * Módulo de Renderizado de Tarjetas de Herramientas (ChatToolCards) para ChatCLI.
+ * Módulo de Renderizado de Tarjetas de Herramientas (ChatToolCards) para ZeroChat.
  * Unifica la creación y actualización reactiva de tarjetas DOM para herramientas agénticas
  * (execute_javascript, fetch_web_page, download_pdf, search_web, render_chart y herramientas MCP)
  * tanto durante la ejecución en vivo como al restaurar conversaciones desde el historial.

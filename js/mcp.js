@@ -1,16 +1,12 @@
 /**
- * Módulo de Integración MCP (Model Context Protocol) para ChatCLI.
+ * Módulo de Integración MCP (Model Context Protocol) para ZeroChat.
+ * Permite la conexión a servidores MCP locales o remotos vía SSE (Server-Sent Events) o HTTP Stream.
  *
- * ==============================================================================================
- * DOCUMENTACIÓN DE SEGURIDAD Y LIMITACIONES DEL NAVEGADOR PARA MCP
- * ==============================================================================================
- * 1. Transporte en Entornos de Navegador vs Escritorio:
- *    - El protocolo MCP estándar soporta dos transportes principales: stdio (procesos CLI del SO)
- *      y HTTP con Server-Sent Events (SSE) o JSON-RPC 2.0 sobre POST.
- *    - En un entorno puramente cliente web en el navegador (ejecutado vía file:// o servido por HTTP),
- *      el sandbox de seguridad del navegador prohíbe terminantemente la creación directa de subprocesos
- *      locales (child_process / stdio).
- *    - Por tanto, ChatCLI implementa el transporte nativo HTTP JSON-RPC 2.0 / SSE / REST para conectarse
+ * Características:
+ *  - Soporte de transporte HTTP / SSE nativo en navegadores (EventSource / fetch stream).
+ *  - Dado que los navegadores no pueden lanzar subprocesos `stdio` directamente,
+ *    las conexiones MCP stdio requieren un proxy / bridge local (mcp-bridge o similar).
+ *  - Por tanto, ZeroChat implementa el transporte nativo HTTP JSON-RPC 2.0 / SSE / REST para conectarse
  *      a servidores MCP remotos o locales (ej. http://localhost:8000/sse o endpoints de herramientas).
  *      Los servidores que solo admiten stdio pueden exponerse al navegador utilizando un bridge/proxy SSE.
  *

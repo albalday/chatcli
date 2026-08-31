@@ -37,9 +37,9 @@ test('Sandbox - Manejo de expresiones matemáticas y estructuras', async () => {
   assert.equal(res.success, true);
   assert.equal(res.result, '12');
 
-  const objRes = await Sandbox.execute('({ nombre: "ChatCLI", version: 4 })');
+  const objRes = await Sandbox.execute('({ nombre: "ZeroChat", version: 5 })');
   assert.equal(objRes.success, true);
-  assert.ok(objRes.result.includes('"nombre": "ChatCLI"'));
+  assert.ok(objRes.result.includes('"nombre": "ZeroChat"'));
 });
 
 test('Sandbox - Protección contra salida excesiva (MAX_OUTPUT_LENGTH)', async () => {

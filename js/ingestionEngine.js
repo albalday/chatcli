@@ -193,7 +193,7 @@
       }
     }
 
-    // 2. Fallback fiable: ChatFileParser nativo de ChatCLI
+    // 2. Fallback fiable: ChatFileParser nativo de ZeroChat
     const FileParser = getFileParser();
     if (FileParser && typeof FileParser.extractTextFromPdf === 'function') {
       const parsedText = await FileParser.extractTextFromPdf(arrayBuffer);
