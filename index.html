@@ -294,38 +294,28 @@
       <div class="modal-body">
         <!-- Pestaña 1: General y Servidor -->
         <div id="tab-general" class="modal-tab-pane active">
-          <!-- Selector y Gestión de Perfiles -->
-          <div class="form-field profile-selection-field">
-            <label for="setting-profile-name">
+          <!-- Selector y Gestión de Perfiles (Compacto) -->
+          <div class="form-field profile-selection-field" style="margin-bottom: 0.85rem;">
+            <label for="profile-select-helper">
               <strong data-i18n="field_profile">Perfil de Conexión / Servidor</strong>
-              <span class="label-hint" data-i18n="field_profile_hint">Selecciona un perfil guardado o escribe un nuevo nombre para crearlo.</span>
             </label>
             <div class="combobox-wrapper profile-combobox-wrapper">
-              <input
-                type="text"
-                id="setting-profile-name"
-                list="profile-datalist"
-                data-i18n-placeholder="field_profile_placeholder"
-                placeholder="Nombre del perfil (ej: LM Studio, Ollama, OpenRouter...)"
-                autocomplete="off"
-              >
-              <select id="profile-select-helper" class="combobox-select-helper" title="Seleccionar perfil existente">
+              <select id="profile-select-helper" class="combobox-select-helper" title="Seleccionar perfil existente" style="flex: 1; max-width: 100%;">
                 <option value="" disabled selected data-i18n="profile_select_default">▾ Elegir perfil guardado...</option>
               </select>
               <datalist id="profile-datalist">
                 <!-- Se puebla dinámicamente -->
               </datalist>
 
-              <button type="button" id="btn-save-profile" class="btn-profile-action btn-save-profile" data-i18n-title="btn_save_profile_title" title="Guardar todos los valores actuales en este perfil">
+              <button type="button" id="btn-save-profile" class="btn-profile-action btn-save-profile btn-icon-only" data-i18n-title="btn_save_profile_title" title="Guardar todos los valores actuales en este perfil">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
                   <polyline points="17 21 17 13 7 13 7 21"></polyline>
                   <polyline points="7 3 7 8 15 8"></polyline>
                 </svg>
-                <span data-i18n="btn_save_profile">Guardar Perfil</span>
               </button>
 
-              <button type="button" id="btn-delete-profile" class="btn-profile-action btn-delete-profile" data-i18n-title="btn_delete_profile_title" title="Eliminar el perfil seleccionado">
+              <button type="button" id="btn-delete-profile" class="btn-profile-action btn-delete-profile btn-icon-only" data-i18n-title="btn_delete_profile_title" title="Eliminar el perfil seleccionado">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <polyline points="3 6 5 6 21 6"></polyline>
                   <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
@@ -340,6 +330,20 @@
             <div class="profile-card-header">
               <span class="profile-card-icon">⚙️</span>
               <span class="profile-card-title" data-i18n="profile_card_title">Configuración del Perfil</span>
+            </div>
+
+            <div class="form-field">
+              <label for="setting-profile-name">
+                <strong data-i18n="field_profile_name_label">Nombre del Perfil</strong>
+              </label>
+              <input
+                type="text"
+                id="setting-profile-name"
+                list="profile-datalist"
+                data-i18n-placeholder="field_profile_placeholder"
+                placeholder="Nombre del perfil (ej: LM Studio, Ollama, OpenRouter...)"
+                autocomplete="off"
+              >
             </div>
 
             <div class="form-field">

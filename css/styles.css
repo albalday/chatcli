@@ -2129,6 +2129,7 @@ input:checked + .slider:before {
 .btn-profile-action {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.35rem;
   padding: 0.65rem 0.85rem;
   border-radius: var(--radius-md);
@@ -2138,6 +2139,10 @@ input:checked + .slider:before {
   white-space: nowrap;
   transition: all 0.15s ease;
   flex-shrink: 0;
+}
+
+.btn-profile-action.btn-icon-only {
+  padding: 0.65rem 0.75rem;
 }
 
 .btn-save-profile {
@@ -2156,7 +2161,6 @@ input:checked + .slider:before {
   background-color: var(--bg-surface);
   color: var(--danger, #ef4444);
   border: 1px solid #fca5a5;
-  padding: 0.65rem 0.75rem;
 }
 
 .btn-delete-profile:hover {
