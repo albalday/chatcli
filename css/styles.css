@@ -4172,77 +4172,6 @@ body.dark .btn-delete-profile:hover {
   margin-left: 2px;
 }
 
-.rag-sidebar-active-status {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.6rem 0.75rem;
-  border-radius: var(--radius-md);
-  margin-bottom: 0.5rem;
-  border: 1px solid var(--border-color);
-  background-color: var(--bg-surface);
-}
-
-.rag-sidebar-active-status.has-active {
-  background-color: rgba(16, 185, 129, 0.08);
-  border-color: #10b981;
-}
-
-.rag-sidebar-active-status.is-disabled {
-  opacity: 0.75;
-  background-color: var(--bg-surface);
-}
-
-.rag-active-status-info {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  min-width: 0;
-}
-
-.rag-status-icon {
-  font-size: 1rem;
-  flex-shrink: 0;
-}
-
-.rag-status-text {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.rag-status-label {
-  font-size: 0.68rem;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.rag-status-branch-name {
-  font-size: 0.8rem;
-  color: var(--text-main);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.btn-rag-deactivate-sm {
-  padding: 0.2rem 0.45rem;
-  font-size: 0.7rem;
-  font-weight: 600;
-  border: 1px solid #ef4444;
-  background-color: transparent;
-  color: #ef4444;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: all 0.15s ease;
-}
-
-.btn-rag-deactivate-sm:hover {
-  background-color: #ef4444;
-  color: #fff;
-}
 
 /* 2. Modal de Gestión de Ramas (Tree RAG Modal) */
 .tree-rag-modal {
@@ -4253,7 +4182,7 @@ body.dark .btn-delete-profile:hover {
 }
 
 .rag-header-icon {
-  font-size: 1.25rem;
+  font-size: 1.1rem;
 }
 
 .rag-tabs-nav {
@@ -4267,34 +4196,34 @@ body.dark .btn-delete-profile:hover {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 1.25rem 2rem;
+  padding: 1rem 1.1rem;
 }
 
 /* Pestaña 1: Selector y Control de Rama Activa */
 .rag-master-toggle-card {
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.6rem;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-color);
   background-color: var(--bg-surface);
-  padding: 1rem 1.15rem;
+  padding: 0.65rem 0.85rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 0.85rem;
 }
 
 .rag-active-branch-list {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  margin-top: 0.6rem;
+  gap: 0.55rem;
+  margin-top: 0.45rem;
 }
 
 .rag-branch-toggle-card {
   display: flex;
   align-items: center;
-  gap: 1.15rem;
-  padding: 0.9rem 1.25rem;
+  gap: 0.85rem;
+  padding: 0.65rem 0.9rem;
   background: var(--bg-surface);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
@@ -4325,26 +4254,26 @@ body.dark .btn-delete-profile:hover {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.45rem;
+  gap: 0.3rem;
 }
 
 /* Fila 1: Nombre + Descripción + Badge ACTIVA */
 .rag-branch-row-top {
   display: flex;
   align-items: baseline;
-  gap: 0.65rem;
+  gap: 0.5rem;
   flex-wrap: wrap;
 }
 
 .rag-branch-name-text {
-  font-size: 0.95rem;
+  font-size: 0.86rem;
   font-weight: 600;
   color: var(--text-main);
   white-space: nowrap;
 }
 
 .rag-branch-inline-desc {
-  font-size: 0.825rem;
+  font-size: 0.73rem;
   font-weight: 400;
   color: var(--text-muted);
   line-height: 1.35;
@@ -4355,23 +4284,23 @@ body.dark .btn-delete-profile:hover {
 .rag-branch-row-bottom {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.55rem;
   flex-wrap: wrap;
 }
 
 .rag-branch-meta-badges {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.35rem;
   flex-shrink: 0;
 }
 
 .rag-meta-badge {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
-  font-size: 0.74rem;
-  padding: 0.18rem 0.5rem;
+  gap: 0.25rem;
+  font-size: 0.7rem;
+  padding: 0.15rem 0.4rem;
   background-color: var(--bg-app);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
@@ -4385,7 +4314,7 @@ body.dark .btn-delete-profile:hover {
 }
 
 .rag-branch-docs-preview {
-  font-size: 0.775rem;
+  font-size: 0.725rem;
   color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
@@ -4394,16 +4323,16 @@ body.dark .btn-delete-profile:hover {
 }
 
 .rag-branch-docs-preview-empty {
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   color: var(--text-muted);
   font-style: italic;
   opacity: 0.75;
 }
 
 .rag-active-pill {
-  font-size: 0.65rem;
+  font-size: 0.62rem;
   font-weight: 700;
-  padding: 0.15rem 0.45rem;
+  padding: 0.12rem 0.4rem;
   border-radius: var(--radius-sm);
   background-color: #10b981;
   color: #fff;
@@ -4437,8 +4366,8 @@ body.dark .btn-delete-profile:hover {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 0.85rem;
-  padding-bottom: 0.85rem;
+  gap: 0.65rem;
+  padding-bottom: 0.65rem;
   border-bottom: 1px solid var(--border-color);
   flex-wrap: wrap;
 }
@@ -4451,7 +4380,7 @@ body.dark .btn-delete-profile:hover {
 .rag-manage-toolbar-actions {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.35rem;
   flex-wrap: wrap;
 }
 
@@ -4464,20 +4393,20 @@ body.dark .btn-delete-profile:hover {
 .rag-manage-workspace {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  margin-top: 1rem;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
 }
 
 /* Dropzone */
 .rag-dropzone {
   border: 2px dashed var(--border-color);
   border-radius: var(--radius-lg);
-  padding: 1.5rem;
+  padding: 1.1rem;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
+  gap: 0.35rem;
   cursor: pointer;
   background-color: var(--bg-app);
   transition: border-color 0.2s, background-color 0.2s;
@@ -4489,32 +4418,33 @@ body.dark .btn-delete-profile:hover {
 }
 
 .rag-dropzone-icon {
-  font-size: 2rem;
+  font-size: 1.6rem;
 }
 
 .rag-dropzone-text {
   text-align: center;
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
+  gap: 0.15rem;
   color: var(--text-main);
+  font-size: 0.82rem;
 }
 
 .rag-dropzone-hint {
-  font-size: 0.8rem;
+  font-size: 0.725rem;
   color: var(--text-muted);
 }
 
 .rag-dropzone-badges {
   display: flex;
-  gap: 0.4rem;
-  margin-top: 0.25rem;
+  gap: 0.3rem;
+  margin-top: 0.2rem;
 }
 
 .filetype-badge {
-  font-size: 0.7rem;
+  font-size: 0.65rem;
   font-weight: 600;
-  padding: 0.15rem 0.45rem;
+  padding: 0.12rem 0.4rem;
   border-radius: var(--radius-sm);
   background-color: var(--bg-surface);
   border: 1px solid var(--border-color);
@@ -4523,13 +4453,13 @@ body.dark .btn-delete-profile:hover {
 
 /* Panel de Progreso de Ingesta */
 .rag-progress-container {
-  padding: 1rem;
+  padding: 0.75rem 0.85rem;
   border-radius: var(--radius-md);
   background-color: var(--bg-app);
   border: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
+  gap: 0.45rem;
 }
 
 .rag-progress-header {
@@ -4541,13 +4471,13 @@ body.dark .btn-delete-profile:hover {
 .rag-progress-title {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  font-size: 0.875rem;
+  gap: 0.35rem;
+  font-size: 0.8rem;
   color: var(--text-main);
 }
 
 .rag-progress-bar-wrapper {
-  height: 6px;
+  height: 5px;
   background-color: var(--border-color);
   border-radius: var(--radius-full);
   overflow: hidden;
@@ -4562,25 +4492,25 @@ body.dark .btn-delete-profile:hover {
 .rag-progress-file-list {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
-  margin-top: 0.3rem;
+  gap: 0.25rem;
+  margin-top: 0.2rem;
 }
 
 .rag-progress-file-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 0.8rem;
-  padding: 0.3rem 0.5rem;
+  font-size: 0.75rem;
+  padding: 0.25rem 0.45rem;
   background-color: var(--bg-surface);
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-color);
 }
 
 .rag-status-badge {
-  font-size: 0.7rem;
+  font-size: 0.65rem;
   font-weight: 600;
-  padding: 0.15rem 0.45rem;
+  padding: 0.12rem 0.4rem;
   border-radius: var(--radius-sm);
 }
 
@@ -4619,14 +4549,14 @@ body.dark .btn-delete-profile:hover {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
-  margin-bottom: 0.6rem;
+  gap: 0.65rem;
+  margin-bottom: 0.45rem;
   flex-wrap: wrap;
 }
 
 .rag-docs-section-header h4 {
   margin: 0;
-  font-size: 0.875rem;
+  font-size: 0.82rem;
   font-weight: 600;
   color: var(--text-main);
 }
@@ -4638,8 +4568,8 @@ body.dark .btn-delete-profile:hover {
 
 .rag-docs-search-input {
   width: 100%;
-  padding: 0.25rem 0.6rem;
-  font-size: 0.78rem;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.73rem;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-color);
   background-color: var(--bg-surface);
@@ -4655,7 +4585,7 @@ body.dark .btn-delete-profile:hover {
 .rag-docs-list {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 0.28rem;
   max-height: 420px;
   overflow-y: auto;
   padding-right: 0.25rem;
@@ -4666,8 +4596,8 @@ body.dark .btn-delete-profile:hover {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.5rem 0.85rem;
+  gap: 0.65rem;
+  padding: 0.4rem 0.65rem;
   background-color: var(--bg-surface);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
@@ -4689,18 +4619,18 @@ body.dark .btn-delete-profile:hover {
 .rag-doc-item-left {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: 0.5rem;
   min-width: 0;
   flex: 1;
 }
 
 .rag-doc-item-icon {
-  font-size: 1.1rem;
+  font-size: 0.95rem;
   flex-shrink: 0;
 }
 
 .rag-doc-item-title {
-  font-size: 0.84rem;
+  font-size: 0.78rem;
   font-weight: 500;
   color: var(--text-main);
   white-space: nowrap;
@@ -4716,14 +4646,14 @@ body.dark .btn-delete-profile:hover {
 .rag-doc-item-right {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.35rem;
   flex-shrink: 0;
 }
 
 .rag-doc-pill {
-  font-size: 0.7rem;
+  font-size: 0.65rem;
   font-weight: 500;
-  padding: 0.12rem 0.45rem;
+  padding: 0.1rem 0.38rem;
   background-color: var(--bg-app);
   border: 1px solid var(--border-color);
   border-radius: 4px;
@@ -4732,22 +4662,22 @@ body.dark .btn-delete-profile:hover {
 
 .rag-empty-state, .rag-empty-workspace, .rag-no-docs-message {
   text-align: center;
-  padding: 2.5rem 1rem;
+  padding: 1.8rem 0.85rem;
   color: var(--text-muted);
-  font-size: 0.85rem;
+  font-size: 0.78rem;
 }
 
 .rag-empty-icon {
-  font-size: 2.5rem;
-  margin-bottom: 0.5rem;
+  font-size: 2rem;
+  margin-bottom: 0.35rem;
 }
 
 .rag-storage-quota-info {
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   color: var(--text-muted);
   display: flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.3rem;
 }
 
 /* 3. Visor de Estructura / Capítulos (rag-structure-modal) */
@@ -4762,8 +4692,8 @@ body.dark .btn-delete-profile:hover {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.45rem 0.75rem;
+  gap: 0.65rem;
+  padding: 0.35rem 0.65rem;
   background-color: var(--bg-surface);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
@@ -4774,8 +4704,8 @@ body.dark .btn-delete-profile:hover {
 .rag-structure-doc-meta {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  font-size: 0.75rem;
+  gap: 0.5rem;
+  font-size: 0.7rem;
   color: var(--text-muted);
   flex-wrap: wrap;
 }
@@ -4783,21 +4713,21 @@ body.dark .btn-delete-profile:hover {
 .rag-doc-meta-item {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.2rem;
 }
 
 .rag-structure-body {
   display: flex;
   flex-direction: column;
-  gap: 0.85rem;
-  padding: 1.25rem 2rem !important;
+  gap: 0.65rem;
+  padding: 1rem 1.1rem !important;
   overflow-y: scroll !important;
   flex: 1 1 auto;
   min-height: 0;
 }
 
 .rag-structure-body::-webkit-scrollbar {
-  width: 8px;
+  width: 6px;
 }
 
 .rag-structure-body::-webkit-scrollbar-track {
@@ -4814,7 +4744,7 @@ body.dark .btn-delete-profile:hover {
 }
 
 .rag-structure-summary-card {
-  padding: 0.8rem 1rem;
+  padding: 0.65rem 0.85rem;
   border-radius: var(--radius-sm);
   background-color: var(--bg-app);
   border: 1px solid var(--border-color);
@@ -4822,39 +4752,39 @@ body.dark .btn-delete-profile:hover {
 }
 
 .rag-structure-summary-card h4, .rag-structure-chapters-section h4 {
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   font-weight: 600;
   color: var(--text-main);
-  margin: 0 0 0.35rem 0;
+  margin: 0 0 0.25rem 0;
 }
 
 .rag-structure-summary-content {
-  font-size: 0.78rem;
-  line-height: 1.45;
+  font-size: 0.73rem;
+  line-height: 1.4;
   color: var(--text-main);
 }
 
 .rag-structure-chapters-section {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.4rem;
   flex: 1;
 }
 
 .rag-structure-chapters-list {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.4rem;
 }
 
 .rag-chapter-card {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
-  padding: 0.6rem 0.85rem;
+  padding: 0.5rem 0.7rem;
   background-color: var(--bg-surface);
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 0.28rem;
   transition: border-color 0.15s;
 }
 
@@ -4866,21 +4796,21 @@ body.dark .btn-delete-profile:hover {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.5rem;
+  gap: 0.45rem;
 }
 
 .rag-chapter-title-group {
   display: flex;
   align-items: center;
-  gap: 0.45rem;
+  gap: 0.35rem;
   min-width: 0;
   flex: 1;
 }
 
 .rag-chapter-badge {
-  font-size: 0.68rem;
+  font-size: 0.62rem;
   font-weight: 700;
-  padding: 0.1rem 0.35rem;
+  padding: 0.08rem 0.3rem;
   border-radius: var(--radius-sm);
   background-color: rgba(59, 130, 246, 0.12);
   color: var(--primary-color);
@@ -4888,7 +4818,7 @@ body.dark .btn-delete-profile:hover {
 }
 
 .rag-chapter-title {
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--text-main);
   white-space: nowrap;
@@ -4897,8 +4827,8 @@ body.dark .btn-delete-profile:hover {
 }
 
 .btn-preview-chapter-content {
-  font-size: 0.72rem;
-  padding: 0.18rem 0.45rem;
+  font-size: 0.68rem;
+  padding: 0.15rem 0.4rem;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-color);
   background-color: var(--bg-app);
@@ -4912,49 +4842,39 @@ body.dark .btn-delete-profile:hover {
 }
 
 .rag-chapter-summary {
-  font-size: 0.76rem;
+  font-size: 0.72rem;
   color: var(--text-muted);
-  line-height: 1.4;
+  line-height: 1.35;
 }
 
 .rag-chapter-content-preview {
-  margin-top: 0.35rem;
-  padding: 0.6rem 0.75rem;
+  margin-top: 0.25rem;
+  padding: 0.5rem 0.65rem;
   background-color: var(--bg-app);
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-color);
 }
 
 .rag-content-preview-header {
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 600;
   color: var(--text-muted);
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.2rem;
 }
 
 .rag-content-pre {
   margin: 0;
   max-height: 280px;
   overflow-y: auto;
-  font-size: 0.74rem;
-  line-height: 1.4;
+  font-size: 0.7rem;
+  line-height: 1.35;
   white-space: pre-wrap;
   word-break: break-word;
   color: var(--text-main);
   font-family: var(--font-mono, monospace);
 }
 
-/* Responsividad para pantallas móviles */
 @media (max-width: 768px) {
-  .rag-modal-body {
-    flex-direction: column;
-  }
-  .rag-sidebar {
-    width: 100%;
-    max-height: 200px;
-    border-right: none;
-    border-bottom: 1px solid var(--border-color);
-  }
   .tree-rag-modal {
     width: 98vw;
     height: 94vh;
