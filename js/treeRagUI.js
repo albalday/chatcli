@@ -721,8 +721,6 @@
           apiType: appCfg.apiType || 'openai',
           apiKey: appCfg.apiKey || '',
           model: model,
-          enableTools: false,
-          enableContextCache: false,
           ...params
         }),
         config: appCfg
