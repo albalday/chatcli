@@ -327,11 +327,6 @@
 
           <!-- Contenedor Enmarcado con los Valores del Perfil Activo -->
           <div class="profile-values-card">
-            <div class="profile-card-header">
-              <span class="profile-card-icon">⚙️</span>
-              <span class="profile-card-title" data-i18n="profile_card_title">Configuración del Perfil</span>
-            </div>
-
             <div class="form-field">
               <label for="setting-profile-name">
                 <strong data-i18n="field_profile_name_label">Nombre del Perfil</strong>
@@ -346,12 +341,11 @@
               >
             </div>
 
-            <div class="form-field">
-              <label for="setting-api-type">
+            <div class="form-field form-field-inline">
+              <label for="setting-api-type" class="label-inline">
                 <strong data-i18n="field_api_type">Tipo de Interfaz / Protocolo</strong>
-                <span class="label-hint" data-i18n="field_api_type_hint">Determina el formato del JSON de petición y las opciones de razonamiento.</span>
               </label>
-              <select id="setting-api-type" class="combobox-select-helper" style="width: 100%;">
+              <select id="setting-api-type" class="combobox-select-helper select-inline">
                 <option value="openai" selected>🤖 OpenAI / LM Studio / LocalAI / vLLM (/v1)</option>
                 <option value="ollama">🦙 Ollama (/api/tags)</option>
                 <option value="openrouter">🔀 OpenRouter (/api/v1)</option>
