@@ -152,7 +152,7 @@
       const isSearch = norm.includes('search') || norm.includes('buscar');
       const query = toolArgs.query || toolArgs.q || toolArgs.search || '';
       cardDiv.innerHTML = `
-        <div class="tool-execution-card rag-execution-card">
+        <div class="tool-execution-card rag-execution-card collapsed">
           <div class="tool-card-header">
             <div class="tool-card-title">
               <span>📖</span>
@@ -160,7 +160,7 @@
             </div>
             <div class="tool-card-header-actions">
               <span class="tool-card-badge status-loading">⏳ ${isSearch ? 'Buscando en base de conocimiento...' : 'Consultando documentos indexados...'}</span>
-              <button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Minimizar'}"><span>▾</span></button>
+              <button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Expandir'}"><span>▸</span></button>
             </div>
           </div>
           <div class="tool-card-collapsible-body">
@@ -177,7 +177,7 @@
       const docId = toolArgs.docId || toolArgs.doc_id || '';
       const chapterId = toolArgs.chapterId || toolArgs.chapter_id || '';
       cardDiv.innerHTML = `
-        <div class="tool-execution-card rag-execution-card">
+        <div class="tool-execution-card rag-execution-card collapsed">
           <div class="tool-card-header">
             <div class="tool-card-title">
               <span>📖</span>
@@ -185,7 +185,7 @@
             </div>
             <div class="tool-card-header-actions">
               <span class="tool-card-badge status-loading">⏳ Consultando doc "${Markdown.escapeHtml(docId)}", Cap ${Markdown.escapeHtml(String(chapterId))}...</span>
-              <button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Minimizar'}"><span>▾</span></button>
+              <button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Expandir'}"><span>▸</span></button>
             </div>
           </div>
           <div class="tool-card-collapsible-body">
@@ -375,7 +375,49 @@
       return cardDiv;
     }
 
-    // 5. Base de Conocimiento RAG (read_chapter_content)
+    // 5a. Base de Conocimiento RAG (list_documents / search_knowledge_base)
+    if (norm === 'listdocuments' || norm === 'listknowledgebase' || norm === 'getdocuments' || norm === 'listdocs' || norm === 'listardocumentos' ||
+        norm === 'searchknowledgebase' || norm === 'searchkb' || norm === 'searchdocuments' || norm === 'searchknowledge' || norm === 'buscarendocumentos') {
+      const isSearch = norm.includes('search') || norm.includes('buscar');
+      const query = toolArgs.query || toolArgs.q || toolArgs.search || '';
+      let textContent = '';
+      let isSuccess = true;
+      let count = 0;
+
+      if (toolMsg && toolMsg.content) {
+        try {
+          const parsed = JSON.parse(toolMsg.content);
+          textContent = parsed.text || toolMsg.content;
+          count = parsed.count ?? parsed.matchesCount ?? (parsed.documents ? parsed.documents.length : 0);
+          isSuccess = parsed.success !== false && !parsed.error;
+        } catch (e) {
+          textContent = toolMsg.content;
+        }
+      }
+
+      cardDiv.innerHTML = `
+        <div class="tool-execution-card rag-execution-card collapsed">
+          <div class="tool-card-header">
+            <div class="tool-card-title">
+              <span>📖</span>
+              <span>Base de Conocimiento (${isSearch ? `Búsqueda: "${Markdown.escapeHtml(query)}"` : 'Índice de Documentos'})</span>
+            </div>
+            <div class="tool-card-header-actions">
+              <span class="tool-card-badge ${isSuccess ? 'status-success' : 'status-error'}">${isSuccess ? `✅ ${count} doc${count === 1 ? '' : 's'} indexado${count === 1 ? '' : 's'}` : '❌ Error al consultar'}</span>
+              <button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Expandir'}"><span>▸</span></button>
+            </div>
+          </div>
+          <div class="tool-card-collapsible-body">
+            <div class="tool-card-result">
+              <pre class="tool-result-pre"><code>${Markdown.escapeHtml(textContent.slice(0, 3000))}${textContent.length > 3000 ? '\n... (texto completo truncado en tarjeta)' : ''}</code></pre>
+            </div>
+          </div>
+        </div>
+      `;
+      return cardDiv;
+    }
+
+    // 5b. Base de Conocimiento RAG (read_chapter_content)
     if (norm === 'readchaptercontent' || norm === 'readchapter') {
       const docId = toolArgs.docId || toolArgs.doc_id || '';
       const chapterId = toolArgs.chapterId || toolArgs.chapter_id || '';
