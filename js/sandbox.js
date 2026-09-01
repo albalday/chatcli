@@ -328,6 +328,16 @@
    * @returns {Promise<{ success: boolean, result: string, logs: string[], executionTimeMs: number, error?: string }>}
    */
   async function execute(code, timeoutMs = DEFAULT_TIMEOUT_MS) {
+    let effectiveTimeout = DEFAULT_TIMEOUT_MS;
+    if (typeof timeoutMs === 'number' && !isNaN(timeoutMs) && timeoutMs > 0) {
+      effectiveTimeout = timeoutMs;
+    } else if (typeof timeoutMs === 'object' && timeoutMs !== null) {
+      const parsed = timeoutMs.timeoutMs || timeoutMs.timeout;
+      if (typeof parsed === 'number' && !isNaN(parsed) && parsed > 0) {
+        effectiveTimeout = parsed;
+      }
+    }
+
     if (!code || typeof code !== 'string') {
       return {
         success: false,
@@ -344,9 +354,9 @@
                               typeof URL.createObjectURL === 'function';
 
     if (isWorkerSupported) {
-      return executeWithWorker(code, timeoutMs);
+      return executeWithWorker(code, effectiveTimeout);
     } else {
-      return executeWithFallback(code, timeoutMs);
+      return executeWithFallback(code, effectiveTimeout);
     }
   }
 

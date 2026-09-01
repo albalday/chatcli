@@ -146,7 +146,33 @@
       return cardDiv;
     }
 
-    // 4. Base de Conocimiento RAG (read_chapter_content)
+    // 4. Base de Conocimiento RAG (list_documents / search_knowledge_base / read_chapter_content)
+    if (norm === 'listdocuments' || norm === 'listknowledgebase' || norm === 'getdocuments' || norm === 'listdocs' || norm === 'listardocumentos' ||
+        norm === 'searchknowledgebase' || norm === 'searchkb' || norm === 'searchdocuments' || norm === 'searchknowledge' || norm === 'buscarendocumentos') {
+      const isSearch = norm.includes('search') || norm.includes('buscar');
+      const query = toolArgs.query || toolArgs.q || toolArgs.search || '';
+      cardDiv.innerHTML = `
+        <div class="tool-execution-card rag-execution-card">
+          <div class="tool-card-header">
+            <div class="tool-card-title">
+              <span>📖</span>
+              <span>Base de Conocimiento (${isSearch ? `Búsqueda: "${Markdown.escapeHtml(query)}"` : 'Índice de Documentos'})</span>
+            </div>
+            <div class="tool-card-header-actions">
+              <span class="tool-card-badge status-loading">⏳ ${isSearch ? 'Buscando en base de conocimiento...' : 'Consultando documentos indexados...'}</span>
+              <button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Minimizar'}"><span>▾</span></button>
+            </div>
+          </div>
+          <div class="tool-card-collapsible-body">
+            <div class="tool-card-result">
+              <div class="tool-loading-placeholder">⏳ Recuperando índice y resúmenes desde IndexedDB...</div>
+            </div>
+          </div>
+        </div>
+      `;
+      return cardDiv;
+    }
+
     if (norm === 'readchaptercontent' || norm === 'readchapter') {
       const docId = toolArgs.docId || toolArgs.doc_id || '';
       const chapterId = toolArgs.chapterId || toolArgs.chapter_id || '';
@@ -420,9 +446,174 @@
     return cardDiv;
   }
 
+  /**
+   * Actualiza una tarjeta de herramienta en vivo tras completar su ejecución.
+   */
+  function updateLiveToolCard(cardDiv, rawName, toolArgs = {}, result = {}, elapsedMs = 0) {
+    if (!cardDiv || typeof document === 'undefined') return;
+    const Markdown = getMarkdown();
+    const norm = normalizeName(rawName);
+
+    // 1. JavaScript Execution
+    if (norm === 'executejavascript') {
+      const badgeEl = cardDiv.querySelector('.tool-card-badge');
+      const isSuccess = result?.success !== false && !result?.error;
+      if (badgeEl) {
+        badgeEl.className = `tool-card-badge ${isSuccess ? 'status-success' : 'status-error'}`;
+        badgeEl.textContent = isSuccess ? `✅ ${t('tool_status_success') || 'Completado'} (${elapsedMs || 0}ms)` : `❌ Error (${elapsedMs || 0}ms)`;
+      }
+      const resContainer = cardDiv.querySelector('.tool-card-result');
+      if (resContainer) {
+        const outText = isSuccess
+          ? (result.result || (result.logs && result.logs.length > 0 ? result.logs.join('\n') : 'undefined'))
+          : `Error: ${result.error || 'Error de ejecución'}`;
+        resContainer.innerHTML = `
+          <div class="tool-result-label">${t('tool_sandbox_output') || 'Salida del Sandbox:'}</div>
+          <pre class="tool-result-pre"><code>${Markdown.escapeHtml(outText)}</code></pre>
+        `;
+      }
+      return;
+    }
+
+    // 2. Web Page / PDF Fetch
+    if (norm === 'fetchwebpage' || norm === 'downloadpdf') {
+      const isPdfCall = norm === 'downloadpdf';
+      const isSuccess = result?.success !== false && !result?.error;
+      const httpStatus = result?.status || (isSuccess ? 200 : 500);
+      const contentStr = result?.content || result?.error || '';
+
+      const badgeEl = cardDiv.querySelector('.web-card-badge');
+      if (badgeEl) {
+        badgeEl.className = `web-card-badge ${isSuccess ? 'status-success' : 'status-error'}`;
+        badgeEl.textContent = isPdfCall
+          ? (isSuccess ? `✅ PDF OK (${elapsedMs || 0}ms)` : `❌ Error PDF (${elapsedMs || 0}ms)`)
+          : (isSuccess ? `✅ HTTP ${httpStatus} OK (${elapsedMs || 0}ms)` : `❌ HTTP ${httpStatus} Error (${elapsedMs || 0}ms)`);
+      }
+
+      const labelEl = cardDiv.querySelector('.section-response-label');
+      if (labelEl) {
+        labelEl.textContent = t('tool_web_content_received', { size: `${contentStr.length} chars` }) || `Contenido recibido (${contentStr.length} caracteres):`;
+      }
+
+      const bodyEl = cardDiv.querySelector('.web-response-body');
+      if (bodyEl) {
+        bodyEl.className = 'web-response-body';
+        bodyEl.innerHTML = `<code>${Markdown.escapeHtml(contentStr.slice(0, 1500))}${contentStr.length > 1500 ? '...' : ''}</code>`;
+      }
+      return;
+    }
+
+    // 3. Web Search
+    if (norm === 'searchweb') {
+      const isSuccess = result?.success !== false && !result?.error;
+      const count = result?.count || (Array.isArray(result?.results) ? result.results.length : 0);
+
+      const badgeEl = cardDiv.querySelector('.search-card-badge');
+      if (badgeEl) {
+        badgeEl.className = `search-card-badge ${isSuccess ? 'status-success' : 'status-error'}`;
+        badgeEl.textContent = isSuccess ? `${count} fuentes (${elapsedMs || 0}ms)` : `❌ Error búsqueda (${elapsedMs || 0}ms)`;
+      }
+
+      const sourcesLabel = cardDiv.querySelector('.search-sources-label');
+      if (sourcesLabel) {
+        sourcesLabel.textContent = t('tool_search_sources_label') || 'Fuentes y resultados encontrados:';
+      }
+
+      const resultsList = cardDiv.querySelector('.search-results-list');
+      if (resultsList) {
+        if (result?.results && result.results.length > 0) {
+          resultsList.innerHTML = result.results.map(r => `
+            <div class="search-result-item">
+              <div><a href="${Markdown.sanitizeUrl(r.url)}" target="_blank" rel="noopener noreferrer">🔗 ${Markdown.escapeHtml(r.title)}</a> <small style="opacity:0.75;">(${Markdown.escapeHtml(r.source || 'web')})</small></div>
+              ${r.snippet ? `<div class="search-result-snippet">${Markdown.escapeHtml(r.snippet)}</div>` : ''}
+            </div>
+          `).join('');
+        } else if (result?.markdown) {
+          resultsList.innerHTML = `<div class="search-result-snippet">${Markdown.renderMarkdown(result.markdown)}</div>`;
+        } else {
+          resultsList.innerHTML = `<div class="search-result-snippet"><em>${t('tool_search_empty') || 'No se encontraron resultados relevantes.'}</em></div>`;
+        }
+      }
+      return;
+    }
+
+    // 4a. Base de Conocimiento RAG (list_documents / search_knowledge_base)
+    if (norm === 'listdocuments' || norm === 'listknowledgebase' || norm === 'getdocuments' || norm === 'listdocs' || norm === 'listardocumentos' ||
+        norm === 'searchknowledgebase' || norm === 'searchkb' || norm === 'searchdocuments' || norm === 'searchknowledge' || norm === 'buscarendocumentos') {
+      const isSuccess = result?.success !== false && !result?.error;
+      const count = result?.count ?? result?.matchesCount ?? (result?.documents ? result.documents.length : 0);
+      const text = result?.text || (typeof result === 'object' ? JSON.stringify(result, null, 2) : String(result || ''));
+
+      const badgeEl = cardDiv.querySelector('.tool-card-badge');
+      if (badgeEl) {
+        badgeEl.className = `tool-card-badge ${isSuccess ? 'status-success' : 'status-error'}`;
+        badgeEl.textContent = isSuccess
+          ? `✅ ${count} doc${count === 1 ? '' : 's'} indexado${count === 1 ? '' : 's'} (${elapsedMs || 0}ms)`
+          : `❌ ${result?.error || 'Error al consultar'}`;
+      }
+
+      const resContainer = cardDiv.querySelector('.tool-card-result');
+      if (resContainer) {
+        resContainer.innerHTML = `
+          <pre class="tool-result-pre"><code>${Markdown.escapeHtml(text.slice(0, 3000))}${text.length > 3000 ? '\n... (texto completo truncado en tarjeta)' : ''}</code></pre>
+        `;
+      }
+      return;
+    }
+
+    // 4b. Base de Conocimiento RAG (read_chapter_content)
+    if (norm === 'readchaptercontent' || norm === 'readchapter') {
+      const isSuccess = result?.success !== false && !result?.error;
+      const charCount = result?.charCount || (result?.content ? result.content.length : 0);
+      const contentStr = result?.content || result?.error || '';
+
+      const badgeEl = cardDiv.querySelector('.tool-card-badge');
+      if (badgeEl) {
+        badgeEl.className = `tool-card-badge ${isSuccess ? 'status-success' : 'status-error'}`;
+        badgeEl.textContent = isSuccess
+          ? `✅ Capítulo recuperado (${charCount} caracteres)`
+          : `❌ ${result?.error || 'No encontrado'}`;
+      }
+
+      const resContainer = cardDiv.querySelector('.tool-card-result');
+      if (resContainer) {
+        resContainer.innerHTML = `
+          <pre class="tool-result-pre"><code>${Markdown.escapeHtml(contentStr.slice(0, 2000))}${contentStr.length > 2000 ? '\n... (texto completo truncado en tarjeta)' : ''}</code></pre>
+        `;
+      }
+      return;
+    }
+
+    // 5. Gráficos interactivos SVG (render_chart)
+    if (norm === 'renderchart' || norm === 'generatechart') {
+      const Charts = getCharts();
+      if (Charts && Charts.renderChartCard) {
+        cardDiv.innerHTML = Charts.renderChartCard(toolArgs);
+      }
+      return;
+    }
+
+    // 6. Generic / MCP
+    const isSuccess = result?.success !== false && !result?.error;
+    const badgeEl = cardDiv.querySelector('.tool-card-badge');
+    if (badgeEl) {
+      badgeEl.className = `tool-card-badge ${isSuccess ? 'status-success' : 'status-error'}`;
+      badgeEl.textContent = isSuccess ? `✅ ${t('tool_status_success') || 'Completado'} (${elapsedMs || 0}ms)` : `❌ Error (${elapsedMs || 0}ms)`;
+    }
+    const resContainer = cardDiv.querySelector('.tool-card-result');
+    if (resContainer) {
+      const outText = typeof result === 'object' ? JSON.stringify(result, null, 2) : String(result || '');
+      resContainer.innerHTML = `
+        <div class="tool-result-label">${t('tool_generic_result') || 'Resultado de la herramienta:'}</div>
+        <pre class="tool-result-pre"><code>${Markdown.escapeHtml(outText)}</code></pre>
+      `;
+    }
+  }
+
   return {
     normalizeName,
     createLiveToolCard,
+    updateLiveToolCard,
     renderHistoricalToolCard
   };
 }));

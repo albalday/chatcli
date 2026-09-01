@@ -432,6 +432,8 @@
       enableAgentWeb = false,
       enableAgentSearch = false,
       enableAgentChart = false,
+      enableAgentRag = false,
+      activeRagBranchId = '',
       enableContextCache = true,
       cacheInvalidated = false,
       cacheRevision = null,
@@ -453,6 +455,7 @@
     // Inyectar herramientas agénticas activadas si están disponibles
     let toolsList = [];
     const AgentCore = typeof window !== 'undefined' ? window.ChatAgentCore : (typeof require !== 'undefined' ? (() => { try { return require('./agent-core.js'); } catch(e){ return null; } })() : null);
+    const isRagActive = Boolean(enableAgentRag || activeRagBranchId);
 
     if (enableTools || toolChoice === 'none') {
       if (AgentCore && AgentCore.registry) {
@@ -460,7 +463,9 @@
           enableAgentJs,
           enableAgentWeb,
           enableAgentSearch,
-          enableAgentChart
+          enableAgentChart,
+          enableAgentRag: isRagActive,
+          activeRagBranchId: isRagActive ? activeRagBranchId : ''
         });
       } else {
         const jsTool = Sandbox.JAVASCRIPT_TOOL_DEFINITION || (typeof window !== 'undefined' && window.ChatSandbox && window.ChatSandbox.JAVASCRIPT_TOOL_DEFINITION);
@@ -474,6 +479,12 @@
         if (enableAgentWeb && pdfTool) toolsList.push(pdfTool);
         if (enableAgentSearch && searchTool) toolsList.push(searchTool);
         if (enableAgentChart && chartTool) toolsList.push(chartTool);
+        if (isRagActive) {
+          const ragService = typeof window !== 'undefined' ? window.ChatTreeRagService : (typeof require !== 'undefined' ? (() => { try { return require('./chatService.js'); } catch(e){ return null; } })() : null);
+          if (ragService && ragService.READ_CHAPTER_TOOL_DEFINITION) {
+            toolsList.push(ragService.READ_CHAPTER_TOOL_DEFINITION);
+          }
+        }
       }
     }
 

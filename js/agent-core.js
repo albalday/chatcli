@@ -76,6 +76,16 @@
     return null;
   }
 
+  function getTreeRagService() {
+    if (typeof window !== 'undefined' && (window.ChatTreeRagService || window.ChatService)) {
+      return window.ChatTreeRagService || window.ChatService;
+    }
+    if (typeof require !== 'undefined') {
+      try { return require('./chatService.js'); } catch (e) {}
+    }
+    return null;
+  }
+
   /**
    * Representa una herramienta individual ejecutable (Tool).
    */
@@ -176,7 +186,8 @@
           if (!Sandbox || !Sandbox.execute) {
             return { success: false, error: 'Módulo Sandbox no disponible.' };
           }
-          return Sandbox.execute(code, context.options || {});
+          const timeoutMs = typeof context?.timeoutMs === 'number' ? context.timeoutMs : (typeof context?.options?.timeoutMs === 'number' ? context.options.timeoutMs : undefined);
+          return Sandbox.execute(code, timeoutMs);
         },
         formatter: (args, result) => {
           const code = args.code || '';
@@ -304,12 +315,12 @@
         metadata: { icon: '📊', label: 'render_chart' },
         handler: async (args, context) => {
           const Charts = getCharts();
-          if (!Charts || !Charts.renderChart) {
+          if (!Charts || (!Charts.renderChartCard && !Charts.renderBarChart)) {
             return { success: false, error: 'Módulo Charts no disponible.' };
           }
-          const svgHtml = Charts.renderChart(args);
+          const svgHtml = Charts.renderChartCard ? Charts.renderChartCard(args) : (Charts.renderBarChart ? Charts.renderBarChart(args.labels, args.datasets) : '');
           return {
-            success: !!svgHtml,
+            success: true,
             svg: svgHtml,
             chartData: args,
             title: args.title || 'Gráfico'
@@ -350,7 +361,62 @@
         }
       }));
 
-      // 7. Herramienta read_chapter_content (RAG Jerárquico)
+      // 7. Herramienta list_documents (RAG Jerárquico / Base de Conocimiento)
+      tools.push(new Tool({
+        name: 'list_documents',
+        description: 'Lista los documentos, resúmenes globales y estructura de capítulos indexados en la base de conocimiento local (RAG). Úsala para descubrir qué manuales o archivos existen antes de leer un capítulo.',
+        parameters: {
+          type: 'object',
+          properties: {},
+          required: []
+        },
+        aliases: ['listdocuments', 'list_knowledge_base', 'list_docs', 'get_documents', 'listar_documentos'],
+        category: 'rag',
+        metadata: { icon: '📖', label: 'list_documents' },
+        handler: async (args, context) => {
+          const TreeRagService = getTreeRagService();
+          if (!TreeRagService || !TreeRagService.resolveListDocumentsToolCall) {
+            return { success: false, error: 'Servicio de RAG no disponible.' };
+          }
+          const branchId = context?.activeRagBranchId || context?.branchId || (typeof window !== 'undefined' && window.ChatStorage?.loadConfig?.()?.activeRagBranchId) || '';
+          return TreeRagService.resolveListDocumentsToolCall(branchId);
+        },
+        formatter: (args, result) => {
+          return `> 📖 **list_documents** (${result.count || 0} documentos disponibles)\n> \`\`\`\n> ${String(result.text || '').split('\n').join('\n> ')}\n> \`\`\``;
+        }
+      }));
+
+      // 8. Herramienta search_knowledge_base (RAG Jerárquico / Búsqueda)
+      tools.push(new Tool({
+        name: 'search_knowledge_base',
+        description: 'Busca temas, palabras clave o preguntas dentro de la base de conocimiento local indexada en la rama activa. Devuelve los resúmenes de documentos y capítulos coincidentes.',
+        parameters: {
+          type: 'object',
+          properties: {
+            query: {
+              type: 'string',
+              description: 'Término, tema o pregunta clave a buscar en la base de conocimiento.'
+            }
+          },
+          required: ['query']
+        },
+        aliases: ['search_kb', 'searchknowledgebase', 'search_documents', 'search_knowledge', 'buscar_en_documentos'],
+        category: 'rag',
+        metadata: { icon: '🔍', label: 'search_knowledge_base' },
+        handler: async (args, context) => {
+          const TreeRagService = getTreeRagService();
+          if (!TreeRagService || !TreeRagService.resolveSearchKnowledgeBaseToolCall) {
+            return { success: false, error: 'Servicio de RAG no disponible.' };
+          }
+          const branchId = context?.activeRagBranchId || context?.branchId || (typeof window !== 'undefined' && window.ChatStorage?.loadConfig?.()?.activeRagBranchId) || '';
+          return TreeRagService.resolveSearchKnowledgeBaseToolCall(branchId, args);
+        },
+        formatter: (args, result) => {
+          return `> 🔍 **search_knowledge_base** ("${args.query || ''}") [${result.matchesCount || 0} coincidencias]\n> \`\`\`\n> ${String(result.text || '').split('\n').join('\n> ')}\n> \`\`\``;
+        }
+      }));
+
+      // 9. Herramienta read_chapter_content (RAG Jerárquico / Contenido Completo)
       tools.push(new Tool({
         name: 'read_chapter_content',
         description: 'Recupera el contenido completo y detallado de un capítulo de un documento indexado en la rama activa cuando el resumen no es suficiente.',
@@ -372,6 +438,10 @@
         category: 'rag',
         metadata: { icon: '📖', label: 'read_chapter_content' },
         handler: async (args, context) => {
+          const TreeRagService = getTreeRagService();
+          if (TreeRagService && TreeRagService.resolveChapterToolCall) {
+            return TreeRagService.resolveChapterToolCall(args);
+          }
           const RagStorage = getRagStorage();
           if (!RagStorage || !RagStorage.getChapterContent) {
             return { success: false, error: 'Módulo de almacenamiento RAG no disponible.' };
@@ -494,6 +564,7 @@
         if ((name === 'fetch_web_page' || name === 'download_pdf') && filterOptions.enableAgentWeb === false) continue;
         if (name === 'search_web' && filterOptions.enableAgentSearch === false) continue;
         if (name === 'render_chart' && filterOptions.enableAgentChart === false) continue;
+        if ((name === 'list_documents' || name === 'search_knowledge_base' || name === 'read_chapter_content' || tool.category === 'rag') && (filterOptions.enableAgentRag === false || (!filterOptions.enableAgentRag && !filterOptions.activeRagBranchId && filterOptions.enableAgentJs !== undefined))) continue;
 
         defs.push(tool.getDefinition());
       }
@@ -529,12 +600,12 @@
       } catch (e) {
         // Fallback tolerante para formato clave: valor o texto plano
         const urlMatch = str.match(/(?:url|link|href)\s*[:=]\s*["']?([^"'\s,}]+)/i);
-        const queryMatch = str.match(/(?:query|q|search)\s*[:=]\s*["']?([^"'\s,}]+)/i);
-        const codeMatch = str.match(/(?:code|js|javascript)\s*[:=]\s*["']?([^"'\s,}]+)/i);
+        const queryMatch = str.match(/(?:query|q|search)\s*[:=]\s*["']?([^"'\r\n,}]+)/i);
+        const codeMatch = str.match(/(?:code|js|javascript)\s*[:=]\s*["']?([^"'\r\n]+)/i);
 
         if (urlMatch) return { url: urlMatch[1] };
-        if (queryMatch) return { query: queryMatch[1] };
-        if (codeMatch) return { code: codeMatch[1] };
+        if (queryMatch) return { query: queryMatch[1].trim() };
+        if (codeMatch) return { code: codeMatch[1].trim().replace(/["']$/, '') };
 
         return { input: str };
       }
@@ -592,6 +663,127 @@
           result: null
         };
       }
+    }
+
+    /**
+     * Despacha una llamada a herramienta gestionando el ciclo completo:
+     * - Parseo seguro de argumentos
+     * - Creación inicial e inserción de la tarjeta DOM en vivo
+     * - Logging previo a consola de depuración
+     * - Ejecución asíncrona a través de executeToolCall
+     * - Actualización reactiva de la tarjeta DOM con los resultados
+     * - Formateo de la respuesta textual para el historial del chat y markdown
+     */
+    async dispatchToolCall(toolCall, options = {}) {
+      const {
+        container,
+        onLog,
+        attachListeners,
+        scrollToBottom,
+        language = 'es'
+      } = options;
+
+      const rawFuncName = toolCall?.function?.name || '';
+      const parsedArgs = this.parseArguments(toolCall?.function?.arguments);
+      const ToolCards = (typeof window !== 'undefined' && window.ChatToolCards) ? window.ChatToolCards : null;
+      const norm = (rawFuncName || '').toLowerCase().replace(/_/g, '');
+
+      // 1. Crear e insertar la tarjeta DOM en vivo con estado de carga
+      let cardEl = null;
+      if (ToolCards && ToolCards.createLiveToolCard && container && typeof document !== 'undefined') {
+        cardEl = ToolCards.createLiveToolCard(rawFuncName, parsedArgs);
+        if (cardEl) {
+          container.appendChild(cardEl);
+          if (typeof attachListeners === 'function') attachListeners(cardEl);
+          if (typeof scrollToBottom === 'function') scrollToBottom();
+        }
+      }
+
+      // 2. Logging previo
+      if (typeof onLog === 'function') {
+        onLog('tool', `${rawFuncName}:\n${JSON.stringify(parsedArgs, null, 2)}`);
+        onLog('raw', `>>> TOOL CALL ${rawFuncName}:\n${JSON.stringify(parsedArgs, null, 2)}`);
+      }
+
+      // 3. Ejecutar la herramienta a través de executeToolCall
+      const execRes = await this.executeToolCall(toolCall, { lang: language, ...options });
+
+      // 4. Actualizar la tarjeta DOM con el resultado
+      if (ToolCards && ToolCards.updateLiveToolCard && cardEl) {
+        ToolCards.updateLiveToolCard(cardEl, rawFuncName, parsedArgs, execRes.result || execRes, execRes.executionTimeMs);
+        if (typeof attachListeners === 'function') attachListeners(cardEl);
+        if (typeof scrollToBottom === 'function') scrollToBottom();
+      }
+
+      // 5. Formatear la salida para el mensaje 'tool' de chatHistory
+      let resultText = '';
+      if (norm === 'executejavascript') {
+        const res = execRes.result;
+        resultText = res?.success
+          ? (res.result || (res.logs && res.logs.length > 0 ? res.logs.join('\n') : 'undefined'))
+          : `Error: ${res?.error || execRes.error || 'Error de ejecución'}`;
+      } else if (norm === 'searchweb') {
+        resultText = execRes.result?.markdown || JSON.stringify(execRes.result || {});
+      } else if (norm === 'fetchwebpage' || norm === 'downloadpdf') {
+        resultText = JSON.stringify(execRes.result || {});
+      } else if (norm === 'renderchart' || norm === 'generatechart') {
+        resultText = JSON.stringify({
+          success: execRes.success !== false,
+          type: parsedArgs.type || 'bar',
+          title: parsedArgs.title || 'Gráfico'
+        });
+      } else if (norm === 'listdocuments' || norm === 'listknowledgebase' || norm === 'getdocuments' || norm === 'listdocs' || norm === 'listardocumentos') {
+        resultText = execRes.result?.text || JSON.stringify(execRes.result || {});
+      } else if (norm === 'searchknowledgebase' || norm === 'searchkb' || norm === 'searchdocuments' || norm === 'searchknowledge' || norm === 'buscarendocumentos') {
+        resultText = execRes.result?.text || JSON.stringify(execRes.result || {});
+      } else if (norm === 'readchaptercontent' || norm === 'readchapter') {
+        resultText = execRes.result?.content || JSON.stringify(execRes.result || {});
+      } else {
+        resultText = typeof execRes.result === 'object' ? JSON.stringify(execRes.result) : String(execRes.result ?? execRes.error ?? '');
+      }
+
+      // 6. Logging posterior
+      if (typeof onLog === 'function') {
+        onLog('tool', `${rawFuncName} output (${execRes.executionTimeMs || 0}ms):\n${String(resultText).substring(0, 300)}`);
+        onLog('raw', `<<< TOOL RESULT ${rawFuncName} (${execRes.executionTimeMs || 0}ms):\n${resultText}`);
+      }
+
+      // 7. Formatear bloque markdown acumulado para el portapapeles/exportación
+      let toolMd = '';
+      if (norm === 'executejavascript') {
+        const code = parsedArgs.code || parsedArgs.javascript || parsedArgs.js || parsedArgs.script || parsedArgs.input || '';
+        toolMd = `> ⚡ **execute_javascript**\n> \`\`\`javascript\n> ${code.split('\n').join('\n> ')}\n> \`\`\`\n> \`\`\`\n> ${String(resultText).split('\n').join('\n> ')}\n> \`\`\``;
+      } else if (norm === 'searchweb') {
+        const count = execRes.result?.count || 0;
+        toolMd = `> 🔍 **search_web** (${count} fuentes)\n> Query: "${parsedArgs.query || ''}"\n> \`\`\`markdown\n> ${(resultText || '').split('\n').join('\n> ')}\n> \`\`\``;
+      } else if (norm === 'fetchwebpage' || norm === 'downloadpdf') {
+        const isPdf = norm === 'downloadpdf';
+        toolMd = `> ${isPdf ? '📄' : '🌐'} **${rawFuncName}**\n> URL: "${parsedArgs.url || ''}"\n\n`;
+      } else if (norm === 'renderchart' || norm === 'generatechart') {
+        toolMd = `> 📊 **render_chart** (${parsedArgs.type || 'bar'})\n> Título: "${parsedArgs.title || 'Gráfico'}"\n\n`;
+      } else if (norm === 'listdocuments' || norm === 'listknowledgebase' || norm === 'getdocuments' || norm === 'listdocs' || norm === 'listardocumentos') {
+        const count = execRes.result?.count || 0;
+        toolMd = `> 📖 **list_documents** (${count} documentos indexados)\n\n`;
+      } else if (norm === 'searchknowledgebase' || norm === 'searchkb' || norm === 'searchdocuments' || norm === 'searchknowledge' || norm === 'buscarendocumentos') {
+        const matches = execRes.result?.matchesCount || 0;
+        toolMd = `> 🔍 **search_knowledge_base** ("${parsedArgs.query || ''}") [${matches} coincidencias]\n\n`;
+      } else if (norm === 'readchaptercontent' || norm === 'readchapter') {
+        toolMd = `> 📖 **read_chapter_content** (Doc: "${parsedArgs.docId}", Cap: ${parsedArgs.chapterId})\n\n`;
+      } else {
+        toolMd = `> ⚙️ **${rawFuncName}**\n> \`\`\`\n> ${String(resultText).slice(0, 300)}\n> \`\`\``;
+      }
+
+      return {
+        success: execRes.success !== false,
+        result: execRes.result,
+        resultText,
+        markdownBlock: toolMd,
+        cardElement: cardEl,
+        executionTimeMs: execRes.executionTimeMs,
+        error: execRes.error,
+        toolName: rawFuncName,
+        args: parsedArgs
+      };
     }
   }
 
@@ -1174,7 +1366,9 @@
     registry: globalRegistry,
     executor: globalExecutor,
     runtime: globalRuntime,
-    agent: globalAgent
+    agent: globalAgent,
+    dispatchToolCall: (toolCall, options) => globalExecutor.dispatchToolCall(toolCall, options),
+    executeToolCall: (toolCall, context) => globalExecutor.executeToolCall(toolCall, context)
   };
 });
 

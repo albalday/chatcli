@@ -31,6 +31,7 @@
   const Export = window.ChatExport || {};
   const State = window.ChatState || {};
   const ContextManager = window.ChatContextManager || {};
+  const AgentCore = window.ChatAgentCore || {};
 
   function t(key, params) {
     if (I18n.t) return I18n.t(key, params);
@@ -63,7 +64,6 @@
     window.appConfig = appConfig;
   }
 
-  let currentRagSystemContext = '';
   let chatHistory = [];
   let currentAbortController = null;
   let isGenerating = false;
@@ -361,11 +361,6 @@
     let activePrompt = (appConfig.systemPrompt && appConfig.systemPrompt.trim() !== '')
       ? appConfig.systemPrompt.trim()
       : '';
-
-    // Inyección de Base de Conocimiento (RAG Jerárquico por Ramas)
-    if (currentRagSystemContext) {
-      activePrompt = activePrompt ? `${currentRagSystemContext}\n\n${activePrompt}` : currentRagSystemContext;
-    }
 
     // Ancla de fecha diaria para máxima autoridad en System Prompt y 100% de aciertos en Context-Cache
     if (appConfig.sendDateTime !== false) {
@@ -1490,18 +1485,6 @@
     }
 
     const maxAgentTurns = 8;
-    // Cargar contexto jerárquico de la rama RAG activa
-    if (appConfig.activeRagBranchId && window.ChatTreeRagService) {
-      try {
-        currentRagSystemContext = await window.ChatTreeRagService.buildTreeRagSystemContext(appConfig.activeRagBranchId);
-      } catch (err) {
-        console.warn('Error al cargar contexto de RAG:', err);
-        currentRagSystemContext = '';
-      }
-    } else {
-      currentRagSystemContext = '';
-    }
-
     while (turnIndex < maxAgentTurns) {
       if (currentAbortController && currentAbortController.signal.aborted) {
         break;
@@ -1531,11 +1514,13 @@
         messages: buildEffectiveMessages(),
         temperature: appConfig.temperature,
         reasoningEffort: appConfig.reasoningEffort || 'none',
-        enableTools: (appConfig.enableAgentJs !== false || appConfig.enableAgentWeb !== false || appConfig.enableAgentSearch !== false || appConfig.enableAgentChart !== false),
+        enableTools: (appConfig.enableAgentJs !== false || appConfig.enableAgentWeb !== false || appConfig.enableAgentSearch !== false || appConfig.enableAgentChart !== false || Boolean(appConfig.activeRagBranchId)),
         enableAgentJs: appConfig.enableAgentJs !== false,
         enableAgentWeb: appConfig.enableAgentWeb !== false,
         enableAgentSearch: appConfig.enableAgentSearch !== false,
         enableAgentChart: appConfig.enableAgentChart !== false,
+        enableAgentRag: Boolean(appConfig.activeRagBranchId),
+        activeRagBranchId: appConfig.activeRagBranchId || '',
         enableContextCache: appConfig.enableContextCache !== false,
         cacheInvalidated: currentCacheInvalidated,
         cacheRevision: sessionCacheRevision,
@@ -1801,547 +1786,52 @@
         turnBlock.remove();
       }
 
-      // 1. Ejecución de JavaScript
-      if (normName === 'execute_javascript') {
-        let codeToRun = '';
-        try {
-          const parsed = typeof tc.function.arguments === 'object' ? tc.function.arguments : JSON.parse(tc.function.arguments || '{}');
-          codeToRun = parsed.code || parsed.javascript || parsed.js || parsed.script || parsed.input || (typeof parsed === 'string' ? parsed : '');
-        } catch (e) {
-          codeToRun = tc.function.arguments || '';
-        }
+      // Ejecución desacoplada mediante ChatAgentCore.dispatchToolCall
+      const AgentCoreModule = window.ChatAgentCore || (typeof require !== 'undefined' ? (() => { try { return require('./agent-core.js'); } catch(e){ return null; } })() : null);
 
-        // Crear e insertar de inmediato la tarjeta en la interfaz (aparece al momento de la llamada)
-        const cardDiv = document.createElement('div');
-        cardDiv.className = 'tool-card-wrapper';
-        cardDiv.innerHTML = `
-          <div class="tool-execution-card">
-            <div class="tool-card-header">
-              <div class="tool-card-title">
-                <span>⚡</span>
-                <span>${t('tool_js_title_running') || 'execute_javascript'}</span>
-              </div>
-              <div class="tool-card-header-actions">
-                <span class="tool-card-badge status-loading">⏳ ${t('tool_badge_executing') || 'Ejecutando...'}</span>
-                <button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Minimizar'}"><span>▾</span></button>
-              </div>
-            </div>
-            <div class="tool-card-collapsible-body">
-              <pre class="tool-card-code"><code>${Markdown.escapeHtml(codeToRun)}</code></pre>
-              <div class="tool-card-result">
-                <div class="tool-loading-placeholder">⏳ ${t('tool_loading_js') || 'Ejecutando código en sandbox local...'}</div>
-              </div>
-            </div>
-          </div>
-        `;
-        content.appendChild(cardDiv);
-        attachListeners(cardDiv);
-        scrollToBottom();
-
-        addDebugLog('tool', `execute_javascript:\n${codeToRun}`);
-        addDebugLog('raw', `>>> TOOL CALL execute_javascript:\n${codeToRun}`);
-        const toolExecRes = await (Sandbox.execute ? Sandbox.execute(codeToRun) : { success: false, error: 'Sandbox not available' });
-        const outputText = toolExecRes.success
-          ? (toolExecRes.result || (toolExecRes.logs && toolExecRes.logs.length > 0 ? toolExecRes.logs.join('\n') : 'undefined'))
-          : `Error: ${toolExecRes.error}`;
-
-        addDebugLog('tool', `execute_javascript output (${toolExecRes.executionTimeMs || 0}ms):\n${outputText}`);
-        addDebugLog('raw', `<<< TOOL RESULT execute_javascript (${toolExecRes.executionTimeMs || 0}ms):\n${JSON.stringify(toolExecRes, null, 2)}`);
-
-        // Rellenar dinámicamente el resultado en la tarjeta existente
-        const badgeEl = cardDiv.querySelector('.tool-card-badge');
-        if (badgeEl) {
-          badgeEl.className = 'tool-card-badge';
-          badgeEl.textContent = `${toolExecRes.executionTimeMs || 0}ms`;
-        }
-        const titleEl = cardDiv.querySelector('.tool-card-title span:last-child');
-        if (titleEl) {
-          titleEl.textContent = t('tool_js_title', { ms: toolExecRes.executionTimeMs || 0 });
-        }
-        const resultEl = cardDiv.querySelector('.tool-card-result');
-        if (resultEl) {
-          resultEl.innerHTML = `<strong>${t('tool_sandbox_output')}</strong>\n${Markdown.escapeHtml(outputText)}`;
-        }
-        attachListeners(cardDiv);
-        if (turnFinalStats) updateStatsDisplay(turnFinalStats);
-        scrollToBottom();
-
-        chatHistory.push({
-          id: `${assistantMsgId}_turn_${turnIndex}_assistant`,
-          role: 'assistant',
-          content: currentTurnText || null,
-          tool_calls: [tc]
+      let toolExecRes = null;
+      if (AgentCoreModule && AgentCoreModule.dispatchToolCall) {
+        toolExecRes = await AgentCoreModule.dispatchToolCall(tc, {
+          container: content,
+          onLog: (type, text) => addDebugLog(type, text),
+          attachListeners: (el) => attachListeners(el),
+          scrollToBottom: () => scrollToBottom(),
+          language: appConfig.language || 'es',
+          signal: currentAbortController ? currentAbortController.signal : undefined
         });
-
-        chatHistory.push({
-          id: `${assistantMsgId}_turn_${turnIndex}_tool_${tc.id || 'res'}`,
-          role: 'tool',
-          tool_call_id: tc.id,
-          name: 'execute_javascript',
-          content: JSON.stringify({
-            success: toolExecRes.success,
-            result: toolExecRes.result,
-            logs: toolExecRes.logs,
-            executionTimeMs: toolExecRes.executionTimeMs,
-            error: toolExecRes.error
-          })
-        });
-
-        const toolMd = `> ⚡ **execute_javascript**\n> \`\`\`javascript\n> ${codeToRun.split('\n').join('\n> ')}\n> \`\`\`\n> \`\`\`\n> ${outputText.split('\n').join('\n> ')}\n> \`\`\``;
-        accumulatedConversationMarkdown += (currentTurnText ? currentTurnText + '\n\n' : '') + toolMd + '\n\n';
-
-        turnIndex++;
-        continue;
+      } else {
+        toolExecRes = {
+          success: false,
+          resultText: 'Error: Módulo de ejecución de herramientas no disponible.',
+          markdownBlock: `> ❌ **${rawFuncName}**: Módulo de ejecución no disponible.`
+        };
       }
 
-      // 2. Consulta Web o Descarga de PDF
-      else if (normName === 'fetch_web_page' || normName === 'download_pdf') {
-        const isPdfCall = normName === 'download_pdf';
-        let urlToFetch = '';
-        try {
-          const parsed = typeof tc.function.arguments === 'object' ? tc.function.arguments : JSON.parse(tc.function.arguments || '{}');
-          urlToFetch = parsed.url || parsed.URL || parsed.uri || parsed.link || parsed.href || parsed.path || parsed.input || (typeof parsed === 'string' ? parsed : '');
-        } catch (e) {
-          urlToFetch = tc.function.arguments || '';
-        }
+      if (turnFinalStats) updateStatsDisplay(turnFinalStats);
+      scrollToBottom();
 
-        const cardIcon = isPdfCall ? '📄' : '🌐';
-        const cardTitle = isPdfCall ? t('tool_pdf_title') : t('tool_web_title');
+      // 1. Guardar turno del asistente con la llamada a la herramienta
+      chatHistory.push({
+        id: `${assistantMsgId}_turn_${turnIndex}_assistant`,
+        role: 'assistant',
+        content: currentTurnText || null,
+        tool_calls: [tc]
+      });
 
-        // Crear e insertar de inmediato la tarjeta en la interfaz (aparece al momento de la llamada)
-        const cardDiv = document.createElement('div');
-        cardDiv.className = 'tool-card-wrapper';
-        cardDiv.innerHTML = `
-          <div class="web-request-card ${isPdfCall ? 'pdf-request-card' : ''}">
-            <div class="web-card-header">
-              <div class="web-card-title">
-                <span>${cardIcon}</span>
-                <span>${cardTitle}</span>
-              </div>
-              <div class="tool-card-header-actions">
-                <span class="web-card-badge status-loading">⏳ ${isPdfCall ? (t('tool_badge_downloading') || 'Descargando...') : (t('tool_badge_fetching') || 'Consultando...')}</span>
-                <button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Minimizar'}"><span>▾</span></button>
-              </div>
-            </div>
-            <div class="tool-card-collapsible-body">
-              <div class="web-card-section web-request-section">
-                <div class="section-label">${t('tool_web_requested_url')}</div>
-                <div class="url-badge"><a href="${Markdown.sanitizeUrl ? Markdown.sanitizeUrl(urlToFetch) : Markdown.escapeHtml(urlToFetch)}" target="_blank" rel="noopener noreferrer">${Markdown.escapeHtml(urlToFetch)}</a></div>
-              </div>
-              <div class="web-card-section web-response-section">
-                <div class="section-label section-response-label">${t('tool_web_receiving') || 'Recibiendo contenido...'}</div>
-                <div class="web-response-body tool-loading-placeholder">⏳ ${isPdfCall ? t('tool_loading_pdf') : t('tool_loading_web')}</div>
-              </div>
-            </div>
-          </div>
-        `;
-        content.appendChild(cardDiv);
-        attachListeners(cardDiv);
-        scrollToBottom();
+      // 2. Guardar turno de la herramienta con el resultado obtenido
+      chatHistory.push({
+        id: `${assistantMsgId}_turn_${turnIndex}_tool_${tc.id || 'res'}`,
+        role: 'tool',
+        tool_call_id: tc.id || `call_${Date.now()}`,
+        name: rawFuncName,
+        content: toolExecRes.resultText
+      });
 
-        addDebugLog('tool', `${normName}: ${urlToFetch}`);
-        addDebugLog('raw', `>>> TOOL CALL ${normName}: ${urlToFetch}`);
-        const webRes = await (WebBrowser.fetchPage ? WebBrowser.fetchPage(urlToFetch) : { success: false, url: urlToFetch, content: '', error: 'Web module not available' });
-        const isPdfResult = webRes.isPdf || isPdfCall;
+      // 3. Acumular markdown de la herramienta para copia íntegra de la respuesta compuesta
+      accumulatedConversationMarkdown += (currentTurnText ? currentTurnText + '\n\n' : '') + (toolExecRes.markdownBlock || '') + '\n\n';
 
-        const statusBadgeText = webRes.success
-          ? (isPdfResult ? `PDF (${webRes.byteSize ? FileParser.formatBytes(webRes.byteSize) : 'OK'}) [${webRes.elapsedMs || 0}ms]` : `HTTP ${webRes.status || 200} OK (${webRes.elapsedMs || 0}ms)`)
-          : `Error (${webRes.elapsedMs || 0}ms)`;
-
-        const responsePreview = webRes.success
-          ? (webRes.content || t('tool_web_empty'))
-          : (webRes.error || t('tool_web_err_connect'));
-
-        addDebugLog('tool', `${normName} (${statusBadgeText}) [${webRes.byteSize ? FileParser.formatBytes(webRes.byteSize) : '0 B'}]:\n${(responsePreview || '').substring(0, 200)}...`);
-        addDebugLog('raw', `<<< TOOL RESULT ${normName} (${statusBadgeText}):\n${responsePreview || ''}`);
-
-        // Rellenar dinámicamente la tarjeta con la respuesta obtenida
-        const badgeEl = cardDiv.querySelector('.web-card-badge');
-        if (badgeEl) {
-          badgeEl.className = 'web-card-badge';
-          badgeEl.textContent = statusBadgeText;
-        }
-        const respLabelEl = cardDiv.querySelector('.section-response-label');
-        if (respLabelEl) {
-          respLabelEl.textContent = t('tool_web_content_received', { size: webRes.byteSize ? FileParser.formatBytes(webRes.byteSize) : (webRes.content ? webRes.content.length + ' chars' : '0 B') });
-        }
-        const respBodyEl = cardDiv.querySelector('.web-response-body');
-        if (respBodyEl) {
-          respBodyEl.className = 'web-response-body';
-          respBodyEl.innerHTML = `<code>${Markdown.escapeHtml(responsePreview)}</code>`;
-        }
-        attachListeners(cardDiv);
-        if (turnFinalStats) updateStatsDisplay(turnFinalStats);
-        scrollToBottom();
-
-        chatHistory.push({
-          id: `${assistantMsgId}_turn_${turnIndex}_assistant`,
-          role: 'assistant',
-          content: currentTurnText || null,
-          tool_calls: [tc]
-        });
-
-        chatHistory.push({
-          id: `${assistantMsgId}_turn_${turnIndex}_tool_${tc.id || 'res'}`,
-          role: 'tool',
-          tool_call_id: tc.id,
-          name: normName,
-          content: JSON.stringify({
-            success: webRes.success,
-            url: webRes.url || urlToFetch,
-            status: webRes.status || 200,
-            isPdf: isPdfResult,
-            content: webRes.content,
-            error: webRes.error
-          })
-        });
-
-        const toolMd = `> ${cardIcon} **${normName}** (${statusBadgeText})\n> URL: ${webRes.url || urlToFetch}\n> \`\`\`\n> ${(responsePreview || '').split('\n').join('\n> ')}\n> \`\`\``;
-        accumulatedConversationMarkdown += (currentTurnText ? currentTurnText + '\n\n' : '') + toolMd + '\n\n';
-
-        turnIndex++;
-        continue;
-      }
-
-      // 3. Búsqueda en Internet (search_web)
-      else if (normName === 'search_web') {
-        let queryToSearch = '';
-        try {
-          const parsed = typeof tc.function.arguments === 'object' ? tc.function.arguments : JSON.parse(tc.function.arguments || '{}');
-          queryToSearch = parsed.query || parsed.q || parsed.search || parsed.keyword || parsed.term || parsed.text || parsed.input || (typeof parsed === 'string' ? parsed : '');
-        } catch (e) {
-          queryToSearch = tc.function.arguments || '';
-        }
-
-        // Crear e insertar de inmediato la tarjeta en la interfaz (aparece al momento de la llamada)
-        const cardDiv = document.createElement('div');
-        cardDiv.className = 'tool-card-wrapper';
-        cardDiv.innerHTML = `
-          <div class="web-search-card">
-            <div class="web-card-header">
-              <div class="web-card-title">
-                <span>🔍</span>
-                <span>${t('tool_search_title')}</span>
-              </div>
-              <div class="tool-card-header-actions">
-                <span class="web-card-badge status-loading">⏳ ${t('tool_badge_searching') || 'Buscando...'}</span>
-                <button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Minimizar'}"><span>▾</span></button>
-              </div>
-            </div>
-            <div class="tool-card-collapsible-body">
-              <div class="web-card-section">
-                <div class="section-label">${t('tool_search_query')}</div>
-                <div class="query-badge">"${Markdown.escapeHtml(queryToSearch)}"</div>
-              </div>
-              <div class="web-card-section search-results-section">
-                <div class="section-label search-response-label">${t('tool_search_searching') || 'Buscando fuentes...'}</div>
-                <div class="search-results-container">
-                  <div class="tool-loading-placeholder">⏳ ${t('tool_loading_search')}</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        `;
-        content.appendChild(cardDiv);
-        attachListeners(cardDiv);
-        scrollToBottom();
-
-        addDebugLog('tool', `search_web: "${queryToSearch}"`);
-        addDebugLog('raw', `>>> TOOL CALL search_web:\nQuery: "${queryToSearch}"`);
-        const searchRes = await (WebSearch.search ? WebSearch.search(queryToSearch, appConfig.language || 'es') : { success: false, query: queryToSearch, count: 0, results: [], markdown: 'Módulo de búsqueda no disponible', elapsedMs: 0 });
-        const statusBadgeText = `${searchRes.count} fuentes (${searchRes.elapsedMs || 0}ms)`;
-
-        addDebugLog('tool', `search_web (${searchRes.count} resultados) [${searchRes.elapsedMs || 0}ms]:\n${(searchRes.markdown || '').substring(0, 200)}...`);
-        addDebugLog('raw', `<<< TOOL RESULT search_web (${searchRes.count} resultados):\n${searchRes.markdown || ''}`);
-
-        let resultsHtml = '';
-        if (searchRes.results && searchRes.results.length > 0) {
-          resultsHtml = '<div class="search-results-list">' + searchRes.results.map(r => `
-            <div class="search-result-item">
-              <div><a href="${Markdown.sanitizeUrl ? Markdown.sanitizeUrl(r.url) : Markdown.escapeHtml(r.url)}" target="_blank" rel="noopener noreferrer">🔗 ${Markdown.escapeHtml(r.title)}</a> <small style="opacity:0.75;">(${Markdown.escapeHtml(r.source)})</small></div>
-              ${r.snippet ? `<div class="search-result-snippet">${Markdown.escapeHtml(r.snippet)}</div>` : ''}
-            </div>
-          `).join('') + '</div>';
-        } else {
-          resultsHtml = `<div class="search-result-snippet"><em>${t('tool_search_empty')}</em></div>`;
-        }
-
-        // Rellenar dinámicamente la tarjeta con los resultados encontrados
-        const badgeEl = cardDiv.querySelector('.web-card-badge');
-        if (badgeEl) {
-          badgeEl.className = 'web-card-badge';
-          badgeEl.textContent = statusBadgeText;
-        }
-        const respLabelEl = cardDiv.querySelector('.search-response-label');
-        if (respLabelEl) {
-          respLabelEl.textContent = t('tool_search_results', { count: searchRes.count });
-        }
-        const resultsContainer = cardDiv.querySelector('.search-results-container');
-        if (resultsContainer) {
-          resultsContainer.innerHTML = resultsHtml;
-        }
-        attachListeners(cardDiv);
-        if (turnFinalStats) updateStatsDisplay(turnFinalStats);
-        scrollToBottom();
-
-        chatHistory.push({
-          id: `${assistantMsgId}_turn_${turnIndex}_assistant`,
-          role: 'assistant',
-          content: currentTurnText || null,
-          tool_calls: [tc]
-        });
-
-        chatHistory.push({
-          id: `${assistantMsgId}_turn_${turnIndex}_tool_${tc.id || 'res'}`,
-          role: 'tool',
-          tool_call_id: tc.id,
-          name: 'search_web',
-          content: searchRes.markdown
-        });
-
-        const toolMd = `> 🔍 **search_web** (${searchRes.count} fuentes)\n> Query: "${queryToSearch}"\n> \`\`\`markdown\n> ${(searchRes.markdown || '').split('\n').join('\n> ')}\n> \`\`\``;
-        accumulatedConversationMarkdown += (currentTurnText ? currentTurnText + '\n\n' : '') + toolMd + '\n\n';
-
-        turnIndex++;
-        continue;
-      }
-
-      // 4. Generación de Gráficos Interactivos SVG (render_chart)
-      else if (normName === 'render_chart') {
-        let chartArgs = {};
-        try {
-          chartArgs = typeof tc.function.arguments === 'object' ? tc.function.arguments : JSON.parse(tc.function.arguments || '{}');
-        } catch (e) {
-          chartArgs = { title: 'Gráfico', labels: [], datasets: [] };
-        }
-
-        addDebugLog('tool', `render_chart (${chartArgs.type || 'bar'}): "${chartArgs.title || 'Gráfico'}"`);
-        addDebugLog('raw', `>>> TOOL CALL render_chart:\n${JSON.stringify(chartArgs, null, 2)}`);
-
-        const chartHtml = (Charts.renderChartCard ? Charts.renderChartCard(chartArgs) : '<div class="chat-chart-card">Gráfico generado</div>');
-        const cardDiv = document.createElement('div');
-        cardDiv.className = 'tool-card-wrapper';
-        cardDiv.innerHTML = chartHtml;
-        content.appendChild(cardDiv);
-        attachListeners(cardDiv);
-        if (turnFinalStats) updateStatsDisplay(turnFinalStats);
-        scrollToBottom();
-
-        chatHistory.push({
-          id: `${assistantMsgId}_turn_${turnIndex}_assistant`,
-          role: 'assistant',
-          content: currentTurnText || null,
-          tool_calls: [tc]
-        });
-
-        chatHistory.push({
-          id: `${assistantMsgId}_turn_${turnIndex}_tool_${tc.id || 'res'}`,
-          role: 'tool',
-          tool_call_id: tc.id,
-          name: 'render_chart',
-          content: JSON.stringify({
-            success: true,
-            type: chartArgs.type || 'bar',
-            title: chartArgs.title || 'Gráfico'
-          })
-        });
-
-        const toolMd = `> 📊 **render_chart** (${chartArgs.type || 'bar'})\n> Título: "${chartArgs.title || 'Gráfico'}"\n\n`;
-        accumulatedConversationMarkdown += (currentTurnText ? currentTurnText + '\n\n' : '') + toolMd + '\n\n';
-
-        turnIndex++;
-        continue;
-      }
-
-      // 5. Base de Conocimiento RAG (read_chapter_content)
-      else if (normName === 'read_chapter_content' || normName === 'readchaptercontent' || normName === 'readchapter') {
-        const ragService = window.ChatTreeRagService || (typeof require !== 'undefined' ? require('./chatService.js') : null);
-        const parsedReqs = ragService && ragService.parseToolCallArguments
-          ? ragService.parseToolCallArguments(tc.function.arguments)
-          : [];
-
-        const targetDesc = parsedReqs.length > 1
-          ? `${parsedReqs.length} capítulos (${parsedReqs.map(r => `Cap ${r.chapterId || r.chapter_id || '?'}`).join(', ')})`
-          : (parsedReqs.length === 1 ? `Doc "${parsedReqs[0].docId || parsedReqs[0].doc_id || '?'}", Cap ${parsedReqs[0].chapterId || parsedReqs[0].chapter_id || '1'}` : 'Consultando capítulos...');
-
-        const cardDiv = document.createElement('div');
-        cardDiv.className = 'tool-card-wrapper';
-        cardDiv.innerHTML = `
-          <div class="tool-execution-card rag-execution-card">
-            <div class="tool-card-header">
-              <div class="tool-card-title">
-                <span>📖</span>
-                <span>Base de Conocimiento (RAG)</span>
-              </div>
-              <div class="tool-card-header-actions">
-                <span class="tool-card-badge status-loading">⏳ ${Markdown.escapeHtml(targetDesc)}...</span>
-                <button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Minimizar'}"><span>▾</span></button>
-              </div>
-            </div>
-            <div class="tool-card-collapsible-body">
-              <div class="tool-card-result">
-                <div class="tool-loading-placeholder">⏳ Recuperando contenido del capítulo desde IndexedDB...</div>
-              </div>
-            </div>
-          </div>
-        `;
-        content.appendChild(cardDiv);
-        attachListeners(cardDiv);
-        scrollToBottom();
-
-        addDebugLog('tool', `read_chapter_content: ${targetDesc}`);
-        addDebugLog('raw', `>>> TOOL CALL read_chapter_content:\n${typeof tc.function.arguments === 'string' ? tc.function.arguments : JSON.stringify(tc.function.arguments, null, 2)}`);
-
-        const ragRes = ragService && ragService.resolveChapterToolCall
-          ? await ragService.resolveChapterToolCall(tc.function.arguments)
-          : { success: false, error: 'Servicio de RAG no disponible' };
-
-        const badgeEl = cardDiv.querySelector('.tool-card-badge');
-        const resContainer = cardDiv.querySelector('.tool-card-result');
-
-        if (badgeEl) {
-          badgeEl.className = ragRes.success ? 'tool-card-badge status-success' : 'tool-card-badge status-error';
-          badgeEl.textContent = ragRes.success
-            ? (parsedReqs.length > 1 ? `✅ ${parsedReqs.length} Capítulos recuperados (${FileParser.formatBytes ? FileParser.formatBytes(ragRes.charCount || 0) : (ragRes.charCount || 0) + ' chars'})` : `Capítulo ${ragRes.chapterId} (${FileParser.formatBytes ? FileParser.formatBytes(ragRes.charCount || 0) : (ragRes.charCount || 0) + ' chars'})`)
-            : 'Error al recuperar';
-        }
-
-        const outText = ragRes.success
-          ? (ragRes.content || '')
-          : (ragRes.error || 'No se encontró el capítulo.');
-
-        if (resContainer) {
-          resContainer.innerHTML = `<div class="result-text-block ${ragRes.success ? 'result-success' : 'result-error'}"><pre><code>${Markdown.escapeHtml(outText)}</code></pre></div>`;
-        }
-
-        // Colapsar la tarjeta por defecto tras recibir el contenido del RAG para no saturar la vista
-        const cardEl = cardDiv.querySelector('.tool-execution-card');
-        if (cardEl) {
-          cardEl.classList.add('collapsed');
-          const collapseSpan = cardDiv.querySelector('.btn-tool-collapse span');
-          if (collapseSpan) collapseSpan.textContent = '▸';
-        }
-
-        addDebugLog('tool', `read_chapter_content Result: ${outText.substring(0, 200)}...`);
-        addDebugLog('raw', `<<< TOOL RESULT read_chapter_content:\n${outText}`);
-
-        chatHistory.push({
-          id: `${assistantMsgId}_turn_${turnIndex}_assistant`,
-          role: 'assistant',
-          content: currentTurnText || null,
-          tool_calls: [tc]
-        });
-
-        chatHistory.push({
-          id: `${assistantMsgId}_turn_${turnIndex}_tool_${tc.id || 'res'}`,
-          role: 'tool',
-          tool_call_id: tc.id,
-          name: 'read_chapter_content',
-          content: outText
-        });
-
-        const toolMd = `> 📖 **read_chapter_content** (${targetDesc})\n> \`\`\`text\n> ${String(outText).split('\n').join('\n> ')}\n> \`\`\`\n\n`;
-        accumulatedConversationMarkdown += (currentTurnText ? currentTurnText + '\n\n' : '') + toolMd + '\n\n';
-
-        turnIndex++;
-        continue;
-      }
-
-      // 6. Herramientas MCP y Herramientas Genéricas Registradas en AgentCore
-      else {
-        const AgentCore = window.ChatAgentCore;
-        const toolInstance = AgentCore?.registry?.getTool(rawFuncName);
-        const serverName = toolInstance?.metadata?.mcpServerName || 'Herramienta Externa';
-        const displayToolName = toolInstance?.metadata?.originalName || rawFuncName;
-
-        let toolArgs = {};
-        try {
-          toolArgs = typeof tc.function.arguments === 'object' ? tc.function.arguments : JSON.parse(tc.function.arguments || '{}');
-        } catch (e) {
-          toolArgs = { input: tc.function.arguments || '' };
-        }
-
-        const cardDiv = document.createElement('div');
-        cardDiv.className = 'tool-card-wrapper';
-        cardDiv.innerHTML = `
-          <div class="tool-execution-card mcp-tool-card">
-            <div class="tool-card-header">
-              <div class="tool-card-title">
-                <span>🔌</span>
-                <span><strong>MCP:</strong> ${Markdown.escapeHtml(displayToolName)} <small style="opacity:0.7;">(${Markdown.escapeHtml(serverName)})</small></span>
-              </div>
-              <div class="tool-card-header-actions">
-                <span class="tool-card-badge status-running">⏳ ${t('tool_running') || 'Ejecutando...'}</span>
-                <button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Minimizar'}"><span>▾</span></button>
-              </div>
-            </div>
-            <div class="tool-card-collapsible-body">
-              <div class="tool-card-section">
-                <div class="section-label">${t('tool_js_code') || 'Argumentos'}</div>
-                <div class="code-preview-block"><pre><code>${Markdown.escapeHtml(JSON.stringify(toolArgs, null, 2))}</code></pre></div>
-              </div>
-              <div class="tool-card-section tool-result-section">
-                <div class="section-label">${t('tool_js_result') || 'Resultado'}</div>
-                <div class="tool-result-container">
-                  <div class="tool-loading-placeholder">⏳ Ejecutando en servidor MCP...</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        `;
-        content.appendChild(cardDiv);
-        attachListeners(cardDiv);
-        scrollToBottom();
-
-        addDebugLog('tool', `MCP Tool [${serverName}]: ${displayToolName}`);
-        addDebugLog('raw', `>>> TOOL CALL ${rawFuncName}:\n${JSON.stringify(toolArgs, null, 2)}`);
-
-        const execResult = AgentCore
-          ? await AgentCore.executor.executeToolCall(tc, { signal: currentAbortController ? currentAbortController.signal : undefined })
-          : { success: false, error: 'AgentCore no disponible' };
-
-        const badgeEl = cardDiv.querySelector('.tool-card-badge');
-        const resContainer = cardDiv.querySelector('.tool-result-container');
-
-        if (badgeEl) {
-          badgeEl.className = execResult.success ? 'tool-card-badge status-success' : 'tool-card-badge status-error';
-          badgeEl.textContent = execResult.success
-            ? `${t('tool_status_success') || 'Éxito'} (${execResult.executionTimeMs || 0}ms)`
-            : (t('tool_status_error') || 'Error');
-        }
-
-        const outText = execResult.success
-          ? (execResult.result?.content || (typeof execResult.result === 'object' ? JSON.stringify(execResult.result, null, 2) : String(execResult.result || '')))
-          : (execResult.error || 'Error desconocido');
-
-        if (resContainer) {
-          resContainer.innerHTML = `<div class="result-text-block ${execResult.success ? 'result-success' : 'result-error'}"><pre><code>${Markdown.escapeHtml(outText)}</code></pre></div>`;
-        }
-
-        addDebugLog('tool', `MCP Result [${displayToolName}]: ${outText.substring(0, 200)}...`);
-        addDebugLog('raw', `<<< TOOL RESULT ${rawFuncName}:\n${outText}`);
-
-        chatHistory.push({
-          id: `${assistantMsgId}_turn_${turnIndex}_assistant`,
-          role: 'assistant',
-          content: currentTurnText || null,
-          tool_calls: [tc]
-        });
-
-        chatHistory.push({
-          id: `${assistantMsgId}_turn_${turnIndex}_tool_${tc.id || 'res'}`,
-          role: 'tool',
-          tool_call_id: tc.id,
-          name: rawFuncName,
-          content: outText
-        });
-
-        const toolMd = `> 🔌 **MCP: ${displayToolName}** (*${serverName}*)\n> \`\`\`json\n> ${JSON.stringify(toolArgs, null, 2).split('\n').join('\n> ')}\n> \`\`\`\n> \`\`\`\n> ${String(outText).split('\n').join('\n> ')}\n> \`\`\`\n\n`;
-        accumulatedConversationMarkdown += (currentTurnText ? currentTurnText + '\n\n' : '') + toolMd + '\n\n';
-
-        turnIndex++;
-        continue;
-      }
+      turnIndex++;
+      continue;
     }
 
     // Si se agotaron los turnos máximos y el último mensaje fue de una herramienta (role: 'tool'),
@@ -2377,6 +1867,8 @@
         enableAgentWeb: appConfig.enableAgentWeb !== false,
         enableAgentSearch: appConfig.enableAgentSearch !== false,
         enableAgentChart: appConfig.enableAgentChart !== false,
+        enableAgentRag: Boolean(appConfig.activeRagBranchId),
+        activeRagBranchId: appConfig.activeRagBranchId || '',
         enableContextCache: appConfig.enableContextCache !== false,
         signal: currentAbortController ? currentAbortController.signal : undefined,
 
