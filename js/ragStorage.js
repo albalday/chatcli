@@ -34,12 +34,13 @@
   const RAG_ROOT = "RAG";
   const MAX_FILES_PER_BUCKET = 100;
   const RAMA_FILE = "rama.md";
-
-  // Constantes de compatibilidad con código legacy
+  // Constantes de compatibilidad con código/tests legacy
   const DB_NAME = "LocalRAG_DB";
   const DB_VERSION = 1;
   const STORE_BRANCHES = "branches";
   const STORE_DOCUMENTS = "documents";
+
+
 
   // ==========================================================================
   // Clases de Error Personalizadas

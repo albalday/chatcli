@@ -404,14 +404,14 @@
    * Si es un PDF/documento paginado, realiza el corte ESTRICTAMENTE por páginas completas.
    * En otros documentos, particiona por secciones y protege bloques atómicos respetando el límite K.
    */
-  function partitionTextIntoHeuristicChapters(text, maxCharsOrLimitK = 16) {
+  function partitionTextIntoHeuristicChapters(text, maxCharsOrLimitK = 128) {
     if (!text) return [];
 
-    let maxChapterSize = 256000;
+    let maxChapterSize = 512000;
     if (typeof maxCharsOrLimitK === 'number') {
       if (maxCharsOrLimitK <= 2048) {
         // En unidades de K tokens (1K tokens ~ 4.000 caracteres)
-        const kTokens = Math.min(1024, Math.max(16, maxCharsOrLimitK));
+        const kTokens = Math.min(1024, Math.max(32, maxCharsOrLimitK));
         maxChapterSize = kTokens * 4000;
       } else {
         maxChapterSize = maxCharsOrLimitK;
