@@ -87,61 +87,7 @@ body {
   position: relative;
 }
 
-/* ==========================================================================
-   Cabecera
-   ========================================================================== */
-.app-header {
-  background-color: var(--bg-surface);
-  border-bottom: 1px solid var(--border-color);
-  padding: 0.75rem 1.25rem;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  z-index: 10;
-  box-shadow: var(--shadow-sm);
-}
 
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.app-logo {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-weight: 700;
-  font-size: 1.15rem;
-  color: var(--primary);
-}
-
-.badge-model {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  background-color: var(--primary-light);
-  color: var(--primary);
-  padding: 0.25rem 0.65rem;
-  border-radius: var(--radius-full);
-  font-size: 0.8rem;
-  font-weight: 500;
-  border: 1px solid #bfdbfe;
-}
-
-.status-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background-color: var(--success);
-  display: inline-block;
-}
-
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
 
 
 
@@ -317,9 +263,7 @@ body {
   flex-direction: row-reverse;
 }
 
-.message-avatar {
-  display: none !important;
-}
+
 
 .message-content-wrapper {
   max-width: 100%;
@@ -2336,9 +2280,7 @@ input:checked + .slider:before {
    Responsive
    ========================================================================== */
 @media (max-width: 640px) {
-  .app-header {
-    padding: 0.6rem 0.85rem;
-  }
+
 
 
 
@@ -2511,16 +2453,14 @@ input:checked + .slider:before {
 }
 
 [data-theme="dark"] .badge-pill,
-[data-theme="dark"] .btn-tool-mini,
-[data-theme="dark"] .btn-action {
+[data-theme="dark"] .btn-tool-mini {
   background-color: var(--bg-surface);
   color: var(--text-muted);
   border-color: var(--border-color);
 }
 
 [data-theme="dark"] .badge-pill:hover,
-[data-theme="dark"] .btn-tool-mini:hover,
-[data-theme="dark"] .btn-action:hover {
+[data-theme="dark"] .btn-tool-mini:hover {
   background-color: #1e293b;
   color: var(--text-main);
   border-color: #475569;
