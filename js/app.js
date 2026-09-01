@@ -392,6 +392,19 @@
       }
     }
 
+    // Directiva proactiva de Base de Conocimiento activa si procede
+    const activeBranchId = options.activeRagBranchId ||
+      (typeof window !== 'undefined' && window.ChatTreeRagUI && window.ChatTreeRagUI.getActiveChatBranchId ? window.ChatTreeRagUI.getActiveChatBranchId() : '') ||
+      (appConfig.activeRagBranchId || '');
+
+    if (activeBranchId) {
+      const lang = appConfig.language || 'es';
+      const ragInstruction = (lang === 'en')
+        ? `*Knowledge Base active:* You have access to the user's private local knowledge base via 'list_documents', 'search_knowledge_base', and 'read_chapter_content'. When the user asks about available manuals, documentation, guides, or technical information, proactively consult these tools before concluding.`
+        : `*Base de Conocimiento activa:* Tienes acceso a la base de conocimiento local y manuales privados del usuario mediante las herramientas 'list_documents', 'search_knowledge_base' y 'read_chapter_content'. Ante preguntas sobre documentación disponible, manuales, procedimientos técnicos o normativas, consulta proactivamente los documentos indexados utilizando estas herramientas antes de responder.`;
+      toolsGuide = toolsGuide ? `${toolsGuide}\n\n${ragInstruction}` : ragInstruction;
+    }
+
     let fullSystemPrompt = activePrompt;
     if (toolsGuide) {
       fullSystemPrompt = fullSystemPrompt ? (fullSystemPrompt + '\n\n' + toolsGuide) : toolsGuide;

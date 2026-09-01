@@ -364,7 +364,7 @@
       // 7. Herramienta list_documents (RAG Jerárquico / Base de Conocimiento)
       tools.push(new Tool({
         name: 'list_documents',
-        description: 'Lista los documentos, resúmenes globales y estructura de capítulos indexados en la base de conocimiento local (RAG). Úsala para descubrir qué manuales o archivos existen antes de leer un capítulo.',
+        description: 'Lista todos los documentos, manuales, resúmenes temáticos y la lista completa de capítulos indexados en la base de conocimiento local del usuario. Úsala para descubrir qué información existe o ante preguntas sobre el catálogo documental disponible.',
         parameters: {
           type: 'object',
           properties: {},
@@ -389,7 +389,7 @@
       // 8. Herramienta search_knowledge_base (RAG Jerárquico / Búsqueda)
       tools.push(new Tool({
         name: 'search_knowledge_base',
-        description: 'Busca temas, palabras clave o preguntas dentro de la base de conocimiento local indexada en la rama activa. Devuelve los resúmenes de documentos y capítulos coincidentes.',
+        description: 'Busca temas, palabras clave o preguntas técnicas en la base de conocimiento local del usuario. Devuelve resúmenes de documentos y capítulos coincidentes para identificar qué leer.',
         parameters: {
           type: 'object',
           properties: {
@@ -419,7 +419,7 @@
       // 9. Herramienta read_chapter_content (RAG Jerárquico / Contenido Completo)
       tools.push(new Tool({
         name: 'read_chapter_content',
-        description: 'Recupera el contenido completo y detallado de un capítulo de un documento indexado en la rama activa cuando el resumen no es suficiente.',
+        description: 'Recupera el texto completo, instrucciones detalladas, código y diagramas de un capítulo específico de un documento (indicando docId y chapterId obtenidos previamente).',
         parameters: {
           type: 'object',
           properties: {
