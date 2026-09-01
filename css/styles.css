@@ -137,7 +137,28 @@ body {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+}
 
+.btn-header {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background-color: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border-color);
+  padding: 0.45rem 0.8rem;
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-header:hover {
+  background-color: #f1f5f9;
+  color: var(--text-main);
+  border-color: #cbd5e1;
+}
 
 /* ==========================================================================
    Contenedor Principal del Chat (Usa el 100% del alto disponible)
@@ -1531,7 +1552,24 @@ body {
   flex-shrink: 0;
 }
 
+.btn-detect-reasoning {
+  background: transparent;
+  border: 1px dashed #cbd5e1;
+  padding: 0.4rem 0.6rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+  width: 100%;
+  text-align: center;
+}
 
+.btn-detect-reasoning:hover {
+  background-color: #e2e8f0;
+  color: var(--text-main);
+  border-color: var(--primary);
+}
 
 .reasoning-detection-info {
   font-size: 0.725rem;
@@ -2118,24 +2156,24 @@ input:checked + .slider:before {
   color: #b91c1c;
 }
 
-[data-theme="dark"] .btn-save-profile {
-  background-color: var(--bg-surface);
+body.dark .btn-save-profile {
+  background-color: var(--bg-card);
   color: #60a5fa;
   border-color: #3b82f6;
 }
 
-[data-theme="dark"] .btn-save-profile:hover {
+body.dark .btn-save-profile:hover {
   background-color: #2563eb;
   color: white;
 }
 
-[data-theme="dark"] .btn-delete-profile {
-  background-color: var(--bg-surface);
+body.dark .btn-delete-profile {
+  background-color: var(--bg-card);
   color: #f87171;
   border-color: #7f1d1d;
 }
 
-[data-theme="dark"] .btn-delete-profile:hover {
+body.dark .btn-delete-profile:hover {
   background-color: #450a0a;
   border-color: #ef4444;
   color: #fca5a5;
@@ -2340,7 +2378,9 @@ input:checked + .slider:before {
     padding: 0.6rem 0.85rem;
   }
 
-
+  .btn-header span {
+    display: none;
+  }
 
   .messages-list {
     padding: 1rem 0.5rem 0.5rem 0.5rem;
@@ -2593,7 +2633,15 @@ input:checked + .slider:before {
   border-color: var(--border-color);
 }
 
+[data-theme="dark"] .btn-detect-reasoning {
+  border-color: var(--border-color);
+  color: var(--text-muted);
+}
 
+[data-theme="dark"] .btn-detect-reasoning:hover {
+  background-color: #1e293b;
+  color: var(--text-main);
+}
 
 [data-theme="dark"] .reasoning-option:hover {
   background-color: #1e293b;
