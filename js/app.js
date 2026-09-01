@@ -64,6 +64,7 @@
     window.appConfig = appConfig;
   }
 
+  let currentRagSystemContext = '';
   let chatHistory = [];
   let currentAbortController = null;
   let isGenerating = false;
@@ -361,6 +362,11 @@
     let activePrompt = (appConfig.systemPrompt && appConfig.systemPrompt.trim() !== '')
       ? appConfig.systemPrompt.trim()
       : '';
+
+    // Inyección de Base de Conocimiento (RAG Jerárquico por Ramas) para Context-Caching
+    if (currentRagSystemContext) {
+      activePrompt = activePrompt ? `${currentRagSystemContext}\n\n${activePrompt}` : currentRagSystemContext;
+    }
 
     // Ancla de fecha diaria para máxima autoridad en System Prompt y 100% de aciertos en Context-Cache
     if (appConfig.sendDateTime !== false) {
@@ -1503,6 +1509,18 @@
       ? window.ChatTreeRagUI.getActiveChatBranchId()
       : (appConfig.activeRagBranchId || (Storage.loadConfig ? Storage.loadConfig()?.activeRagBranchId : '') || '');
     appConfig.activeRagBranchId = activeRagBranchId;
+
+    // Cargar contexto jerárquico inicial de la rama RAG para Context-Caching en System Prompt
+    if (activeRagBranchId && window.ChatTreeRagService && window.ChatTreeRagService.buildTreeRagSystemContext) {
+      try {
+        currentRagSystemContext = await window.ChatTreeRagService.buildTreeRagSystemContext(activeRagBranchId);
+      } catch (err) {
+        console.warn('Error al cargar contexto inicial de RAG:', err);
+        currentRagSystemContext = '';
+      }
+    } else {
+      currentRagSystemContext = '';
+    }
 
     while (turnIndex < maxAgentTurns) {
       if (currentAbortController && currentAbortController.signal.aborted) {
