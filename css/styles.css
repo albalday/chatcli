@@ -2120,24 +2120,24 @@ input:checked + .slider:before {
   color: #b91c1c;
 }
 
-body.dark .btn-save-profile {
-  background-color: var(--bg-card);
+[data-theme="dark"] .btn-save-profile {
+  background-color: var(--bg-surface);
   color: #60a5fa;
   border-color: #3b82f6;
 }
 
-body.dark .btn-save-profile:hover {
+[data-theme="dark"] .btn-save-profile:hover {
   background-color: #2563eb;
   color: white;
 }
 
-body.dark .btn-delete-profile {
-  background-color: var(--bg-card);
+[data-theme="dark"] .btn-delete-profile {
+  background-color: var(--bg-surface);
   color: #f87171;
   border-color: #7f1d1d;
 }
 
-body.dark .btn-delete-profile:hover {
+[data-theme="dark"] .btn-delete-profile:hover {
   background-color: #450a0a;
   border-color: #ef4444;
   color: #fca5a5;
