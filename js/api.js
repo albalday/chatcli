@@ -455,9 +455,12 @@
     // Inyectar herramientas agénticas activadas si están disponibles
     let toolsList = [];
     const AgentCore = typeof window !== 'undefined' ? window.ChatAgentCore : (typeof require !== 'undefined' ? (() => { try { return require('./agent-core.js'); } catch(e){ return null; } })() : null);
-    const isRagActive = Boolean(enableAgentRag || activeRagBranchId);
+    const resolvedBranchId = activeRagBranchId ||
+      (typeof window !== 'undefined' && window.ChatTreeRagUI && window.ChatTreeRagUI.getActiveChatBranchId ? window.ChatTreeRagUI.getActiveChatBranchId() : '') ||
+      (typeof window !== 'undefined' && window.appConfig ? window.appConfig.activeRagBranchId : '') || '';
+    const isRagActive = Boolean(enableAgentRag || resolvedBranchId);
 
-    if (enableTools || toolChoice === 'none') {
+    if (enableTools || toolChoice === 'none' || isRagActive) {
       if (AgentCore && AgentCore.registry) {
         toolsList = AgentCore.registry.getDefinitions({
           enableAgentJs,
@@ -465,7 +468,7 @@
           enableAgentSearch,
           enableAgentChart,
           enableAgentRag: isRagActive,
-          activeRagBranchId: isRagActive ? activeRagBranchId : ''
+          activeRagBranchId: isRagActive ? resolvedBranchId : ''
         });
       } else {
         const jsTool = Sandbox.JAVASCRIPT_TOOL_DEFINITION || (typeof window !== 'undefined' && window.ChatSandbox && window.ChatSandbox.JAVASCRIPT_TOOL_DEFINITION);

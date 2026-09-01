@@ -554,6 +554,13 @@
      */
     getDefinitions(filterOptions = {}) {
       const defs = [];
+      const branchId = filterOptions.activeRagBranchId ||
+        (typeof window !== 'undefined' && window.ChatTreeRagUI && window.ChatTreeRagUI.getActiveChatBranchId ? window.ChatTreeRagUI.getActiveChatBranchId() : '') ||
+        (typeof window !== 'undefined' && window.appConfig ? window.appConfig.activeRagBranchId : '') || '';
+      const isRagActive = filterOptions.enableAgentRag !== undefined
+        ? Boolean(filterOptions.enableAgentRag)
+        : (filterOptions.activeRagBranchId !== undefined ? Boolean(filterOptions.activeRagBranchId) : Boolean(branchId));
+
       for (const [name, tool] of this.tools.entries()) {
         // Filtrar por categorías o habilitaciones booleanas
         if (filterOptions.category && tool.category !== filterOptions.category) continue;
@@ -564,7 +571,7 @@
         if ((name === 'fetch_web_page' || name === 'download_pdf') && filterOptions.enableAgentWeb === false) continue;
         if (name === 'search_web' && filterOptions.enableAgentSearch === false) continue;
         if (name === 'render_chart' && filterOptions.enableAgentChart === false) continue;
-        if ((name === 'list_documents' || name === 'search_knowledge_base' || name === 'read_chapter_content' || tool.category === 'rag') && (filterOptions.enableAgentRag === false || (!filterOptions.enableAgentRag && !filterOptions.activeRagBranchId && filterOptions.enableAgentJs !== undefined))) continue;
+        if ((name === 'list_documents' || name === 'search_knowledge_base' || name === 'read_chapter_content' || tool.category === 'rag') && !isRagActive) continue;
 
         defs.push(tool.getDefinition());
       }

@@ -1485,6 +1485,12 @@
     }
 
     const maxAgentTurns = 8;
+    // Sincronizar dinámicamente la rama RAG activa desde ChatTreeRagUI o Storage
+    const activeRagBranchId = (typeof window !== 'undefined' && window.ChatTreeRagUI && window.ChatTreeRagUI.getActiveChatBranchId)
+      ? window.ChatTreeRagUI.getActiveChatBranchId()
+      : (appConfig.activeRagBranchId || (Storage.loadConfig ? Storage.loadConfig()?.activeRagBranchId : '') || '');
+    appConfig.activeRagBranchId = activeRagBranchId;
+
     while (turnIndex < maxAgentTurns) {
       if (currentAbortController && currentAbortController.signal.aborted) {
         break;
@@ -1514,13 +1520,13 @@
         messages: buildEffectiveMessages(),
         temperature: appConfig.temperature,
         reasoningEffort: appConfig.reasoningEffort || 'none',
-        enableTools: (appConfig.enableAgentJs !== false || appConfig.enableAgentWeb !== false || appConfig.enableAgentSearch !== false || appConfig.enableAgentChart !== false || Boolean(appConfig.activeRagBranchId)),
+        enableTools: (appConfig.enableAgentJs !== false || appConfig.enableAgentWeb !== false || appConfig.enableAgentSearch !== false || appConfig.enableAgentChart !== false || Boolean(activeRagBranchId)),
         enableAgentJs: appConfig.enableAgentJs !== false,
         enableAgentWeb: appConfig.enableAgentWeb !== false,
         enableAgentSearch: appConfig.enableAgentSearch !== false,
         enableAgentChart: appConfig.enableAgentChart !== false,
-        enableAgentRag: Boolean(appConfig.activeRagBranchId),
-        activeRagBranchId: appConfig.activeRagBranchId || '',
+        enableAgentRag: Boolean(activeRagBranchId),
+        activeRagBranchId: activeRagBranchId || '',
         enableContextCache: appConfig.enableContextCache !== false,
         cacheInvalidated: currentCacheInvalidated,
         cacheRevision: sessionCacheRevision,
@@ -1867,8 +1873,8 @@
         enableAgentWeb: appConfig.enableAgentWeb !== false,
         enableAgentSearch: appConfig.enableAgentSearch !== false,
         enableAgentChart: appConfig.enableAgentChart !== false,
-        enableAgentRag: Boolean(appConfig.activeRagBranchId),
-        activeRagBranchId: appConfig.activeRagBranchId || '',
+        enableAgentRag: Boolean(activeRagBranchId),
+        activeRagBranchId: activeRagBranchId || '',
         enableContextCache: appConfig.enableContextCache !== false,
         signal: currentAbortController ? currentAbortController.signal : undefined,
 
