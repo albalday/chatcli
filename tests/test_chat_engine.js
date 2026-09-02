@@ -248,3 +248,54 @@ test('ChatEngine - executeAgentTurnLoop protege contra bucles infinitos repetido
 
   ChatAPI.streamChatCompletion = originalStream;
 });
+
+test('ChatEngine - executeAgentTurnLoop limpia el cursor inicial del contenedor en turnIndex 0', async (t) => {
+  const originalStream = ChatAPI.streamChatCompletion;
+
+  ChatAPI.streamChatCompletion = async (params) => {
+    if (params.onChunk) {
+      params.onChunk('Respuesta de prueba', 'Respuesta de prueba', { ttftSec: '0.1', tokensPerSec: '40', totalSec: '0.2', tokens: 5 });
+    }
+    if (params.onDone) {
+      params.onDone('Respuesta de prueba', null, null);
+    }
+    return { accumulatedText: 'Respuesta de prueba', toolCalls: null, stats: null };
+  };
+
+  const fakeContainer = {
+    innerHTML: '<span class="streaming-cursor initial-cursor"></span>',
+    querySelectorAll: () => [],
+    appendChild: (child) => {
+      fakeContainer.children = fakeContainer.children || [];
+      fakeContainer.children.push(child);
+    }
+  };
+
+  global.document = {
+    createElement: (tag) => ({
+      tagName: tag,
+      className: '',
+      style: {},
+      setAttribute: () => {},
+      appendChild: () => {},
+      querySelectorAll: () => [],
+      ownerDocument: global.document
+    })
+  };
+
+  const res = await ChatEngine.executeAgentTurnLoop({
+    apiUrl: 'http://localhost:1234/v1',
+    apiType: 'openai',
+    model: 'test-model',
+    chatHistory: [{ role: 'user', content: 'Hola' }],
+    appConfig: { apiUrl: 'http://localhost:1234/v1', model: 'test-model' },
+    container: fakeContainer
+  });
+
+  // El cursor inicial debe haberse limpiado antes de añadir el agentic-turn-block
+  assert.equal(res.success, true);
+  assert.equal(fakeContainer.innerHTML, '');
+
+  ChatAPI.streamChatCompletion = originalStream;
+  delete global.document;
+});

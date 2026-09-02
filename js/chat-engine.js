@@ -358,7 +358,7 @@
 
       let turnBlock = null;
       if (container && typeof document !== 'undefined') {
-        if (turnIndex === 0 && container.innerHTML.includes('tool-loading-placeholder')) {
+        if (turnIndex === 0) {
           container.innerHTML = '';
         }
         turnBlock = document.createElement('div');
