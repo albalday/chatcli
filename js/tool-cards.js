@@ -75,40 +75,6 @@
     const cardDiv = document.createElement('div');
     cardDiv.className = 'tool-card-wrapper';
 
-    // 1. Web Page / PDF Fetch
-    if (norm === 'fetchwebpage' || norm === 'downloadpdf') {
-      const isPdfCall = norm === 'downloadpdf';
-      const urlToFetch = toolArgs.url || toolArgs.URL || toolArgs.uri || toolArgs.link || toolArgs.href || toolArgs.path || toolArgs.input || '';
-      const cardIcon = isPdfCall ? '📄' : '🌐';
-      const cardTitle = isPdfCall ? t('tool_pdf_title') : t('tool_web_title');
-
-      cardDiv.innerHTML = `
-        <div class="web-request-card ${isPdfCall ? 'pdf-request-card' : ''}">
-          <div class="web-card-header">
-            <div class="web-card-title">
-              <span>${cardIcon}</span>
-              <span>${cardTitle}</span>
-            </div>
-            <div class="tool-card-header-actions">
-              <span class="web-card-badge status-loading">⏳ ${isPdfCall ? (t('tool_badge_downloading') || 'Descargando...') : (t('tool_badge_fetching') || 'Consultando...')}</span>
-              <button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Minimizar'}"><span>▾</span></button>
-            </div>
-          </div>
-          <div class="tool-card-collapsible-body">
-            <div class="web-card-section web-request-section">
-              <div class="section-label">${t('tool_web_requested_url')}</div>
-              <div class="url-badge"><a href="${Markdown.sanitizeUrl(urlToFetch)}" target="_blank" rel="noopener noreferrer">${Markdown.escapeHtml(urlToFetch)}</a></div>
-            </div>
-            <div class="web-card-section web-response-section">
-              <div class="section-label section-response-label">${t('tool_web_receiving') || 'Recibiendo contenido...'}</div>
-              <div class="web-response-body tool-loading-placeholder">⏳ ${isPdfCall ? t('tool_loading_pdf') : t('tool_loading_web')}</div>
-            </div>
-          </div>
-        </div>
-      `;
-      return cardDiv;
-    }
-
     // 4. Base de Conocimiento RAG (list_documents / search_knowledge_base / read_chapter_content)
     if (norm === 'listdocuments' || norm === 'listknowledgebase' || norm === 'getdocuments' || norm === 'listdocs' || norm === 'listardocumentos' ||
         norm === 'searchknowledgebase' || norm === 'searchkb' || norm === 'searchdocuments' || norm === 'searchknowledge' || norm === 'buscarendocumentos') {
@@ -210,53 +176,6 @@
 
     const cardDiv = document.createElement('div');
     cardDiv.className = 'tool-card-wrapper';
-
-    // 4. Consulta Web o Descarga de PDF
-    if (norm === 'fetchwebpage' || norm === 'downloadpdf') {
-      const isPdfCall = norm === 'downloadpdf';
-      const urlToFetch = toolArgs.url || toolArgs.URL || toolArgs.uri || toolArgs.link || toolArgs.href || toolArgs.path || toolArgs.input || '';
-      let responseContent = '';
-      let httpStatus = 200;
-
-      if (toolMsg && toolMsg.content) {
-        try {
-          const parsed = JSON.parse(toolMsg.content);
-          responseContent = parsed.content || parsed.error || toolMsg.content;
-          httpStatus = parsed.status || 200;
-        } catch (e) {
-          responseContent = toolMsg.content;
-        }
-      }
-
-      const cardIcon = isPdfCall ? '📄' : '🌐';
-      const cardTitle = isPdfCall ? t('tool_pdf_title') : t('tool_web_title');
-
-      cardDiv.innerHTML = `
-        <div class="web-request-card ${isPdfCall ? 'pdf-request-card' : ''}">
-          <div class="web-card-header">
-            <div class="web-card-title">
-              <span>${cardIcon}</span>
-              <span>${cardTitle}</span>
-            </div>
-            <div class="tool-card-header-actions">
-              <span class="web-card-badge status-success">${isPdfCall ? 'PDF OK' : `HTTP ${httpStatus} OK`}</span>
-              <button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Minimizar'}"><span>▾</span></button>
-            </div>
-          </div>
-          <div class="tool-card-collapsible-body">
-            <div class="web-card-section web-request-section">
-              <div class="section-label">${t('tool_web_requested_url') || 'URL consultada:'}</div>
-              <div class="url-badge"><a href="${Markdown.sanitizeUrl(urlToFetch)}" target="_blank" rel="noopener noreferrer">${Markdown.escapeHtml(urlToFetch)}</a></div>
-            </div>
-            <div class="web-card-section web-response-section">
-              <div class="section-label">${t('tool_web_content_received', { size: responseContent.length + ' chars' })}</div>
-              <div class="web-response-body"><code>${Markdown.escapeHtml(responseContent.slice(0, 1500))}${responseContent.length > 1500 ? '...' : ''}</code></div>
-            </div>
-          </div>
-        </div>
-      `;
-      return cardDiv;
-    }
 
     // 5a. Base de Conocimiento RAG (list_documents / search_knowledge_base)
     if (norm === 'listdocuments' || norm === 'listknowledgebase' || norm === 'getdocuments' || norm === 'listdocs' || norm === 'listardocumentos' ||
@@ -381,34 +300,6 @@
     const toolView = resolveToolView(rawName);
     if (typeof toolView?.updateLiveCard === 'function') {
       toolView.updateLiveCard(cardDiv, toolArgs, result, elapsedMs, createToolViewContext());
-      return;
-    }
-
-    // 1. Web Page / PDF Fetch
-    if (norm === 'fetchwebpage' || norm === 'downloadpdf') {
-      const isPdfCall = norm === 'downloadpdf';
-      const isSuccess = result?.success !== false && !result?.error;
-      const httpStatus = result?.status || (isSuccess ? 200 : 500);
-      const contentStr = result?.content || result?.error || '';
-
-      const badgeEl = cardDiv.querySelector('.web-card-badge');
-      if (badgeEl) {
-        badgeEl.className = `web-card-badge ${isSuccess ? 'status-success' : 'status-error'}`;
-        badgeEl.textContent = isPdfCall
-          ? (isSuccess ? `✅ PDF OK (${elapsedMs || 0}ms)` : `❌ Error PDF (${elapsedMs || 0}ms)`)
-          : (isSuccess ? `✅ HTTP ${httpStatus} OK (${elapsedMs || 0}ms)` : `❌ HTTP ${httpStatus} Error (${elapsedMs || 0}ms)`);
-      }
-
-      const labelEl = cardDiv.querySelector('.section-response-label');
-      if (labelEl) {
-        labelEl.textContent = t('tool_web_content_received', { size: `${contentStr.length} chars` }) || `Contenido recibido (${contentStr.length} caracteres):`;
-      }
-
-      const bodyEl = cardDiv.querySelector('.web-response-body');
-      if (bodyEl) {
-        bodyEl.className = 'web-response-body';
-        bodyEl.innerHTML = `<code>${Markdown.escapeHtml(contentStr.slice(0, 1500))}${contentStr.length > 1500 ? '...' : ''}</code>`;
-      }
       return;
     }
 

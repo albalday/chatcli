@@ -74,4 +74,9 @@ test('fetch_web_page y download_pdf - usan WebBrowser inyectado con sus opciones
   assert.equal(pdfTool.serializeResultForModel({}, pdfResult), JSON.stringify(pdfResult));
   assert.match(fetchTool.formatDispatchMarkdown({ url: 'https://example.com/article' }, pageResult), /fetch_web_page/);
   assert.match(pdfTool.formatDispatchMarkdown({ url: 'https://example.com/document.pdf' }, pdfResult), /download_pdf/);
+  for (const tool of [fetchTool, pdfTool]) {
+    assert.equal(typeof tool.view.createLiveCard, 'function');
+    assert.equal(typeof tool.view.updateLiveCard, 'function');
+    assert.equal(typeof tool.view.renderHistoricalCard, 'function');
+  }
 });
