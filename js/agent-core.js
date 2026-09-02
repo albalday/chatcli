@@ -45,14 +45,6 @@
     return toolModule.createTool(Tool);
   }
 
-  function getCharts() {
-    if (typeof window !== 'undefined' && window.ChatCharts) return window.ChatCharts;
-    if (typeof require !== 'undefined') {
-      try { return require('./charts.js'); } catch (e) {}
-    }
-    return null;
-  }
-
   function getAPI() {
     if (typeof window !== 'undefined' && window.ChatAPI) return window.ChatAPI;
     if (typeof require !== 'undefined') {
@@ -65,26 +57,6 @@
     if (typeof window !== 'undefined' && window.ChatContextManager) return window.ChatContextManager;
     if (typeof require !== 'undefined') {
       try { return require('./context-manager.js'); } catch (e) {}
-    }
-    return null;
-  }
-
-  function getRagStorage() {
-    if (typeof window !== 'undefined' && (window.ChatRagStorage || window.RagStorage)) {
-      return window.ChatRagStorage || window.RagStorage;
-    }
-    if (typeof require !== 'undefined') {
-      try { return require('./ragStorage.js'); } catch (e) {}
-    }
-    return null;
-  }
-
-  function getTreeRagService() {
-    if (typeof window !== 'undefined' && (window.ChatTreeRagService || window.ChatService)) {
-      return window.ChatTreeRagService || window.ChatService;
-    }
-    if (typeof require !== 'undefined') {
-      try { return require('./chatService.js'); } catch (e) {}
     }
     return null;
   }
@@ -286,7 +258,7 @@
 
   /**
    * Proveedor de herramientas nativas de ZeroChat (BuiltinToolProvider).
-   * Provee: execute_javascript, search_web, fetch_web_page, download_pdf, render_chart.
+   * Provee las herramientas nativas registradas en módulos autocontenidos.
    */
   class BuiltinToolProvider extends BaseToolProvider {
     constructor() {
@@ -304,245 +276,12 @@
       tools.push(createBuiltinTool('fetch_web_page', 'ChatBuiltinFetchWebPageTool', './tools/builtin/fetch-web-page.tool.js'));
       tools.push(createBuiltinTool('download_pdf', 'ChatBuiltinDownloadPdfTool', './tools/builtin/download-pdf.tool.js'));
 
-      // 5. Herramienta render_chart
-      tools.push(new Tool({
-        id: 'render_chart',
-        name: 'render_chart',
-        description: 'Genera y visualiza un gráfico interactivo (barras, líneas, donut o sectores) a partir de datos numéricos o tablas.',
-        parameters: {
-          type: 'object',
-          properties: {
-            type: { type: 'string', enum: ['bar', 'line', 'pie', 'doughnut'], description: 'Tipo de gráfico.' },
-            title: { type: 'string', description: 'Título descriptivo del gráfico.' },
-            description: { type: 'string', description: 'Breve explicación de los datos.' },
-            labels: { type: 'array', items: { type: 'string' }, description: 'Etiquetas del eje X o categorías.' },
-            datasets: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  label: { type: 'string' },
-                  data: { type: 'array', items: { type: 'number' } },
-                  color: { type: 'string' }
-                },
-                required: ['label', 'data']
-              },
-              description: 'Series de datos numéricos.'
-            }
-          },
-          required: ['type', 'title', 'labels', 'datasets']
-        },
-        aliases: ['renderchart', 'draw_chart', 'create_chart', 'plot_chart', 'generate_chart', 'show_chart', 'chart', 'grafico'],
-        category: 'charts',
-        metadata: { icon: '📊', label: 'render_chart' },
-        ui: {
-          titleKey: 'agent_chart_title',
-          titleFallback: '📊 Visualización de Datos y Gráficos Nativos (SVG)',
-          descKey: 'agent_chart_desc',
-          descFallback: 'Permite al modelo invocar render_chart para generar y mostrar gráficos interactivos de barras, líneas o sectores sin librerías externas.',
-          icon: '📊',
-          defaultEnabled: true,
-          showInSettings: true
-        },
-        promptGuide: (lang) => lang === 'en'
-          ? '- `render_chart(type="...", title="...", labels=[...], datasets=[...])`: Generates and displays native interactive SVG charts (bar, line, pie, doughnut).'
-          : '- `render_chart(type="...", title="...", labels=[...], datasets=[...])`: Genera y visualiza gráficos SVG nativos interactivos (barras, líneas, sectores, donut).',
-        handler: async (args, context) => {
-          const Charts = getCharts();
-          if (!Charts || (!Charts.renderChartCard && !Charts.renderBarChart)) {
-            return { success: false, error: 'Módulo Charts no disponible.' };
-          }
-          const svgHtml = Charts.renderChartCard ? Charts.renderChartCard(args) : (Charts.renderBarChart ? Charts.renderBarChart(args.labels, args.datasets) : '');
-          return {
-            success: true,
-            svg: svgHtml,
-            chartData: args,
-            title: args.title || 'Gráfico'
-          };
-        },
-        result: {
-          toModel: (args, _result, outcome) => JSON.stringify({
-            success: outcome?.ok !== false,
-            type: args.type || 'bar',
-            title: args.title || 'Gráfico'
-          }),
-          toMarkdown: (args) => `> 📊 **render_chart** (${args.type || 'bar'})\n> Título: "${args.title || 'Gráfico'}"\n\n`
-        }
-      }));
-
-      // 6. Herramienta get_current_datetime
-      tools.push(new Tool({
-        id: 'get_current_datetime',
-        name: 'get_current_datetime',
-        description: 'Obtiene la fecha, hora, día de la semana y zona horaria actual en tiempo real en el cliente.',
-        parameters: {
-          type: 'object',
-          properties: {
-            timezone: { type: 'string', description: 'Zona horaria opcional (ej: "Europe/Madrid", "America/New_York", "UTC").' }
-          }
-        },
-        aliases: ['get_current_time', 'get_datetime', 'current_time', 'current_date', 'get_date', 'now', 'fecha_actual', 'hora_actual'],
-        category: 'system',
-        metadata: { icon: '⏱️', label: 'get_current_datetime' },
-        ui: { showInSettings: false },
-        promptGuide: (lang) => lang === 'en'
-          ? '- `get_current_datetime(timezone="...")`: Retrieves the current date, exact time, day of week and timezone in real-time.'
-          : '- `get_current_datetime(timezone="...")`: Obtiene la fecha, hora exacta, día de la semana y zona horaria actual en tiempo real.',
-        handler: async (args, context) => {
-          const now = new Date();
-          const tz = args.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-          return {
-            success: true,
-            iso: now.toISOString(),
-            date: now.toLocaleDateString('es-ES', { timeZone: tz, weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
-            time: now.toLocaleTimeString('es-ES', { timeZone: tz, hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-            timestamp: now.getTime(),
-            timezone: tz
-          };
-        },
-        result: {
-          toMarkdown: (_args, result) => {
-            const resultText = typeof result === 'object' ? JSON.stringify(result) : String(result ?? '');
-            return `> ⚙️ **get_current_datetime**\n> \`\`\`\n> ${resultText.slice(0, 300)}\n> \`\`\``;
-          }
-        }
-      }));
-
-      // 7. Herramienta list_documents (RAG Jerárquico / Base de Conocimiento)
-      tools.push(new Tool({
-        id: 'list_documents',
-        name: 'list_documents',
-        description: 'Lista todos los documentos, manuales, resúmenes temáticos y la lista completa de capítulos indexados en la base de conocimiento local del usuario. Úsala para descubrir qué información existe o ante preguntas sobre el catálogo documental disponible.',
-        parameters: {
-          type: 'object',
-          properties: {},
-          required: []
-        },
-        aliases: ['listdocuments', 'list_knowledge_base', 'list_docs', 'get_documents', 'listar_documentos'],
-        category: 'rag',
-        metadata: { icon: '📖', label: 'list_documents' },
-        ui: { showInSettings: false },
-        isAvailable: (config = {}) => Boolean(config.activeRagBranchId || config.enableAgentRag),
-        handler: async (args, context) => {
-          const TreeRagService = getTreeRagService();
-          if (!TreeRagService || !TreeRagService.resolveListDocumentsToolCall) {
-            return { success: false, error: 'Servicio de RAG no disponible.' };
-          }
-          const branchId = context?.activeRagBranchId || context?.branchId || (typeof window !== 'undefined' && window.ChatStorage?.loadConfig?.()?.activeRagBranchId) || '';
-          return TreeRagService.resolveListDocumentsToolCall(branchId);
-        },
-        result: {
-          toModel: (_args, result) => result?.text || JSON.stringify(result || {}),
-          toMarkdown: (_args, result) => `> 📖 **list_documents** (${result?.count || 0} documentos indexados)\n\n`
-        },
-        formatter: (_args, result) => {
-          return `> 📖 **list_documents** (${result.count || 0} documentos disponibles)\n> \`\`\`\n> ${String(result.text || '').split('\n').join('\n> ')}\n> \`\`\``;
-        }
-      }));
-
-      // 8. Herramienta search_knowledge_base (RAG Jerárquico / Búsqueda)
-      tools.push(new Tool({
-        id: 'search_knowledge_base',
-        name: 'search_knowledge_base',
-        description: 'Busca temas, palabras clave o preguntas técnicas en la base de conocimiento local del usuario. Devuelve resúmenes de documentos y capítulos coincidentes para identificar qué leer.',
-        parameters: {
-          type: 'object',
-          properties: {
-            query: {
-              type: 'string',
-              description: 'Término, tema o pregunta clave a buscar en la base de conocimiento.'
-            }
-          },
-          required: ['query']
-        },
-        aliases: ['search_kb', 'searchknowledgebase', 'search_documents', 'search_knowledge', 'buscar_en_documentos'],
-        category: 'rag',
-        metadata: { icon: '🔍', label: 'search_knowledge_base' },
-        ui: { showInSettings: false },
-        isAvailable: (config = {}) => Boolean(config.activeRagBranchId || config.enableAgentRag),
-        handler: async (args, context) => {
-          const TreeRagService = getTreeRagService();
-          if (!TreeRagService || !TreeRagService.resolveSearchKnowledgeBaseToolCall) {
-            return { success: false, error: 'Servicio de RAG no disponible.' };
-          }
-          const branchId = context?.activeRagBranchId || context?.branchId || (typeof window !== 'undefined' && window.ChatStorage?.loadConfig?.()?.activeRagBranchId) || '';
-          return TreeRagService.resolveSearchKnowledgeBaseToolCall(branchId, args);
-        },
-        result: {
-          toModel: (_args, result) => result?.text || JSON.stringify(result || {}),
-          toMarkdown: (args, result) => `> 🔍 **search_knowledge_base** ("${args.query || ''}") [${result?.matchesCount || 0} coincidencias]\n\n`
-        },
-        formatter: (args, result) => {
-          return `> 🔍 **search_knowledge_base** ("${args.query || ''}") [${result.matchesCount || 0} coincidencias]\n> \`\`\`\n> ${String(result.text || '').split('\n').join('\n> ')}\n> \`\`\``;
-        }
-      }));
-
-      // 9. Herramienta read_chapter_content (RAG Jerárquico / Contenido Completo)
-      tools.push(new Tool({
-        id: 'read_chapter_content',
-        name: 'read_chapter_content',
-        description: 'Recupera el texto completo, instrucciones detalladas, código y diagramas de un capítulo específico de un documento (indicando docId y chapterId obtenidos previamente).',
-        parameters: {
-          type: 'object',
-          properties: {
-            docId: {
-              type: 'string',
-              description: 'El identificador único del documento (docId).'
-            },
-            chapterId: {
-              type: 'number',
-              description: 'El número de ID del capítulo a consultar.'
-            }
-          },
-          required: ['docId', 'chapterId']
-        },
-        aliases: ['readchaptercontent', 'read_chapter', 'get_chapter', 'get_chapter_content', 'read_doc_chapter'],
-        category: 'rag',
-        metadata: { icon: '📖', label: 'read_chapter_content' },
-        ui: { showInSettings: false },
-        isAvailable: (config = {}) => Boolean(config.activeRagBranchId || config.enableAgentRag),
-        handler: async (args, context) => {
-          const TreeRagService = getTreeRagService();
-          if (TreeRagService && TreeRagService.resolveChapterToolCall) {
-            return TreeRagService.resolveChapterToolCall(args);
-          }
-          const RagStorage = getRagStorage();
-          if (!RagStorage || !RagStorage.getChapterContent) {
-            return { success: false, error: 'Módulo de almacenamiento RAG no disponible.' };
-          }
-          const docId = args.docId || args.doc_id || args.id || '';
-          const chapterId = typeof args.chapterId === 'number' ? args.chapterId : parseInt(args.chapter_id || args.chapterId || args.chapter, 10);
-
-          if (!docId || isNaN(chapterId)) {
-            return { success: false, error: 'Parámetros inválidos: docId y chapterId numérico son requeridos.' };
-          }
-
-          const content = await RagStorage.getChapterContent(docId, chapterId);
-          if (content !== null && typeof content === 'string') {
-            return {
-              success: true,
-              docId,
-              chapterId,
-              charCount: content.length,
-              content
-            };
-          }
-          return {
-            success: false,
-            error: `No se encontró el capítulo ${chapterId} en el documento [${docId}].`
-          };
-        },
-        result: {
-          toModel: (_args, result) => result?.content || JSON.stringify(result || {}),
-          toMarkdown: (args) => `> 📖 **read_chapter_content** (Doc: "${args.docId}", Cap: ${args.chapterId})\n\n`
-        },
-        formatter: (args, result) => {
-          if (result.success) {
-            return `> 📖 **read_chapter_content** (Doc: \`${result.docId}\`, Cap: \`${result.chapterId}\`)\n> \`\`\`text\n> ${String(result.content).split('\n').join('\n> ')}\n> \`\`\``;
-          }
-          return `> 📖 **read_chapter_content** (Doc: \`${args.docId}\`, Cap: \`${args.chapterId}\`)\n> ❌ ${result.error || 'Error al recuperar capítulo'}`;
-        }
-      }));
+      // 5-9. Gráficos, fecha y RAG como módulos autocontenidos.
+      tools.push(createBuiltinTool('render_chart', 'ChatBuiltinRenderChartTool', './tools/builtin/render-chart.tool.js'));
+      tools.push(createBuiltinTool('get_current_datetime', 'ChatBuiltinGetCurrentDatetimeTool', './tools/builtin/get-current-datetime.tool.js'));
+      tools.push(createBuiltinTool('list_documents', 'ChatBuiltinListDocumentsTool', './tools/builtin/list-documents.tool.js'));
+      tools.push(createBuiltinTool('search_knowledge_base', 'ChatBuiltinSearchKnowledgeBaseTool', './tools/builtin/search-knowledge-base.tool.js'));
+      tools.push(createBuiltinTool('read_chapter_content', 'ChatBuiltinReadChapterContentTool', './tools/builtin/read-chapter-content.tool.js'));
 
       return tools;
     }
