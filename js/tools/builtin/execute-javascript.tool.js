@@ -100,10 +100,8 @@
       const output = isSuccess
         ? (result.result || (result.logs && result.logs.length > 0 ? result.logs.join('\n') : 'undefined'))
         : `Error: ${result.error || 'Error de ejecución'}`;
-      resContainer.innerHTML = `
-        <div class="tool-result-label">${t('tool_sandbox_output') || 'Salida del Sandbox:'}</div>
-        <pre class="tool-result-pre"><code>${Markdown.escapeHtml(output)}</code></pre>
-      `;
+      const cleanOutput = String(output ?? '').trim();
+      resContainer.innerHTML = `<div class="tool-result-label">${t('tool_sandbox_output') || 'Salida del Sandbox:'}</div><pre class="tool-result-pre"><code>${Markdown.escapeHtml(cleanOutput)}</code></pre>`;
     }
   }
 
@@ -122,6 +120,7 @@
         output = toolMessage.content;
       }
     }
+    const cleanOutput = String(output ?? '').trim();
     cardDiv.innerHTML = `
       <div class="tool-execution-card">
         <div class="tool-card-header">
@@ -132,11 +131,8 @@
           </div>
         </div>
         <div class="tool-card-collapsible-body">
-          <pre class="tool-card-code"><code>${Markdown.escapeHtml(getCode(args))}</code></pre>
-          <div class="tool-card-result">
-            <div class="tool-result-label">${t('tool_sandbox_output') || 'Salida del Sandbox:'}</div>
-            <pre class="tool-result-pre"><code>${Markdown.escapeHtml(output)}</code></pre>
-          </div>
+          <pre class="tool-card-code"><code>${Markdown.escapeHtml(getCode(args).trim())}</code></pre>
+          <div class="tool-card-result"><div class="tool-result-label">${t('tool_sandbox_output') || 'Salida del Sandbox:'}</div><pre class="tool-result-pre"><code>${Markdown.escapeHtml(cleanOutput)}</code></pre></div>
         </div>
       </div>
     `;

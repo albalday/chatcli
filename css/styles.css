@@ -861,7 +861,25 @@ body {
   border-top: 1px solid #e2e8f0;
   color: #1e293b;
   font-family: var(--font-mono);
+}
+
+.tool-result-label {
+  font-size: 0.725rem;
+  font-weight: 600;
+  color: #64748b;
+  margin: 0 0 0.25rem 0;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.tool-result-pre {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  font-family: inherit;
+  font-size: inherit;
   white-space: pre-wrap;
+  word-break: break-word;
 }
 
 /* Subzona de Pantalla: Tarjeta de Consulta Web en Modo Agente */
@@ -2721,6 +2739,10 @@ input:checked + .slider:before {
   background-color: #090d16;
   border-top-color: var(--border-color);
   color: #e2e8f0;
+}
+
+[data-theme="dark"] .tool-result-label {
+  color: #94a3b8;
 }
 
 /* Estadísticas de respuesta con texto negro de alto contraste en Modo Oscuro */
