@@ -1,5 +1,5 @@
 /**
- * Aplicación principal del cliente de chat Web (ZeroChat v5.2).
+ * Aplicación principal del cliente de chat Web (ZeroChat v5.3).
  * Incluye:
  * - Soporte Multi-idioma (Castellano / Inglés) con autodetección por navegador y persistencia.
  * - Selector de nivel de razonamiento (Thinking/CoT) con detección automática de capacidades del modelo.
@@ -2808,7 +2808,7 @@
       exportConversationAsPrint
     };
 
-    console.log('💬 ZeroChat v5.2 initialized successfully with Autonomous Agentic Engine, Traffic Debug Logs and Tree-RAG.');
+    console.log('💬 ZeroChat v5.3 initialized successfully with Autonomous Agentic Engine, Traffic Debug Logs and Tree-RAG.');
   }
 
   if (document.readyState === 'loading') {

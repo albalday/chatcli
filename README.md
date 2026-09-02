@@ -1,6 +1,6 @@
-# ⚡ ZeroChat - Cliente Web Universal, Agente IA Autónomo & RAG Local (v5.2)
+# ⚡ ZeroChat - Cliente Web Universal, Agente IA Autónomo & RAG Local (v5.3)
 
-[![Versión](https://img.shields.io/badge/versión-5.2-blue.svg)](zerochat.html)
+[![Versión](https://img.shields.io/badge/versión-5.3-blue.svg)](zerochat.html)
 [![Zero-Instalación](https://img.shields.io/badge/instalación-0%20dependencias-success.svg)](zerochat.html)
 [![Privacidad](https://img.shields.io/badge/privacidad-100%25%20local-brightgreen.svg)](#-privacidad-y-almacenamiento-local)
 [![Multi-Idioma](https://img.shields.io/badge/idiomas-ES%20%7C%20EN-orange.svg)](#-soporte-multi-idioma-i18n)
@@ -40,9 +40,9 @@ ZeroChat incluye un catálogo completo de herramientas integradas con tarjetas i
 - **`fetch_web_page` & `download_pdf`**: Navegación, scraping y lectura de páginas web y documentos PDF en línea.
 - **Protocolo MCP (Model Context Protocol)**: Conexión con servidores MCP para descubrir e invocar herramientas personalizadas.
 
-### 3. 🌳 Tree-RAG: Base de Conocimiento Jerárquica Local (Experimental en v5.2)
+### 3. 🌳 Tree-RAG: Base de Conocimiento Jerárquica Local (Experimental en v5.3)
 > [!NOTE]
-> **Aviso de Estado Experimental**: La implementación de **Tree-RAG** incluida en esta versión **v5.2** tiene carácter experimental / beta para pruebas de flujo de extracción de diagramas, indexación de capítulos y recuperación contextual. La versión definitiva, optimizada y completa del motor Tree-RAG se publicará formalmente en la versión **v6.0**.
+> **Aviso de Estado Experimental**: La implementación de **Tree-RAG** incluida en esta versión **v5.3** tiene carácter experimental / beta para pruebas de flujo de extracción de diagramas, indexación de capítulos y recuperación contextual. La versión definitiva, optimizada y completa del motor Tree-RAG se publicará formalmente en la versión **v6.0**.
 
 - **Indexación en Cliente**: Ingestión ultrarrápida de documentos PDF, Markdown y TXT organizados en ramas de conocimiento.
 - **Extracción de Diagramas e Imágenes**: Normalización de esquemas e imágenes de documentos (incluyendo conversión de espacios de color Adobe CMYK a sRGB JPEG) almacenados en IndexedDB.
@@ -128,5 +128,4 @@ Desde el diseño de la arquitectura modular, el sistema reactivo de estado, los 
 ## 📄 Licencia
 
 Este proyecto se distribuye bajo la licencia **MIT**. Consulta el archivo `LICENSE` para más detalles.
-
 
