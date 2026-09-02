@@ -42,6 +42,7 @@
           branchId: 'string',
           documentId: 'string',
           chunkId: 'string',
+          rawTitle: 'string',
           documentTitle: 'string',
           sectionTitle: 'string',
           content: 'string',
@@ -53,12 +54,18 @@
       if (chunks.length > 0) {
         const records = chunks.map(chunk => {
           const document = documentsById.get(chunk.documentId) || {};
+          const rawDocTitle = document.title || '';
+          const unsluggedDocTitle = rawDocTitle.replace(/[_\-]+/g, ' ');
+          const searchableDocTitle = unsluggedDocTitle !== rawDocTitle
+            ? `${rawDocTitle} ${unsluggedDocTitle}`
+            : rawDocTitle;
           return {
             id: chunk.id,
             branchId,
             documentId: chunk.documentId,
             chunkId: chunk.id,
-            documentTitle: document.title || '',
+            rawTitle: rawDocTitle,
+            documentTitle: searchableDocTitle,
             sectionTitle: chunk.title || '',
             content: chunk.content || '',
             fileType: document.fileType || '',
@@ -79,15 +86,48 @@
     }
   }
 
+  function prepareSearchQuery(rawQuery) {
+    if (!rawQuery) return { cleanedTerm: '', tolerance: 0 };
+    // 1. Eliminar extensiones de archivo que solo añaden ruido (.pdf, .txt, etc.)
+    let cleaned = String(rawQuery).replace(/\.(?:pdf|txt|md|csv|json)\b/gi, ' ');
+    // 2. Eliminar operadores booleanos aislados en mayúsculas
+    cleaned = cleaned.replace(/\b(?:OR|AND|NOT)\b/g, ' ');
+    // 3. Normalizar guiones y barras bajas a espacios para que "3M_2018_10K" se busque como términos individuales
+    cleaned = cleaned.replace(/[_\-]+/g, ' ');
+    // 4. Limpiar comillas, corchetes y caracteres conflictivos para el tokenizador
+    cleaned = cleaned.replace(/["'()[\]{}#*:;]/g, ' ');
+    cleaned = cleaned.replace(/\s+/g, ' ').trim();
+
+    // 5. Tolerancia inteligente:
+    // Si contiene tokens cortos (<= 3 caracteres como "3M", "AMD", "Q1", "SEC"), usar tolerance 0
+    // para evitar falsos positivos por distancia Levenshtein (ej. "3M" <-> "TM" o "PM")
+    const tokens = cleaned.split(/\s+/).filter(Boolean);
+    const hasShortToken = tokens.some(t => t.length > 0 && t.length <= 3);
+    const tolerance = hasShortToken ? 0 : 1;
+
+    return { cleanedTerm: cleaned || String(rawQuery).trim(), tolerance };
+  }
+
   async function searchBranch(branchId, term, options = {}) {
-    const query = String(term || '').trim();
-    if (!query) return { count: 0, elapsed: null, hits: [] };
+    const rawQuery = String(term || '').trim();
+    if (!rawQuery) return { count: 0, elapsed: null, hits: [] };
+    const { cleanedTerm, tolerance: autoTolerance } = prepareSearchQuery(rawQuery);
+    if (!cleanedTerm) return { count: 0, elapsed: null, hits: [] };
+
     const db = await buildBranchIndex(branchId);
+    const tolerance = Number.isInteger(options.tolerance) ? options.tolerance : autoTolerance;
+    const limit = Number(options.limit) > 0 ? Number(options.limit) : 10;
+
     const result = await Orama.search(db, {
-      term: query,
+      term: cleanedTerm,
       properties: ['documentTitle', 'sectionTitle', 'content'],
-      limit: Number(options.limit) > 0 ? Number(options.limit) : 8,
-      tolerance: Number.isInteger(options.tolerance) ? options.tolerance : 1
+      boost: {
+        documentTitle: 5,
+        sectionTitle: 2,
+        content: 1
+      },
+      limit,
+      tolerance
     });
     return {
       count: result.count || 0,
@@ -97,7 +137,7 @@
         score: hit.score,
         documentId: hit.document.documentId,
         chunkId: hit.document.chunkId,
-        documentTitle: hit.document.documentTitle,
+        documentTitle: hit.document.rawTitle || hit.document.documentTitle,
         sectionTitle: hit.document.sectionTitle,
         content: hit.document.content,
         order: hit.document.order
@@ -111,7 +151,7 @@
     if (cleanIds.length === 0) return { count: 0, elapsed: null, hits: [] };
     if (cleanIds.length === 1) return searchBranch(cleanIds[0], term, options);
 
-    const limit = Number(options.limit) > 0 ? Number(options.limit) : 8;
+    const limit = Number(options.limit) > 0 ? Number(options.limit) : 10;
     const branchResults = await Promise.all(
       cleanIds.map(async (id) => {
         try {

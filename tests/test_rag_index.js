@@ -50,3 +50,32 @@ test('RagIndex - busca federadamente entre múltiples ramas', async () => {
   assert.ok(branchIds.includes(dev.id));
   assert.ok(branchIds.includes(prod.id));
 });
+
+test('RagIndex - evita falsos positivos en tokens cortos (3M no coincide con TM) y prioriza boost de título', async () => {
+  const branch = await RagStorage.createBranch('Finance');
+  await RagStorage.saveDocument({
+    branchId: branch.id,
+    title: 'ADOBE_2018_10K.pdf',
+    chunks: [
+      { title: 'Statement', content: 'Adobe 2018 cash flows capital expenditures TM trademark registered' }
+    ]
+  });
+  await RagStorage.saveDocument({
+    branchId: branch.id,
+    title: '3M_2018_10K.pdf',
+    chunks: [
+      { title: 'Cash Flows', content: 'Purchases of property, plant and equipment 1577 million dollars in 2018' }
+    ]
+  });
+
+  // 1. "3M" no debe coincidir con "TM" de Adobe por tolerancia difusa
+  const res3M = await RagIndex.searchBranch(branch.id, '3M');
+  assert.equal(res3M.count, 1);
+  assert.equal(res3M.hits[0].documentTitle, '3M_2018_10K.pdf');
+
+  // 2. Query compleja con nombre de archivo, comillas y operadores booleanos
+  const resComplex = await RagIndex.searchBranch(branch.id, '3M_2018_10K.pdf "Cash Flows" "Capital expenditures" OR "Purchases"');
+  assert.ok(resComplex.count >= 1);
+  assert.equal(resComplex.hits[0].documentTitle, '3M_2018_10K.pdf');
+});
+

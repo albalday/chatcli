@@ -91,9 +91,10 @@
       const branches = await resolveBranches(branchIds);
       const branchNamesById = new Map(branches.map(b => [b.id, b.name]));
       const ids = branches.map(b => b.id);
+      const limit = Number(args.limit) > 0 ? Number(args.limit) : 10;
       const result = typeof RagIndex.searchBranches === 'function'
-        ? await RagIndex.searchBranches(ids, query, { limit: args.limit || 8, tolerance: args.tolerance })
-        : await RagIndex.searchBranch(ids[0], query, { limit: args.limit || 8, tolerance: args.tolerance });
+        ? await RagIndex.searchBranches(ids, query, { limit, tolerance: args.tolerance })
+        : await RagIndex.searchBranch(ids[0], query, { limit, tolerance: args.tolerance });
 
       const matches = result.hits.map(hit => {
         const bName = branchNamesById.get(hit.branchId) || branches[0].name;

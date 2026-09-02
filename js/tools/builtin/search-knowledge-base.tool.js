@@ -8,7 +8,14 @@
   const definition = {
     name: 'search_knowledge_base',
     description: 'Busca información en la base de conocimiento local con Orama. Devuelve fragmentos relevantes y sus identificadores para poder leerlos completos.',
-    parameters: { type: 'object', properties: { query: { type: 'string', description: 'Término, tema o pregunta clave a buscar en la base de conocimiento.' } }, required: ['query'] }
+    parameters: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Término, tema o pregunta clave a buscar en la base de conocimiento.' },
+        limit: { type: 'integer', description: 'Número opcional de fragmentos a devolver (por defecto 10).' }
+      },
+      required: ['query']
+    }
   };
 
   function getBranchIds(context = {}) {
