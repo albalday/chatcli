@@ -242,7 +242,8 @@
       const res = await fetchWithTimeout(readerUrl, {
         headers: {
           'Accept': 'text/plain',
-          'X-Return-Format': 'markdown'
+          'X-Return-Format': 'markdown',
+          'X-No-Cache': 'true'
         }
       }, this.timeoutMs);
 
