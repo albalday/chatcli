@@ -1,5 +1,5 @@
 /**
- * Módulo de Visualización y Gráficos Nativos en SVG (ChatCharts) para ChatCLI.
+ * Módulo de Visualización y Gráficos Nativos en SVG (ChatCharts) para ZeroChat.
  * - Soporta gráficos de Barras, Líneas, Donut y Sectores (Pie) con SVG puro sin dependencias externas.
  * - Totalmente interactivo, accesible y adaptado a temas claro y oscuro.
  * - Compatible con file:// y http://.

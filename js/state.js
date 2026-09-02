@@ -1,5 +1,5 @@
 /**
- * Módulo de Gestión del Estado Global (ChatState) para ChatCLI.
+ * Módulo de Gestión del Estado Global (ChatState) para ZeroChat.
  * Implementa un Store reactivo, desacoplado, predecible y con una única fuente de verdad,
  * sin dependencias de frameworks externos.
  */

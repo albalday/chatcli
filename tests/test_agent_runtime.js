@@ -17,7 +17,7 @@ test('AgentRuntime - Tool call normal con resolución y respuesta final', async 
       },
       required: ['a', 'b']
     },
-    handler: async (args) => {
+    execute: async (args) => {
       return { sum: Number(args.a) + Number(args.b) };
     }
   }));
@@ -75,11 +75,11 @@ test('AgentRuntime - Múltiples pasos agénticos secuenciales', async () => {
   const registry = new ToolRegistry();
   registry.registerTool(new Tool({
     name: 'get_user_id',
-    handler: async () => ({ userId: 'usr_8899' })
+    execute: async () => ({ userId: 'usr_8899' })
   }));
   registry.registerTool(new Tool({
     name: 'get_user_orders',
-    handler: async (args) => ({ orders: [`order_1_for_${args.userId}`, `order_2_for_${args.userId}`] })
+    execute: async (args) => ({ orders: [`order_1_for_${args.userId}`, `order_2_for_${args.userId}`] })
   }));
 
   let step = 0;
@@ -118,7 +118,7 @@ test('AgentRuntime - Error de herramienta capturado y recuperación en siguiente
   let attempts = 0;
   registry.registerTool(new Tool({
     name: 'unstable_tool',
-    handler: async () => {
+    execute: async () => {
       attempts++;
       throw new Error('Servicio de base de datos no disponible');
     }
@@ -161,7 +161,7 @@ test('AgentRuntime - Timeout global de ejecución agéntica', async () => {
   const registry = new ToolRegistry();
   registry.registerTool(new Tool({
     name: 'slow_query',
-    handler: async (args, ctx) => {
+    execute: async (args, ctx) => {
       await new Promise(r => setTimeout(r, 200));
       return { data: 'ok' };
     }
@@ -197,7 +197,7 @@ test('AgentRuntime - Cancelación manual mediante AbortSignal', async () => {
   const registry = new ToolRegistry();
   registry.registerTool(new Tool({
     name: 'dummy_tool',
-    handler: async () => ({ ok: true })
+    execute: async () => ({ ok: true })
   }));
 
   const controller = new AbortController();
@@ -224,7 +224,7 @@ test('AgentRuntime - Detección de bucles infinitos (Loop Detection)', async () 
   const registry = new ToolRegistry();
   registry.registerTool(new Tool({
     name: 'same_search',
-    handler: async () => ({ results: ['noticia 1'] })
+    execute: async () => ({ results: ['noticia 1'] })
   }));
 
   let loopDetectedEventFired = false;
@@ -260,7 +260,7 @@ test('AgentRuntime - Auto-síntesis cuando el modelo finaliza con texto vacío t
   const registry = new ToolRegistry();
   registry.registerTool(new Tool({
     name: 'fetch_stock',
-    handler: async () => ({ price: 215.4 })
+    execute: async () => ({ price: 215.4 })
   }));
 
   let step = 0;

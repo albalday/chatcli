@@ -7,7 +7,7 @@
  * 3. Monitor en vivo de la cola de ingesta secuencial con barras de progreso y badges.
  * 4. Visor de estructura de documento (Árbol de conocimiento, resumen global y lector de capítulos).
  *
- * Integrado 100% con los estilos y temas visuales (Claro/Oscuro) de ChatCLI.
+ * Integrado 100% con los estilos y temas visuales (Claro/Oscuro) de ZeroChat.
  */
 
 (function (root, factory) {
@@ -219,11 +219,47 @@
   }
 
   /**
-   * Pestaña 1: Renderiza la tarjeta principal de estado y cada rama como una caja con un check/switch de activar.
+   * Pestaña 1: Renderiza el selector de perfil de resumen, la tarjeta principal de estado y cada rama como una caja con un check/switch de activar.
    */
   async function renderActiveBranchTab() {
     if (typeof document === 'undefined') return;
     await renderFileSystemStatusBanners();
+
+    // Poblar y sincronizar el selector de perfil de resumen para RAG
+    const summaryProfileSelect = document.getElementById('setting-rag-summary-profile');
+    if (summaryProfileSelect) {
+      const Storage = getStorage();
+      const profiles = Storage && Storage.getProfiles ? Storage.getProfiles() : {};
+      const profileNames = Object.keys(profiles);
+      const curCfg = (typeof window !== 'undefined' && window.appConfig) ? window.appConfig : (Storage?.loadConfig ? Storage.loadConfig() : {});
+      const activeSummaryProf = curCfg.ragSummaryProfile || 'Local resumen';
+
+      summaryProfileSelect.innerHTML = '';
+      profileNames.forEach(name => {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = `⚡ ${name}`;
+        if (name === activeSummaryProf) {
+          opt.selected = true;
+        }
+        summaryProfileSelect.appendChild(opt);
+      });
+
+      // Si no coincide con ninguno existente, seleccionar el primero disponible
+      if (!profileNames.includes(activeSummaryProf) && profileNames.length > 0) {
+        summaryProfileSelect.value = profileNames[0];
+      }
+
+      summaryProfileSelect.onchange = () => {
+        const chosen = summaryProfileSelect.value;
+        if (typeof window !== 'undefined' && window.appConfig) {
+          window.appConfig.ragSummaryProfile = chosen;
+        }
+        if (Storage && Storage.saveConfig) {
+          Storage.saveConfig({ ragSummaryProfile: chosen });
+        }
+      };
+    }
 
     const list = document.getElementById('rag-active-branch-list') || document.getElementById('rag-active-branch-grid');
     const titleEl = document.getElementById('rag-active-status-title');
@@ -703,29 +739,51 @@
         }
       };
 
-      // Cliente LLM configurado en la app
+      // Cliente LLM configurado para RAG a través del perfil de resumen
+      const Storage = getStorage();
       const appCfg = (typeof window !== 'undefined' && window.appConfig)
         ? window.appConfig
-        : ((getStorage && getStorage()?.loadConfig) ? getStorage().loadConfig() : {});
+        : ((Storage && Storage.loadConfig) ? Storage.loadConfig() : {});
+
+      const summaryProfileName = appCfg.ragSummaryProfile || 'Local resumen';
+      const summaryProfileData = (Storage && Storage.getProfile) ? Storage.getProfile(summaryProfileName) : null;
+
+      const effectiveSummaryConfig = summaryProfileData || appCfg;
+      const apiUrl = effectiveSummaryConfig.apiUrl || appCfg.apiUrl || 'http://localhost:1234/v1';
+      const apiType = effectiveSummaryConfig.apiType || appCfg.apiType || 'openai';
+      const apiKey = effectiveSummaryConfig.apiKey !== undefined ? effectiveSummaryConfig.apiKey : (appCfg.apiKey || '');
+      const model = effectiveSummaryConfig.model !== undefined ? effectiveSummaryConfig.model : (appCfg.model || '');
+
+      if (!apiUrl || !apiUrl.trim()) {
+        throw new Error(`El perfil de resumen "${summaryProfileName}" no tiene configurada la URL de la API del LLM.`);
+      }
 
       const llmClient = (typeof window !== 'undefined' && window.ChatAPI) ? {
         streamChatCompletion: (params) => window.ChatAPI.streamChatCompletion({
-          apiUrl: appCfg.apiUrl || 'http://localhost:1234/v1',
-          apiType: appCfg.apiType || 'openai',
-          apiKey: appCfg.apiKey || '',
-          model: appCfg.model || '',
-          enableTools: false,
-          enableContextCache: false,
+          apiUrl: apiUrl,
+          apiType: apiType,
+          apiKey: apiKey,
+          model: model,
           ...params
         }),
-        config: appCfg
+        config: effectiveSummaryConfig
       } : null;
 
-      const contextLimitK = parseInt(appCfg.ragContextLimitK || '16', 10) || 16;
-      await IngestionEngine.processDocumentQueue(files, branchId, llmClient, onProgress, { ragContextLimitK: contextLimitK });
+      if (!llmClient) {
+        throw new Error('No se encontró el módulo de cliente LLM (ChatAPI).');
+      }
+
+      const contextLimitK = parseInt(effectiveSummaryConfig.ragContextLimitK || appCfg.ragContextLimitK || '128', 10) || 128;
+      const queueResult = await IngestionEngine.processDocumentQueue(files, branchId, llmClient, onProgress, { ragContextLimitK: contextLimitK });
 
       progressBarFill.style.width = '100%';
-      progressSummaryTitle.textContent = `✅ Ingesta completada con éxito (${files.length} archivos procesados).`;
+      if (queueResult.failed > 0 && queueResult.processed === 0) {
+        progressSummaryTitle.textContent = `❌ Ingesta fallida: No se pudo procesar ningún documento (${queueResult.failed} con error).`;
+      } else if (queueResult.failed > 0) {
+        progressSummaryTitle.textContent = `⚠️ Ingesta parcial: ${queueResult.processed} procesado(s), ${queueResult.failed} fallido(s).`;
+      } else {
+        progressSummaryTitle.textContent = `✅ Ingesta completada con éxito (${queueResult.processed} archivo(s) procesados).`;
+      }
 
       // Refrescar lista de documentos tras un breve instante
       setTimeout(() => {
@@ -990,24 +1048,25 @@
   }
 
   /**
-   * Manejador para exportar una rama a archivo JSON descargable.
+   * Manejador para exportar una rama a paquete comprimido (.rag.gz) descargable.
    */
   async function handleExportBranch(branchId) {
     const targetBranchId = branchId || selectedManageBranchId;
     if (!targetBranchId) return;
 
     const RagStorage = getRagStorage();
-    if (!RagStorage || !RagStorage.exportBranchToJson) return;
+    if (!RagStorage || !RagStorage.exportBranch) return;
 
     try {
-      const exportData = await RagStorage.exportBranchToJson(targetBranchId);
-      const jsonStr = JSON.stringify(exportData, null, 2);
-      const blob = new Blob([jsonStr], { type: 'application/json' });
+      const branch = await RagStorage.getBranchById(targetBranchId);
+      const safeName = (branch?.name || 'branch').replace(/[^a-zA-Z0-9_\u00C0-\u017F-]/g, '_');
+      
+      const compressedBytes = await RagStorage.exportBranch(targetBranchId);
+      const blob = new Blob([compressedBytes], { type: 'application/gzip' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      const safeName = (exportData.branch?.name || 'branch').replace(/[^a-zA-Z0-9_\u00C0-\u017F-]/g, '_');
       a.href = url;
-      a.download = `${safeName}_rag_branch.json`;
+      a.download = `${safeName}_rag_branch.rag.gz`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -1018,7 +1077,7 @@
   }
 
   /**
-   * Manejador para importar una rama completa desde un archivo JSON.
+   * Manejador para importar una rama completa (.rag.gz o legado .json).
    */
   async function handleImportBranchFile(file) {
     if (!file) return;
@@ -1037,11 +1096,17 @@
     }
 
     const RagStorage = getRagStorage();
-    if (!RagStorage || !RagStorage.importBranchFromJson) return;
+    if (!RagStorage || !RagStorage.importBranch) return;
 
     try {
-      const text = await file.text();
-      const result = await RagStorage.importBranchFromJson(text);
+      let result;
+      if (file.name.toLowerCase().endsWith('.json')) {
+        const text = await file.text();
+        result = await RagStorage.importBranch(text);
+      } else {
+        const ab = await file.arrayBuffer();
+        result = await RagStorage.importBranch(new Uint8Array(ab));
+      }
       selectedManageBranchId = result.branch.id;
       await renderBranchesList();
       await refreshBranchSelector();
@@ -1107,6 +1172,17 @@
 
     // Pestañas del modal
     const tabBtns = document.querySelectorAll('#rag-modal-tabs-nav .modal-tab-btn');
+    const activateInitialRagTab = () => {
+      const firstTab = tabBtns[0];
+      if (!firstTab || !modalDialog) return;
+      const targetTabId = firstTab.getAttribute('data-rag-tab');
+      tabBtns.forEach(btn => btn.classList.toggle('active', btn === firstTab));
+      modalDialog.querySelectorAll('.modal-tab-pane').forEach(pane => {
+        pane.classList.toggle('active', pane.id === targetTabId);
+      });
+    };
+    // Garantiza un estado válido incluso antes de abrir el diálogo por primera vez.
+    activateInitialRagTab();
     tabBtns.forEach((btn) => {
       btn.addEventListener('click', () => {
         const targetTabId = btn.getAttribute('data-rag-tab');
@@ -1134,6 +1210,7 @@
       const fs = getFS();
       if (fs) {
         if (typeof fs.isFirefoxOrOpfsOnly === 'function' && fs.isFirefoxOrOpfsOnly()) {
+          activateInitialRagTab();
           await renderActiveBranchTab();
           await renderManageTab();
           if (modalDialog) modalDialog.showModal();
@@ -1152,6 +1229,9 @@
           } catch (_) {}
         }
       }
+
+      // Restablecer navegación por pestañas para que inicie por defecto en la primera pestaña ("Activar RAG")
+      activateInitialRagTab();
 
       await renderActiveBranchTab();
       await renderManageTab();
@@ -1260,13 +1340,13 @@
     if (selectChunkLimitK) {
       const Storage = getStorage();
       const curCfg = (typeof window !== 'undefined' && window.appConfig) ? window.appConfig : (Storage?.loadConfig ? Storage.loadConfig() : {});
-      const savedK = String(curCfg.ragContextLimitK || 16);
+      const savedK = String(curCfg.ragContextLimitK || 128);
       if (selectChunkLimitK.querySelector(`option[value="${savedK}"]`)) {
         selectChunkLimitK.value = savedK;
       }
 
       selectChunkLimitK.addEventListener('change', () => {
-        const valK = parseInt(selectChunkLimitK.value, 10) || 16;
+        const valK = parseInt(selectChunkLimitK.value, 10) || 128;
         if (typeof window !== 'undefined' && window.appConfig) {
           window.appConfig.ragContextLimitK = valK;
         }

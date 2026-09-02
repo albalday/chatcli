@@ -34,12 +34,13 @@
   const RAG_ROOT = "RAG";
   const MAX_FILES_PER_BUCKET = 100;
   const RAMA_FILE = "rama.md";
-
-  // Constantes de compatibilidad con código legacy
+  // Constantes de compatibilidad con código/tests legacy
   const DB_NAME = "LocalRAG_DB";
   const DB_VERSION = 1;
   const STORE_BRANCHES = "branches";
   const STORE_DOCUMENTS = "documents";
+
+
 
   // ==========================================================================
   // Clases de Error Personalizadas
@@ -880,8 +881,246 @@
   }
 
   // ==========================================================================
-  // Exportación e Importación
+  // Exportación e Importación Comprimida (.rag.gz)
   // ==========================================================================
+
+  async function compressData(jsonStr) {
+    if (typeof globalThis.CompressionStream !== 'undefined') {
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(jsonStr));
+          controller.close();
+        }
+      }).pipeThrough(new globalThis.CompressionStream('gzip'));
+      
+      const chunks = [];
+      const reader = stream.getReader();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+      }
+      const totalLen = chunks.reduce((acc, c) => acc + c.length, 0);
+      const result = new Uint8Array(totalLen);
+      let offset = 0;
+      for (const c of chunks) {
+        result.set(c, offset);
+        offset += c.length;
+      }
+      return result;
+    } else {
+      throw new Error('El navegador o entorno no soporta CompressionStream.');
+    }
+  }
+
+  async function decompressData(uint8Array) {
+    if (typeof globalThis.DecompressionStream !== 'undefined') {
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(uint8Array);
+          controller.close();
+        }
+      }).pipeThrough(new globalThis.DecompressionStream('gzip'));
+      
+      const chunks = [];
+      const reader = stream.getReader();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+      }
+      const totalLen = chunks.reduce((acc, c) => acc + c.length, 0);
+      const result = new Uint8Array(totalLen);
+      let offset = 0;
+      for (const c of chunks) {
+        result.set(c, offset);
+        offset += c.length;
+      }
+      return new TextDecoder().decode(result);
+    } else {
+      throw new Error('El navegador o entorno no soporta DecompressionStream.');
+    }
+  }
+
+  function base64ToUint8(base64) {
+    const binaryString = atob(base64.trim());
+    const len = binaryString.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    return bytes;
+  }
+
+  function uint8ToBase64(uint8) {
+    if (!uint8 || uint8.length === 0) return '';
+    if (typeof Buffer !== 'undefined') {
+      return Buffer.from(uint8).toString('base64');
+    }
+    let binary = '';
+    const len = uint8.byteLength;
+    const chunk = 8192;
+    for (let i = 0; i < len; i += chunk) {
+      const sub = uint8.subarray(i, Math.min(i + chunk, len));
+      binary += String.fromCharCode.apply(null, sub);
+    }
+    return btoa(binary);
+  }
+
+  function getParentPath(pathStr) {
+    const idx = pathStr.lastIndexOf("/");
+    return idx > -1 ? pathStr.slice(0, idx) : "";
+  }
+
+  async function exportBranch(branchId) {
+    const branch = await getBranchById(branchId);
+    if (!branch) throw new NotFoundError(`No existe la rama [${branchId}].`);
+
+    const fs = getFS();
+    if (!fs) throw new RagStorageError("ChatFileSystem no está disponible.");
+
+    const branchDir = `${RAG_ROOT}/${branchId}`;
+    const files = await fs.listDirectory(branchDir, { recursive: true });
+
+    const packedFiles = [];
+
+    for (const f of files) {
+      if (f.kind !== "file") continue;
+      const absolutePath = f.path; // f.path ya es la ruta completa desde la raíz de ChatFileSystem
+      const relativePath = absolutePath.startsWith(branchDir) 
+        ? absolutePath.slice(branchDir.length + 1) 
+        : absolutePath;
+
+      // Determinar si es texto o binario para una codificación óptima
+      const isText = relativePath.endsWith(".md") || relativePath.endsWith(".txt") || relativePath.endsWith(".json");
+      if (isText) {
+        const textContent = await fs.readFile(absolutePath, "text");
+        packedFiles.push({
+          path: relativePath,
+          content: textContent,
+          encoding: "utf8"
+        });
+      } else {
+        const bytes = await fs.readFile(absolutePath, "uint8Array");
+        const base64Content = uint8ToBase64(bytes);
+        packedFiles.push({
+          path: relativePath,
+          content: base64Content,
+          encoding: "base64"
+        });
+      }
+    }
+
+    const packageData = {
+      schema: "ZeroChat_RAG_Branch_Directory_v1",
+      version: 1,
+      exportedAt: Date.now(),
+      branch: {
+        id: branch.id,
+        name: branch.name,
+        description: branch.description,
+        createdAt: branch.createdAt,
+        updatedAt: branch.updatedAt
+      },
+      files: packedFiles
+    };
+
+    const jsonStr = JSON.stringify(packageData);
+    const compressedBytes = await compressData(jsonStr);
+    return compressedBytes;
+  }
+
+  async function importBranch(inputData, options = {}) {
+    // 1. Detectar si el inputData es el formato JSON legacy (cadena o JSON parseado)
+    let isLegacyJson = false;
+    let legacyPayload = null;
+
+    if (typeof inputData === "string") {
+      const trimmed = inputData.trim();
+      if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+        try {
+          legacyPayload = JSON.parse(inputData);
+          isLegacyJson = true;
+        } catch (_) {}
+      }
+    } else if (inputData && typeof inputData === "object" && !(inputData instanceof ArrayBuffer) && !(inputData instanceof Uint8Array) && !(typeof Blob !== "undefined" && inputData instanceof Blob)) {
+      legacyPayload = inputData;
+      isLegacyJson = true;
+    }
+
+    if (isLegacyJson) {
+      return await importBranchFromJson(legacyPayload, options);
+    }
+
+    // 2. Procesar como paquete comprimido Gzip (.rag.gz)
+    let compressedBytes;
+    if (inputData instanceof Uint8Array) {
+      compressedBytes = inputData;
+    } else if (inputData instanceof ArrayBuffer) {
+      compressedBytes = new Uint8Array(inputData);
+    } else if (typeof Blob !== "undefined" && inputData instanceof Blob) {
+      compressedBytes = new Uint8Array(await inputData.arrayBuffer());
+    } else {
+      throw new ValidationError("Tipo de datos de importación no soportado.");
+    }
+
+    const fs = getFS();
+    if (!fs) throw new RagStorageError("ChatFileSystem no está disponible.");
+
+    let packageData;
+    try {
+      const jsonStr = await decompressData(compressedBytes);
+      packageData = JSON.parse(jsonStr);
+    } catch (err) {
+      throw new ValidationError("El archivo importado no contiene una firma Gzip válida o la estructura del paquete RAG está corrupta.");
+    }
+
+    if (!packageData || !packageData.branch || !packageData.branch.name) {
+      throw new ValidationError('Estructura de rama inválida en el paquete importado.');
+    }
+
+    const branchName = String(packageData.branch.name).trim();
+    const branchDesc = String(packageData.branch.description || "").trim();
+    const files = Array.isArray(packageData.files) ? packageData.files : [];
+
+    const existingBranch = packageData.branch.id ? await getBranchById(packageData.branch.id).catch(() => null) : null;
+    const shouldCreateNew = options.createNewId || Boolean(existingBranch);
+
+    let targetBranch;
+    if (shouldCreateNew) {
+      const importedName = existingBranch ? `${branchName} (Copia)` : branchName;
+      targetBranch = await createBranch(importedName, branchDesc);
+    } else {
+      targetBranch = await createBranch(branchName, branchDesc);
+    }
+
+    const targetBranchDir = `${RAG_ROOT}/${targetBranch.id}`;
+
+    // Restaurar cada archivo individualmente en la nueva ubicación física del disco
+    for (const f of files) {
+      if (!f.path) continue;
+      const targetFilePath = `${targetBranchDir}/${f.path}`;
+      const parentDir = getParentPath(targetFilePath);
+      if (parentDir) {
+        await fs.createDirectory(parentDir);
+      }
+
+      if (f.encoding === "base64") {
+        const fileBytes = base64ToUint8(f.content);
+        await fs.writeFile(targetFilePath, fileBytes);
+      } else {
+        await fs.writeFile(targetFilePath, f.content);
+      }
+    }
+
+    // Re-indexar los documentos en memoria
+    const docs = await getDocumentsByBranch(targetBranch.id);
+
+    return {
+      branch: targetBranch,
+      documentCount: docs.length
+    };
+  }
 
   async function exportBranchToJson(branchId) {
     const branch = await getBranchById(branchId);
@@ -889,7 +1128,7 @@
     const docs = await getDocumentsByBranch(branchId);
 
     return {
-      schema: "ChatCLI_RAG_Branch_v1",
+      schema: "ZeroChat_RAG_Branch_v1",
       version: 1,
       exportedAt: Date.now(),
       branch: {
@@ -1058,6 +1297,8 @@
     getBranches,
     getBranchById,
     deleteBranch,
+    exportBranch,
+    importBranch,
     exportBranchToJson,
     importBranchFromJson,
 

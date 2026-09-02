@@ -8,3 +8,23 @@ test('ChatToolCards - Normalización de nombres de herramientas', () => {
   assert.equal(ChatToolCards.normalizeName('fetch_web_page'), 'fetchwebpage');
   assert.equal(ChatToolCards.normalizeName('download_pdf'), 'downloadpdf');
 });
+
+test('ChatToolCards - resuelve la vista declarada por la tool registrada', () => {
+  const previousWindow = global.window;
+  const view = { createLiveCard: () => null };
+  global.window = {
+    ChatAgentCore: {
+      registry: {
+        getTool: (name) => name === 'view_tool' ? { view } : null
+      }
+    }
+  };
+
+  try {
+    assert.equal(ChatToolCards.resolveToolView('view_tool'), view);
+    assert.equal(ChatToolCards.resolveToolView('unknown_tool'), null);
+  } finally {
+    if (previousWindow === undefined) delete global.window;
+    else global.window = previousWindow;
+  }
+});

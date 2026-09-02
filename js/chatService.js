@@ -32,13 +32,50 @@
   }
 
   /**
+   * Definición oficial de la herramienta 'list_documents' según la especificación OpenAI Tool Calling.
+   */
+  const LIST_DOCUMENTS_TOOL_DEFINITION = {
+    type: 'function',
+    function: {
+      name: 'list_documents',
+      description: 'Lista todos los documentos, manuales, resúmenes temáticos y la lista completa de capítulos indexados en la base de conocimiento local del usuario. Úsala para descubrir qué información existe o ante preguntas sobre el catálogo documental disponible.',
+      parameters: {
+        type: 'object',
+        properties: {},
+        required: []
+      }
+    }
+  };
+
+  /**
+   * Definición oficial de la herramienta 'search_knowledge_base' según la especificación OpenAI Tool Calling.
+   */
+  const SEARCH_KNOWLEDGE_BASE_TOOL_DEFINITION = {
+    type: 'function',
+    function: {
+      name: 'search_knowledge_base',
+      description: 'Busca temas, palabras clave o preguntas técnicas en la base de conocimiento local del usuario. Devuelve resúmenes de documentos y capítulos coincidentes para identificar qué leer.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            description: 'Término, tema o pregunta clave a buscar en la base de conocimiento.'
+          }
+        },
+        required: ['query']
+      }
+    }
+  };
+
+  /**
    * Definición oficial de la herramienta 'read_chapter_content' según la especificación OpenAI Tool Calling.
    */
   const READ_CHAPTER_TOOL_DEFINITION = {
     type: 'function',
     function: {
       name: 'read_chapter_content',
-      description: 'Recupera el contenido completo y detallado de un capítulo de un documento indexado en la rama activa cuando el resumen no es suficiente.',
+      description: 'Recupera el texto completo, instrucciones detalladas, código y diagramas de un capítulo específico de un documento (indicando docId y chapterId obtenidos previamente).',
       parameters: {
         type: 'object',
         properties: {
@@ -270,11 +307,189 @@
     };
   }
 
+  /**
+   * Resuelve la ejecución de 'list_documents' devolviendo la lista de documentos y capítulos.
+   * @param {string} branchId - ID de la rama activa.
+   * @returns {Promise<{ success: boolean, branchId: string, branchName: string, count: number, documents: Array, text: string, error?: string }>}
+   */
+  async function resolveListDocumentsToolCall(branchId) {
+    const RagStorage = getRagStorage();
+    if (!RagStorage || !RagStorage.getBranchById || !RagStorage.getDocumentHeadersByBranch) {
+      return {
+        success: false,
+        error: 'El módulo de almacenamiento RagStorage no está disponible.'
+      };
+    }
+
+    if (!branchId) {
+      return {
+        success: false,
+        error: 'No hay ninguna rama de conocimiento activa seleccionada.'
+      };
+    }
+
+    try {
+      const branch = await RagStorage.getBranchById(branchId);
+      if (!branch) {
+        return {
+          success: false,
+          error: `No se encontró la rama de conocimiento con ID "${branchId}".`
+        };
+      }
+
+      const docHeaders = await RagStorage.getDocumentHeadersByBranch(branchId);
+      if (!docHeaders || docHeaders.length === 0) {
+        return {
+          success: true,
+          branchId,
+          branchName: branch.name,
+          count: 0,
+          documents: [],
+          text: `La base de conocimiento "${branch.name}" está activa pero aún no contiene documentos indexados.`
+        };
+      }
+
+      const lines = [];
+      lines.push(`[BASE DE CONOCIMIENTO: "${branch.name}"]`);
+      if (branch.description) {
+        lines.push(`Descripción: ${branch.description.trim()}`);
+      }
+      lines.push(`\nDocumentos disponibles (${docHeaders.length}):\n`);
+
+      const docsSummary = docHeaders.map(doc => {
+        lines.push(`📄 Documento: "${doc.title}" (docId: "${doc.id}")`);
+        if (doc.globalSummary) {
+          lines.push(`   Resumen: ${doc.globalSummary.trim()}`);
+        }
+        if (Array.isArray(doc.chapters) && doc.chapters.length > 0) {
+          lines.push(`   Capítulos (${doc.chapters.length}):`);
+          for (const chap of doc.chapters) {
+            lines.push(`     - Cap [${chap.chapterId}]: "${chap.title}" ➔ ${(chap.summary || 'Sin resumen').trim()}`);
+          }
+        }
+        lines.push('');
+
+        return {
+          docId: doc.id,
+          title: doc.title,
+          summary: doc.globalSummary,
+          chaptersCount: doc.chapters?.length || 0,
+          chapters: (doc.chapters || []).map(c => ({
+            chapterId: c.chapterId,
+            title: c.title,
+            summary: c.summary
+          }))
+        };
+      });
+
+      return {
+        success: true,
+        branchId,
+        branchName: branch.name,
+        count: docHeaders.length,
+        documents: docsSummary,
+        text: lines.join('\n').trim()
+      };
+    } catch (err) {
+      return {
+        success: false,
+        error: `Error al listar documentos de la base de conocimiento: ${err.message || String(err)}`
+      };
+    }
+  }
+
+  /**
+   * Resuelve 'search_knowledge_base' buscando coincidencias en los títulos y resúmenes.
+   * @param {string} branchId - ID de la rama activa.
+   * @param {string|Object} rawArgs - Parámetro { query } o string de búsqueda.
+   * @returns {Promise<{ success: boolean, branchId: string, query: string, matchesCount: number, text: string, error?: string }>}
+   */
+  async function resolveSearchKnowledgeBaseToolCall(branchId, rawArgs) {
+    let query = '';
+    if (typeof rawArgs === 'string') {
+      try {
+        const parsed = JSON.parse(rawArgs);
+        query = parsed.query || parsed.q || parsed.search || rawArgs;
+      } catch (e) {
+        query = rawArgs;
+      }
+    } else if (rawArgs && typeof rawArgs === 'object') {
+      query = rawArgs.query || rawArgs.q || rawArgs.search || '';
+    }
+
+    const listRes = await resolveListDocumentsToolCall(branchId);
+    if (!listRes.success) return listRes;
+
+    const q = (query || '').toLowerCase().trim();
+    if (!q) {
+      return {
+        ...listRes,
+        query: '',
+        matchesCount: listRes.count,
+        isFiltered: false
+      };
+    }
+
+    const matchedDocs = [];
+    const lines = [];
+    lines.push(`[BÚSQUEDA EN BASE DE CONOCIMIENTO: "${listRes.branchName}" | Término: "${query}"]\n`);
+
+    for (const doc of listRes.documents) {
+      const docTitleMatch = doc.title.toLowerCase().includes(q);
+      const docSumMatch = (doc.summary || '').toLowerCase().includes(q);
+      const matchingChapters = (doc.chapters || []).filter(c =>
+        c.title.toLowerCase().includes(q) || (c.summary || '').toLowerCase().includes(q)
+      );
+
+      if (docTitleMatch || docSumMatch || matchingChapters.length > 0) {
+        matchedDocs.push({
+          docId: doc.docId,
+          title: doc.title,
+          summary: doc.summary,
+          matchingChapters
+        });
+
+        lines.push(`📄 Documento: "${doc.title}" (docId: "${doc.docId}")`);
+        if (doc.summary) lines.push(`   Resumen: ${doc.summary}`);
+        if (matchingChapters.length > 0) {
+          lines.push(`   Capítulos coincidentes (${matchingChapters.length}):`);
+          for (const chap of matchingChapters) {
+            lines.push(`     - Cap [${chap.chapterId}]: "${chap.title}" ➔ ${(chap.summary || '').trim()}`);
+          }
+        } else if (doc.chaptersCount > 0) {
+          lines.push(`   (Todos los ${doc.chaptersCount} capítulos disponibles en este documento)`);
+        }
+        lines.push('');
+      }
+    }
+
+    if (matchedDocs.length === 0) {
+      // Si no hay coincidencias estrictas, devolver el listado general con aviso
+      lines.push(`No se encontraron coincidencias exactas para "${query}". A continuación se listan todos los documentos disponibles:\n`);
+      lines.push(listRes.text);
+    }
+
+    return {
+      success: true,
+      branchId,
+      branchName: listRes.branchName,
+      query,
+      matchesCount: matchedDocs.length,
+      isFiltered: matchedDocs.length > 0,
+      documents: matchedDocs.length > 0 ? matchedDocs : listRes.documents,
+      text: lines.join('\n').trim()
+    };
+  }
+
   return {
+    LIST_DOCUMENTS_TOOL_DEFINITION,
+    SEARCH_KNOWLEDGE_BASE_TOOL_DEFINITION,
     READ_CHAPTER_TOOL_DEFINITION,
     parseToolCallArguments,
     buildTreeRagSystemContext,
     injectTreeRagContext,
+    resolveListDocumentsToolCall,
+    resolveSearchKnowledgeBaseToolCall,
     resolveChapterToolCall
   };
 });

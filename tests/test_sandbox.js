@@ -37,9 +37,9 @@ test('Sandbox - Manejo de expresiones matemáticas y estructuras', async () => {
   assert.equal(res.success, true);
   assert.equal(res.result, '12');
 
-  const objRes = await Sandbox.execute('({ nombre: "ChatCLI", version: 4 })');
+  const objRes = await Sandbox.execute('({ nombre: "ZeroChat", version: 5 })');
   assert.equal(objRes.success, true);
-  assert.ok(objRes.result.includes('"nombre": "ChatCLI"'));
+  assert.ok(objRes.result.includes('"nombre": "ZeroChat"'));
 });
 
 test('Sandbox - Protección contra salida excesiva (MAX_OUTPUT_LENGTH)', async () => {
@@ -154,3 +154,24 @@ test('Sandbox - Aislamiento y terminación de Web Worker cuando está disponible
     delete global.Blob;
   }
 });
+
+test('Sandbox - Factorial 100 con BigInt y paso de opciones sin TimeoutNaNWarning', async () => {
+  const code = `
+function factorial(n) {
+  let result = 1n;
+  for (let i = 2n; i <= BigInt(n); i++) {
+    result *= i;
+  }
+  return result;
+}
+
+const fact100 = factorial(100);
+console.log(fact100.toString());
+return fact100.toString();
+  `;
+
+  const res = await Sandbox.execute(code, {});
+  assert.equal(res.success, true);
+  assert.ok(res.result.startsWith('93326215443944152681699238856266700490715968264381621468592963895217599993229915608941463976156518286253697920827223758251185210916864000000000000000000000000'));
+});
+

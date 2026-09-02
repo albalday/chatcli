@@ -377,3 +377,152 @@ endobj
   assert.ok(!extracted.includes('Typeface Monotype Arial'), 'Debe ignorar por completo streams de fuentes (/FontFile2)');
 });
 
+test('IngestionEngine - Generación de payload multimodal con imágenes in-line para el LLM', async () => {
+  const paginatedDoc = `
+--- Página 1 ---
+# Overview
+Introducción a la placa base.
+
+--- Página 2 ---
+## Panel Trasero
+Detalles de conectores y puertos traseros.
+![Diagrama E/S #img_2_1](rag-image://img_2_1)
+`.trim();
+
+  const mockImages = [
+    {
+      id: 'img_2_1',
+      page: 2,
+      caption: 'Diagrama E/S (Pág. 2)',
+      dataUrl: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP...'
+    }
+  ];
+
+  const receivedCalls = [];
+
+  const mockMultimodalLLM = async (prompt, systemPrompt) => {
+    receivedCalls.push({ prompt, systemPrompt });
+    return 'Resumen de prueba con diagrama #img_2_1';
+  };
+
+  const result = await IngestionEngine.analyzeDocumentStructure(
+    paginatedDoc,
+    'manual.pdf',
+    mockMultimodalLLM,
+    null,
+    16,
+    { images: mockImages }
+  );
+
+  assert.ok(result);
+  assert.ok(result.chapters.length >= 1);
+  
+  // Buscar la llamada de capítulo que contenía la imagen de la página 2
+  const multimodalCall = receivedCalls.find(c => Array.isArray(c.prompt) && c.prompt.some(p => p.type === 'image_url'));
+  assert.ok(multimodalCall, 'Debe haber al menos una llamada multimodal con array de prompt e imágenes');
+  assert.ok(multimodalCall.systemPrompt.includes('visión multimodal'), 'System prompt del capítulo debe instruir visión multimodal');
+  
+  const textPart = multimodalCall.prompt.find(p => p.type === 'text');
+  const imgPart = multimodalCall.prompt.find(p => p.type === 'image_url');
+  assert.ok(textPart && textPart.text.includes('Panel Trasero'));
+  assert.ok(imgPart && imgPart.image_url.url.startsWith('data:image/jpeg;base64,'));
+});
+
+test('IngestionEngine - Detección de títulos de capítulos genérica y multiidioma (ES, EN, DE, FR, IT)', () => {
+  const multilingualDoc = `
+--- Page 1 ---
+# Chapter 1: System Architecture
+This section provides an overview of the microservices ecosystem.
+
+--- Seite 2 ---
+## Kapitel 2: Sicherheitsrichtlinien
+Hier werden die Richtlinien für Datenverschlüsselung und Authentifizierung definiert.
+
+--- Page 3 ---
+3.1.2 Procédures de Déploiement
+Instructions détaillées pour le déploiement sur les serveurs de production.
+
+--- Pagina 4 ---
+NORMATIVA GENERALE SULLA PRIVACY
+Trattamento dei dati personali e conformità con il regolamento europeo.
+
+--- Página 5 ---
+Apéndice B: Glosario de Términos
+Definición de acrónimos y vocabulario técnico utilizado a lo largo del documento.
+`.trim();
+
+  const chapters = IngestionEngine.partitionTextIntoHeuristicChapters(multilingualDoc, 16);
+  assert.ok(chapters.length >= 4, `Debe detectar al menos 4 secciones estructuradas (obtenidos: ${chapters.length})`);
+  
+  const titles = chapters.map(c => c.title);
+  assert.ok(titles.some(t => t.includes('System Architecture') || t.includes('Chapter 1')), 'Debe detectar Chapter en inglés');
+  assert.ok(titles.some(t => t.includes('Sicherheitsrichtlinien') || t.includes('Kapitel 2')), 'Debe detectar Kapitel en alemán');
+  assert.ok(titles.some(t => t.includes('Procédures de Déploiement') || t.includes('3.1.2')), 'Debe detectar numeración jerárquica y francés');
+  assert.ok(titles.some(t => t.includes('NORMATIVA GENERALE') || t.includes('PRIVACY')), 'Debe detectar títulos en ALL CAPS');
+  assert.ok(titles.some(t => t.includes('Apéndice B') || t.includes('Glosario')), 'Debe detectar Apéndice / Glosario en español');
+});
+
+test('IngestionEngine - Particionado no paginado por numeración jerárquica y Title Case', () => {
+  const unpaginatedDoc = `
+1. Introducción General
+El propósito de este contrato es regular los términos de prestación de servicios.
+
+1.1 Objeto del Contrato
+El prestador se compromete a realizar las tareas de mantenimiento descritas.
+
+1.2 Obligaciones Financieras y Formas de Pago
+El cliente abonará las cantidades acordadas en un plazo máximo de 30 días.
+
+POLÍTICA DE CONFIDENCIALIDAD
+Ambas partes mantendrán el secreto profesional sobre la información compartida.
+`.trim();
+
+  const chapters = IngestionEngine.partitionTextIntoHeuristicChapters(unpaginatedDoc, 1000);
+  assert.ok(chapters.length >= 3, `Debe detectar encabezados por numeración y ALL CAPS (obtenidos: ${chapters.length})`);
+  const titles = chapters.map(c => c.title);
+  assert.ok(titles.some(t => t.includes('Introducción General')));
+  assert.ok(titles.some(t => t.includes('Obligaciones Financieras')));
+  assert.ok(titles.some(t => t.includes('POLÍTICA DE CONFIDENCIALIDAD')));
+});
+
+test('IngestionEngine - Fallo de red/conexión con LLM aborta el archivo y no lo guarda', async () => {
+  const branch = await RagStorage.createBranch('Rama Test LLM Error', 'Rama para verificar errores de conexión');
+  const progressEvents = [];
+
+  const files = [
+    {
+      name: 'doc_fallo_llm.txt',
+      content: 'Contenido técnico de prueba que requiere ser resumido por el LLM antes de ser persistido en disco.'
+    }
+  ];
+
+  // Simulación de LLM desconectado o error de fetch
+  const offlineLLM = async () => {
+    throw new Error('TypeError: Failed to fetch (Servidor LLM apagado o inalcanzable)');
+  };
+
+  const result = await IngestionEngine.processDocumentQueue(files, branch.id, offlineLLM, (p) => progressEvents.push(p));
+
+  // El proceso debe reportar fallo en el documento
+  assert.equal(result.total, 1);
+  assert.equal(result.failed, 1);
+  assert.equal(result.processed, 0);
+  assert.equal(result.errors.length, 1);
+  assert.ok(result.errors[0].error.includes('Failed to fetch') || result.errors[0].error.includes('Servidor LLM'));
+
+  // Verificar que el documento NO se guardó en RagStorage
+  const docs = await RagStorage.getDocumentsByBranch(branch.id);
+  assert.equal(docs.length, 0, 'No se debe persistir el documento si el LLM falló al generar los resúmenes');
+});
+
+test('IngestionEngine - callLLM sin llmClient arroja excepción inmediata', async () => {
+  await assert.rejects(
+    async () => {
+      await IngestionEngine.analyzeDocumentStructure('Texto de prueba', 'test.txt', null);
+    },
+    {
+      message: /No se ha configurado un cliente LLM activo/
+    }
+  );
+});
+

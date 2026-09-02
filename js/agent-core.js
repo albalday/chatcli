@@ -1,5 +1,5 @@
 /**
- * Módulo de Núcleo Agéntico y Sistema Modular de Herramientas (ChatAgentCore) para ChatCLI.
+ * Módulo de Núcleo Agéntico y Sistema Modular de Herramientas (ChatAgentCore) para ZeroChat.
  *
  * Arquitectura:
  * Model -> AgentCore -> ToolRegistry -> Tool -> ToolExecutor
@@ -18,36 +18,31 @@
   'use strict';
 
   // Resolutores perezosos de dependencias del entorno
-  function getSandbox() {
-    if (typeof window !== 'undefined' && window.ChatSandbox) return window.ChatSandbox;
+  function getBuiltinToolModule(globalName, modulePath) {
+    if (typeof window !== 'undefined' && window[globalName]) {
+      return window[globalName];
+    }
     if (typeof require !== 'undefined') {
-      try { return require('./sandbox.js'); } catch (e) {}
+      try { return require(modulePath); } catch (e) {}
     }
     return null;
   }
 
-  function getWebSearch() {
-    if (typeof window !== 'undefined' && window.ChatWebSearch) return window.ChatWebSearch;
+  function getBuiltinToolManifest() {
+    if (typeof window !== 'undefined' && window.ChatToolManifest) return window.ChatToolManifest.builtin;
     if (typeof require !== 'undefined') {
-      try { return require('./web-search.js'); } catch (e) {}
+      try { return require('./tools/tool-manifest.js').builtin; } catch (e) {}
     }
     return null;
   }
 
-  function getWebBrowser() {
-    if (typeof window !== 'undefined' && window.ChatWebBrowser) return window.ChatWebBrowser;
-    if (typeof require !== 'undefined') {
-      try { return require('./web-browser.js'); } catch (e) {}
+  function createBuiltinTool(toolId, globalName, modulePath) {
+    const builtinManifest = getBuiltinToolManifest();
+    const toolModule = builtinManifest?.get(toolId) || getBuiltinToolModule(globalName, modulePath);
+    if (!toolModule || typeof toolModule.createTool !== 'function') {
+      throw new Error(`No se pudo cargar el módulo de la herramienta ${toolId}.`);
     }
-    return null;
-  }
-
-  function getCharts() {
-    if (typeof window !== 'undefined' && window.ChatCharts) return window.ChatCharts;
-    if (typeof require !== 'undefined') {
-      try { return require('./charts.js'); } catch (e) {}
-    }
-    return null;
+    return toolModule.createTool(Tool);
   }
 
   function getAPI() {
@@ -66,29 +61,113 @@
     return null;
   }
 
-  function getRagStorage() {
-    if (typeof window !== 'undefined' && (window.ChatRagStorage || window.RagStorage)) {
-      return window.ChatRagStorage || window.RagStorage;
-    }
+  function getToolRuntime() {
+    if (typeof window !== 'undefined' && window.ChatToolRuntime) return window.ChatToolRuntime;
     if (typeof require !== 'undefined') {
-      try { return require('./ragStorage.js'); } catch (e) {}
+      try { return require('./tools/tool-runtime.js'); } catch (e) {}
     }
     return null;
   }
 
   /**
-   * Representa una herramienta individual ejecutable (Tool).
+   * Versión del contrato público que deben implementar las herramientas.
+   *
+   * Una herramienta puede exponerse como una instancia de Tool (adaptador de
+   * compatibilidad) o como un módulo que implemente los mismos métodos. Las
+   * futuras herramientas autocontenidas usarán este contrato directamente.
+   */
+  const TOOL_CONTRACT_VERSION = 1;
+
+  /**
+   * Resultado normalizado de una ejecución. Mantiene el resultado nativo en
+   * `data` para no alterar el comportamiento de las herramientas existentes.
+   */
+  class ToolOutcome {
+    constructor(options = {}) {
+      this.ok = options.ok !== false;
+      this.data = options.data === undefined ? null : options.data;
+      this.error = options.error || null;
+      this.meta = options.meta || {};
+    }
+
+    static fromExecution(result, meta = {}) {
+      const ok = result?.success !== false;
+      return new ToolOutcome({
+        ok,
+        data: result,
+        error: result?.error || null,
+        meta
+      });
+    }
+
+    static fromError(error, meta = {}) {
+      return new ToolOutcome({
+        ok: false,
+        data: null,
+        error: error?.message || String(error || 'Error de ejecución de herramienta.'),
+        meta
+      });
+    }
+  }
+
+  /**
+   * Valida el contrato mínimo de una herramienta antes de registrarla.
+   * La validación no impone todavía una vista específica: durante la migración
+   * las herramientas existentes pueden usar el renderer genérico.
+   */
+  function validateToolContract(tool) {
+    const errors = [];
+    if (!tool || typeof tool !== 'object') {
+      return { valid: false, errors: ['La herramienta debe ser un objeto.'] };
+    }
+    if (!tool.id || typeof tool.id !== 'string') errors.push('Falta un id de herramienta válido.');
+    if (!tool.name || typeof tool.name !== 'string') errors.push('Falta un nombre de función válido.');
+    if (!tool.description || typeof tool.description !== 'string') errors.push('Falta una descripción válida.');
+    if (!tool.parameters || tool.parameters.type !== 'object') errors.push('El esquema parameters debe ser un objeto JSON Schema.');
+    if (typeof tool.getDefinition !== 'function') errors.push('Falta getDefinition().');
+    if (typeof tool.execute !== 'function') errors.push('Falta execute(args, context).');
+    if (typeof tool.isAvailable !== 'function') errors.push('Falta isAvailable(context).');
+    if (typeof tool.serializeResultForModel !== 'function') errors.push('Falta serializeResultForModel(args, result).');
+    if (typeof tool.formatMarkdownResult !== 'function') errors.push('Falta formatMarkdownResult(args, result).');
+    if (typeof tool.formatDispatchMarkdown !== 'function') errors.push('Falta formatDispatchMarkdown(args, result).');
+    if (!tool.settings || typeof tool.settings !== 'object') errors.push('Falta descriptor settings.');
+
+    return { valid: errors.length === 0, errors };
+  }
+
+  /**
+   * Representa una herramienta individual ejecutable y adapta la API histórica
+   * al contrato ToolModule v1.
    */
   class Tool {
     constructor(options = {}) {
-      this.name = options.name || '';
-      this.description = options.description || '';
-      this.parameters = options.parameters || { type: 'object', properties: {} };
+      const definition = options.definition || {};
+      this.contractVersion = options.contractVersion || TOOL_CONTRACT_VERSION;
+      this.id = options.id || definition.id || definition.name || options.name || '';
+      this.name = definition.name || options.name || '';
+      // Las tools históricas podían omitir descripción; el adaptador conserva
+      // su registro y les proporciona una descripción mínima válida.
+      this.description = definition.description || options.description || this.name;
+      this.parameters = definition.parameters || options.parameters || { type: 'object', properties: {} };
       this.aliases = Array.isArray(options.aliases) ? options.aliases : [];
       this.category = options.category || 'general';
       this.metadata = options.metadata || {};
-      this.handler = options.handler || null;
+      const settings = options.settings || {};
+      this.settings = {
+        titleKey: settings.titleKey || `agent_${this.name}_title`,
+        titleFallback: settings.titleFallback || options.metadata?.label || this.name,
+        descKey: settings.descKey || `agent_${this.name}_desc`,
+        descFallback: settings.descFallback || this.description,
+        icon: settings.icon || options.metadata?.icon || '⚙️',
+        defaultEnabled: settings.defaultEnabled !== false,
+        showInSettings: settings.showInSettings !== false
+      };
+      this.executeHandler = options.execute || null;
+      this.result = options.result || {};
       this.formatter = options.formatter || null;
+      this.promptGuide = options.promptGuide || options.getSystemPromptGuide || null;
+      this.isAvailable = typeof options.isAvailable === 'function' ? options.isAvailable : (() => true);
+      this.view = options.view || null;
     }
 
     /**
@@ -106,24 +185,55 @@
     }
 
     /**
+     * Devuelve la línea descriptiva de la herramienta para el System Prompt (guía de texto plano).
+     */
+    getSystemPromptGuide(lang = 'es') {
+      if (typeof this.promptGuide === 'function') {
+        return this.promptGuide(lang);
+      }
+      return `- \`${this.name}\`: ${this.description}`;
+    }
+
+    /**
      * Ejecuta la herramienta asíncronamente.
      */
     async execute(args, context = {}) {
-      if (typeof this.handler === 'function') {
-        return this.handler(args, context);
+      if (typeof this.executeHandler === 'function') {
+        return this.executeHandler(args, context);
       }
       throw new Error(`La herramienta ${this.name} no tiene handler de ejecución implementado.`);
     }
 
     /**
+     * Serializa una salida para el mensaje con rol `tool` que consume el LLM.
+     */
+    serializeResultForModel(args, result, outcome) {
+      if (typeof this.result.toModel === 'function') {
+        return this.result.toModel(args, result, outcome);
+      }
+      return typeof result === 'object' ? JSON.stringify(result) : String(result ?? '');
+    }
+
+    /**
      * Formatea el resultado en Markdown para su inserción en el historial o exportación.
      */
-    formatMarkdownResult(args, result) {
+    formatMarkdownResult(args, result, outcome) {
       if (typeof this.formatter === 'function') {
-        return this.formatter(args, result);
+        return this.formatter(args, result, outcome);
       }
       const output = typeof result === 'object' ? JSON.stringify(result, null, 2) : String(result);
       return `> ⚙️ **${this.name}**\n> \`\`\`json\n> ${output.split('\n').join('\n> ')}\n> \`\`\``;
+    }
+
+    /**
+     * Formato resumido que se añade al despacho y a la exportación de chat.
+     * Puede diferir del formato detallado conservado por la API histórica.
+     */
+    formatDispatchMarkdown(args, result, outcome) {
+      if (typeof this.result.toMarkdown === 'function') {
+        return this.result.toMarkdown(args, result, outcome);
+      }
+      return this.formatMarkdownResult(args, result, outcome);
     }
   }
 
@@ -145,266 +255,31 @@
   }
 
   /**
-   * Proveedor de herramientas nativas de ChatCLI (BuiltinToolProvider).
-   * Provee: execute_javascript, search_web, fetch_web_page, download_pdf, render_chart.
+   * Proveedor de herramientas nativas de ZeroChat (BuiltinToolProvider).
+   * Provee las herramientas nativas registradas en módulos autocontenidos.
    */
   class BuiltinToolProvider extends BaseToolProvider {
     constructor() {
-      super({ id: 'builtin', name: 'ChatCLI Built-in Tools' });
+      super({ id: 'builtin', name: 'ZeroChat Built-in Tools' });
     }
 
     getTools() {
       const tools = [];
 
-      // 1. Herramienta execute_javascript
-      tools.push(new Tool({
-        name: 'execute_javascript',
-        description: 'Ejecuta código JavaScript localmente en un sandbox seguro en el navegador para cálculos matemáticos y procesamiento de datos.',
-        parameters: {
-          type: 'object',
-          properties: {
-            code: { type: 'string', description: 'Código JS ejecutable.' }
-          },
-          required: ['code']
-        },
-        aliases: ['executejs', 'execute_js', 'run_javascript', 'run_js', 'javascript', 'evaljs'],
-        category: 'sandbox',
-        metadata: { icon: '⚡', label: 'execute_javascript' },
-        handler: async (args, context) => {
-          const Sandbox = getSandbox();
-          const code = args.code || args.javascript || args.js || args.script || args.input || (typeof args === 'string' ? args : '');
-          if (!Sandbox || !Sandbox.execute) {
-            return { success: false, error: 'Módulo Sandbox no disponible.' };
-          }
-          return Sandbox.execute(code, context.options || {});
-        },
-        formatter: (args, result) => {
-          const code = args.code || '';
-          const output = result.success
-            ? (result.result || (result.logs && result.logs.length > 0 ? result.logs.join('\n') : 'undefined'))
-            : `Error: ${result.error}`;
-          return `> ⚡ **execute_javascript**\n> \`\`\`javascript\n> ${code.split('\n').join('\n> ')}\n> \`\`\`\n> \`\`\`\n> ${String(output).split('\n').join('\n> ')}\n> \`\`\``;
-        }
-      }));
+      // 1. Herramienta execute_javascript (módulo autocontenido)
+      tools.push(createBuiltinTool('execute_javascript', 'ChatBuiltinExecuteJavascriptTool', './tools/builtin/execute-javascript.tool.js'));
 
-      // 2. Herramienta search_web
-      tools.push(new Tool({
-        name: 'search_web',
-        description: 'Busca en internet en tiempo real información actualizada, noticias, artículos y enlaces web utilizando DuckDuckGo.',
-        parameters: {
-          type: 'object',
-          properties: {
-            query: { type: 'string', description: 'Términos o consulta de búsqueda (ej: "INE poblacion Ceuta padron", "DeepSeek R1").' }
-          },
-          required: ['query']
-        },
-        aliases: ['searchweb', 'web_search', 'duckduckgo_search', 'duckduckgo', 'search_internet', 'internet_search', 'search'],
-        category: 'web',
-        metadata: { icon: '🔍', label: 'search_web' },
-        handler: async (args, context) => {
-          const WebSearch = getWebSearch();
-          const query = args.query || args.q || args.search || args.keyword || args.term || args.input || (typeof args === 'string' ? args : '');
-          if (!WebSearch || !WebSearch.search) {
-            return { success: false, error: 'Módulo WebSearch no disponible.' };
-          }
-          return WebSearch.search(query, context.lang || 'es');
-        },
-        formatter: (args, result) => {
-          return result.markdown || `> 🔍 **search_web**: ${args.query}`;
-        }
-      }));
+      // 2-4. Herramientas web autocontenidas
+      tools.push(createBuiltinTool('search_web', 'ChatBuiltinSearchWebTool', './tools/builtin/search-web.tool.js'));
+      tools.push(createBuiltinTool('fetch_web_page', 'ChatBuiltinFetchWebPageTool', './tools/builtin/fetch-web-page.tool.js'));
+      tools.push(createBuiltinTool('download_pdf', 'ChatBuiltinDownloadPdfTool', './tools/builtin/download-pdf.tool.js'));
 
-      // 3. Herramienta fetch_web_page
-      tools.push(new Tool({
-        name: 'fetch_web_page',
-        description: 'Descarga y lee el texto y contenido de una página web pública o artículo HTML a partir de su URL (ej: "https://es.wikipedia.org/wiki/Sol").',
-        parameters: {
-          type: 'object',
-          properties: {
-            url: { type: 'string', description: 'URL de la página web a consultar.' }
-          },
-          required: ['url']
-        },
-        aliases: ['fetchwebpage', 'fetch_web', 'fetch_url', 'get_web_page', 'read_web_page', 'web_fetch', 'browse_web', 'webpage'],
-        category: 'web',
-        metadata: { icon: '🌐', label: 'fetch_web_page' },
-        handler: async (args, context) => {
-          const WebBrowser = getWebBrowser();
-          const url = args.url || args.URL || args.uri || args.link || args.href || args.path || args.input || (typeof args === 'string' ? args : '');
-          if (!WebBrowser || !WebBrowser.fetchPage) {
-            return { success: false, error: 'Módulo WebBrowser no disponible.' };
-          }
-          return WebBrowser.fetchPage(url, context.options || {});
-        },
-        formatter: (args, result) => {
-          const url = args.url || '';
-          const preview = result.success ? (result.content || '(Página vacía)') : (result.error || 'Error al conectar');
-          return `> 🌐 **fetch_web_page** (HTTP ${result.status || 200})\n> URL: ${url}\n> \`\`\`\n> ${preview.slice(0, 500).split('\n').join('\n> ')}\n> \`\`\``;
-        }
-      }));
-
-      // 4. Herramienta download_pdf
-      tools.push(new Tool({
-        name: 'download_pdf',
-        description: 'Descarga un archivo o documento PDF desde una URL web y extrae todo su texto legible para analizarlo e integrarlo en el contexto (ej: "https://arxiv.org/pdf/2310.06825.pdf").',
-        parameters: {
-          type: 'object',
-          properties: {
-            url: { type: 'string', description: 'URL directa del documento PDF a descargar y extraer.' }
-          },
-          required: ['url']
-        },
-        aliases: ['downloadpdf', 'fetch_pdf', 'download_pdf_document', 'fetch_pdf_document', 'download_file', 'getpdf', 'readpdf'],
-        category: 'web',
-        metadata: { icon: '📄', label: 'download_pdf' },
-        handler: async (args, context) => {
-          const WebBrowser = getWebBrowser();
-          const url = args.url || args.URL || args.uri || args.link || args.href || args.path || args.input || (typeof args === 'string' ? args : '');
-          if (!WebBrowser || !WebBrowser.downloadPdf) {
-            return { success: false, error: 'Módulo WebBrowser no disponible.' };
-          }
-          return WebBrowser.downloadPdf(url, context.options || {});
-        },
-        formatter: (args, result) => {
-          const url = args.url || '';
-          const preview = result.success ? (result.content || '(PDF vacío)') : (result.error || 'Error descargando PDF');
-          return `> 📄 **download_pdf**\n> URL: ${url}\n> \`\`\`\n> ${preview.slice(0, 500).split('\n').join('\n> ')}\n> \`\`\``;
-        }
-      }));
-
-      // 5. Herramienta render_chart
-      tools.push(new Tool({
-        name: 'render_chart',
-        description: 'Genera y visualiza un gráfico interactivo (barras, líneas, donut o sectores) a partir de datos numéricos o tablas.',
-        parameters: {
-          type: 'object',
-          properties: {
-            type: { type: 'string', enum: ['bar', 'line', 'pie', 'doughnut'], description: 'Tipo de gráfico.' },
-            title: { type: 'string', description: 'Título descriptivo del gráfico.' },
-            description: { type: 'string', description: 'Breve explicación de los datos.' },
-            labels: { type: 'array', items: { type: 'string' }, description: 'Etiquetas del eje X o categorías.' },
-            datasets: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  label: { type: 'string' },
-                  data: { type: 'array', items: { type: 'number' } },
-                  color: { type: 'string' }
-                },
-                required: ['label', 'data']
-              },
-              description: 'Series de datos numéricos.'
-            }
-          },
-          required: ['type', 'title', 'labels', 'datasets']
-        },
-        aliases: ['renderchart', 'draw_chart', 'create_chart', 'plot_chart', 'generate_chart', 'show_chart', 'chart', 'grafico'],
-        category: 'charts',
-        metadata: { icon: '📊', label: 'render_chart' },
-        handler: async (args, context) => {
-          const Charts = getCharts();
-          if (!Charts || !Charts.renderChart) {
-            return { success: false, error: 'Módulo Charts no disponible.' };
-          }
-          const svgHtml = Charts.renderChart(args);
-          return {
-            success: !!svgHtml,
-            svg: svgHtml,
-            chartData: args,
-            title: args.title || 'Gráfico'
-          };
-        },
-        formatter: (args, result) => {
-          return `> 📊 **render_chart**: ${args.title || 'Gráfico'} (${args.type || 'bar'})\n> [Gráfico interactivo generado correctamente]`;
-        }
-      }));
-
-      // 6. Herramienta get_current_datetime
-      tools.push(new Tool({
-        name: 'get_current_datetime',
-        description: 'Obtiene la fecha, hora, día de la semana y zona horaria actual en tiempo real en el cliente.',
-        parameters: {
-          type: 'object',
-          properties: {
-            timezone: { type: 'string', description: 'Zona horaria opcional (ej: "Europe/Madrid", "America/New_York", "UTC").' }
-          }
-        },
-        aliases: ['get_current_time', 'get_datetime', 'current_time', 'current_date', 'get_date', 'now', 'fecha_actual', 'hora_actual'],
-        category: 'system',
-        metadata: { icon: '⏱️', label: 'get_current_datetime' },
-        handler: async (args, context) => {
-          const now = new Date();
-          const tz = args.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-          return {
-            success: true,
-            iso: now.toISOString(),
-            date: now.toLocaleDateString('es-ES', { timeZone: tz, weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
-            time: now.toLocaleTimeString('es-ES', { timeZone: tz, hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-            timestamp: now.getTime(),
-            timezone: tz
-          };
-        },
-        formatter: (args, result) => {
-          return `> ⏱️ **get_current_datetime**: ${result.date} ${result.time} (${result.timezone})`;
-        }
-      }));
-
-      // 7. Herramienta read_chapter_content (RAG Jerárquico)
-      tools.push(new Tool({
-        name: 'read_chapter_content',
-        description: 'Recupera el contenido completo y detallado de un capítulo de un documento indexado en la rama activa cuando el resumen no es suficiente.',
-        parameters: {
-          type: 'object',
-          properties: {
-            docId: {
-              type: 'string',
-              description: 'El identificador único del documento (docId).'
-            },
-            chapterId: {
-              type: 'number',
-              description: 'El número de ID del capítulo a consultar.'
-            }
-          },
-          required: ['docId', 'chapterId']
-        },
-        aliases: ['readchaptercontent', 'read_chapter', 'get_chapter', 'get_chapter_content', 'read_doc_chapter'],
-        category: 'rag',
-        metadata: { icon: '📖', label: 'read_chapter_content' },
-        handler: async (args, context) => {
-          const RagStorage = getRagStorage();
-          if (!RagStorage || !RagStorage.getChapterContent) {
-            return { success: false, error: 'Módulo de almacenamiento RAG no disponible.' };
-          }
-          const docId = args.docId || args.doc_id || args.id || '';
-          const chapterId = typeof args.chapterId === 'number' ? args.chapterId : parseInt(args.chapter_id || args.chapterId || args.chapter, 10);
-
-          if (!docId || isNaN(chapterId)) {
-            return { success: false, error: 'Parámetros inválidos: docId y chapterId numérico son requeridos.' };
-          }
-
-          const content = await RagStorage.getChapterContent(docId, chapterId);
-          if (content !== null && typeof content === 'string') {
-            return {
-              success: true,
-              docId,
-              chapterId,
-              charCount: content.length,
-              content
-            };
-          }
-          return {
-            success: false,
-            error: `No se encontró el capítulo ${chapterId} en el documento [${docId}].`
-          };
-        },
-        formatter: (args, result) => {
-          if (result.success) {
-            return `> 📖 **read_chapter_content** (Doc: \`${result.docId}\`, Cap: \`${result.chapterId}\`)\n> \`\`\`text\n> ${String(result.content).split('\n').join('\n> ')}\n> \`\`\``;
-          }
-          return `> 📖 **read_chapter_content** (Doc: \`${args.docId}\`, Cap: \`${args.chapterId}\`)\n> ❌ ${result.error || 'Error al recuperar capítulo'}`;
-        }
-      }));
+      // 5-9. Gráficos, fecha y RAG como módulos autocontenidos.
+      tools.push(createBuiltinTool('render_chart', 'ChatBuiltinRenderChartTool', './tools/builtin/render-chart.tool.js'));
+      tools.push(createBuiltinTool('get_current_datetime', 'ChatBuiltinGetCurrentDatetimeTool', './tools/builtin/get-current-datetime.tool.js'));
+      tools.push(createBuiltinTool('list_documents', 'ChatBuiltinListDocumentsTool', './tools/builtin/list-documents.tool.js'));
+      tools.push(createBuiltinTool('search_knowledge_base', 'ChatBuiltinSearchKnowledgeBaseTool', './tools/builtin/search-knowledge-base.tool.js'));
+      tools.push(createBuiltinTool('read_chapter_content', 'ChatBuiltinReadChapterContentTool', './tools/builtin/read-chapter-content.tool.js'));
 
       return tools;
     }
@@ -439,7 +314,10 @@
      * Registra una herramienta individual.
      */
     registerTool(tool) {
-      if (!tool || !tool.name) return;
+      const validation = validateToolContract(tool);
+      if (!validation.valid) {
+        throw new Error(`Contrato de herramienta inválido: ${validation.errors.join(' ')}`);
+      }
       const canonicalName = tool.name.trim().toLowerCase();
       this.tools.set(canonicalName, tool);
 
@@ -454,6 +332,7 @@
           this.aliasMap.set(cleanAlias.replace(/_/g, ''), canonicalName);
         });
       }
+      return tool;
     }
 
     /**
@@ -480,24 +359,102 @@
     }
 
     /**
-     * Devuelve las definiciones Function Calling de las herramientas filtradas.
+     * Devuelve las herramientas visibles para la UI de Configuración.
      */
-    getDefinitions(filterOptions = {}) {
-      const defs = [];
-      for (const [name, tool] of this.tools.entries()) {
-        // Filtrar por categorías o habilitaciones booleanas
-        if (filterOptions.category && tool.category !== filterOptions.category) continue;
-        if (filterOptions.enabledCategories && !filterOptions.enabledCategories.includes(tool.category)) continue;
+    listToolsForUI() {
+      const list = [];
+      for (const tool of this.tools.values()) {
+        if (tool.settings && tool.settings.showInSettings !== false) {
+          list.push({
+            id: tool.id || tool.name,
+            name: tool.name,
+            category: tool.category,
+            icon: tool.settings.icon,
+            titleKey: tool.settings.titleKey,
+            titleFallback: tool.settings.titleFallback,
+            descKey: tool.settings.descKey,
+            descFallback: tool.settings.descFallback,
+            defaultEnabled: tool.settings.defaultEnabled !== false
+          });
+        }
+      }
+      return list;
+    }
 
-        // Filtros específicos por herramienta
-        if (name === 'execute_javascript' && filterOptions.enableAgentJs === false) continue;
-        if ((name === 'fetch_web_page' || name === 'download_pdf') && filterOptions.enableAgentWeb === false) continue;
-        if (name === 'search_web' && filterOptions.enableAgentSearch === false) continue;
-        if (name === 'render_chart' && filterOptions.enableAgentChart === false) continue;
+    /**
+     * Resuelve las definiciones Function Calling de las herramientas activas según la configuración.
+     */
+    getActiveDefinitions(appConfig = {}) {
+      const defs = [];
+      const enabledTools = appConfig.enabledTools || {};
+
+      for (const [name, tool] of this.tools.entries()) {
+        // 1. Comprobar si la herramienta está disponible por su contexto (ej. RAG requiere rama activa)
+        if (typeof tool.isAvailable === 'function' && !tool.isAvailable(appConfig)) {
+          continue;
+        }
+
+        // 2. Si la herramienta se configura en la UI, verificar si está activada
+        if (tool.settings && tool.settings.showInSettings !== false) {
+          const toolId = tool.id || tool.name;
+          const isEnabled = enabledTools[toolId] !== undefined
+            ? enabledTools[toolId] !== false
+            : (enabledTools[tool.name] !== undefined ? enabledTools[tool.name] !== false : tool.settings.defaultEnabled !== false);
+
+          if (!isEnabled) {
+            continue;
+          }
+        }
 
         defs.push(tool.getDefinition());
       }
       return defs;
+    }
+
+    /**
+     * Alias compatible con versiones anteriores de getDefinitions.
+     */
+    getDefinitions(filterOptions = {}) {
+      return this.getActiveDefinitions(filterOptions);
+    }
+
+    /**
+     * Genera la guía textual de herramientas para el System Prompt.
+     */
+    getActivePromptGuide(appConfig = {}, lang = 'es') {
+      const isEs = lang !== 'en';
+      const enabledTools = appConfig.enabledTools || {};
+      const guides = [];
+
+      for (const tool of this.tools.values()) {
+        if (typeof tool.isAvailable === 'function' && !tool.isAvailable(appConfig)) {
+          continue;
+        }
+
+        if (tool.settings && tool.settings.showInSettings !== false) {
+          const toolId = tool.id || tool.name;
+          const isEnabled = enabledTools[toolId] !== undefined
+            ? enabledTools[toolId] !== false
+            : (enabledTools[tool.name] !== undefined ? enabledTools[tool.name] !== false : tool.settings.defaultEnabled !== false);
+
+          if (!isEnabled) {
+            continue;
+          }
+        }
+
+        if (typeof tool.getSystemPromptGuide === 'function') {
+          const guideStr = tool.getSystemPromptGuide(lang);
+          if (guideStr && typeof guideStr === 'string') {
+            guides.push(guideStr);
+          }
+        }
+      }
+
+      if (guides.length === 0) return '';
+
+      return isEs
+        ? `\n\n[HERRAMIENTAS Y FUNCIONES DISPONIBLES]:\nPuedes utilizar las siguientes herramientas cuando sea necesario para responder con precisión:\n${guides.join('\n')}\n*Instrucción de flujo:* Una vez recibidos los resultados de las herramientas en la conversación, sintetiza los hallazgos y redacta una respuesta final completa, bien estructurada y detallada para el usuario, citando las fuentes consultadas. No finalices la respuesta sin proporcionar el resumen completo.`
+        : `\n\n[AVAILABLE TOOLS AND FUNCTIONS]:\nYou can use the following tools when needed to answer accurately:\n${guides.join('\n')}\n*Workflow instruction:* Once tool results are received, synthesize the findings and write a complete, well-structured, detailed final answer for the user, citing consulted sources. Do not end the response without providing the full summary.`;
     }
 
     /**
@@ -529,12 +486,12 @@
       } catch (e) {
         // Fallback tolerante para formato clave: valor o texto plano
         const urlMatch = str.match(/(?:url|link|href)\s*[:=]\s*["']?([^"'\s,}]+)/i);
-        const queryMatch = str.match(/(?:query|q|search)\s*[:=]\s*["']?([^"'\s,}]+)/i);
-        const codeMatch = str.match(/(?:code|js|javascript)\s*[:=]\s*["']?([^"'\s,}]+)/i);
+        const queryMatch = str.match(/(?:query|q|search)\s*[:=]\s*["']?([^"'\r\n,}]+)/i);
+        const codeMatch = str.match(/(?:code|js|javascript)\s*[:=]\s*["']?([^"'\r\n]+)/i);
 
         if (urlMatch) return { url: urlMatch[1] };
-        if (queryMatch) return { query: queryMatch[1] };
-        if (codeMatch) return { code: codeMatch[1] };
+        if (queryMatch) return { query: queryMatch[1].trim() };
+        if (codeMatch) return { code: codeMatch[1].trim().replace(/["']$/, '') };
 
         return { input: str };
       }
@@ -549,12 +506,19 @@
       const parsedArgs = this.parseArguments(toolCall?.function?.arguments);
 
       if (!tool) {
+        const error = `Herramienta '${rawName}' no encontrada en el registro.`;
         return {
           success: false,
           toolName: rawName,
-          error: `Herramienta '${rawName}' no encontrada en el registro.`,
+          error,
           executionTimeMs: 0,
-          result: null
+          result: null,
+          outcome: ToolOutcome.fromError(error, {
+            toolId: null,
+            toolName: rawName,
+            contractVersion: TOOL_CONTRACT_VERSION,
+            executionTimeMs: 0
+          })
         };
       }
 
@@ -565,16 +529,27 @@
           throw new Error('Ejecución de herramienta cancelada por el usuario.');
         }
 
-        const execResult = await tool.execute(parsedArgs, context);
+        const ToolRuntime = getToolRuntime();
+        const executionContext = ToolRuntime?.createToolExecutionContext
+          ? ToolRuntime.createToolExecutionContext(context)
+          : context;
+        const execResult = await tool.execute(parsedArgs, executionContext);
         const endTime = typeof performance !== 'undefined' ? performance.now() : Date.now();
         const elapsed = parseFloat((endTime - startTime).toFixed(2));
 
+        const meta = {
+          toolId: tool.id,
+          toolName: tool.name,
+          contractVersion: tool.contractVersion || TOOL_CONTRACT_VERSION,
+          executionTimeMs: elapsed
+        };
         return {
           success: execResult?.success !== false,
           tool: tool,
           toolName: tool.name,
           args: parsedArgs,
           result: execResult,
+          outcome: ToolOutcome.fromExecution(execResult, meta),
           executionTimeMs: elapsed,
           error: execResult?.error
         };
@@ -582,6 +557,12 @@
         const endTime = typeof performance !== 'undefined' ? performance.now() : Date.now();
         const elapsed = parseFloat((endTime - startTime).toFixed(2));
 
+        const meta = {
+          toolId: tool.id,
+          toolName: tool.name,
+          contractVersion: tool.contractVersion || TOOL_CONTRACT_VERSION,
+          executionTimeMs: elapsed
+        };
         return {
           success: false,
           tool: tool,
@@ -589,9 +570,100 @@
           args: parsedArgs,
           error: err.message || String(err),
           executionTimeMs: elapsed,
-          result: null
+          result: null,
+          outcome: ToolOutcome.fromError(err, meta)
         };
       }
+    }
+
+    /**
+     * Despacha una llamada a herramienta gestionando el ciclo completo:
+     * - Parseo seguro de argumentos
+     * - Creación inicial e inserción de la tarjeta DOM en vivo
+     * - Logging previo a consola de depuración
+     * - Ejecución asíncrona a través de executeToolCall
+     * - Actualización reactiva de la tarjeta DOM con los resultados
+     * - Formateo de la respuesta textual para el historial del chat y markdown
+     */
+    async dispatchToolCall(toolCall, options = {}) {
+      const {
+        container,
+        onLog,
+        attachListeners,
+        scrollToBottom,
+        language = 'es'
+      } = options;
+
+      const rawFuncName = toolCall?.function?.name || '';
+      const parsedArgs = this.parseArguments(toolCall?.function?.arguments);
+      const ToolCards = (typeof window !== 'undefined' && window.ChatToolCards) ? window.ChatToolCards : null;
+
+      // 1. Crear e insertar la tarjeta DOM en vivo con estado de carga
+      let cardEl = null;
+      if (ToolCards && ToolCards.createLiveToolCard && container && typeof document !== 'undefined') {
+        cardEl = ToolCards.createLiveToolCard(rawFuncName, parsedArgs);
+        if (cardEl) {
+          container.appendChild(cardEl);
+          if (typeof attachListeners === 'function') attachListeners(cardEl);
+          if (typeof scrollToBottom === 'function') scrollToBottom();
+        }
+      }
+
+      // 2. Logging previo
+      if (typeof onLog === 'function') {
+        onLog('tool', `${rawFuncName}:\n${JSON.stringify(parsedArgs, null, 2)}`);
+        onLog('raw', `>>> TOOL CALL ${rawFuncName}:\n${JSON.stringify(parsedArgs, null, 2)}`);
+      }
+
+      // 3. Ejecutar la herramienta a través de executeToolCall
+      const execRes = await this.executeToolCall(toolCall, { lang: language, ...options });
+
+      // 4. Actualizar la tarjeta DOM con el resultado
+      if (ToolCards && ToolCards.updateLiveToolCard && cardEl) {
+        ToolCards.updateLiveToolCard(cardEl, rawFuncName, parsedArgs, execRes.result || execRes, execRes.executionTimeMs);
+        if (typeof attachListeners === 'function') attachListeners(cardEl);
+        if (typeof scrollToBottom === 'function') scrollToBottom();
+      }
+
+      // 5. Formatear la salida para el mensaje `tool` sin conocer tipos concretos.
+      const resolvedTool = execRes.tool;
+      let resultText = '';
+      try {
+        const serialized = resolvedTool
+          ? resolvedTool.serializeResultForModel(parsedArgs, execRes.result, execRes.outcome)
+          : (execRes.error || 'Error de ejecución de herramienta.');
+        resultText = typeof serialized === 'string' ? serialized : JSON.stringify(serialized);
+      } catch (err) {
+        resultText = `Error al serializar el resultado de ${rawFuncName}: ${err.message || String(err)}`;
+      }
+
+      // 6. Logging posterior
+      if (typeof onLog === 'function') {
+        onLog('tool', `${rawFuncName} output (${execRes.executionTimeMs || 0}ms):\n${String(resultText).substring(0, 300)}`);
+        onLog('raw', `<<< TOOL RESULT ${rawFuncName} (${execRes.executionTimeMs || 0}ms):\n${resultText}`);
+      }
+
+      // 7. Formatear bloque Markdown para portapapeles/exportación desde la tool.
+      let toolMd = '';
+      try {
+        toolMd = resolvedTool
+          ? resolvedTool.formatDispatchMarkdown(parsedArgs, execRes.result, execRes.outcome)
+          : `> ⚙️ **${rawFuncName}**\n> \`\`\`\n> ${String(resultText).slice(0, 300)}\n> \`\`\``;
+      } catch (err) {
+        toolMd = `> ❌ **${rawFuncName}**: ${err.message || String(err)}`;
+      }
+
+      return {
+        success: execRes.success !== false,
+        result: execRes.result,
+        resultText,
+        markdownBlock: toolMd,
+        cardElement: cardEl,
+        executionTimeMs: execRes.executionTimeMs,
+        error: execRes.error,
+        toolName: rawFuncName,
+        args: parsedArgs
+      };
     }
   }
 
@@ -1164,6 +1236,9 @@
   const globalAgent = new AgentCore({ registry: globalRegistry, executor: globalExecutor });
 
   return {
+    TOOL_CONTRACT_VERSION,
+    ToolOutcome,
+    validateToolContract,
     Tool,
     BaseToolProvider,
     BuiltinToolProvider,
@@ -1174,7 +1249,8 @@
     registry: globalRegistry,
     executor: globalExecutor,
     runtime: globalRuntime,
-    agent: globalAgent
+    agent: globalAgent,
+    dispatchToolCall: (toolCall, options) => globalExecutor.dispatchToolCall(toolCall, options),
+    executeToolCall: (toolCall, context) => globalExecutor.executeToolCall(toolCall, context)
   };
 });
-

@@ -1,5 +1,5 @@
 /**
- * Módulo de Internacionalización y Multi-idioma (ChatI18n) para ChatCLI v5.0.
+ * Módulo de Internacionalización y Multi-idioma (ChatI18n) para ZeroChat v5.3.
  * Gestiona diccionarios en Español e Inglés, formateo de fechas y reactividad de UI.
  */
 
@@ -17,7 +17,7 @@
   const TRANSLATIONS = {
     es: {
       // Metadatos y Encabezados
-      app_title: 'ZeroChat v5.2 - Cliente Web Universal de Chat & Agente IA',
+      app_title: 'ZeroChat v5.3 - Cliente Web Universal de Chat & Agente IA',
       app_description: 'Cliente web universal, agente IA autónomo y RAG local en un solo archivo con cero instalación',
       
       // Bienvenida y Sugerencias
@@ -34,6 +34,7 @@
       sug_ideas_prompt: 'Dame 3 ideas de proyectos web interesantes que utilicen HTML5 y JavaScript Vanilla.',
 
       // Barra de herramientas superior
+      profile_badge_title: 'Perfil de conexión activo (clic para abrir Configuración)',
       server_badge_title: 'Servidor configurado (clic para cambiar)',
       model_badge_title: 'Modelo activo (clic para cambiar)',
       no_model: '(Sin modelo)',
@@ -45,15 +46,19 @@
       btn_settings_title: 'Abrir configuración de API y Modelo',
       btn_tree_rag: 'Base de Conocimiento',
       btn_tree_rag_title: 'Gestionar Base de Conocimiento por Ramas (RAG Jerárquico)',
-      rag_tab_active: '🌿 Rama Activa en Chat',
+      rag_tab_active: 'Activar RAG',
       rag_tab_manage: '📁 Gestión de Ramas y Documentos',
       rag_tab_help: '❓ Ayuda',
+      rag_summary_profile_title: 'Perfil de Conexión para Resumen de Documentos',
+      rag_summary_profile_hint: 'Selecciona el perfil de conexión que procesará el análisis e ingesta de documentos:',
+      rag_summary_profile_warning_title: '💡 Elección recomendada del modelo para ingesta y resumen:',
+      rag_summary_profile_warning_desc: 'Se recomienda usar un modelo <strong>multimodal</strong>, de <strong>bajo coste</strong> (o local) y con una <strong>ventana de contexto lo más grande posible</strong>. <span style="color: var(--danger, #ef4444); font-weight: 600;">⚠️ Atención: El procesamiento automático de documentos extensos o PDFs puede generar costes de API elevados si utilizas un modelo generalista de pago por token.</span>',
       rag_help_intro_title: '¿Qué es el RAG Agéntico Local?',
       rag_help_how_it_works_title: '¿Cómo funciona la indexación y recuperación?',
       rag_help_model_rec_title: 'Modelo para Ingesta y Carga de Archivos',
       rag_help_storage_title: 'Ubicación de Archivos, Exportación e Importación',
       rag_context_limit_title: '📦 Tamaño de Contexto por Capítulo (Tokens)',
-      rag_context_limit_desc: 'Define la capacidad máxima de tokens por capítulo (16K a 1M tokens) para segmentar documentos y realizar síntesis con el modelo. Protege imágenes y tablas completas.',
+      rag_context_limit_desc: 'Define la capacidad máxima de tokens por capítulo (32K a 1M tokens) para segmentar documentos y realizar síntesis con el modelo. Protege imágenes y tablas completas.',
       rag_select_branch_chat: 'Seleccionar Rama para el Chat',
       rag_select_branch_chat_hint: 'Haz clic en una rama para activarla en la conversación actual:',
       rag_editing_branch: 'Rama en edición:',
@@ -220,6 +225,7 @@
       tab_general: '🌐 General',
       tab_agent: '🤖 Agente',
       tab_model: '⚙️ Modelo',
+      tab_appearance: '🎨 Visualización',
       tab_inspector: '🔍 Inspector',
       inspector_desc: 'Analiza el endpoint configurado para determinar con precisión qué capacidades soporta, distinguiendo entre capacidades declaradas, inferidas y comprobadas mediante pruebas activas seguras.',
       btn_run_inspector: 'Ejecutar Diagnóstico de Capacidades',
@@ -241,6 +247,19 @@
       inspector_models_found: '{count} modelos detectados',
       field_language: 'Idioma de la Interfaz (Language)',
       field_language_hint: 'Selecciona el idioma visual de la aplicación.',
+      field_profile: 'Perfil de Conexión / Servidor',
+      field_profile_hint: 'Selecciona un perfil guardado o escribe un nuevo nombre para crearlo.',
+      field_profile_name_label: 'Nombre del Perfil',
+      field_profile_placeholder: 'Nombre del perfil (ej: LM Studio, Ollama, OpenRouter...)',
+      profile_card_title: 'Valores y Parámetros del Perfil',
+      profile_select_default: '▾ Elegir perfil guardado...',
+      btn_save_profile: 'Guardar Perfil',
+      btn_save_profile_title: 'Guardar todos los valores actuales en este perfil',
+      btn_delete_profile_title: 'Eliminar el perfil seleccionado',
+      msg_profile_saved: '✅ Perfil "{name}" guardado con éxito.',
+      msg_profile_deleted: '🗑️ Perfil "{name}" eliminado correctamente.',
+      confirm_delete_profile: '¿Estás seguro de que deseas eliminar el perfil "{name}"?',
+      err_profile_name_empty: 'Por favor, escribe un nombre para el perfil.',
       field_api_type: 'Tipo de Interfaz / Protocolo',
       field_api_type_hint: 'Determina el formato del JSON de petición y las opciones de razonamiento.',
       field_api_url: 'URL del Servidor / Endpoint de Chat',
@@ -265,8 +284,10 @@
       agent_search_desc: 'Permite al modelo invocar search_web para buscar información actualizada, definiciones, noticias y enlaces web mediante la API de DuckDuckGo.',
       agent_js_title: '⚡ Ejecución de JavaScript Local (Sandbox)',
       agent_js_desc: 'Permite al modelo invocar execute_javascript para calcular, procesar datos o validar algoritmos en un entorno seguro en el navegador.',
-      agent_web_title: '🌐 Navegación Web y Descarga de Documentos PDF',
-      agent_web_desc: 'Permite al modelo invocar fetch_web_page para consultar páginas web públicas y download_pdf para descargar y extraer documentos PDF en tiempo real.',
+      agent_web_title: '🌐 Navegación Web en Tiempo Real',
+      agent_web_desc: 'Permite al modelo invocar fetch_web_page para consultar páginas web públicas y extraer su contenido textual en tiempo real.',
+      agent_pdf_title: '📄 Descarga y Lectura de Documentos PDF',
+      agent_pdf_desc: 'Permite al modelo descargar documentos PDF desde la web y extraer todo su texto al contexto en tiempo real.',
       agent_chart_title: '📊 Visualización de Datos y Gráficos Nativos (SVG)',
       agent_chart_desc: 'Permite al modelo invocar render_chart para generar y mostrar gráficos interactivos de barras, líneas o sectores sin librerías externas.',
       agent_cache_title: '⚡ Caché de Contexto (Context / Prompt Caching)',
@@ -315,8 +336,9 @@
 
       // Barra lateral e Historial de Conversaciones (Sidebar)
       sidebar_title: 'Conversaciones',
-      btn_sidebar_title: 'Abrir/Cerrar historial de chats',
-      btn_chats_history: 'Chats',
+      btn_sidebar_title: 'Abrir historial de conversaciones',
+      btn_chats_history: 'Abrir historial',
+      btn_open_history: 'Abrir historial',
       btn_new_chat_sidebar_title: 'Crear nueva conversación',
       btn_close_sidebar_title: 'Cerrar barra lateral',
       sidebar_search_placeholder: 'Buscar en historial...',
@@ -353,7 +375,7 @@
 
     en: {
       // Metadata & Headers
-      app_title: 'ZeroChat v5.2 - Universal AI Chat & Agent Web Client',
+      app_title: 'ZeroChat v5.3 - Universal AI Chat & Agent Web Client',
       app_description: 'Universal, zero-install, standalone web chat client, autonomous AI agent and local RAG in a single file',
       
       // Bienvenida y Sugerencias
@@ -370,6 +392,7 @@
       sug_ideas_prompt: 'Give me 3 interesting web project ideas using HTML5 and Vanilla JavaScript.',
 
       // Barra de herramientas superior
+      profile_badge_title: 'Active connection profile (click to open Settings)',
       server_badge_title: 'Configured server (click to change)',
       model_badge_title: 'Active model (click to change)',
       no_model: '(No model)',
@@ -381,15 +404,19 @@
       btn_settings_title: 'Open API and Model settings',
       btn_tree_rag: 'Knowledge Base',
       btn_tree_rag_title: 'Manage Branch Knowledge Base (Hierarchical Tree RAG)',
-      rag_tab_active: '🌿 Active Chat Branch',
+      rag_tab_active: 'Activate RAG',
       rag_tab_manage: '📁 Branch & Document Manager',
       rag_tab_help: '❓ Help',
+      rag_summary_profile_title: 'Connection Profile for Document Summarization',
+      rag_summary_profile_hint: 'Select the connection profile to be used for document analysis and ingestion:',
+      rag_summary_profile_warning_title: '💡 Recommended model for ingestion and summarization:',
+      rag_summary_profile_warning_desc: 'It is recommended to use a <strong>multimodal</strong>, <strong>low-cost</strong> (or local) model with a <strong>context window as large as possible</strong>. <span style="color: var(--danger, #ef4444); font-weight: 600;">⚠️ Warning: Automatic processing of large documents or PDFs can generate high API costs if you choose a paid generalist model per token.</span>',
       rag_help_intro_title: 'What is Local Agentic RAG?',
       rag_help_how_it_works_title: 'How does indexing and retrieval work?',
       rag_help_model_rec_title: 'Model for Document Ingestion and Loading',
       rag_help_storage_title: 'File Location, Export, and Import',
       rag_context_limit_title: '📦 Chapter Context Size (Tokens)',
-      rag_context_limit_desc: 'Sets the maximum token capacity per chapter (16K to 1M tokens) for document partitioning and AI summaries. Preserves atomic tables and images.',
+      rag_context_limit_desc: 'Sets the maximum token capacity per chapter (32K to 1M tokens) for document partitioning and AI summaries. Preserves atomic tables and images.',
       rag_select_branch_chat: 'Select Branch for Chat',
       rag_select_branch_chat_hint: 'Click a branch to activate it in the current conversation:',
       rag_editing_branch: 'Editing Branch:',
@@ -556,6 +583,7 @@
       tab_general: '🌐 General',
       tab_agent: '🤖 Agent',
       tab_model: '⚙️ Model',
+      tab_appearance: '🎨 Appearance',
       tab_inspector: '🔍 Inspector',
       inspector_desc: 'Analyzes the configured endpoint to determine which capabilities are supported, distinguishing between declared, inferred, and confirmed capabilities via safe active probes.',
       btn_run_inspector: 'Run Capability Diagnostics',
@@ -577,6 +605,19 @@
       inspector_models_found: '{count} models detected',
       field_language: 'Interface Language (Idioma)',
       field_language_hint: 'Select the visual language of the application.',
+      field_profile: 'Connection Profile / Server',
+      field_profile_hint: 'Select a saved profile or type a new name to create one.',
+      field_profile_name_label: 'Profile Name',
+      field_profile_placeholder: 'Profile name (e.g. LM Studio, Ollama, OpenRouter...)',
+      profile_card_title: 'Profile Settings & Parameters',
+      profile_select_default: '▾ Choose saved profile...',
+      btn_save_profile: 'Save Profile',
+      btn_save_profile_title: 'Save all current values into this profile',
+      btn_delete_profile_title: 'Delete selected profile',
+      msg_profile_saved: '✅ Profile "{name}" saved successfully.',
+      msg_profile_deleted: '🗑️ Profile "{name}" deleted successfully.',
+      confirm_delete_profile: 'Are you sure you want to delete profile "{name}"?',
+      err_profile_name_empty: 'Please enter a name for the profile.',
       field_api_type: 'Interface Type / Protocol',
       field_api_type_hint: 'Determines the request JSON format and reasoning options.',
       field_api_url: 'Server URL / Chat Endpoint',
@@ -601,8 +642,10 @@
       agent_search_desc: 'Allows the model to call search_web to search for up-to-date information, definitions, news, and links using the DuckDuckGo API.',
       agent_js_title: '⚡ Local JavaScript Execution (Sandbox)',
       agent_js_desc: 'Allows the model to call execute_javascript to compute, process data, or validate algorithms safely in the browser.',
-      agent_web_title: '🌐 Web Browsing & PDF Document Downloads',
-      agent_web_desc: 'Allows the model to call fetch_web_page to retrieve public web pages and download_pdf to download and extract PDF documents in real-time.',
+      agent_web_title: '🌐 Real-time Web Browsing',
+      agent_web_desc: 'Allows the model to call fetch_web_page to retrieve public web pages and extract their text content in real-time.',
+      agent_pdf_title: '📄 PDF Document Download & Reading',
+      agent_pdf_desc: 'Allows the model to download PDF documents from the web and extract all readable text into context in real-time.',
       agent_chart_title: '📊 Data Visualization & Native SVG Charts',
       agent_chart_desc: 'Allows the model to call render_chart to generate and display interactive bar, line, doughnut or pie charts without external libraries.',
       agent_cache_title: '⚡ Context / Prompt Caching',
@@ -651,8 +694,9 @@
 
       // Sidebar & Conversation History
       sidebar_title: 'Conversations',
-      btn_sidebar_title: 'Toggle chat history',
-      btn_chats_history: 'Chats',
+      btn_sidebar_title: 'Open conversation history',
+      btn_chats_history: 'Open history',
+      btn_open_history: 'Open history',
       btn_new_chat_sidebar_title: 'Create new conversation',
       btn_close_sidebar_title: 'Close sidebar',
       sidebar_search_placeholder: 'Search history...',
@@ -874,4 +918,3 @@
     TRANSLATIONS
   };
 });
-

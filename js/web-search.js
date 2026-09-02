@@ -1,5 +1,5 @@
 /**
- * Módulo de Búsqueda Web Desacoplado (ChatWebSearch) para ChatCLI.
+ * Módulo de Búsqueda Web Desacoplado (ChatWebSearch) para ZeroChat.
  * - Arquitectura basada en SearchProvider con registro extensible (DuckDuckGo, SearXNG, etc.).
  * - Motor de búsqueda resiliente multitrayecto con fallback automático.
  * - Formateo estandarizado de resultados en Markdown optimizado para LLMs.
@@ -468,14 +468,18 @@
     }
   }
 
-  const registry = new SearchProviderRegistry();
-
   /**
-   * Función de búsqueda web compatible con la interfaz histórica de ChatCLI.
+   * Módulo de Búsqueda Web Desacoplado (ChatWebSearch) para ZeroChat.
+   */
+  /* ... */
+  /**
+   * Función de búsqueda web compatible con la interfaz histórica de ZeroChat.
    */
   async function search(query, lang = 'es', options = {}) {
     return registry.search(query, { lang, ...options });
   }
+
+  const registry = new SearchProviderRegistry();
 
   /**
    * Definición estándar de herramienta (Tool/Function Calling) para OpenAI y LLMs compatibles.

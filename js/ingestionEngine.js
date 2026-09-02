@@ -193,7 +193,7 @@
       }
     }
 
-    // 2. Fallback fiable: ChatFileParser nativo de ChatCLI
+    // 2. Fallback fiable: ChatFileParser nativo de ZeroChat
     const FileParser = getFileParser();
     if (FileParser && typeof FileParser.extractTextFromPdf === 'function') {
       const parsedText = await FileParser.extractTextFromPdf(arrayBuffer);
@@ -335,40 +335,91 @@
   }
 
   /**
+   * Detecta si una línea de texto corresponde a un título o encabezado de sección/capítulo
+   * utilizando patrones estructurales, prefijos multiidioma y heurísticas tipográficas (ALL CAPS, Title Case).
+   *
+   * @param {string} rawLine - Línea candidata a encabezado.
+   * @returns {string|null} - Título limpio extraído o null si no es un encabezado.
+   */
+  function detectSectionHeading(rawLine) {
+    if (!rawLine || typeof rawLine !== 'string') return null;
+
+    let clean = rawLine.replace(/^---.*?---|\[.*?\]/g, '').replace(/https?:\/\/[^\s]+/g, '').replace(/[•·*ᨀ࢈㍭\s]+/g, ' ').trim();
+    if (clean.length < 3 || clean.length > 90) return null;
+
+    // Ignorar líneas que son sentencias o párrafos comunes (terminan en punto, coma o punto y coma)
+    if (/[.,;]$/.test(clean)) return null;
+
+    // 1. Marcadores de encabezado explícitos (Markdown `#` o líneas divisorias)
+    const mdMatch = rawLine.match(/^#{1,6}\s+(.+)$/);
+    if (mdMatch) {
+      return mdMatch[1].trim();
+    }
+
+    // 2. Prefijos estructurales multiidioma (ES, EN, FR, DE, IT, PT)
+    // Ej: "Capítulo 1", "Chapter IV", "Kapitel 2", "Section 3.1", "Anexo B", "Appendix A", "Parte II", "Module 1"
+    const prefixRegex = /^(?:(?:Capítulo|Capitulo|Chapter|Kapitel|Chapitre|Capitolo)\s+[0-9A-Za-zIVXLCDM]+[:.-]?|(?:Sección|Seccion|Section|Abschnitt|Sezione|Seção|Secao)\s+[0-9A-Za-zIVXLCDM]+(?:\.[0-9A-Za-z]+)*[:.-]?|(?:Parte|Part|Teil|Partie)\s+[0-9A-Za-zIVXLCDM]+[:.-]?|(?:Apéndice|Apendice|Appendix|Anhang|Appendice|Annexe|Anexo)\s+[0-9A-Za-zIVXLCDM]+[:.-]?|(?:Módulo|Modulo|Module|Einheit|Unità|Unita|Unit|Tema)\s+[0-9A-Za-zIVXLCDM]+[:.-]?)\s*(.*)$/i;
+    const prefixMatch = clean.match(prefixRegex);
+    if (prefixMatch) {
+      return clean;
+    }
+
+    // 3. Numeración jerárquica decimal u ordinal al inicio
+    // Ej: "1. Introducción", "2.1 Requisitos del Sistema", "3.1.2 Métodos de Pago"
+    const numHierarchyRegex = /^(?:[0-9]+(?:\.[0-9]+)*|[A-Z]\.)\s+([A-ZÁÉÍÓÚÑÀ-ÖØ-ßa-záéíóúñà-öø-ÿ].*)$/;
+    if (numHierarchyRegex.test(clean)) {
+      return clean;
+    }
+
+    // 4. Secciones estándar multiidioma comunes (Índice, Resumen, Introducción, Conclusiones, etc.)
+    const genericSectionsRegex = /^(?:(?:Resumen|Abstract|Overview|Introduction|Introducción|Introduccion|Einführung|Conclusion|Conclusiones|Conclusión|Fazit|Table of Contents|Tabla de contenidos|Índice|Indice|Inhalt|Sommaire|Sommario|Glossary|Glosario|Bibliography|Bibliografía|References|Referencias|Troubleshooting|Specifications|Especificaciones|Instalación|Installation|Configuration|Configuración|Architecture|Arquitectura|Requisitos|Requirements|Seguridad|Security|Sicherheit|Sécurité|Licencia|License|Lizenz|FAQ|Preguntas Frecuentes))(?:\s*[:.-].*)?$/i;
+    if (genericSectionsRegex.test(clean)) {
+      return clean;
+    }
+
+    // 5. Heurística Tipográfica (ALL CAPS o Title Case para líneas breves y destacadas)
+    // A. ALL CAPS: Longitud entre 4 y 60 caracteres, solo letras mayúsculas, dígitos y espacios
+    const lettersOnly = clean.replace(/[^A-ZÁÉÍÓÚÑÀ-ÖØ-ßa-záéíóúñà-öø-ÿ]/g, '');
+    if (lettersOnly.length >= 4 && lettersOnly.length <= 50) {
+      const isAllCaps = lettersOnly === lettersOnly.toUpperCase() && /[A-ZÁÉÍÓÚÑÀ-ÖØ-ß]/.test(lettersOnly);
+      if (isAllCaps) {
+        return clean;
+      }
+    }
+
+    // B. Title Case: Palabras cortas con inicial mayúscula (> 60% de palabras con inicial mayúscula)
+    const words = clean.split(/\s+/).filter(w => w.length > 1);
+    if (words.length >= 2 && words.length <= 8) {
+      const capitalizedWords = words.filter(w => /^[A-ZÁÉÍÓÚÑÀ-ÖØ-ß]/.test(w));
+      if (capitalizedWords.length / words.length >= 0.65) {
+        return clean;
+      }
+    }
+
+    return null;
+  }
+
+  /**
    * Divide un documento extenso en fragmentos/capítulos candidatos coherentes.
    * Si es un PDF/documento paginado, realiza el corte ESTRICTAMENTE por páginas completas.
    * En otros documentos, particiona por secciones y protege bloques atómicos respetando el límite K.
    */
-  function partitionTextIntoHeuristicChapters(text, maxCharsOrLimitK = 16) {
+  function partitionTextIntoHeuristicChapters(text, maxCharsOrLimitK = 128) {
     if (!text) return [];
 
-    let maxChapterSize = 256000;
+    let maxChapterSize = 512000;
     if (typeof maxCharsOrLimitK === 'number') {
       if (maxCharsOrLimitK <= 2048) {
         // En unidades de K tokens (1K tokens ~ 4.000 caracteres)
-        const kTokens = Math.min(1024, Math.max(16, maxCharsOrLimitK));
+        const kTokens = Math.min(1024, Math.max(32, maxCharsOrLimitK));
         maxChapterSize = kTokens * 4000;
       } else {
         maxChapterSize = maxCharsOrLimitK;
       }
     }
 
-    const headingRegex = /^(?:#{1,6}\s+|--- (?:Página|Page)\s+\d+\s+---|\[(?:Página|Page)\s+\d+\]|\b(?:Capítulo|Capitulo|Sección|Seccion|Tema|Módulo|Modulo|Module|Section|Chapter|Parte|Part)\s+[0-9A-Za-zIVXLCDM]+[:.]?|\b(?:Overview|Quick Start|Specifications|Special Features|Rear I\/O Panel|Component Overview|CPU Socket|DIMM Slots|PCI_E|M\.?2 Slots|SATA|Front Panel|Power Connectors|Fan Headers|Audio|JRGB|JARGB|EZ Debug|BIOS Setup|RAID Configuration|Driver|Troubleshooting|Safety Information|Package Contents|Block Diagram|Hardware Setup|Software Description|Appendix)\b|^[0-9]+(?:\.[0-9]+)*\s+[A-ZÁÉÍÓÚÑ])/i;
-
-    const headingKeywords = [
-      'Quick Start', 'Safety Information', 'Specifications', 'Special Features',
-      'Rear I/O Panel', 'Component Overview', 'CPU Socket', 'DIMM Slots', 'PCI_E1~4', 'PCIe Expansion Slots',
-      'M2_1~4', 'M.2 Slots', 'SATA1~6', 'SATA 6Gb/s Connectors', 'Power Connectors', 'Fan Connectors',
-      'Front Panel Connectors', 'EZ Debug LED', 'Installing OS', 'MSI Center', 'UEFI BIOS', 'BIOS Setup',
-      'Resetting BIOS', 'Updating BIOS', 'RAID Configuration', 'Troubleshooting', 'Regulatory Notices',
-      'Package Contents', 'Block Diagram', 'Hardware Setup', 'Software Description', 'Connecting Peripheral Devices',
-      'Installing DDR5 memory', 'Connecting the Power Connectors', 'Installing a Graphics Card', 'Case stand-off',
-      'Inhalt', 'Lieferumfang', 'Spezifikationen', 'Übersicht der Komponenten', 'Rückseite I/O',
-      'Table des matières', 'Contenu', 'Spécifications', 'Vue d\'ensemble des composants', 'Panneau arrière E/S'
-    ];
-
     // 1. Detección de páginas completas (para PDFs o documentos paginados)
-    const pageSplitRegex = /(?:^|\n)(?=--- (?:Página|Page)\s+\d+\s+---|\[(?:Página|Page)\s+\d+\])/i;
+    const pageSplitRegex = /(?:^|\n)(?=--- (?:Página|Page|Seite|Page|Pagina)\s+\d+\s+---|\[(?:Página|Page|Seite|Page|Pagina)\s+\d+\])/i;
     const rawPages = text.split(pageSplitRegex).map(p => p.trim()).filter(p => p.length > 0);
 
     if (rawPages.length > 1) {
@@ -379,11 +430,11 @@
       let startPage = 1;
       let curPageNum = 1;
       const maxPagesPerChapter = 20;
-      const minPageChapterSize = Math.min(3000, Math.floor(maxChapterSize * 0.1));
+      const minPageChapterSize = Math.min(600, Math.floor(maxChapterSize * 0.05));
 
       for (let i = 0; i < rawPages.length; i++) {
         const pageText = rawPages[i];
-        const pageMatch = pageText.match(/(?:--- (?:Página|Page)\s+(\d+)\s+---|\[(?:Página|Page)\s+(\d+)\])/i);
+        const pageMatch = pageText.match(/(?:--- (?:Página|Page|Seite|Page|Pagina)\s+(\d+)\s+---|\[(?:Página|Page|Seite|Page|Pagina)\s+(\d+)\])/i);
         if (pageMatch) {
           curPageNum = parseInt(pageMatch[1] || pageMatch[2], 10);
         } else {
@@ -393,23 +444,15 @@
         const lines = pageText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
         let pageHeading = '';
         for (const line of lines.slice(0, 8)) {
-          let clean = line.replace(/^---.*?---|\[.*?\]/g, '').replace(/https?:\/\/[^\s]+/g, '').replace(/[•·*ᨀ࢈㍭\s]+/g, ' ').trim();
-          clean = clean.replace(/^\d+([A-ZÁÉÍÓÚÑa-z])/, '$1').replace(/^\d+[\s.:-]+/, '').trim();
-          for (const kw of headingKeywords) {
-            if (clean.toLowerCase().includes(kw.toLowerCase())) {
-              pageHeading = kw;
-              break;
-            }
-          }
-          if (!pageHeading && clean.length > 2 && clean.length < 80 && headingRegex.test(clean)) {
-            pageHeading = clean.replace(/^#+\s*/, '').trim();
+          const detected = detectSectionHeading(line);
+          if (detected) {
+            pageHeading = detected;
             break;
           }
-          if (pageHeading) break;
         }
 
         const isNewHeading = pageHeading && pageHeading !== curChapterTitle;
-        const shouldSplitByHeading = isNewHeading && (curChapterLen >= minPageChapterSize || curPages.length >= 3);
+        const shouldSplitByHeading = isNewHeading && (curChapterLen >= minPageChapterSize || curPages.length >= 1);
         const shouldSplitBySize = (curPages.length >= maxPagesPerChapter || curChapterLen + pageText.length > maxChapterSize) && curPages.length > 0;
 
         if ((shouldSplitBySize || shouldSplitByHeading) && curPages.length > 0) {
@@ -454,12 +497,9 @@
 
     for (const rawLine of lines) {
       const line = rawLine.trim();
-      const isHeading = line.length > 0 && line.length < 90 && (
-        headingRegex.test(line) ||
-        (line.startsWith('#') && line.length > 3)
-      );
+      const detected = detectSectionHeading(line);
 
-      if (isHeading) {
+      if (detected) {
         const textSoFar = currentLines.join('\n').trim();
         if (textSoFar.length > 0) {
           rawSections.push({
@@ -468,7 +508,7 @@
           });
           currentLines = [];
         }
-        currentTitle = line.replace(/^#+\s*/, '').replace(/---/g, '').replace(/[\[\]]/g, '').trim() || `Sección ${rawSections.length + 1}`;
+        currentTitle = detected;
         currentLines.push(rawLine);
       } else {
         currentLines.push(rawLine);
@@ -552,10 +592,11 @@
 
   /**
    * Invoca al LLM provisto de forma segura y devuelve su respuesta en texto.
+   * Soporta tanto prompts de texto plano como payloads multimodales estructurados (arrays con texto e imágenes).
    */
   async function callLLM(llmClient, prompt, systemPrompt = '') {
     if (!llmClient) {
-      throw new Error('No se proporcionó un cliente LLM válido para la generación de resúmenes.');
+      throw new Error('No se ha configurado un cliente LLM activo. Revisa la configuración de API/Modelo.');
     }
 
     // 1. Si llmClient es una función directa async (prompt, systemPrompt)
@@ -574,6 +615,8 @@
         let accumulatedText = '';
         const messages = [];
         if (systemPrompt) messages.push({ role: 'system', content: systemPrompt });
+
+        // Si prompt es un array de content parts (multimodal) o string
         messages.push({ role: 'user', content: prompt });
 
         const Storage = getStorage();
@@ -584,6 +627,10 @@
         const apiType = clientCfg.apiType || appCfg.apiType || 'openai';
         const apiKey = clientCfg.apiKey !== undefined ? clientCfg.apiKey : (appCfg.apiKey || '');
         const model = clientCfg.model || appCfg.model || '';
+
+        if (!apiUrl || !apiUrl.trim()) {
+          return reject(new Error('La URL de la API del LLM no está configurada.'));
+        }
 
         const apiMethod = llmClient.streamChatCompletion || llmClient.sendChatCompletion;
         apiMethod.call(llmClient, {
@@ -603,13 +650,13 @@
             resolve(typeof finalText === 'string' ? finalText : (finalText?.text || accumulatedText));
           },
           onError: (err) => {
-            reject(new Error(typeof err === 'string' ? err : err?.message || 'Error en llamada LLM'));
+            reject(new Error(typeof err === 'string' ? err : err?.message || 'Error de conexión o respuesta del LLM'));
           }
         });
       });
     }
 
-    throw new Error('El objeto llmClient no implementa una interfaz reconocida (complete o function).');
+    throw new Error('El objeto llmClient no implementa una interfaz reconocida (complete o streamChatCompletion).');
   }
 
   /**
@@ -651,14 +698,17 @@
 
   /**
    * Analiza la estructura semántica de un documento utilizando el LLM conectado.
-   * Filtra cadenas base64 de imágenes reemplazándolas por su contexto descriptivo (~10 líneas).
+   * Soporta generación multimodal de resúmenes pasando texto e imágenes in-line al LLM.
    *
-   * @param {string} text - Texto limpio del documento.
+   * @param {string|String} text - Texto limpio del documento (puede incluir propiedad .images).
    * @param {string} filename - Nombre del archivo.
    * @param {Object|Function} llmClient - Cliente de invocación del LLM.
+   * @param {Function} [onChapterProgress] - Callback de progreso por capítulo.
+   * @param {number} [contextLimitK=16] - Límite de contexto en miles de tokens.
+   * @param {Object} [options={}] - Opciones adicionales (ej: { images: Array, rawBytes: Uint8Array|ArrayBuffer }).
    * @returns {Promise<{ globalSummary: string, chapters: Array<{ chapterId: number, title: string, summary: string, content: string, charCount: number }> }>}
    */
-  async function analyzeDocumentStructure(text, filename, llmClient, onChapterProgress, contextLimitK = 16) {
+  async function analyzeDocumentStructure(text, filename, llmClient, onChapterProgress, contextLimitK = 16, options = {}) {
     const cleanText = normalizeExtractedText(text);
     if (!cleanText) {
       return {
@@ -667,8 +717,13 @@
       };
     }
 
-    const SYSTEM_PROMPT = `Eres un indexador semántico de alta precisión y densidad informativa para un sistema RAG jerárquico.
+    const allImages = options.images || (text && text.images) || [];
+    const rawBytes = options.rawBytes || options.fileBytes || null;
+    const FileParser = getFileParser();
+
+    const SYSTEM_PROMPT = `Eres un indexador semántico y de visión multimodal de alta precisión y densidad informativa para un sistema RAG jerárquico.
 Tu misión es estructurar el contenido en un objeto JSON válido con máxima concisión y anclaje de palabras clave esenciales.
+Si se proporcionan diagramas, esquemas o imágenes, analiza cuidadosamente su contenido visual y descríbelo con precisión técnica.
 
 Estructura requerida:
 {
@@ -677,7 +732,7 @@ Estructura requerida:
     {
       "chapterId": 1,
       "title": "Título descriptivo y preciso de la sección",
-      "summary": "Micro-resumen telegráfico de alta densidad (1-2 frases, máx. 25-30 palabras): palabras clave exactas, APIs/comandos, rangos de fecha/hora o eventos/logs (si aplica), tags/fuentes y mención explícita de diagramas.",
+      "summary": "Micro-resumen telegráfico de alta densidad (1-2 frases, máx. 25-30 palabras): palabras clave exactas, APIs/comandos, rangos de fecha/hora o eventos/logs (si aplica), tags/fuentes y síntesis de diagramas visuales con su etiqueta #img_X_Y.",
       "content": "Texto original íntegro de la sección."
     }
   ]
@@ -688,7 +743,72 @@ Reglas estrictas de indexación RAG:
 2. PALABRAS CLAVE Y ENTIDADES: Conserva términos técnicos literales, identificadores de funciones/APIs, endpoints, librerías, parámetros y acrónimos clave.
 3. LOGS, FECHAS Y REGISTROS: Si el texto contiene logs, registros o eventos cronológicos, incluye el rango de fechas/horas, niveles de severidad (ERROR, WARN) o códigos de estado relevantes.
 4. FUENTES Y TAGS: Si hay etiquetas (#tag), nombres de archivo, metadatos de autor o versiones (vX.Y), inclúyelos.
-5. ESQUEMAS Y DIAGRAMAS: Si aparecen marcas [IMAGEN / ESQUEMA: ...], enumera qué diagramas o ilustraciones clave contiene (ej: "Diagrama pinout GPIO", "Esquema arquitectura").`;
+5. ESQUEMAS, DIAGRAMAS Y VISIÓN: Si se adjuntan imágenes o aparecen marcas [IMAGEN / ESQUEMA: ...] o #img_X_Y, sintetiza qué muestra el diagrama visual (ej: "Diagrama #img_1_1: Pinout de conectores de audio 7.1", "Esquema #img_2_1: Conexión de alimentación PCIe").`;
+
+    // Función auxiliar para construir el payload del prompt (texto + imágenes multimodales)
+    function buildChapterPromptPayload(cand, sampleText) {
+      const promptText = `Genera un micro-resumen telegráfico de alta densidad semántica (1-2 frases concisas, máx. 25-30 palabras) para la sección "${cand.title}" del documento "${filename}".
+
+Reglas estrictas de indexación RAG:
+- Cero muletillas ("En esta sección se explica...", "Este capítulo trata..."). Sé directo.
+- Incluye palabras clave técnicas exactas, nombres de componentes, comandos, parámetros, librerías o funciones.
+- Si contiene logs, auditorías o registros temporales, captura el rango de fecha/hora, tags (#tag) o eventos críticos.
+- Si observas diagramas o esquemas adjuntos o marcas [IMAGEN / ESQUEMA: ...], describe explícitamente qué componentes o flujos muestra la imagen citando su identificador (ej: "Incluye diagrama #img_X_Y con pinout de audio", "Esquema #img_X_Y de zócalo CPU").
+
+Contenido del capítulo:
+${sampleText}`;
+
+      // Extraer imágenes asociadas al capítulo
+      const chapterImgs = [];
+      if (allImages && allImages.length > 0) {
+        if (cand.pageRange && cand.pageRange.start && cand.pageRange.end) {
+          allImages.forEach(img => {
+            if (img.page >= cand.pageRange.start && img.page <= cand.pageRange.end) {
+              chapterImgs.push(img);
+            }
+          });
+        } else {
+          // Documentos no paginados: buscar referencias a id o filename en el contenido del capítulo
+          allImages.forEach(img => {
+            if (img.id && (cand.content.includes(img.id) || (img.name && cand.content.includes(img.name)))) {
+              chapterImgs.push(img);
+            }
+          });
+        }
+      }
+
+      // Obtener dataUrls de hasta 4 imágenes principales por capítulo para no saturar visión
+      const visualParts = [];
+      const limitedImgs = chapterImgs.slice(0, 4);
+
+      for (const imgMeta of limitedImgs) {
+        let dataUrl = imgMeta.dataUrl || null;
+        if (!dataUrl && rawBytes && FileParser && typeof FileParser.extractImageFromPdfBytes === 'function') {
+          try {
+            dataUrl = FileParser.extractImageFromPdfBytes(rawBytes, imgMeta);
+          } catch (e) {}
+        }
+        if (dataUrl && typeof dataUrl === 'string' && dataUrl.startsWith('data:image/')) {
+          visualParts.push({
+            type: 'image_url',
+            image_url: { url: dataUrl },
+            caption: imgMeta.caption || imgMeta.id || 'Diagrama'
+          });
+        }
+      }
+
+      if (visualParts.length > 0) {
+        return [
+          { type: 'text', text: promptText },
+          ...visualParts.map(vp => ({
+            type: 'image_url',
+            image_url: { url: vp.image_url.url }
+          }))
+        ];
+      }
+
+      return promptText;
+    }
 
     // Si el texto es ultra-breve (un solo fragmento sin páginas ni secciones, <= 2.500 caracteres)
     const hasMultiplePagesOrSections = cleanText.includes('--- Página') || cleanText.includes('[Página') || cleanText.length > 2500;
@@ -749,28 +869,18 @@ Reglas estrictas de indexación RAG:
       const maxSampleChars = Math.min(32000, Math.max(4000, kVal * 200));
       const cleanedSample = prepareTextForSummarization(cand.content);
       const sampleText = cleanedSample.length > maxSampleChars ? (cleanedSample.slice(0, maxSampleChars) + '...') : cleanedSample;
-      const chapPrompt = `Genera un micro-resumen telegráfico de alta densidad semántica (1-2 frases concisas, máx. 25-30 palabras) para la sección "${cand.title}" del documento "${filename}".
+      const chapPrompt = buildChapterPromptPayload(cand, sampleText);
 
-Reglas estrictas de indexación RAG:
-- Cero muletillas ("En esta sección se explica...", "Este capítulo trata..."). Sé directo.
-- Incluye palabras clave técnicas exactas, nombres de componentes, comandos, parámetros, librerías o funciones.
-- Si contiene logs, auditorías o registros temporales, captura el rango de fecha/hora, tags (#tag) o eventos críticos.
-- Si contiene esquemas, imágenes o diagramas visuales ([IMAGEN / ESQUEMA: ...]), especifícalos explícitamente (ej: "Incluye diagrama de conectores de audio 7.1", "Esquema del zócalo CPU").
+      let chapSummary = await callLLM(llmClient, chapPrompt, 'Eres un indexador técnico con visión multimodal y ultra-conciso para un sistema RAG jerárquico. Responde ÚNICAMENTE con 1-2 frases directas y telegráficas con máxima densidad de palabras clave, fechas/logs y diagramas, sin introducciones ni texto conversacional.');
+      chapSummary = (chapSummary || '').trim()
+        .replace(/^Resumen:\s*/i, '')
+        .replace(/^En esta sección se\s+/i, '')
+        .replace(/^En este capítulo se\s+/i, '')
+        .replace(/^Esta sección describe\s+/i, '')
+        .replace(/^Este documento describe\s+/i, '')
+        .replace(/^Capítulo \d+:\s*/i, '');
 
-Contenido:
-${sampleText}`;
-
-      let chapSummary = '';
-      try {
-        chapSummary = await callLLM(llmClient, chapPrompt, 'Eres un indexador técnico ultra-conciso para un sistema RAG jerárquico. Responde ÚNICAMENTE con 1-2 frases directas y telegráficas con máxima densidad de palabras clave, fechas/logs y diagramas, sin introducciones ni texto conversacional.');
-        chapSummary = chapSummary.trim()
-          .replace(/^Resumen:\s*/i, '')
-          .replace(/^En esta sección se\s+/i, '')
-          .replace(/^En este capítulo se\s+/i, '')
-          .replace(/^Esta sección describe\s+/i, '')
-          .replace(/^Este documento describe\s+/i, '')
-          .replace(/^Capítulo \d+:\s*/i, '');
-      } catch (e) {
+      if (!chapSummary) {
         chapSummary = `${cand.title}.`;
       }
 
@@ -786,16 +896,16 @@ ${sampleText}`;
 
     // Generar resumen global a partir de los micro-resúmenes
     let globalSummary = '';
-    try {
-      const summariesBlock = chapterSummaries.join('\n').slice(0, 4000);
-      const globalPrompt = `A partir de los siguientes resúmenes de sección, genera un resumen global denso y conciso (1-2 frases directas, máx. 40 palabras) del documento "${filename}".
+    const summariesBlock = chapterSummaries.join('\n').slice(0, 4000);
+    const globalPrompt = `A partir de los siguientes resúmenes de sección, genera un resumen global denso y conciso (1-2 frases directas, máx. 40 palabras) del documento "${filename}".
 Destaca el propósito central, tecnologías/entidades clave, versiones/fechas relevantes y alcance general:\n\n${summariesBlock}`;
-      globalSummary = await callLLM(llmClient, globalPrompt, 'Eres un redactor técnico de alta densidad. Responde ÚNICAMENTE con 1 o 2 frases directas resumiendo el propósito, tecnologías clave y alcance, sin prefacios ni relleno.');
-      globalSummary = globalSummary.trim()
-        .replace(/^Resumen Global:\s*/i, '')
-        .replace(/^Resumen:\s*/i, '')
-        .replace(/^En este documento se\s+/i, '');
-    } catch (e) {
+    globalSummary = await callLLM(llmClient, globalPrompt, 'Eres un redactor técnico de alta densidad. Responde ÚNICAMENTE con 1 o 2 frases directas resumiendo el propósito, tecnologías clave y alcance, sin prefacios ni relleno.');
+    globalSummary = (globalSummary || '').trim()
+      .replace(/^Resumen Global:\s*/i, '')
+      .replace(/^Resumen:\s*/i, '')
+      .replace(/^En este documento se\s+/i, '');
+
+    if (!globalSummary) {
       globalSummary = `Documento ${filename} (${processedChapters.length} secciones).`;
     }
 
@@ -836,7 +946,7 @@ Destaca el propósito central, tecnologías/entidades clave, versiones/fechas re
     const RagStorage = getRagStorage();
     const Storage = getStorage();
     const appCfg = (typeof window !== 'undefined' && window.appConfig) ? window.appConfig : (Storage?.loadConfig ? Storage.loadConfig() : {});
-    const contextLimitK = options.ragContextLimitK || llmClient?.config?.ragContextLimitK || appCfg?.ragContextLimitK || 16;
+    const contextLimitK = options.ragContextLimitK || llmClient?.config?.ragContextLimitK || appCfg?.ragContextLimitK || 128;
 
     if (!RagStorage) {
       throw new Error('ChatRagStorage no está disponible para persistir los documentos de la cola.');
@@ -895,10 +1005,23 @@ Destaca el propósito central, tecnologías/entidades clave, versiones/fechas re
         }
 
         let rawText = '';
+        let fileRawBytes = null;
+
+        if (file instanceof ArrayBuffer) {
+          fileRawBytes = new Uint8Array(file);
+        } else if (file instanceof Uint8Array) {
+          fileRawBytes = file;
+        } else if (file && typeof file.arrayBuffer === 'function') {
+          try {
+            const ab = await file.arrayBuffer();
+            fileRawBytes = new Uint8Array(ab);
+          } catch (_) {}
+        }
+
         if (typeof file.content === 'string') {
           rawText = normalizeExtractedText(file.content);
         } else if (fileType === 'pdf') {
-          rawText = await extractTextFromPDF(file);
+          rawText = await extractTextFromPDF(fileRawBytes || file);
         } else {
           rawText = await extractTextFromPlainText(file);
         }
@@ -906,6 +1029,8 @@ Destaca el propósito central, tecnologías/entidades clave, versiones/fechas re
         if (!rawText || rawText.trim().length === 0) {
           throw new Error(`El archivo "${fileName}" no contiene texto extraíble.`);
         }
+
+        const docImages = (rawText && rawText.images) ? rawText.images : (file.images || []);
 
         // Paso 2: Análisis Estructurado y Generación de Resúmenes vía LLM con seguimiento granular de capítulos
         emitProgress(index, fileName, 'generating_summaries', `Analizando estructura y preparando resúmenes (${index + 1}/${totalFiles})...`, null, basePercent + 15);
@@ -921,7 +1046,10 @@ Destaca el propósito central, tecnologías/entidades clave, versiones/fechas re
             null,
             currentPct
           );
-        }, contextLimitK);
+        }, contextLimitK, {
+          images: docImages,
+          rawBytes: fileRawBytes
+        });
 
         // Paso 3: Persistencia en Sistema de Ficheros Local (RAG/<branch_id>/<bucket>/)
         emitProgress(index, fileName, 'saving', `Guardando capítulos y archivo en sistema de ficheros (${index + 1}/${totalFiles})...`, null, basePercent + 90);
@@ -932,7 +1060,7 @@ Destaca el propósito central, tecnologías/entidades clave, versiones/fechas re
           fileSize: fileSize,
           globalSummary: structure.globalSummary,
           chapters: structure.chapters,
-          images: (rawText && rawText.images) ? rawText.images : (file.images || [])
+          images: docImages
         };
 
         const savedDoc = await RagStorage.saveDocument(docPayload, file);

@@ -5,7 +5,7 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src http: https: ws: wss: data: blob:; font-src 'self' data:; object-src 'none'; base-uri 'self';">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
   <meta name="description" content="ZeroChat - Cliente web universal, agente IA autónomo y RAG local en un solo archivo con cero instalación">
-  <title>ZeroChat v5.2 - Cliente Web Universal de Chat & Agente IA</title>
+  <title>ZeroChat v5.3 - Cliente Web Universal de Chat & Agente IA</title>
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
@@ -51,6 +51,12 @@
     </div>
   </aside>
 
+  <!-- Botón flotante para abrir el historial de conversaciones en la esquina superior izquierda de la pantalla -->
+  <button type="button" id="btn-toggle-sidebar" class="btn-top-left-sidebar" data-i18n-title="btn_sidebar_title" title="Abrir historial de conversaciones">
+    <span>💬</span>
+    <span data-i18n="btn_open_history">Abrir historial</span>
+  </button>
+
   <!-- Contenedor Principal del Chat (Usa todo el alto de la página: 100vh) -->
   <main class="chat-container">
     <div id="messages-list" class="messages-list">
@@ -91,27 +97,15 @@
       <!-- Barra de herramientas y configuración compacta al lado de la pregunta -->
       <div class="input-toolbar-top">
         <div class="toolbar-left">
-          <button type="button" id="btn-toggle-sidebar" class="btn-tool-mini btn-sidebar-toggle" data-i18n-title="btn_sidebar_title" title="Abrir/Cerrar historial de chats">
-            <span>💬</span>
-            <span data-i18n="btn_chats_history">Chats</span>
-          </button>
-          <button type="button" class="badge-pill badge-server" id="badge-server" data-i18n-title="server_badge_title" title="Servidor configurado (clic para cambiar)">
-            <span class="server-icon">🌐</span>
-            <span id="current-server-url">http://localhost:1234/v1</span>
-          </button>
-          <button type="button" class="badge-pill badge-model" id="badge-model" data-i18n-title="model_badge_title" title="Modelo activo (clic para cambiar)">
-            <span class="status-dot"></span>
-            <span id="current-model-name">(Sin modelo)</span>
-          </button>
+          <label class="badge-pill badge-profile" data-i18n-title="profile_badge_title" title="Perfil de conexión activo">
+            <span class="profile-icon">⚡</span>
+            <select id="active-profile-select" aria-label="Perfil de conexión activo"></select>
+          </label>
         </div>
         <div class="toolbar-right">
           <button type="button" id="btn-open-tree-rag" class="btn-tool-mini btn-rag-mini" data-i18n-title="btn_tree_rag_title" title="Gestionar Base de Conocimiento por Ramas (RAG Jerárquico)">
             <span>🌿</span>
             <span data-i18n="btn_tree_rag">Conocimiento</span>
-          </button>
-          <button type="button" id="btn-lang-quick" class="btn-tool-mini btn-lang-quick" data-i18n-title="lang_switcher_title" title="Cambiar idioma / Switch language">
-            <span>🌐</span>
-            <span id="current-lang-label">ES</span>
           </button>
           <button type="button" id="btn-quick-export" class="btn-tool-mini" data-i18n-title="btn_export_chat_title" title="Exportar conversación (Markdown, JSON, PDF)">
             <span>📤</span>
@@ -282,11 +276,14 @@
       <button type="button" class="modal-tab-btn active" data-tab="tab-general">
         <span data-i18n="tab_general">🌐 General</span>
       </button>
+      <button type="button" class="modal-tab-btn" data-tab="tab-model">
+        <span data-i18n="tab_model">⚙️ Modelo</span>
+      </button>
       <button type="button" class="modal-tab-btn" data-tab="tab-agent">
         <span data-i18n="tab_agent">🤖 Agente</span>
       </button>
-      <button type="button" class="modal-tab-btn" data-tab="tab-model">
-        <span data-i18n="tab_model">⚙️ Modelo</span>
+      <button type="button" class="modal-tab-btn" data-tab="tab-appearance">
+        <span data-i18n="tab_appearance">🎨 Visualización</span>
       </button>
       <button type="button" class="modal-tab-btn" data-tab="tab-inspector">
         <span data-i18n="tab_inspector">🔍 Inspector</span>
@@ -297,199 +294,132 @@
       <div class="modal-body">
         <!-- Pestaña 1: General y Servidor -->
         <div id="tab-general" class="modal-tab-pane active">
-          <div class="form-field">
-            <label for="setting-api-type">
-              <strong data-i18n="field_api_type">Tipo de Interfaz / Protocolo</strong>
-              <span class="label-hint" data-i18n="field_api_type_hint">Determina el formato del JSON de petición y las opciones de razonamiento.</span>
+          <!-- Selector y Gestión de Perfiles (Compacto) -->
+          <div class="form-field profile-selection-field" style="margin-bottom: 0.85rem;">
+            <label for="profile-select-helper">
+              <strong data-i18n="field_profile">Perfil de Conexión / Servidor</strong>
             </label>
-            <select id="setting-api-type" class="combobox-select-helper" style="width: 100%;">
-              <option value="openai" selected>🤖 OpenAI / LM Studio / LocalAI / vLLM (/v1)</option>
-              <option value="ollama">🦙 Ollama (/api/tags)</option>
-              <option value="openrouter">🔀 OpenRouter (/api/v1)</option>
-              <option value="claude">🎭 Anthropic Claude (/v1)</option>
-              <option value="gemini">✨ Google Gemini (OpenAI compat)</option>
-              <option value="custom">⚙️ Personalizado</option>
-            </select>
-          </div>
+            <div class="combobox-wrapper profile-combobox-wrapper">
+              <select id="profile-select-helper" class="combobox-select-helper" title="Seleccionar perfil existente" style="flex: 1; max-width: 100%;">
+                <option value="" disabled selected data-i18n="profile_select_default">▾ Elegir perfil guardado...</option>
+              </select>
+              <datalist id="profile-datalist">
+                <!-- Se puebla dinámicamente -->
+              </datalist>
 
-          <div class="form-field">
-            <label for="setting-api-url">
-              <strong data-i18n="field_api_url">URL del Servidor / Endpoint de Chat</strong>
-              <span class="label-hint" data-i18n="field_api_url_hint">Compatible con OpenAI, LM Studio, Ollama, LocalAI, vLLM, OpenRouter, Claude, Gemini, etc.</span>
-            </label>
-            <div class="input-with-button-wrapper">
-              <input
-                type="url"
-                id="setting-api-url"
-                placeholder="http://localhost:1234/v1"
-                required
-              >
-              <button type="button" id="btn-query-server" class="btn-query-server" data-i18n-title="btn_query_title" title="Consultar modelos disponibles y capacidades de la API en el servidor">
-                <svg class="query-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <circle cx="11" cy="11" r="8"></circle>
-                  <line x1="21" y1="2" x2="16.65" y2="16.65"></line>
+              <button type="button" id="btn-save-profile" class="btn-profile-action btn-save-profile btn-icon-only" data-i18n-title="btn_save_profile_title" title="Guardar todos los valores actuales en este perfil">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                  <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                  <polyline points="7 3 7 8 15 8"></polyline>
                 </svg>
-                <span class="query-btn-text" data-i18n="btn_query_text">Query</span>
+              </button>
+
+              <button type="button" id="btn-delete-profile" class="btn-profile-action btn-delete-profile btn-icon-only" data-i18n-title="btn_delete_profile_title" title="Eliminar el perfil seleccionado">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="3 6 5 6 21 6"></polyline>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                </svg>
               </button>
             </div>
-            <div id="server-query-status" class="server-query-status" style="display: none;"></div>
+            <div id="profile-action-feedback" class="server-query-status" style="display: none;"></div>
           </div>
 
-          <div class="form-field">
-            <label for="setting-api-key">
-              <strong data-i18n="field_api_key">Clave de API (API Key)</strong>
-              <span class="label-hint" data-i18n="field_api_key_hint">Opcional si usas un servidor local (LM Studio / Ollama / LocalAI).</span>
-            </label>
-            <div class="input-password-wrapper">
-              <input
-                type="password"
-                id="setting-api-key"
-                placeholder="sk-..."
-                autocomplete="off"
-              >
-              <button type="button" id="btn-toggle-key" class="btn-toggle-visibility" data-i18n-title="btn_toggle_key_title" title="Mostrar/Ocultar clave">
-                👁️
-              </button>
-            </div>
-          </div>
-
-          <div class="form-field">
-            <label for="setting-model">
-              <strong data-i18n="field_model">Nombre del Modelo</strong>
-              <span class="label-hint" data-i18n="field_model_hint">Selecciona de la lista del servidor o escribe cualquier nombre personalizado.</span>
-            </label>
-            <div class="combobox-wrapper">
+          <!-- Contenedor Enmarcado con los Valores del Perfil Activo -->
+          <div class="profile-values-card">
+            <div class="form-field">
+              <label for="setting-profile-name">
+                <strong data-i18n="field_profile_name_label">Nombre del Perfil</strong>
+              </label>
               <input
                 type="text"
-                id="setting-model"
-                list="model-datalist"
-                data-i18n-placeholder="field_model_placeholder"
-                placeholder="Escribe o pulsa Query para consultar modelos..."
+                id="setting-profile-name"
+                list="profile-datalist"
+                data-i18n-placeholder="field_profile_placeholder"
+                placeholder="Nombre del perfil (ej: LM Studio, Ollama, OpenRouter...)"
                 autocomplete="off"
               >
-              <select id="model-select-helper" class="combobox-select-helper" title="Seleccionar modelo de la lista">
-                <option value="" disabled selected data-i18n="model_select_default">▾ Elegir modelo detectado...</option>
+            </div>
+
+            <div class="form-field">
+              <label for="setting-api-type">
+                <strong data-i18n="field_api_type">Tipo de Interfaz / Protocolo</strong>
+              </label>
+              <select id="setting-api-type" class="combobox-select-helper" style="width: 100%; max-width: 100%;">
+                <option value="openai" selected>🤖 OpenAI / LM Studio / LocalAI / vLLM (/v1)</option>
+                <option value="ollama">🦙 Ollama (/api/tags)</option>
+                <option value="openrouter">🔀 OpenRouter (/api/v1)</option>
+                <option value="claude">🎭 Anthropic Claude (/v1)</option>
+                <option value="gemini">✨ Google Gemini (OpenAI compat)</option>
               </select>
-              <datalist id="model-datalist">
-                <!-- Se puebla automáticamente al pulsar Query -->
-              </datalist>
             </div>
-          </div>
 
-          <div class="form-field">
-            <label>
-              <strong data-i18n="field_theme">Tema Visual de la Interfaz</strong>
-              <span class="label-hint" data-i18n="field_theme_hint">Selecciona el modo de visualización.</span>
-            </label>
-            <div class="theme-switcher-group" id="theme-switcher-group">
-              <button type="button" class="btn-theme-toggle active" id="btn-theme-light" data-theme="light">
-                <span data-i18n="theme_light">☀️ Modo Claro</span>
-              </button>
-              <button type="button" class="btn-theme-toggle" id="btn-theme-dark" data-theme="dark">
-                <span data-i18n="theme_dark">🌙 Modo Oscuro</span>
-              </button>
+            <div class="form-field">
+              <label for="setting-api-url">
+                <strong data-i18n="field_api_url">URL del Servidor / Endpoint de Chat</strong>
+              </label>
+              <div class="input-with-button-wrapper">
+                <input
+                  type="url"
+                  id="setting-api-url"
+                  placeholder="http://localhost:1234/v1"
+                  required
+                >
+                <button type="button" id="btn-query-server" class="btn-query-server" data-i18n-title="btn_query_title" title="Consultar modelos disponibles y capacidades de la API en el servidor">
+                  <svg class="query-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="2" x2="16.65" y2="16.65"></line>
+                  </svg>
+                  <span class="query-btn-text" data-i18n="btn_query_text">Query</span>
+                </button>
+              </div>
+              <div id="server-query-status" class="server-query-status" style="display: none;"></div>
+            </div>
+
+            <div class="form-field">
+              <label for="setting-api-key">
+                <strong data-i18n="field_api_key">Clave de API (API Key)</strong>
+                <span class="label-hint" data-i18n="field_api_key_hint">Opcional si usas un servidor local (LM Studio / Ollama / LocalAI).</span>
+              </label>
+              <div class="input-password-wrapper">
+                <input
+                  type="password"
+                  id="setting-api-key"
+                  placeholder="sk-..."
+                  autocomplete="off"
+                >
+                <button type="button" id="btn-toggle-key" class="btn-toggle-visibility" data-i18n-title="btn_toggle_key_title" title="Mostrar/Ocultar clave">
+                  👁️
+                </button>
+              </div>
+            </div>
+
+            <div class="form-field" style="margin-bottom: 0;">
+              <label for="setting-model">
+                <strong data-i18n="field_model">Nombre del Modelo</strong>
+                <span class="label-hint" data-i18n="field_model_hint">Selecciona de la lista del servidor o escribe cualquier nombre personalizado.</span>
+              </label>
+              <div class="combobox-wrapper">
+                <input
+                  type="text"
+                  id="setting-model"
+                  list="model-datalist"
+                  data-i18n-placeholder="field_model_placeholder"
+                  placeholder="Escribe o pulsa Query para consultar modelos..."
+                  autocomplete="off"
+                >
+                <select id="model-select-helper" class="combobox-select-helper" title="Seleccionar modelo de la lista">
+                  <option value="" disabled selected data-i18n="model_select_default">▾ Elegir modelo detectado...</option>
+                </select>
+                <datalist id="model-datalist">
+                  <!-- Se puebla automáticamente al pulsar Query -->
+                </datalist>
+              </div>
             </div>
           </div>
         </div>
 
-        <!-- Pestaña 2: Modo Agente y Herramientas -->
-        <div id="tab-agent" class="modal-tab-pane">
-          <div class="settings-section-intro">
-            <p data-i18n="agent_intro">Configura las herramientas agénticas y el contexto temporal que se transmiten al modelo.</p>
-          </div>
-
-          <div class="setting-toggle-card">
-            <div class="toggle-card-info">
-              <div class="toggle-card-title">
-                <span data-i18n="agent_datetime_title">🕒 Informar Fecha y Hora al Iniciar Chat</span>
-              </div>
-              <p class="toggle-card-desc" data-i18n="agent_datetime_desc">
-                Inserta automáticamente la fecha y hora actual como primer mensaje de la conversación (con respuesta 'OK') para informar al modelo sin invalidar la caché de contexto en las siguientes peticiones.
-              </p>
-            </div>
-            <label class="switch">
-              <input type="checkbox" id="setting-send-datetime" checked>
-              <span class="slider"></span>
-            </label>
-          </div>
-
-          <div class="setting-toggle-card">
-            <div class="toggle-card-info">
-              <div class="toggle-card-title">
-                <span data-i18n="agent_search_title">🔍 Búsqueda en DuckDuckGo en Tiempo Real</span>
-              </div>
-              <p class="toggle-card-desc" data-i18n="agent_search_desc">
-                Permite al modelo invocar <code>search_web</code> para buscar información actualizada, definiciones, noticias y enlaces web mediante la API de DuckDuckGo.
-              </p>
-            </div>
-            <label class="switch">
-              <input type="checkbox" id="setting-enable-agent-search" checked>
-              <span class="slider"></span>
-            </label>
-          </div>
-
-          <div class="setting-toggle-card">
-            <div class="toggle-card-info">
-              <div class="toggle-card-title">
-                <span data-i18n="agent_web_title">🌐 Navegación Web y Descarga de Documentos PDF</span>
-              </div>
-              <p class="toggle-card-desc" data-i18n="agent_web_desc">
-                Permite al modelo invocar <code>fetch_web_page</code> para consultar páginas web públicas y descargar documentos PDF en tiempo real extrayendo su texto al contexto.
-              </p>
-            </div>
-            <label class="switch">
-              <input type="checkbox" id="setting-enable-agent-web" checked>
-              <span class="slider"></span>
-            </label>
-          </div>
-
-          <div class="setting-toggle-card">
-            <div class="toggle-card-info">
-              <div class="toggle-card-title">
-                <span data-i18n="agent_js_title">⚡ Ejecución de JavaScript Local (Sandbox)</span>
-              </div>
-              <p class="toggle-card-desc" data-i18n="agent_js_desc">
-                Permite al modelo invocar <code>execute_javascript</code> para calcular, procesar datos o validar algoritmos en un entorno seguro en el navegador.
-              </p>
-            </div>
-            <label class="switch">
-              <input type="checkbox" id="setting-enable-agent-js" checked>
-              <span class="slider"></span>
-            </label>
-          </div>
-
-          <div class="setting-toggle-card">
-            <div class="toggle-card-info">
-              <div class="toggle-card-title">
-                <span data-i18n="agent_chart_title">📊 Visualización de Datos y Gráficos Nativos (SVG)</span>
-              </div>
-              <p class="toggle-card-desc" data-i18n="agent_chart_desc">
-                Permite al modelo invocar <code>render_chart</code> para generar y mostrar gráficos interactivos de barras, líneas o sectores sin librerías externas.
-              </p>
-            </div>
-            <label class="switch">
-              <input type="checkbox" id="setting-enable-agent-chart" checked>
-              <span class="slider"></span>
-            </label>
-          </div>
-
-          <div class="setting-toggle-card">
-            <div class="toggle-card-info">
-              <div class="toggle-card-title">
-                <span data-i18n="agent_cache_title">⚡ Caché de Contexto (Context / Prompt Caching)</span>
-              </div>
-              <p class="toggle-card-desc" data-i18n="agent_cache_desc">
-                Reutiliza la memoria caché de contexto (KV Cache / Prompt Caching) en servidores compatibles (OpenAI, Claude, OpenRouter, Gemini, LM Studio, vLLM) reduciendo latencia y costes. Se invalida automáticamente al borrar mensajes del chat.
-              </p>
-            </div>
-            <label class="switch">
-              <input type="checkbox" id="setting-enable-context-cache" checked>
-              <span class="slider"></span>
-            </label>
-          </div>
-        </div>
-
-        <!-- Pestaña 3: Modelo y Prompt -->
+        <!-- Pestaña 2: Modelo y Prompt -->
         <div id="tab-model" class="modal-tab-pane">
           <div class="form-field">
             <label for="setting-system-prompt">
@@ -529,7 +459,80 @@
           </div>
         </div>
 
-        <!-- Pestaña 4: Inspector de Proveedor -->
+        <!-- Pestaña 3: Modo Agente y Herramientas -->
+        <div id="tab-agent" class="modal-tab-pane">
+          <div class="settings-section-intro">
+            <p data-i18n="agent_intro">Configura las herramientas agénticas y el contexto temporal que se transmiten al modelo.</p>
+          </div>
+
+          <div class="setting-toggle-card">
+            <div class="toggle-card-info">
+              <div class="toggle-card-title">
+                <span data-i18n="agent_datetime_title">🕒 Informar Fecha y Hora al Iniciar Chat</span>
+              </div>
+              <p class="toggle-card-desc" data-i18n="agent_datetime_desc">
+                Inserta automáticamente la fecha y hora actual como primer mensaje de la conversación (con respuesta 'OK') para informar al modelo sin invalidar la caché de contexto en las siguientes peticiones.
+              </p>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="setting-send-datetime" checked>
+              <span class="slider"></span>
+            </label>
+          </div>
+
+          <!-- Contenedor dinámico de herramientas agénticas registradas -->
+          <div id="agent-tools-container" class="agent-tools-container"></div>
+
+          <div class="setting-toggle-card">
+            <div class="toggle-card-info">
+              <div class="toggle-card-title">
+                <span data-i18n="agent_cache_title">⚡ Caché de Contexto (Context / Prompt Caching)</span>
+              </div>
+              <p class="toggle-card-desc" data-i18n="agent_cache_desc">
+                Reutiliza la memoria caché de contexto (KV Cache / Prompt Caching) en servidores compatibles (OpenAI, Claude, OpenRouter, Gemini, LM Studio, vLLM) reduciendo latencia y costes. Se invalida automáticamente al borrar mensajes del chat.
+              </p>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="setting-enable-context-cache" checked>
+              <span class="slider"></span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Pestaña 4: Visualización e Idioma -->
+        <div id="tab-appearance" class="modal-tab-pane">
+          <div class="form-field">
+            <label>
+              <strong data-i18n="field_theme">Tema Visual de la Interfaz</strong>
+              <span class="label-hint" data-i18n="field_theme_hint">Selecciona el modo de visualización.</span>
+            </label>
+            <div class="theme-switcher-group" id="theme-switcher-group">
+              <button type="button" class="btn-theme-toggle active" id="btn-theme-light" data-theme="light">
+                <span data-i18n="theme_light">☀️ Modo Claro</span>
+              </button>
+              <button type="button" class="btn-theme-toggle" id="btn-theme-dark" data-theme="dark">
+                <span data-i18n="theme_dark">🌙 Modo Oscuro</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="form-field">
+            <label>
+              <strong data-i18n="field_language">Idioma de la Interfaz (Language)</strong>
+              <span class="label-hint" data-i18n="field_language_hint">Selecciona el idioma visual de la aplicación.</span>
+            </label>
+            <div class="theme-switcher-group" id="lang-switcher-group">
+              <button type="button" class="btn-lang-toggle active" id="btn-lang-es" data-lang="es">
+                <span>🇪🇸 Español</span>
+              </button>
+              <button type="button" class="btn-lang-toggle" id="btn-lang-en" data-lang="en">
+                <span>🇬🇧 English</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Pestaña 5: Inspector de Proveedor -->
         <div id="tab-inspector" class="modal-tab-pane">
           <div class="inspector-intro-card">
             <div class="inspector-intro-header">
@@ -712,7 +715,7 @@
     <!-- Navegación por pestañas unificadas -->
     <div class="modal-tabs-nav rag-tabs-nav" id="rag-modal-tabs-nav">
       <button type="button" class="modal-tab-btn active" data-rag-tab="tab-rag-active">
-        <span data-i18n="rag_tab_active">🌿 Rama Activa en Chat</span>
+        <span data-i18n="rag_tab_active">Activar RAG</span>
       </button>
       <button type="button" class="modal-tab-btn" data-rag-tab="tab-rag-manage">
         <span data-i18n="rag_tab_manage">📁 Gestión de Ramas y Documentos</span>
@@ -723,7 +726,7 @@
     </div>
 
     <div class="modal-body rag-modal-body-tabbed">
-      <!-- PESTAÑA 1: Activar / Desactivar y Escoger Rama Activa para el Chat -->
+      <!-- PESTAÑA 1: Activar RAG, Perfil de Resumen y Selección de Rama -->
       <div id="tab-rag-active" class="modal-tab-pane active">
         <!-- Banner de Estado de Carpeta Local -->
         <div id="rag-fs-banner-active" class="rag-fs-banner-container"></div>
@@ -743,7 +746,29 @@
           </button>
         </div>
 
-        <div class="form-field" style="margin-top: 1rem;">
+        <!-- Selección del Perfil de Conexión para Resumen de Documentos (RAG) -->
+        <div class="form-field" style="margin-top: 0.5rem;">
+          <label for="setting-rag-summary-profile">
+            <strong data-i18n="rag_summary_profile_title">Perfil de Conexión para Resumen de Documentos</strong>
+            <span class="label-hint" data-i18n="rag_summary_profile_hint">Selecciona el perfil de conexión que procesará el análisis e ingesta de documentos:</span>
+          </label>
+          <div class="combobox-wrapper">
+            <select id="setting-rag-summary-profile" class="combobox-select-helper" style="width: 100%; max-width: 100%; font-weight: 500;">
+              <!-- Se puebla dinámicamente con los perfiles existentes -->
+            </select>
+          </div>
+          <div class="setting-toggle-card" style="margin-top: 0.45rem; background: var(--bg-app); border-style: dashed;">
+            <div class="toggle-card-info">
+              <div class="toggle-card-title" style="font-size: 0.78rem;">
+                <span data-i18n="rag_summary_profile_warning_title">💡 Elección recomendada del modelo para ingesta y resumen:</span>
+              </div>
+              <p class="toggle-card-desc" style="font-size: 0.72rem; line-height: 1.4;" data-i18n-html="rag_summary_profile_warning_desc">
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-field" style="margin-top: 0.5rem;">
           <label>
             <strong data-i18n="rag_select_branch_chat">Ramas de Conocimiento Disponibles</strong>
             <span class="label-hint" data-i18n="rag_select_branch_chat_hint">Activa el interruptor de la rama que desees utilizar como contexto en el chat:</span>
@@ -771,9 +796,9 @@
           <div class="rag-manage-toolbar-actions">
             <button type="button" id="btn-rag-new-branch" class="btn-primary" data-i18n="rag_btn_new_branch">+ Nueva Rama</button>
             <button type="button" id="btn-rag-edit-branch" class="btn-secondary" title="Renombrar o editar descripción">✏️ Editar</button>
-            <button type="button" id="btn-rag-export-branch" class="btn-secondary" title="Exportar rama a archivo JSON">📤 Exportar</button>
-            <input type="file" id="rag-import-file-input" accept=".json" style="display: none;">
-            <button type="button" id="btn-rag-import-branch" class="btn-secondary" title="Importar rama desde archivo JSON">📥 Importar</button>
+            <button type="button" id="btn-rag-export-branch" class="btn-secondary" title="Exportar rama a paquete comprimido (.rag.gz)">📤 Exportar</button>
+            <input type="file" id="rag-import-file-input" accept=".rag.gz,.json" style="display: none;">
+            <button type="button" id="btn-rag-import-branch" class="btn-secondary" title="Importar rama (.rag.gz o .json)">📥 Importar</button>
             <button type="button" id="btn-rag-delete-branch" class="btn-secondary btn-danger-hover" title="Eliminar rama">🗑️</button>
           </div>
         </div>
@@ -790,10 +815,9 @@
           </div>
           <div class="rag-chunk-select-wrapper" style="min-width: 250px;">
             <select id="setting-rag-context-limit-k" class="combobox-select-helper" style="width: 100%;">
-              <option value="16">16K tokens (~64 KB texto) - Mínimo</option>
-              <option value="32">32K tokens (~128 KB texto)</option>
-              <option value="64" selected>64K tokens (~256 KB texto) - Estándar</option>
-              <option value="128">128K tokens (~512 KB texto)</option>
+              <option value="32">32K tokens (~128 KB texto) - Mínimo</option>
+              <option value="64">64K tokens (~256 KB texto)</option>
+              <option value="128" selected>128K tokens (~512 KB texto) - Estándar</option>
               <option value="256">256K tokens (~1 MB texto) - Modelos 256K</option>
               <option value="512">512K tokens (~2 MB texto)</option>
               <option value="1024">1M tokens (~4 MB texto) - Máximo</option>
@@ -857,8 +881,8 @@
             <div class="setting-card-desc" style="margin-top: 0.5rem; line-height: 1.5;">
               <ul style="margin-left: 1.25rem; display: flex; flex-direction: column; gap: 0.4rem;">
                 <li><strong>Ubicación de Archivos:</strong> En Chrome/Chromium se guardan en la carpeta local <code>./zerochat/RAG/</code> (con un fichero <code>rama.md</code> por rama y subdirectorios <code>0001/</code>, <code>0002/</code> que paginan cada 100 archivos). En Firefox/Safari se guardan en el sistema privado OPFS.</li>
-                <li><strong>Exportar Rama Completa:</strong> En la pestaña <em>Gestión de Ramas y Documentos</em>, selecciona la rama deseada y haz clic en <strong>📤 Exportar</strong> para descargar un único archivo <code>.json</code> con todos sus documentos, capítulos, resúmenes e imágenes.</li>
-                <li><strong>Importar Rama:</strong> Haz clic en <strong>📥 Importar</strong> y selecciona un archivo <code>.json</code> previamente exportado para restaurar la rama completa inmediatamente con todos sus contenidos.</li>
+                <li><strong>Exportar Rama Completa:</strong> En la pestaña <em>Gestión de Ramas y Documentos</em>, selecciona la rama deseada y haz clic en <strong>📤 Exportar</strong> para descargar un paquete comprimido <code>.rag.gz</code> conteniendo la estructura completa del directorio (documentos originales, resúmenes, capítulos e índices).</li>
+                <li><strong>Importar Rama:</strong> Haz clic en <strong>📥 Importar</strong> y selecciona un paquete <code>.rag.gz</code> (o un archivo JSON legado) para restaurar la rama de conocimiento completa inmediatamente con todos sus archivos y configuraciones.</li>
               </ul>
             </div>
           </div>
@@ -929,6 +953,17 @@
   <script src="js/providers.js"></script>
   <script src="js/api.js"></script>
   <script src="js/file-parser.js"></script>
+  <script src="js/tools/tool-runtime.js"></script>
+  <script src="js/tools/tool-manifest.js"></script>
+  <script src="js/tools/builtin/execute-javascript.tool.js"></script>
+  <script src="js/tools/builtin/search-web.tool.js"></script>
+  <script src="js/tools/builtin/fetch-web-page.tool.js"></script>
+  <script src="js/tools/builtin/download-pdf.tool.js"></script>
+  <script src="js/tools/builtin/render-chart.tool.js"></script>
+  <script src="js/tools/builtin/get-current-datetime.tool.js"></script>
+  <script src="js/tools/builtin/list-documents.tool.js"></script>
+  <script src="js/tools/builtin/search-knowledge-base.tool.js"></script>
+  <script src="js/tools/builtin/read-chapter-content.tool.js"></script>
   <script src="js/agent-core.js"></script>
   <script src="js/mcp.js"></script>
   <script src="js/debug.js"></script>
@@ -937,6 +972,7 @@
   <script src="js/export.js"></script>
   <script src="js/state.js"></script>
   <script src="js/context-manager.js"></script>
+  <script src="js/chat-engine.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

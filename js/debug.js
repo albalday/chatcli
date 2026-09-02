@@ -1,5 +1,5 @@
 /**
- * Módulo de Depuración, Logs e Interceptor de Mensajes (ChatDebug) para ChatCLI.
+ * Módulo de Depuración, Logs e Interceptor de Mensajes (ChatDebug) para ZeroChat.
  * Gestiona el panel de logs, el filtrado por pestañas (Todo, Pensamiento, Herramientas, Red, Raw),
  * el formateo de marcas temporales y la ventana emergente de depuración de payloads salientes.
  */

@@ -1,7 +1,7 @@
 /**
  * Módulo de almacenamiento y persistencia de configuración y conversaciones (ChatStorage).
  * - Configuración síncrona en localStorage / cookies (preferencias ligeras y API keys).
- * - Persistencia estructurada y asíncrona de conversaciones, mensajes y adjuntos en IndexedDB (ChatCLIDB).
+ * - Persistencia estructurada y asíncrona de conversaciones, mensajes y adjuntos en IndexedDB (ZeroChatDB).
  * - Migración automática de sesiones legacy desde localStorage sin pérdida de datos.
  * - Carga bajo demanda de mensajes para optimizar el consumo de memoria.
  * - Fallback transparente para entornos sin soporte de IndexedDB.
@@ -16,7 +16,7 @@
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  const DB_NAME = 'ChatCLIDB';
+  const DB_NAME = 'ZeroChatDB';
   const DB_VERSION = 1;
   const STORE_CONVERSATIONS = 'conversations';
   const STORE_MESSAGES = 'messages';
@@ -32,19 +32,23 @@
     reasoningEffort: 'none', // 'none' | 'low' | 'medium' | 'high'
     theme: 'light', // 'light' | 'dark'
     language: 'es', // 'es' | 'en'
-    enableAgentJs: true,
-    enableAgentWeb: true,
-    enableAgentSearch: true,
-    enableAgentChart: true,
+    enabledTools: {
+      execute_javascript: true,
+      search_web: true,
+      fetch_web_page: true,
+      download_pdf: true,
+      render_chart: true
+    },
     enableContextCache: true,
     enableRawLogs: false,
     enableDebugMessages: false,
     sendDateTime: true,
     activeRagBranchId: '',
-    ragContextLimitK: 64
+    ragContextLimitK: 128,
+    ragSummaryProfile: 'Local resumen'
   };
 
-  const STORAGE_PREFIX = 'chatcli_';
+  const STORAGE_PREFIX = 'zerochat_';
   const DEFAULT_EXPIRY_DAYS = 365;
 
   const memoryStorage = new Map();
@@ -54,7 +58,10 @@
 
   function isLocalStorageAvailable() {
     try {
-      const testKey = '__chatcli_test__';
+      const testKey = '__zerochat_test__';
+      localStorage.setItem(testKey, testKey);
+      localStorage.removeItem(testKey);
+      return true;
       localStorage.setItem(testKey, testKey);
       localStorage.removeItem(testKey);
       return true;
@@ -138,7 +145,241 @@
     return val === 'true' || val === true || val === '1';
   }
 
+  const DEFAULT_PROFILES = {
+    'Local chat': {
+      apiUrl: 'http://localhost:1234/v1',
+      apiType: 'openai',
+      apiKey: '',
+      model: 'google/gemma-4-26b-a4b-qat',
+      systemPrompt: '',
+      temperature: '0.7',
+      reasoningEffort: 'none',
+      modelReasoningConfig: null,
+      enableAgentJs: true,
+      enableAgentWeb: true,
+      enableAgentSearch: true,
+      enableAgentChart: true,
+      enableContextCache: true,
+      enableRawLogs: false,
+      enableDebugMessages: false,
+      sendDateTime: true,
+      ragContextLimitK: 128
+    },
+    'Remoto chat': {
+      apiUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
+      apiType: 'gemini',
+      apiKey: '',
+      model: 'gemini-3.6-flash',
+      systemPrompt: '',
+      temperature: '0.7',
+      reasoningEffort: 'none',
+      modelReasoningConfig: null,
+      enabledTools: {
+        execute_javascript: true,
+        search_web: true,
+        fetch_web_page: true,
+        download_pdf: true,
+        render_chart: true
+      },
+      enableContextCache: true,
+      enableRawLogs: false,
+      enableDebugMessages: false,
+      sendDateTime: true,
+      ragContextLimitK: 128
+    },
+    'Local resumen': {
+      apiUrl: 'http://localhost:1234/v1',
+      apiType: 'openai',
+      apiKey: '',
+      model: 'google/gemma-4-e4b',
+      systemPrompt: '',
+      temperature: '0.7',
+      reasoningEffort: 'none',
+      modelReasoningConfig: null,
+      enabledTools: {
+        execute_javascript: true,
+        search_web: true,
+        fetch_web_page: true,
+        download_pdf: true,
+        render_chart: true
+      },
+      enableContextCache: true,
+      enableRawLogs: false,
+      enableDebugMessages: false,
+      sendDateTime: true,
+      ragContextLimitK: 128
+    },
+    'Remoto resumen': {
+      apiUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
+      apiType: 'gemini',
+      apiKey: '',
+      model: 'gemini-3.6-flash',
+      systemPrompt: '',
+      temperature: '0.7',
+      reasoningEffort: 'none',
+      modelReasoningConfig: null,
+      enabledTools: {
+        execute_javascript: true,
+        search_web: true,
+        fetch_web_page: true,
+        download_pdf: true,
+        render_chart: true
+      },
+      enableContextCache: true,
+      enableRawLogs: false,
+      enableDebugMessages: false,
+      sendDateTime: true,
+      ragContextLimitK: 128
+    },
+    'Nuevo': {
+      apiUrl: '',
+      apiType: 'openai',
+      apiKey: '',
+      model: '',
+      systemPrompt: '',
+      temperature: '0.7',
+      reasoningEffort: 'none',
+      modelReasoningConfig: null,
+      enabledTools: {
+        execute_javascript: true,
+        search_web: true,
+        fetch_web_page: true,
+        download_pdf: true,
+        render_chart: true
+      },
+      enableContextCache: true,
+      enableRawLogs: false,
+      enableDebugMessages: false,
+      sendDateTime: true,
+      ragContextLimitK: 128
+    }
+  };
+
+  /**
+   * Obtiene todos los perfiles de configuración guardados, o inicializa con los predeterminados.
+   */
+  function getProfiles() {
+    const raw = getStorageItem('profiles');
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
+          return parsed;
+        }
+      } catch (e) {}
+    }
+    // Si no existen, inicializar con DEFAULT_PROFILES
+    const initial = JSON.parse(JSON.stringify(DEFAULT_PROFILES));
+    setStorageItem('profiles', JSON.stringify(initial));
+    setActiveProfileName('Local chat');
+    return initial;
+  }
+
+  /**
+   * Obtiene el nombre del perfil activo actual.
+   */
+  function getActiveProfileName() {
+    const active = getStorageItem('active_profile');
+    const profiles = getProfiles();
+    if (active && profiles[active]) {
+      return active;
+    }
+    const firstKey = Object.keys(profiles)[0] || 'Local chat';
+    return firstKey;
+  }
+
+  /**
+   * Establece el perfil activo actual por su nombre.
+   */
+  function setActiveProfileName(name) {
+    if (typeof name === 'string' && name.trim()) {
+      setStorageItem('active_profile', name.trim());
+    }
+  }
+
+  /**
+   * Obtiene la configuración completa de un perfil por nombre.
+   */
+  function getProfile(name) {
+    const profiles = getProfiles();
+    if (profiles && profiles[name]) {
+      return JSON.parse(JSON.stringify(profiles[name]));
+    }
+    return null;
+  }
+
+  /**
+   * Guarda o actualiza un perfil con todos sus campos específicos.
+   */
+  function saveProfile(name, profileData) {
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      throw new Error('El nombre del perfil no puede estar vacío.');
+    }
+    const cleanName = name.trim();
+    const profiles = getProfiles();
+    
+    // Extraer y normalizar todos los campos de configuración
+    profiles[cleanName] = {
+      apiUrl: profileData.apiUrl !== undefined ? String(profileData.apiUrl).trim() : 'http://localhost:1234/v1',
+      apiType: profileData.apiType !== undefined ? String(profileData.apiType).trim() : 'openai',
+      apiKey: profileData.apiKey !== undefined ? String(profileData.apiKey).trim() : '',
+      model: profileData.model !== undefined ? String(profileData.model).trim() : '',
+      systemPrompt: profileData.systemPrompt !== undefined ? String(profileData.systemPrompt).trim() : '',
+      temperature: profileData.temperature !== undefined ? String(profileData.temperature) : '0.7',
+      reasoningEffort: profileData.reasoningEffort || 'none',
+      modelReasoningConfig: profileData.modelReasoningConfig || null,
+      enabledTools: (profileData.enabledTools && typeof profileData.enabledTools === 'object')
+        ? { ...profileData.enabledTools }
+        : { ...DEFAULT_CONFIG.enabledTools },
+      enableContextCache: profileData.enableContextCache !== false,
+      enableRawLogs: profileData.enableRawLogs === true,
+      enableDebugMessages: profileData.enableDebugMessages === true,
+      sendDateTime: profileData.sendDateTime !== false,
+      ragContextLimitK: (() => {
+        const val = parseInt(profileData.ragContextLimitK, 10);
+        if (isNaN(val) || val < 16) return 64;
+        if (val > 1024) return 1024;
+        return val;
+      })()
+    };
+
+    setStorageItem('profiles', JSON.stringify(profiles));
+    setActiveProfileName(cleanName);
+    return profiles[cleanName];
+  }
+
+  /**
+   * Elimina un perfil por nombre. Si era el activo, conmuta al primero disponible.
+   */
+  function deleteProfile(name) {
+    if (!name) return false;
+    const cleanName = String(name).trim();
+    const profiles = getProfiles();
+    if (!profiles[cleanName]) return false;
+
+    delete profiles[cleanName];
+    
+    // Si no quedan perfiles, restaurar DEFAULT_PROFILES
+    if (Object.keys(profiles).length === 0) {
+      const restored = JSON.parse(JSON.stringify(DEFAULT_PROFILES));
+      setStorageItem('profiles', JSON.stringify(restored));
+      setActiveProfileName('Local chat');
+      return true;
+    }
+
+    setStorageItem('profiles', JSON.stringify(profiles));
+    const currentActive = getActiveProfileName();
+    if (currentActive === cleanName) {
+      setActiveProfileName(Object.keys(profiles)[0]);
+    }
+    return true;
+  }
+
   function loadConfig() {
+    const activeProfileName = getActiveProfileName();
+    const profiles = getProfiles();
+    const activeProfile = profiles[activeProfileName] || DEFAULT_PROFILES['Local chat'];
+
     const apiUrl = getStorageItem('apiUrl');
     const apiType = getStorageItem('apiType');
     const apiKey = getStorageItem('apiKey');
@@ -148,10 +389,7 @@
     const reasoningEffort = getStorageItem('reasoningEffort');
     const theme = getStorageItem('theme');
     const language = getStorageItem('language');
-    const enableAgentJs = getStorageItem('enableAgentJs');
-    const enableAgentWeb = getStorageItem('enableAgentWeb');
-    const enableAgentSearch = getStorageItem('enableAgentSearch');
-    const enableAgentChart = getStorageItem('enableAgentChart');
+    const enabledToolsRaw = getStorageItem('enabledTools');
     const enableContextCache = getStorageItem('enableContextCache');
     const enableRawLogs = getStorageItem('enableRawLogs');
     const enableDebugMessages = getStorageItem('enableDebugMessages');
@@ -160,7 +398,7 @@
     const ragContextLimitK = getStorageItem('ragContextLimitK');
     const modelReasoningConfigRaw = getStorageItem('modelReasoningConfig');
 
-    let effectiveApiUrl = apiUrl;
+    let effectiveApiUrl = apiUrl !== null ? apiUrl : (activeProfile.apiUrl || DEFAULT_CONFIG.apiUrl);
     if (!effectiveApiUrl || effectiveApiUrl === 'https://api.openai.com/v1') {
       effectiveApiUrl = DEFAULT_CONFIG.apiUrl;
     }
@@ -179,16 +417,16 @@
       }
     }
 
-    let parsedReasoningConfig = null;
+    let parsedReasoningConfig = activeProfile.modelReasoningConfig || null;
     try {
       if (modelReasoningConfigRaw) {
         parsedReasoningConfig = JSON.parse(modelReasoningConfigRaw);
       }
     } catch (e) {}
 
-    let effectiveApiType = (apiType && apiType !== 'auto') ? apiType : DEFAULT_CONFIG.apiType;
+    let effectiveApiType = (apiType && apiType !== 'auto') ? apiType : (activeProfile.apiType || DEFAULT_CONFIG.apiType);
 
-    let effectiveSystemPrompt = systemPrompt !== null ? systemPrompt : DEFAULT_CONFIG.systemPrompt;
+    let effectiveSystemPrompt = systemPrompt !== null ? systemPrompt : (activeProfile.systemPrompt !== undefined ? activeProfile.systemPrompt : DEFAULT_CONFIG.systemPrompt);
     if (effectiveSystemPrompt && (
       effectiveSystemPrompt.startsWith('Eres un asistente de IA útil') ||
       effectiveSystemPrompt.startsWith('You are a helpful, concise and precise AI assistant')
@@ -196,29 +434,38 @@
       effectiveSystemPrompt = '';
     }
 
+    let effectiveEnabledTools = activeProfile.enabledTools ? { ...activeProfile.enabledTools } : { ...DEFAULT_CONFIG.enabledTools };
+    if (enabledToolsRaw) {
+      try {
+        const parsed = JSON.parse(enabledToolsRaw);
+        if (parsed && typeof parsed === 'object') {
+          effectiveEnabledTools = { ...effectiveEnabledTools, ...parsed };
+        }
+      } catch (e) {}
+    }
+
     return {
+      activeProfileName: activeProfileName,
       apiUrl: effectiveApiUrl,
       apiType: effectiveApiType,
-      apiKey: apiKey !== null ? apiKey : DEFAULT_CONFIG.apiKey,
-      model: model !== null && model !== '' ? model : DEFAULT_CONFIG.model,
+      apiKey: apiKey !== null ? apiKey : (activeProfile.apiKey !== undefined ? activeProfile.apiKey : DEFAULT_CONFIG.apiKey),
+      model: model !== null && model !== '' ? model : (activeProfile.model !== undefined ? activeProfile.model : DEFAULT_CONFIG.model),
       systemPrompt: effectiveSystemPrompt,
-      temperature: temperature !== null && temperature !== '' ? temperature : DEFAULT_CONFIG.temperature,
-      reasoningEffort: (reasoningEffort === 'off' || reasoningEffort === 'none') ? 'none' : (reasoningEffort !== null && reasoningEffort !== '' ? reasoningEffort : DEFAULT_CONFIG.reasoningEffort),
+      temperature: temperature !== null && temperature !== '' ? temperature : (activeProfile.temperature !== undefined ? activeProfile.temperature : DEFAULT_CONFIG.temperature),
+      reasoningEffort: (reasoningEffort === 'off' || reasoningEffort === 'none') ? 'none' : (reasoningEffort !== null && reasoningEffort !== '' ? reasoningEffort : (activeProfile.reasoningEffort || DEFAULT_CONFIG.reasoningEffort)),
       modelReasoningConfig: parsedReasoningConfig,
       theme: effectiveTheme,
       language: effectiveLanguage,
-      enableAgentJs: parseBool(enableAgentJs, DEFAULT_CONFIG.enableAgentJs),
-      enableAgentWeb: parseBool(enableAgentWeb, DEFAULT_CONFIG.enableAgentWeb),
-      enableAgentSearch: parseBool(enableAgentSearch, DEFAULT_CONFIG.enableAgentSearch),
-      enableAgentChart: parseBool(enableAgentChart, DEFAULT_CONFIG.enableAgentChart),
-      enableContextCache: parseBool(enableContextCache, DEFAULT_CONFIG.enableContextCache),
-      enableRawLogs: parseBool(enableRawLogs, DEFAULT_CONFIG.enableRawLogs),
-      enableDebugMessages: parseBool(enableDebugMessages, DEFAULT_CONFIG.enableDebugMessages),
-      sendDateTime: parseBool(sendDateTime, DEFAULT_CONFIG.sendDateTime),
+      enabledTools: effectiveEnabledTools,
+      enableContextCache: parseBool(enableContextCache, activeProfile.enableContextCache !== undefined ? activeProfile.enableContextCache : DEFAULT_CONFIG.enableContextCache),
+      enableRawLogs: parseBool(enableRawLogs, activeProfile.enableRawLogs !== undefined ? activeProfile.enableRawLogs : DEFAULT_CONFIG.enableRawLogs),
+      enableDebugMessages: parseBool(enableDebugMessages, activeProfile.enableDebugMessages !== undefined ? activeProfile.enableDebugMessages : DEFAULT_CONFIG.enableDebugMessages),
+      sendDateTime: parseBool(sendDateTime, activeProfile.sendDateTime !== undefined ? activeProfile.sendDateTime : DEFAULT_CONFIG.sendDateTime),
       activeRagBranchId: activeRagBranchId !== null ? activeRagBranchId : DEFAULT_CONFIG.activeRagBranchId,
+      ragSummaryProfile: getStorageItem('ragSummaryProfile') || DEFAULT_CONFIG.ragSummaryProfile,
       ragContextLimitK: (() => {
-        const val = parseInt(ragContextLimitK, 10);
-        if (isNaN(val) || val < 16) return DEFAULT_CONFIG.ragContextLimitK;
+        const val = parseInt(ragContextLimitK !== null ? ragContextLimitK : activeProfile.ragContextLimitK, 10);
+        if (isNaN(val) || val < 32) return DEFAULT_CONFIG.ragContextLimitK;
         if (val > 1024) return 1024;
         return val;
       })()
@@ -226,6 +473,11 @@
   }
 
   function saveConfig(config) {
+    if (config.activeProfileName !== undefined && config.activeProfileName) {
+      setActiveProfileName(config.activeProfileName);
+      // Auto-actualizar el perfil guardado con los nuevos valores
+      saveProfile(config.activeProfileName, config);
+    }
     if (config.apiUrl !== undefined) setStorageItem('apiUrl', config.apiUrl.trim());
     if (config.apiType !== undefined) setStorageItem('apiType', config.apiType.trim());
     if (config.apiKey !== undefined) setStorageItem('apiKey', config.apiKey.trim());
@@ -238,18 +490,18 @@
     }
     if (config.theme !== undefined) setStorageItem('theme', config.theme);
     if (config.language !== undefined) setStorageItem('language', config.language);
-    if (config.enableAgentJs !== undefined) setStorageItem('enableAgentJs', String(config.enableAgentJs));
-    if (config.enableAgentWeb !== undefined) setStorageItem('enableAgentWeb', String(config.enableAgentWeb));
-    if (config.enableAgentSearch !== undefined) setStorageItem('enableAgentSearch', String(config.enableAgentSearch));
-    if (config.enableAgentChart !== undefined) setStorageItem('enableAgentChart', String(config.enableAgentChart));
+    if (config.enabledTools !== undefined) {
+      setStorageItem('enabledTools', JSON.stringify(config.enabledTools));
+    }
     if (config.enableContextCache !== undefined) setStorageItem('enableContextCache', String(config.enableContextCache));
     if (config.enableRawLogs !== undefined) setStorageItem('enableRawLogs', String(config.enableRawLogs));
     if (config.enableDebugMessages !== undefined) setStorageItem('enableDebugMessages', String(config.enableDebugMessages));
     if (config.sendDateTime !== undefined) setStorageItem('sendDateTime', String(config.sendDateTime));
     if (config.activeRagBranchId !== undefined) setStorageItem('activeRagBranchId', String(config.activeRagBranchId));
+    if (config.ragSummaryProfile !== undefined) setStorageItem('ragSummaryProfile', String(config.ragSummaryProfile).trim());
     if (config.ragContextLimitK !== undefined) {
       let k = parseInt(config.ragContextLimitK, 10);
-      if (isNaN(k) || k < 16) k = 16;
+      if (isNaN(k) || k < 32) k = 128;
       if (k > 1024) k = 1024;
       setStorageItem('ragContextLimitK', String(k));
     }
@@ -264,13 +516,17 @@
     return { ...DEFAULT_CONFIG };
   }
 
+  function getDefaultProfiles() {
+    return JSON.parse(JSON.stringify(DEFAULT_PROFILES));
+  }
+
   function clearAllStorage() {
     if (hasLocalStorage) {
       try {
         const keysToRemove = [];
         for (let i = 0; i < localStorage.length; i++) {
           const k = localStorage.key(i);
-          if (k && (k.startsWith(STORAGE_PREFIX) || k === 'chat_sessions' || k.startsWith('chatcli'))) {
+          if (k && (k.startsWith(STORAGE_PREFIX) || k === 'chat_sessions' || k.startsWith('chatcli') || k.startsWith('zerochat'))) {
             keysToRemove.push(k);
           }
         }
@@ -377,42 +633,6 @@
     });
 
     return dbPromise;
-  }
-
-  /**
-   * Migración automática de sesiones legacy desde localStorage hacia IndexedDB.
-   */
-  async function migrateFromLocalStorage() {
-    try {
-      const raw = getStorageItem('chat_sessions');
-      if (!raw) return;
-
-      const parsed = JSON.parse(raw);
-      if (!Array.isArray(parsed) || parsed.length === 0) return;
-
-      for (const sess of parsed) {
-        if (!sess || !sess.id) continue;
-        const messages = Array.isArray(sess.history) ? sess.history : [];
-        const sessionMeta = {
-          id: sess.id,
-          title: sess.title || 'Nueva conversación',
-          createdAt: sess.createdAt || Date.now(),
-          updatedAt: sess.updatedAt || sess.createdAt || Date.now(),
-          messageCount: messages.length,
-          model: sess.model || '',
-          summary: sess.summary || '',
-          tags: sess.tags || [],
-          pinned: Boolean(sess.pinned),
-          metadata: sess.metadata || {}
-        };
-        await saveConversation(sessionMeta, messages);
-      }
-
-      // Eliminar clave antigua de localStorage tras migración exitosa
-      deleteStorageItem('chat_sessions');
-    } catch (e) {
-      console.warn('ChatStorage: Error durante la migración desde localStorage:', e);
-    }
   }
 
   /**
@@ -639,7 +859,7 @@
 
     return new Promise((resolve) => {
       try {
-        const tx = db.transaction([STORE_CONVERSATIONS, STORE_MESSAGES, STORE_ATTACHMENTS, STORE_KNOWLEDGE], 'readwrite');
+        const tx = db.transaction([STORE_CONVERSATIONS, STORE_MESSAGES, STORE_ATTACHMENTS], 'readwrite');
         const convStore = tx.objectStore(STORE_CONVERSATIONS);
         const msgStore = tx.objectStore(STORE_MESSAGES);
         const msgIndex = msgStore.index('by_conversationId');
@@ -685,11 +905,10 @@
 
     return new Promise((resolve) => {
       try {
-        const tx = db.transaction([STORE_CONVERSATIONS, STORE_MESSAGES, STORE_ATTACHMENTS, STORE_KNOWLEDGE], 'readwrite');
+        const tx = db.transaction([STORE_CONVERSATIONS, STORE_MESSAGES, STORE_ATTACHMENTS], 'readwrite');
         tx.objectStore(STORE_CONVERSATIONS).clear();
         tx.objectStore(STORE_MESSAGES).clear();
         tx.objectStore(STORE_ATTACHMENTS).clear();
-        tx.objectStore(STORE_KNOWLEDGE).clear();
 
         tx.oncomplete = function () {
           resolve(true);
@@ -760,7 +979,6 @@
   async function initDB() {
     const db = await openDatabase();
     if (db) {
-      await migrateFromLocalStorage();
     }
     return db;
   }
@@ -777,11 +995,17 @@
     saveConfig,
     resetConfigToDefaults,
     getDefaultConfig,
+    getDefaultProfiles,
+    getProfiles,
+    getProfile,
+    saveProfile,
+    deleteProfile,
+    getActiveProfileName,
+    setActiveProfileName,
     clearAllStorage,
 
     // Persistencia Asíncrona en IndexedDB (Conversaciones & Mensajes)
     initDB,
-    migrateFromLocalStorage,
     getConversationsList,
     getConversation,
     saveConversation,

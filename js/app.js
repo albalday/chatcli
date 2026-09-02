@@ -1,5 +1,5 @@
 /**
- * Aplicación principal del cliente de chat Web (ChatCLI v4.0).
+ * Aplicación principal del cliente de chat Web (ZeroChat v5.3).
  * Incluye:
  * - Soporte Multi-idioma (Castellano / Inglés) con autodetección por navegador y persistencia.
  * - Selector de nivel de razonamiento (Thinking/CoT) con detección automática de capacidades del modelo.
@@ -31,6 +31,8 @@
   const Export = window.ChatExport || {};
   const State = window.ChatState || {};
   const ContextManager = window.ChatContextManager || {};
+  const AgentCore = window.ChatAgentCore || {};
+  const Engine = window.ChatEngine || {};
 
   function t(key, params) {
     if (I18n.t) return I18n.t(key, params);
@@ -48,10 +50,13 @@
     reasoningEffort: 'none',
     theme: 'light',
     language: 'es',
-    enableAgentJs: true,
-    enableAgentWeb: true,
-    enableAgentSearch: true,
-    enableAgentChart: true,
+    enabledTools: {
+      execute_javascript: true,
+      search_web: true,
+      fetch_web_page: true,
+      download_pdf: true,
+      render_chart: true
+    },
     enableContextCache: true,
     enableRawLogs: false,
     enableDebugMessages: false,
@@ -103,6 +108,9 @@
       btnExportJson: document.getElementById('btn-export-json'),
       btnExportPrint: document.getElementById('btn-export-print'),
 
+      badgeProfile: document.getElementById('badge-profile'),
+      currentProfileName: document.getElementById('current-profile-name'),
+      activeProfileSelect: document.getElementById('active-profile-select'),
       badgeServer: document.getElementById('badge-server'),
       currentServerUrl: document.getElementById('current-server-url'),
       badgeModel: document.getElementById('badge-model'),
@@ -172,6 +180,12 @@
       btnResetSettings: document.getElementById('btn-reset-settings'),
       btnClearAllData: document.getElementById('btn-clear-all-data'),
       btnToggleKey: document.getElementById('btn-toggle-key'),
+      settingProfileName: document.getElementById('setting-profile-name'),
+      profileSelectHelper: document.getElementById('profile-select-helper'),
+      profileDatalist: document.getElementById('profile-datalist'),
+      btnSaveProfile: document.getElementById('btn-save-profile'),
+      btnDeleteProfile: document.getElementById('btn-delete-profile'),
+      profileActionFeedback: document.getElementById('profile-action-feedback'),
       settingApiType: document.getElementById('setting-api-type'),
       settingApiUrl: document.getElementById('setting-api-url'),
       btnQueryServer: document.getElementById('btn-query-server'),
@@ -189,10 +203,7 @@
       modalPanes: document.querySelectorAll('.modal-tab-pane'),
       btnRunInspector: document.getElementById('btn-run-inspector'),
       inspectorResults: document.getElementById('inspector-results'),
-      settingEnableAgentJs: document.getElementById('setting-enable-agent-js'),
-      settingEnableAgentWeb: document.getElementById('setting-enable-agent-web'),
-      settingEnableAgentSearch: document.getElementById('setting-enable-agent-search'),
-      settingEnableAgentChart: document.getElementById('setting-enable-agent-chart'),
+      agentToolsContainer: document.getElementById('agent-tools-container'),
       settingEnableContextCache: document.getElementById('setting-enable-context-cache'),
       settingEnableRawLogs: document.getElementById('setting-enable-raw-logs'),
       settingSendDateTime: document.getElementById('setting-send-datetime'),
@@ -217,232 +228,22 @@
   }
 
   function getDailyDateAnchor() {
-    const now = new Date();
-    const isoDate = now.toISOString().slice(0, 10);
-    const lang = appConfig.language || (I18n.getLanguage ? I18n.getLanguage() : 'es');
-    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-    const dayName = now.toLocaleDateString(lang === 'en' ? 'en-US' : 'es-ES', { weekday: 'long' });
-    return lang === 'en'
-      ? `[System Context: Current Date is ${isoDate} (${dayName}), Timezone: ${tz}]`
-      : `[Contexto del Sistema: La fecha actual es ${isoDate} (${dayName}), Zona Horaria: ${tz}]`;
+    return Engine.getDailyDateAnchor ? Engine.getDailyDateAnchor(appConfig.language || 'es') : '';
   }
 
   function getToolsSystemPromptGuide() {
-    const lang = appConfig.language || (I18n.getLanguage ? I18n.getLanguage() : 'es');
-    const isEs = lang !== 'en';
-    const tools = [];
-
-    if (appConfig.enableAgentWeb !== false) {
-      if (isEs) {
-        tools.push(`- \`download_pdf(url="...")\`: Descarga y extrae el texto completo de un documento PDF desde una URL web para analizar su contenido (ej: "https://arxiv.org/pdf/2310.06825.pdf" o "https://samplelib.com/pdf/sample-scanned.pdf").`);
-        tools.push(`- \`fetch_web_page(url="...")\`: Descarga y lee el texto de una página web pública o artículo HTML a partir de su URL (ej: "https://es.wikipedia.org/wiki/Sol").`);
-      } else {
-        tools.push(`- \`download_pdf(url="...")\`: Downloads and extracts all text from a PDF document given its web URL (e.g. "https://arxiv.org/pdf/2310.06825.pdf" or "https://samplelib.com/pdf/sample-scanned.pdf").`);
-        tools.push(`- \`fetch_web_page(url="...")\`: Retrieves and reads the clean text of a public web page or HTML article from its URL (e.g. "https://en.wikipedia.org/wiki/Sun").`);
-      }
-    }
-
-    if (appConfig.enableAgentSearch !== false) {
-      if (isEs) {
-        tools.push(`- \`search_web(query="...")\`: Busca información actualizada, noticias, artículos y enlaces en internet mediante DuckDuckGo.`);
-      } else {
-        tools.push(`- \`search_web(query="...")\`: Searches up-to-date information, news, articles, and links on the internet using DuckDuckGo.`);
-      }
-    }
-
-    if (appConfig.enableAgentJs !== false) {
-      if (isEs) {
-        tools.push(`- \`execute_javascript(code="...")\`: Ejecuta código JavaScript localmente en un sandbox seguro en el navegador para cálculos matemáticos y procesamiento de datos.`);
-      } else {
-        tools.push(`- \`execute_javascript(code="...")\`: Executes JavaScript code safely in a local browser sandbox for math calculations and data processing.`);
-      }
-    }
-
-    // Herramienta de Gráficos Nativos
-    if (appConfig.enableAgentChart !== false) {
-      if (isEs) {
-        tools.push(`- \`render_chart(type="bar"|"line"|"doughnut"|"pie", title="...", labels=["..."], datasets=[{"label":"...", "data":[...]}])\`: Genera y visualiza un gráfico interactivo (barras, líneas, donut o sectores) a partir de datos numéricos o tablas.`);
-      } else {
-        tools.push(`- \`render_chart(type="bar"|"line"|"doughnut"|"pie", title="...", labels=["..."], datasets=[{"label":"...", "data":[...]}])\`: Generates and renders an interactive chart (bar, line, doughnut or pie) from numerical data or tables.`);
-      }
-    }
-
-    // Herramienta de Fecha y Hora en tiempo real
-    if (isEs) {
-      tools.push(`- \`get_current_datetime(timezone="...")\`: Obtiene la fecha, hora exacta, día de la semana y zona horaria actual en tiempo real.`);
-    } else {
-      tools.push(`- \`get_current_datetime(timezone="...")\`: Retrieves current date, exact time, day of week and timezone in real-time.`);
-    }
-
-    if (tools.length === 0) return '';
-
-    if (isEs) {
-      return `[HERRAMIENTAS Y FUNCIONES DISPONIBLES]:\nTienes disponibles las siguientes herramientas. Si necesitas consultar URLs, buscar en la web, leer documentos PDF o calcular, invoca la herramienta adecuada con sus parámetros obligatorios:\n${tools.join('\n')}\n*Instrucción de flujo:* Cuando obtengas el resultado de una herramienta, utilízalo para responder al usuario con una síntesis o resumen completo y estructurado, citando las fuentes consultadas. No invoques herramientas adicionales si la información obtenida ya es suficiente para responder.`;
-    } else {
-      return `[AVAILABLE TOOLS AND FUNCTIONS]:\nYou have the following tools available. If you need to fetch URLs, search the web, read PDF documents, or calculate, call the appropriate tool with its required parameters:\n${tools.join('\n')}\n*Workflow instruction:* Once you receive a tool's output, use it to answer the user with a comprehensive and well-structured summary, citing sources. Do not invoke further tools if the gathered information is already sufficient to answer.`;
-    }
+    return Engine.getToolsSystemPromptGuide ? Engine.getToolsSystemPromptGuide(appConfig, appConfig.language || 'es') : '';
   }
 
   function buildEffectiveMessages(options = {}) {
-    const rawMessages = chatHistory.filter(m => m && m.role);
-    const messages = [];
-
-    rawMessages.forEach(m => {
-      if (m.role === 'user') {
-        if (m.images && Array.isArray(m.images) && m.images.length > 0) {
-          const contentParts = [];
-          if (m.content) {
-            contentParts.push({ type: 'text', text: m.content });
-          }
-          m.images.forEach(img => {
-            if (img && img.dataUrl) {
-              contentParts.push({
-                type: 'image_url',
-                image_url: {
-                  url: img.dataUrl
-                }
-              });
-            }
-          });
-          messages.push({ role: 'user', content: contentParts });
-        } else {
-          messages.push({ role: 'user', content: m.content || '' });
-        }
-      } else if (m.role === 'assistant') {
-        const item = { role: 'assistant', content: m.content !== undefined ? m.content : '' };
-        if (m.tool_calls && Array.isArray(m.tool_calls) && m.tool_calls.length > 0) {
-          item.tool_calls = m.tool_calls;
-        }
-        messages.push(item);
-      } else if (m.role === 'tool') {
-        const toolCallId = m.tool_call_id || `call_${Date.now()}`;
-        const toolName = m.name || 'tool';
-        const toolContent = typeof m.content === 'object' ? JSON.stringify(m.content) : String(m.content !== undefined ? m.content : '');
-
-        // Validar que el mensaje previo sea un assistant con el tool_call correspondiente
-        const prevMsg = messages.length > 0 ? messages[messages.length - 1] : null;
-        const hasMatchingToolCall = prevMsg && prevMsg.role === 'assistant' && Array.isArray(prevMsg.tool_calls) &&
-          prevMsg.tool_calls.some(tc => tc.id === toolCallId || (tc.function && tc.function.name === toolName));
-
-        if (!hasMatchingToolCall) {
-          messages.push({
-            role: 'assistant',
-            content: null,
-            tool_calls: [{
-              id: toolCallId,
-              type: 'function',
-              function: {
-                name: toolName,
-                arguments: '{}'
-              }
-            }]
-          });
-        }
-
-        messages.push({
-          role: 'tool',
-          tool_call_id: toolCallId,
-          name: toolName,
-          content: toolContent
-        });
-      } else if (m.role === 'system') {
-        messages.push({ role: 'system', content: m.content || '' });
-      }
-    });
-
-    let activePrompt = (appConfig.systemPrompt && appConfig.systemPrompt.trim() !== '')
-      ? appConfig.systemPrompt.trim()
-      : '';
-
-    // Inyección de Base de Conocimiento (RAG Jerárquico por Ramas)
-    if (currentRagSystemContext) {
-      activePrompt = activePrompt ? `${currentRagSystemContext}\n\n${activePrompt}` : currentRagSystemContext;
-    }
-
-    // Ancla de fecha diaria para máxima autoridad en System Prompt y 100% de aciertos en Context-Cache
-    if (appConfig.sendDateTime !== false) {
-      const dateAnchor = getDailyDateAnchor();
-      activePrompt = activePrompt ? (dateAnchor + '\n\n' + activePrompt) : dateAnchor;
-    }
-
-    const isToolsEnabled = options.enableTools !== undefined
-      ? Boolean(options.enableTools)
-      : (appConfig.enableAgentJs !== false || appConfig.enableAgentWeb !== false || appConfig.enableAgentSearch !== false || appConfig.enableAgentChart !== false);
-
-    // Consultar dinámicamente si el proveedor y modelo soportan Function Calling nativo en JSON
-    let isNativeToolsSupported = true;
-    if (API.getProviderCapabilities) {
-      const caps = API.getProviderCapabilities(appConfig.apiUrl, appConfig.apiType, appConfig.model);
-      isNativeToolsSupported = caps ? (caps.tools !== false) : true;
-    }
-
-    // Instrucción de flujo para herramientas
-    let toolsGuide = '';
-    if (isToolsEnabled) {
-      if (!isNativeToolsSupported || options.forceSystemPromptGuide) {
-        toolsGuide = getToolsSystemPromptGuide();
-      } else {
-        const lang = appConfig.language || 'es';
-        toolsGuide = (lang === 'en')
-          ? `*Workflow instruction:* Once you receive tool results in the conversation, synthesize the findings and write a comprehensive, well-structured final answer to the user, citing sources. Do not stop without providing a complete summary.`
-          : `*Instrucción de flujo:* Una vez recibidos los resultados de las herramientas en la conversación, sintetiza los hallazgos y redacta una respuesta final completa, bien estructurada y detallada para el usuario, citando las fuentes consultadas. No finalices la respuesta sin proporcionar el resumen completo.`;
-      }
-    }
-
-    let fullSystemPrompt = activePrompt;
-    if (toolsGuide) {
-      fullSystemPrompt = fullSystemPrompt ? (fullSystemPrompt + '\n\n' + toolsGuide) : toolsGuide;
-    }
-
-    if (messages.length > 0 && messages[0].role === 'system') {
-      if (fullSystemPrompt) {
-        messages[0].content = fullSystemPrompt;
-      } else {
-        messages.shift();
-      }
-    } else if (fullSystemPrompt) {
-      messages.unshift({
-        role: 'system',
-        content: fullSystemPrompt
-      });
-    }
-
-    // Inyectar marca temporal exacta en el último mensaje de usuario (fuera del prefijo de caché histórica)
-    if (appConfig.sendDateTime !== false && messages.length > 0) {
-      const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
-      if (lastUserMsg) {
-        const lang = appConfig.language || 'es';
-        const nowTimeStr = new Date().toLocaleTimeString(lang === 'en' ? 'en-US' : 'es-ES', { hour: '2-digit', minute: '2-digit' });
-        if (typeof lastUserMsg.content === 'string' && !lastUserMsg.content.includes('[Context Time:')) {
-          lastUserMsg.content += `\n\n[Context Time: ${nowTimeStr}]`;
-        }
-      }
-    }
-
-    // Asegurar que la conversación comience con un turno de usuario válido tras el mensaje del sistema
-    const firstNonSysIdx = messages.findIndex(m => m.role !== 'system');
-    if (firstNonSysIdx !== -1 && messages[firstNonSysIdx].role === 'assistant') {
-      messages.splice(firstNonSysIdx, 0, {
-        role: 'user',
-        content: 'Continuar'
-      });
-    }
-
-    // Optimización dinámica de contexto, presupuesto de tokens y ventana deslizante
-    if (ContextManager.buildOptimizedContext) {
-      const optimization = ContextManager.buildOptimizedContext(messages, {
-        model: appConfig.model,
-        providerType: appConfig.apiType,
+    if (Engine.buildEffectiveMessages) {
+      return Engine.buildEffectiveMessages(chatHistory, appConfig, {
+        currentRagSystemContext,
+        activeRagBranchId: appConfig.activeRagBranchId,
         ...options
       });
-      const diag = optimization.diagnostics;
-      if (diag && (diag.excludedCount > 0 || diag.prunedToolsCount > 0) && typeof addDebugLog === 'function') {
-        addDebugLog('stats', `[ContextManager]: ${diag.totalTokens} tokens estimados | Presupuesto: ${diag.budget} | ${diag.includedCount} incluidos, ${diag.excludedCount} excluidos, ${diag.prunedToolsCount} tools podadas.`);
-      }
-      return optimization.messages;
     }
-
-    return messages;
+    return chatHistory;
   }
 
   function applyTheme(theme) {
@@ -499,7 +300,11 @@
     if (elements.sugCardCode) elements.sugCardCode.setAttribute('data-prompt', t('sug_code_prompt'));
     if (elements.sugCardIdeas) elements.sugCardIdeas.setAttribute('data-prompt', t('sug_ideas_prompt'));
 
-    // Actualizar modelo y servidor en badges
+    // Actualizar modelo y perfil en badges
+    if (elements.currentProfileName) {
+      const activeProf = (Storage.getActiveProfileName ? Storage.getActiveProfileName() : appConfig.activeProfileName) || appConfig.activeProfileName || 'Local chat';
+      elements.currentProfileName.textContent = activeProf;
+    }
     if (elements.currentModelName) {
       elements.currentModelName.textContent = appConfig.model ? appConfig.model : t('no_model');
     }
@@ -1087,6 +892,14 @@
   }
 
   function updateUIFromConfig() {
+    if (elements.activeProfileSelect && Storage.getProfiles) {
+      const active = (Storage.getActiveProfileName ? Storage.getActiveProfileName() : appConfig.activeProfileName) || 'Local chat';
+      elements.activeProfileSelect.innerHTML = Object.keys(Storage.getProfiles()).map(name => `<option value="${Markdown.escapeHtml(name)}"${name === active ? ' selected' : ''}>${Markdown.escapeHtml(name)}</option>`).join('');
+    }
+    if (elements.currentProfileName) {
+      const activeProf = (Storage.getActiveProfileName ? Storage.getActiveProfileName() : appConfig.activeProfileName) || appConfig.activeProfileName || 'Local chat';
+      elements.currentProfileName.textContent = activeProf;
+    }
     if (elements.currentServerUrl) {
       elements.currentServerUrl.textContent = appConfig.apiUrl || 'http://localhost:1234/v1';
     }
@@ -1412,26 +1225,7 @@
 
     currentAbortController = new AbortController();
     const { wrapper, row, content, actions, btnCopy, statsContainer, msgId: assistantMsgId } = createAssistantMessagePlaceholder();
-
-    let accumulatedText = '';
-    let accumulatedConversationMarkdown = '';
-    let turnIndex = 0;
-    const toolCallSignatures = [];
-    const parseMd = Markdown.parseMarkdown || function(txt) { return txt; };
     const attachListeners = Markdown.attachCopyCodeListeners || function() {};
-
-    function injectStreamingCursor(html) {
-      if (!html || html.trim() === '') {
-        return '<span class="streaming-cursor"></span>';
-      }
-      const trimmed = html.trimEnd();
-      const match = trimmed.match(/(<\/(?:p|li|h[1-6]|span|code|strong|em|td|blockquote)>)$/i);
-      if (match) {
-        const closingTag = match[1];
-        return trimmed.slice(0, -closingTag.length) + '<span class="streaming-cursor"></span>' + closingTag;
-      }
-      return trimmed + '<span class="streaming-cursor"></span>';
-    }
 
     if (!API.streamChatCompletion) {
       row.classList.add('message-error');
@@ -1473,959 +1267,129 @@
       `;
     }
 
-    const maxAgentTurns = 8;
-    // Cargar contexto jerárquico de la rama RAG activa
-    if (appConfig.activeRagBranchId && window.ChatTreeRagService) {
+    // Sincronizar dinámicamente la rama RAG activa desde ChatTreeRagUI o Storage
+    const activeRagBranchId = (typeof window !== 'undefined' && window.ChatTreeRagUI && window.ChatTreeRagUI.getActiveChatBranchId)
+      ? window.ChatTreeRagUI.getActiveChatBranchId()
+      : (appConfig.activeRagBranchId || (Storage.loadConfig ? Storage.loadConfig()?.activeRagBranchId : '') || '');
+    appConfig.activeRagBranchId = activeRagBranchId;
+
+    // Cargar contexto jerárquico inicial de la rama RAG para Context-Caching en System Prompt
+    if (activeRagBranchId && window.ChatTreeRagService && window.ChatTreeRagService.buildTreeRagSystemContext) {
       try {
-        currentRagSystemContext = await window.ChatTreeRagService.buildTreeRagSystemContext(appConfig.activeRagBranchId);
+        currentRagSystemContext = await window.ChatTreeRagService.buildTreeRagSystemContext(activeRagBranchId);
       } catch (err) {
-        console.warn('Error al cargar contexto de RAG:', err);
+        console.warn('Error al cargar contexto inicial de RAG:', err);
         currentRagSystemContext = '';
       }
     } else {
       currentRagSystemContext = '';
     }
 
-    while (turnIndex < maxAgentTurns) {
+    const runner = window.ChatEngine || Engine;
+    const loopResult = await runner.executeAgentTurnLoop({
+      apiUrl: appConfig.apiUrl,
+      apiType: appConfig.apiType,
+      apiKey: appConfig.apiKey,
+      model: appConfig.model,
+      temperature: appConfig.temperature,
+      reasoningEffort: appConfig.reasoningEffort || 'none',
+      chatHistory: chatHistory,
+      appConfig: appConfig,
+      assistantMsgId: assistantMsgId,
+      activeRagBranchId: activeRagBranchId,
+      currentRagSystemContext: currentRagSystemContext,
+      sessionCacheInvalidated: sessionCacheInvalidated,
+      sessionCacheRevision: sessionCacheRevision,
+      signal: currentAbortController.signal,
+      container: content,
+
+      onBeforeRequest: appConfig.enableDebugMessages ? async function ({ endpoint, headers, payload }) {
+        return await openDebugInterceptorModal({ endpoint, headers, payload });
+      } : null,
+
+      onReasoningChunk: function (chunk) {
+        addDebugLog('thinking', chunk);
+        setDebugStatus('streaming', t('debug_status_thinking'));
+      },
+
+      onLog: function (type, text) {
+        addDebugLog(type, text);
+      },
+
+      onStats: function (stats) {
+        updateStatsDisplay(stats);
+      },
+
+      onChunk: function ({ turnIndex, fullText, delta, stats }) {
+        if (stats) updateStatsDisplay(stats);
+        scrollToBottom();
+      },
+
+      scrollToBottom: () => scrollToBottom(),
+      attachListeners: (el) => attachListeners(el)
+    });
+
+    if (sessionCacheInvalidated) {
+      sessionCacheInvalidated = false;
+    }
+
+    if (loopResult && loopResult.cancelled) {
+      if (wrapper && !wrapper.querySelector('.agentic-turn-block') && wrapper.parentNode) {
+        wrapper.parentNode.removeChild(wrapper);
+      }
+      setDebugStatus('idle');
+      finishGeneration();
+      return;
+    }
+
+    if (loopResult && loopResult.error) {
       if (currentAbortController && currentAbortController.signal.aborted) {
-        break;
-      }
-
-      if (turnIndex === 0) {
-        content.innerHTML = '';
-      }
-
-      let currentTurnText = '';
-      const turnBlock = document.createElement('div');
-      turnBlock.className = 'agentic-turn-block';
-      content.appendChild(turnBlock);
-
-      let turnToolCalls = null;
-      let turnFinalStats = null;
-      let streamError = null;
-
-      const isFirstTurn = turnIndex === 0;
-      const currentCacheInvalidated = isFirstTurn && sessionCacheInvalidated;
-
-      const streamResult = await API.streamChatCompletion({
-        apiUrl: appConfig.apiUrl,
-        apiType: appConfig.apiType,
-        apiKey: appConfig.apiKey,
-        model: appConfig.model,
-        messages: buildEffectiveMessages(),
-        temperature: appConfig.temperature,
-        reasoningEffort: appConfig.reasoningEffort || 'none',
-        enableTools: (appConfig.enableAgentJs !== false || appConfig.enableAgentWeb !== false || appConfig.enableAgentSearch !== false || appConfig.enableAgentChart !== false),
-        enableAgentJs: appConfig.enableAgentJs !== false,
-        enableAgentWeb: appConfig.enableAgentWeb !== false,
-        enableAgentSearch: appConfig.enableAgentSearch !== false,
-        enableAgentChart: appConfig.enableAgentChart !== false,
-        enableContextCache: appConfig.enableContextCache !== false,
-        cacheInvalidated: currentCacheInvalidated,
-        cacheRevision: sessionCacheRevision,
-        signal: currentAbortController.signal,
-
-        onBeforeRequest: appConfig.enableDebugMessages ? async function ({ endpoint, headers, payload }) {
-          return await openDebugInterceptorModal({ endpoint, headers, payload });
-        } : null,
-
-        onReasoningChunk: function (chunk) {
-          addDebugLog('thinking', chunk);
-          setDebugStatus('streaming', t('debug_status_thinking'));
-        },
-
-        onLog: function (logData) {
-          if (logData && logData.type !== 'thinking') {
-            addDebugLog(logData.type, logData.text);
-          }
-        },
-
-        onChunk: function (fullTextSoFar, delta, stats) {
-          currentTurnText = fullTextSoFar;
-          turnBlock.innerHTML = injectStreamingCursor(parseMd(currentTurnText));
-          attachListeners(turnBlock);
-          if (stats) updateStatsDisplay(stats);
-          scrollToBottom();
-        },
-
-        onDone: function (finalText, stats, toolCalls) {
-          currentTurnText = finalText || currentTurnText;
-          turnFinalStats = stats;
-          turnToolCalls = toolCalls;
-        },
-
-        onError: function (error) {
-          streamError = error;
-        }
-      });
-
-      if (streamResult && streamResult.cancelled) {
-        if (!currentTurnText && turnBlock.parentNode) {
-          turnBlock.parentNode.removeChild(turnBlock);
-        }
-        if (wrapper && !wrapper.querySelector('.agentic-turn-block') && wrapper.parentNode) {
-          wrapper.parentNode.removeChild(wrapper);
-        }
-        setDebugStatus('idle');
         finishGeneration();
         return;
       }
-
-      if (sessionCacheInvalidated) {
-        sessionCacheInvalidated = false;
-      }
-
-      if (streamError) {
-        if (currentAbortController && currentAbortController.signal.aborted) {
-          break;
-        }
-        setDebugStatus('error', t('debug_status_error'));
-        addDebugLog('error', streamError.message || String(streamError));
-        row.classList.add('message-error');
-        turnBlock.innerHTML = `
-          <div class="network-error-card">
-            <span>⚠️</span>
-            <div>
-              <strong>${t('err_server_connect_title')}</strong>
-              <p style="margin-top: 0.25rem;">
-                ${Markdown.escapeHtml(streamError.message || String(streamError))}
-              </p>
-              <p style="margin-top: 0.25rem; font-size: 0.75rem; color: var(--text-muted);">
-                ${t('err_server_connect_hint', { url: appConfig.apiUrl })}
-              </p>
-            </div>
+      setDebugStatus('error', t('debug_status_error'));
+      addDebugLog('error', loopResult.error.message || String(loopResult.error));
+      row.classList.add('message-error');
+      content.innerHTML = `
+        <div class="network-error-card">
+          <span>⚠️</span>
+          <div>
+            <strong>${t('err_server_connect_title')}</strong>
+            <p style="margin-top: 0.25rem;">
+              ${Markdown.escapeHtml ? Markdown.escapeHtml(loopResult.error.message || String(loopResult.error)) : String(loopResult.error)}
+            </p>
+            <p style="margin-top: 0.25rem; font-size: 0.75rem; color: var(--text-muted);">
+              ${t('err_server_connect_hint', { url: appConfig.apiUrl })}
+            </p>
           </div>
-        `;
-        actions.style.display = 'inline-flex';
-        finishGeneration();
-        return;
-      }
-
-      if (streamResult) {
-        currentTurnText = streamResult.accumulatedText || currentTurnText;
-        turnToolCalls = streamResult.toolCalls || turnToolCalls;
-        turnFinalStats = streamResult.stats || turnFinalStats;
-      }
-
-      // Extraer tool calls de texto si no llegaron en estructura nativa
-      if ((!turnToolCalls || turnToolCalls.length === 0) && currentTurnText) {
-        if (API.extractToolCallsFromText) {
-          const textCalls = API.extractToolCallsFromText(currentTurnText);
-          if (textCalls && textCalls.length > 0) {
-            turnToolCalls = textCalls;
-          }
-        }
-      }
-
-      // Si no hay herramientas para ejecutar, es la respuesta final o requiere síntesis
-      if (!turnToolCalls || turnToolCalls.length === 0) {
-        // Si el modelo devolvió un texto vacío tras haber ejecutado herramientas en turnos anteriores (común en Gemini cuando tool_choice es auto),
-        // solicitar inmediatamente un turno de síntesis forzado con instrucción explícita y toolChoice: 'none' para que el modelo redacte el resumen.
-        if ((!currentTurnText || currentTurnText.trim() === '') && turnIndex > 0 && chatHistory.length > 0 && chatHistory[chatHistory.length - 1].role === 'tool' && !(currentAbortController && currentAbortController.signal.aborted)) {
-          addDebugLog('info', 'El modelo finalizó el turno de herramientas sin texto. Solicitando síntesis final obligatoria...');
-
-          let synthText = '';
-          let synthStats = null;
-
-          const isEn = appConfig.language === 'en';
-          const synthMessages = buildEffectiveMessages({ forceSystemPromptGuide: true });
-          synthMessages.push({
-            role: 'user',
-            content: isEn
-              ? 'Based on all the information gathered from the tools above, please write a comprehensive, detailed, and well-structured final answer to my initial question, organizing the findings clearly and citing sources.'
-              : 'A partir de toda la información obtenida por las herramientas anteriores, redacta ahora una respuesta final completa, detallada y bien estructurada para mi consulta inicial, organizando los hallazgos con claridad y citando las fuentes consultadas.'
-          });
-
-          await API.streamChatCompletion({
-            apiUrl: appConfig.apiUrl,
-            apiType: appConfig.apiType,
-            apiKey: appConfig.apiKey,
-            model: appConfig.model,
-            messages: synthMessages,
-            temperature: appConfig.temperature,
-            reasoningEffort: appConfig.reasoningEffort || 'none',
-            enableTools: true,
-            toolChoice: 'none', // Preservar declaraciones de herramientas pero forzar respuesta textual
-            enableAgentJs: appConfig.enableAgentJs !== false,
-            enableAgentWeb: appConfig.enableAgentWeb !== false,
-            enableAgentSearch: appConfig.enableAgentSearch !== false,
-            enableAgentChart: appConfig.enableAgentChart !== false,
-            enableContextCache: appConfig.enableContextCache !== false,
-            signal: currentAbortController ? currentAbortController.signal : undefined,
-
-            onReasoningChunk: function (chunk) {
-              addDebugLog('thinking', chunk);
-              setDebugStatus('streaming', t('debug_status_thinking'));
-            },
-            onLog: function (logData) {
-              if (logData && logData.type !== 'thinking') addDebugLog(logData.type, logData.text);
-            },
-            onChunk: function (fullTextSoFar, delta, stats) {
-              synthText = fullTextSoFar;
-              turnBlock.innerHTML = injectStreamingCursor(parseMd(synthText));
-              attachListeners(turnBlock);
-              if (stats) updateStatsDisplay(stats);
-              scrollToBottom();
-            },
-            onDone: function (finalText, stats) {
-              synthText = finalText || synthText;
-              synthStats = stats;
-            }
-          });
-
-          if (synthText && synthText.trim() !== '') {
-            currentTurnText = synthText;
-            if (synthStats) turnFinalStats = synthStats;
-          }
-        }
-
-        // Si el modelo todavía no emitió texto tras la síntesis forzada, compilar los resultados de las herramientas
-        if (!currentTurnText || currentTurnText.trim() === '') {
-          const toolResults = chatHistory
-            .filter(m => m.role === 'tool' && m.content)
-            .map(m => m.content)
-            .filter(Boolean);
-
-          if (toolResults.length > 0) {
-            const isEn = appConfig.language === 'en';
-            currentTurnText = isEn
-              ? '### Summary of Search Results\n\n' + toolResults.join('\n\n---\n\n')
-              : '### Resumen de la Información Consultada\n\n' + toolResults.join('\n\n---\n\n');
-          }
-        }
-
-        turnBlock.innerHTML = parseMd(currentTurnText || t('empty_response'));
-        attachListeners(turnBlock);
-        chatHistory.push({
-          id: `${assistantMsgId}_final`,
-          role: 'assistant',
-          content: currentTurnText
-        });
-
-        if (turnFinalStats) updateStatsDisplay(turnFinalStats);
-        setDebugStatus('done', t('debug_status_done'));
-
-        actions.style.display = 'inline-flex';
-        btnCopy.onclick = async () => {
-          try {
-            const finalFullMarkdown = (accumulatedConversationMarkdown ? accumulatedConversationMarkdown : '') + currentTurnText;
-            await navigator.clipboard.writeText(finalFullMarkdown);
-            const span = btnCopy.querySelector('span');
-            const originalText = span.textContent;
-            span.textContent = t('copied_text');
-            btnCopy.classList.add('copied');
-
-            setTimeout(() => {
-              span.textContent = originalText;
-              btnCopy.classList.remove('copied');
-            }, 2000);
-          } catch (err) {
-            console.error('Error copying composite response:', err);
-          }
-        };
-
-        finishGeneration();
-        return;
-      }
-
-      // Procesar llamada a herramienta
-      const tc = turnToolCalls[0];
-      const rawFuncName = tc.function?.name || '';
-      const normName = API.normalizeToolName ? API.normalizeToolName(rawFuncName) : rawFuncName.toLowerCase().replace(/_/g, '');
-
-      // Protección contra Bucles Infinitos: Detectar repetición idéntica de llamadas
-      const callFingerprint = `${normName}:${typeof tc.function.arguments === 'object' ? JSON.stringify(tc.function.arguments) : String(tc.function.arguments || '').trim()}`;
-      const identicalCount = toolCallSignatures.filter(sig => sig === callFingerprint).length;
-      if (identicalCount >= 2) {
-        addDebugLog('error', `[Protección Bucle Infinito]: Herramienta '${normName}' invocada repetidamente con los mismos argumentos. Interrumpiendo ciclo agéntico.`);
-        const loopWarning = `\n\n> ⚠️ *[Protección de Bucle Infinito]*: La herramienta \`${normName}\` fue invocada repetidamente con los mismos parámetros sin progreso. Se finaliza la iteración.`;
-        currentTurnText = (currentTurnText || '') + loopWarning;
-        turnBlock.innerHTML = parseMd(currentTurnText);
-        attachListeners(turnBlock);
-
-        chatHistory.push({
-          id: `${assistantMsgId}_final`,
-          role: 'assistant',
-          content: currentTurnText
-        });
-
-        if (turnFinalStats) updateStatsDisplay(turnFinalStats);
-        setDebugStatus('done', t('debug_status_done'));
-        actions.style.display = 'inline-flex';
-        finishGeneration();
-        return;
-      }
-      toolCallSignatures.push(callFingerprint);
-
-      // Limpiar llamadas a herramientas emitidas como texto crudo en la UI
-      const trimmedAcc = (currentTurnText || '').trim();
-      if (
-        trimmedAcc.startsWith('<|') ||
-        trimmedAcc.startsWith('<tool_call') ||
-        trimmedAcc.startsWith('<function_call') ||
-        trimmedAcc.startsWith('call:') ||
-        trimmedAcc.startsWith('{"name"') ||
-        trimmedAcc.startsWith('```json\n{"name"') ||
-        trimmedAcc.startsWith('download_pdf(') ||
-        trimmedAcc.startsWith('downloadpdf(') ||
-        trimmedAcc.startsWith('fetch_web_page(') ||
-        trimmedAcc.startsWith('fetchwebpage(') ||
-        trimmedAcc.startsWith('search_web(') ||
-        trimmedAcc.startsWith('searchweb(') ||
-        trimmedAcc.startsWith('execute_javascript(') ||
-        trimmedAcc.startsWith('executejs(')
-      ) {
-        currentTurnText = '';
-      }
-
-      if (currentTurnText) {
-        turnBlock.innerHTML = parseMd(currentTurnText);
-        attachListeners(turnBlock);
-      } else {
-        turnBlock.remove();
-      }
-
-      // 1. Ejecución de JavaScript
-      if (normName === 'execute_javascript') {
-        let codeToRun = '';
-        try {
-          const parsed = typeof tc.function.arguments === 'object' ? tc.function.arguments : JSON.parse(tc.function.arguments || '{}');
-          codeToRun = parsed.code || parsed.javascript || parsed.js || parsed.script || parsed.input || (typeof parsed === 'string' ? parsed : '');
-        } catch (e) {
-          codeToRun = tc.function.arguments || '';
-        }
-
-        // Crear e insertar de inmediato la tarjeta en la interfaz (aparece al momento de la llamada)
-        const cardDiv = document.createElement('div');
-        cardDiv.className = 'tool-card-wrapper';
-        cardDiv.innerHTML = `
-          <div class="tool-execution-card">
-            <div class="tool-card-header">
-              <div class="tool-card-title">
-                <span>⚡</span>
-                <span>${t('tool_js_title_running') || 'execute_javascript'}</span>
-              </div>
-              <div class="tool-card-header-actions">
-                <span class="tool-card-badge status-loading">⏳ ${t('tool_badge_executing') || 'Ejecutando...'}</span>
-                <button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Minimizar'}"><span>▾</span></button>
-              </div>
-            </div>
-            <div class="tool-card-collapsible-body">
-              <pre class="tool-card-code"><code>${Markdown.escapeHtml(codeToRun)}</code></pre>
-              <div class="tool-card-result">
-                <div class="tool-loading-placeholder">⏳ ${t('tool_loading_js') || 'Ejecutando código en sandbox local...'}</div>
-              </div>
-            </div>
-          </div>
-        `;
-        content.appendChild(cardDiv);
-        attachListeners(cardDiv);
-        scrollToBottom();
-
-        addDebugLog('tool', `execute_javascript:\n${codeToRun}`);
-        addDebugLog('raw', `>>> TOOL CALL execute_javascript:\n${codeToRun}`);
-        const toolExecRes = await (Sandbox.execute ? Sandbox.execute(codeToRun) : { success: false, error: 'Sandbox not available' });
-        const outputText = toolExecRes.success
-          ? (toolExecRes.result || (toolExecRes.logs && toolExecRes.logs.length > 0 ? toolExecRes.logs.join('\n') : 'undefined'))
-          : `Error: ${toolExecRes.error}`;
-
-        addDebugLog('tool', `execute_javascript output (${toolExecRes.executionTimeMs || 0}ms):\n${outputText}`);
-        addDebugLog('raw', `<<< TOOL RESULT execute_javascript (${toolExecRes.executionTimeMs || 0}ms):\n${JSON.stringify(toolExecRes, null, 2)}`);
-
-        // Rellenar dinámicamente el resultado en la tarjeta existente
-        const badgeEl = cardDiv.querySelector('.tool-card-badge');
-        if (badgeEl) {
-          badgeEl.className = 'tool-card-badge';
-          badgeEl.textContent = `${toolExecRes.executionTimeMs || 0}ms`;
-        }
-        const titleEl = cardDiv.querySelector('.tool-card-title span:last-child');
-        if (titleEl) {
-          titleEl.textContent = t('tool_js_title', { ms: toolExecRes.executionTimeMs || 0 });
-        }
-        const resultEl = cardDiv.querySelector('.tool-card-result');
-        if (resultEl) {
-          resultEl.innerHTML = `<strong>${t('tool_sandbox_output')}</strong>\n${Markdown.escapeHtml(outputText)}`;
-        }
-        attachListeners(cardDiv);
-        if (turnFinalStats) updateStatsDisplay(turnFinalStats);
-        scrollToBottom();
-
-        chatHistory.push({
-          id: `${assistantMsgId}_turn_${turnIndex}_assistant`,
-          role: 'assistant',
-          content: currentTurnText || null,
-          tool_calls: [tc]
-        });
-
-        chatHistory.push({
-          id: `${assistantMsgId}_turn_${turnIndex}_tool_${tc.id || 'res'}`,
-          role: 'tool',
-          tool_call_id: tc.id,
-          name: 'execute_javascript',
-          content: JSON.stringify({
-            success: toolExecRes.success,
-            result: toolExecRes.result,
-            logs: toolExecRes.logs,
-            executionTimeMs: toolExecRes.executionTimeMs,
-            error: toolExecRes.error
-          })
-        });
-
-        const toolMd = `> ⚡ **execute_javascript**\n> \`\`\`javascript\n> ${codeToRun.split('\n').join('\n> ')}\n> \`\`\`\n> \`\`\`\n> ${outputText.split('\n').join('\n> ')}\n> \`\`\``;
-        accumulatedConversationMarkdown += (currentTurnText ? currentTurnText + '\n\n' : '') + toolMd + '\n\n';
-
-        turnIndex++;
-        continue;
-      }
-
-      // 2. Consulta Web o Descarga de PDF
-      else if (normName === 'fetch_web_page' || normName === 'download_pdf') {
-        const isPdfCall = normName === 'download_pdf';
-        let urlToFetch = '';
-        try {
-          const parsed = typeof tc.function.arguments === 'object' ? tc.function.arguments : JSON.parse(tc.function.arguments || '{}');
-          urlToFetch = parsed.url || parsed.URL || parsed.uri || parsed.link || parsed.href || parsed.path || parsed.input || (typeof parsed === 'string' ? parsed : '');
-        } catch (e) {
-          urlToFetch = tc.function.arguments || '';
-        }
-
-        const cardIcon = isPdfCall ? '📄' : '🌐';
-        const cardTitle = isPdfCall ? t('tool_pdf_title') : t('tool_web_title');
-
-        // Crear e insertar de inmediato la tarjeta en la interfaz (aparece al momento de la llamada)
-        const cardDiv = document.createElement('div');
-        cardDiv.className = 'tool-card-wrapper';
-        cardDiv.innerHTML = `
-          <div class="web-request-card ${isPdfCall ? 'pdf-request-card' : ''}">
-            <div class="web-card-header">
-              <div class="web-card-title">
-                <span>${cardIcon}</span>
-                <span>${cardTitle}</span>
-              </div>
-              <div class="tool-card-header-actions">
-                <span class="web-card-badge status-loading">⏳ ${isPdfCall ? (t('tool_badge_downloading') || 'Descargando...') : (t('tool_badge_fetching') || 'Consultando...')}</span>
-                <button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Minimizar'}"><span>▾</span></button>
-              </div>
-            </div>
-            <div class="tool-card-collapsible-body">
-              <div class="web-card-section web-request-section">
-                <div class="section-label">${t('tool_web_requested_url')}</div>
-                <div class="url-badge"><a href="${Markdown.sanitizeUrl ? Markdown.sanitizeUrl(urlToFetch) : Markdown.escapeHtml(urlToFetch)}" target="_blank" rel="noopener noreferrer">${Markdown.escapeHtml(urlToFetch)}</a></div>
-              </div>
-              <div class="web-card-section web-response-section">
-                <div class="section-label section-response-label">${t('tool_web_receiving') || 'Recibiendo contenido...'}</div>
-                <div class="web-response-body tool-loading-placeholder">⏳ ${isPdfCall ? t('tool_loading_pdf') : t('tool_loading_web')}</div>
-              </div>
-            </div>
-          </div>
-        `;
-        content.appendChild(cardDiv);
-        attachListeners(cardDiv);
-        scrollToBottom();
-
-        addDebugLog('tool', `${normName}: ${urlToFetch}`);
-        addDebugLog('raw', `>>> TOOL CALL ${normName}: ${urlToFetch}`);
-        const webRes = await (WebBrowser.fetchPage ? WebBrowser.fetchPage(urlToFetch) : { success: false, url: urlToFetch, content: '', error: 'Web module not available' });
-        const isPdfResult = webRes.isPdf || isPdfCall;
-
-        const statusBadgeText = webRes.success
-          ? (isPdfResult ? `PDF (${webRes.byteSize ? FileParser.formatBytes(webRes.byteSize) : 'OK'}) [${webRes.elapsedMs || 0}ms]` : `HTTP ${webRes.status || 200} OK (${webRes.elapsedMs || 0}ms)`)
-          : `Error (${webRes.elapsedMs || 0}ms)`;
-
-        const responsePreview = webRes.success
-          ? (webRes.content || t('tool_web_empty'))
-          : (webRes.error || t('tool_web_err_connect'));
-
-        addDebugLog('tool', `${normName} (${statusBadgeText}) [${webRes.byteSize ? FileParser.formatBytes(webRes.byteSize) : '0 B'}]:\n${(responsePreview || '').substring(0, 200)}...`);
-        addDebugLog('raw', `<<< TOOL RESULT ${normName} (${statusBadgeText}):\n${responsePreview || ''}`);
-
-        // Rellenar dinámicamente la tarjeta con la respuesta obtenida
-        const badgeEl = cardDiv.querySelector('.web-card-badge');
-        if (badgeEl) {
-          badgeEl.className = 'web-card-badge';
-          badgeEl.textContent = statusBadgeText;
-        }
-        const respLabelEl = cardDiv.querySelector('.section-response-label');
-        if (respLabelEl) {
-          respLabelEl.textContent = t('tool_web_content_received', { size: webRes.byteSize ? FileParser.formatBytes(webRes.byteSize) : (webRes.content ? webRes.content.length + ' chars' : '0 B') });
-        }
-        const respBodyEl = cardDiv.querySelector('.web-response-body');
-        if (respBodyEl) {
-          respBodyEl.className = 'web-response-body';
-          respBodyEl.innerHTML = `<code>${Markdown.escapeHtml(responsePreview)}</code>`;
-        }
-        attachListeners(cardDiv);
-        if (turnFinalStats) updateStatsDisplay(turnFinalStats);
-        scrollToBottom();
-
-        chatHistory.push({
-          id: `${assistantMsgId}_turn_${turnIndex}_assistant`,
-          role: 'assistant',
-          content: currentTurnText || null,
-          tool_calls: [tc]
-        });
-
-        chatHistory.push({
-          id: `${assistantMsgId}_turn_${turnIndex}_tool_${tc.id || 'res'}`,
-          role: 'tool',
-          tool_call_id: tc.id,
-          name: normName,
-          content: JSON.stringify({
-            success: webRes.success,
-            url: webRes.url || urlToFetch,
-            status: webRes.status || 200,
-            isPdf: isPdfResult,
-            content: webRes.content,
-            error: webRes.error
-          })
-        });
-
-        const toolMd = `> ${cardIcon} **${normName}** (${statusBadgeText})\n> URL: ${webRes.url || urlToFetch}\n> \`\`\`\n> ${(responsePreview || '').split('\n').join('\n> ')}\n> \`\`\``;
-        accumulatedConversationMarkdown += (currentTurnText ? currentTurnText + '\n\n' : '') + toolMd + '\n\n';
-
-        turnIndex++;
-        continue;
-      }
-
-      // 3. Búsqueda en Internet (search_web)
-      else if (normName === 'search_web') {
-        let queryToSearch = '';
-        try {
-          const parsed = typeof tc.function.arguments === 'object' ? tc.function.arguments : JSON.parse(tc.function.arguments || '{}');
-          queryToSearch = parsed.query || parsed.q || parsed.search || parsed.keyword || parsed.term || parsed.text || parsed.input || (typeof parsed === 'string' ? parsed : '');
-        } catch (e) {
-          queryToSearch = tc.function.arguments || '';
-        }
-
-        // Crear e insertar de inmediato la tarjeta en la interfaz (aparece al momento de la llamada)
-        const cardDiv = document.createElement('div');
-        cardDiv.className = 'tool-card-wrapper';
-        cardDiv.innerHTML = `
-          <div class="web-search-card">
-            <div class="web-card-header">
-              <div class="web-card-title">
-                <span>🔍</span>
-                <span>${t('tool_search_title')}</span>
-              </div>
-              <div class="tool-card-header-actions">
-                <span class="web-card-badge status-loading">⏳ ${t('tool_badge_searching') || 'Buscando...'}</span>
-                <button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Minimizar'}"><span>▾</span></button>
-              </div>
-            </div>
-            <div class="tool-card-collapsible-body">
-              <div class="web-card-section">
-                <div class="section-label">${t('tool_search_query')}</div>
-                <div class="query-badge">"${Markdown.escapeHtml(queryToSearch)}"</div>
-              </div>
-              <div class="web-card-section search-results-section">
-                <div class="section-label search-response-label">${t('tool_search_searching') || 'Buscando fuentes...'}</div>
-                <div class="search-results-container">
-                  <div class="tool-loading-placeholder">⏳ ${t('tool_loading_search')}</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        `;
-        content.appendChild(cardDiv);
-        attachListeners(cardDiv);
-        scrollToBottom();
-
-        addDebugLog('tool', `search_web: "${queryToSearch}"`);
-        addDebugLog('raw', `>>> TOOL CALL search_web:\nQuery: "${queryToSearch}"`);
-        const searchRes = await (WebSearch.search ? WebSearch.search(queryToSearch, appConfig.language || 'es') : { success: false, query: queryToSearch, count: 0, results: [], markdown: 'Módulo de búsqueda no disponible', elapsedMs: 0 });
-        const statusBadgeText = `${searchRes.count} fuentes (${searchRes.elapsedMs || 0}ms)`;
-
-        addDebugLog('tool', `search_web (${searchRes.count} resultados) [${searchRes.elapsedMs || 0}ms]:\n${(searchRes.markdown || '').substring(0, 200)}...`);
-        addDebugLog('raw', `<<< TOOL RESULT search_web (${searchRes.count} resultados):\n${searchRes.markdown || ''}`);
-
-        let resultsHtml = '';
-        if (searchRes.results && searchRes.results.length > 0) {
-          resultsHtml = '<div class="search-results-list">' + searchRes.results.map(r => `
-            <div class="search-result-item">
-              <div><a href="${Markdown.sanitizeUrl ? Markdown.sanitizeUrl(r.url) : Markdown.escapeHtml(r.url)}" target="_blank" rel="noopener noreferrer">🔗 ${Markdown.escapeHtml(r.title)}</a> <small style="opacity:0.75;">(${Markdown.escapeHtml(r.source)})</small></div>
-              ${r.snippet ? `<div class="search-result-snippet">${Markdown.escapeHtml(r.snippet)}</div>` : ''}
-            </div>
-          `).join('') + '</div>';
-        } else {
-          resultsHtml = `<div class="search-result-snippet"><em>${t('tool_search_empty')}</em></div>`;
-        }
-
-        // Rellenar dinámicamente la tarjeta con los resultados encontrados
-        const badgeEl = cardDiv.querySelector('.web-card-badge');
-        if (badgeEl) {
-          badgeEl.className = 'web-card-badge';
-          badgeEl.textContent = statusBadgeText;
-        }
-        const respLabelEl = cardDiv.querySelector('.search-response-label');
-        if (respLabelEl) {
-          respLabelEl.textContent = t('tool_search_results', { count: searchRes.count });
-        }
-        const resultsContainer = cardDiv.querySelector('.search-results-container');
-        if (resultsContainer) {
-          resultsContainer.innerHTML = resultsHtml;
-        }
-        attachListeners(cardDiv);
-        if (turnFinalStats) updateStatsDisplay(turnFinalStats);
-        scrollToBottom();
-
-        chatHistory.push({
-          id: `${assistantMsgId}_turn_${turnIndex}_assistant`,
-          role: 'assistant',
-          content: currentTurnText || null,
-          tool_calls: [tc]
-        });
-
-        chatHistory.push({
-          id: `${assistantMsgId}_turn_${turnIndex}_tool_${tc.id || 'res'}`,
-          role: 'tool',
-          tool_call_id: tc.id,
-          name: 'search_web',
-          content: searchRes.markdown
-        });
-
-        const toolMd = `> 🔍 **search_web** (${searchRes.count} fuentes)\n> Query: "${queryToSearch}"\n> \`\`\`markdown\n> ${(searchRes.markdown || '').split('\n').join('\n> ')}\n> \`\`\``;
-        accumulatedConversationMarkdown += (currentTurnText ? currentTurnText + '\n\n' : '') + toolMd + '\n\n';
-
-        turnIndex++;
-        continue;
-      }
-
-      // 4. Generación de Gráficos Interactivos SVG (render_chart)
-      else if (normName === 'render_chart') {
-        let chartArgs = {};
-        try {
-          chartArgs = typeof tc.function.arguments === 'object' ? tc.function.arguments : JSON.parse(tc.function.arguments || '{}');
-        } catch (e) {
-          chartArgs = { title: 'Gráfico', labels: [], datasets: [] };
-        }
-
-        addDebugLog('tool', `render_chart (${chartArgs.type || 'bar'}): "${chartArgs.title || 'Gráfico'}"`);
-        addDebugLog('raw', `>>> TOOL CALL render_chart:\n${JSON.stringify(chartArgs, null, 2)}`);
-
-        const chartHtml = (Charts.renderChartCard ? Charts.renderChartCard(chartArgs) : '<div class="chat-chart-card">Gráfico generado</div>');
-        const cardDiv = document.createElement('div');
-        cardDiv.className = 'tool-card-wrapper';
-        cardDiv.innerHTML = chartHtml;
-        content.appendChild(cardDiv);
-        attachListeners(cardDiv);
-        if (turnFinalStats) updateStatsDisplay(turnFinalStats);
-        scrollToBottom();
-
-        chatHistory.push({
-          id: `${assistantMsgId}_turn_${turnIndex}_assistant`,
-          role: 'assistant',
-          content: currentTurnText || null,
-          tool_calls: [tc]
-        });
-
-        chatHistory.push({
-          id: `${assistantMsgId}_turn_${turnIndex}_tool_${tc.id || 'res'}`,
-          role: 'tool',
-          tool_call_id: tc.id,
-          name: 'render_chart',
-          content: JSON.stringify({
-            success: true,
-            type: chartArgs.type || 'bar',
-            title: chartArgs.title || 'Gráfico'
-          })
-        });
-
-        const toolMd = `> 📊 **render_chart** (${chartArgs.type || 'bar'})\n> Título: "${chartArgs.title || 'Gráfico'}"\n\n`;
-        accumulatedConversationMarkdown += (currentTurnText ? currentTurnText + '\n\n' : '') + toolMd + '\n\n';
-
-        turnIndex++;
-        continue;
-      }
-
-      // 5. Base de Conocimiento RAG (read_chapter_content)
-      else if (normName === 'read_chapter_content' || normName === 'readchaptercontent' || normName === 'readchapter') {
-        const ragService = window.ChatTreeRagService || (typeof require !== 'undefined' ? require('./chatService.js') : null);
-        const parsedReqs = ragService && ragService.parseToolCallArguments
-          ? ragService.parseToolCallArguments(tc.function.arguments)
-          : [];
-
-        const targetDesc = parsedReqs.length > 1
-          ? `${parsedReqs.length} capítulos (${parsedReqs.map(r => `Cap ${r.chapterId || r.chapter_id || '?'}`).join(', ')})`
-          : (parsedReqs.length === 1 ? `Doc "${parsedReqs[0].docId || parsedReqs[0].doc_id || '?'}", Cap ${parsedReqs[0].chapterId || parsedReqs[0].chapter_id || '1'}` : 'Consultando capítulos...');
-
-        const cardDiv = document.createElement('div');
-        cardDiv.className = 'tool-card-wrapper';
-        cardDiv.innerHTML = `
-          <div class="tool-execution-card rag-execution-card">
-            <div class="tool-card-header">
-              <div class="tool-card-title">
-                <span>📖</span>
-                <span>Base de Conocimiento (RAG)</span>
-              </div>
-              <div class="tool-card-header-actions">
-                <span class="tool-card-badge status-loading">⏳ ${Markdown.escapeHtml(targetDesc)}...</span>
-                <button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Minimizar'}"><span>▾</span></button>
-              </div>
-            </div>
-            <div class="tool-card-collapsible-body">
-              <div class="tool-card-result">
-                <div class="tool-loading-placeholder">⏳ Recuperando contenido del capítulo desde IndexedDB...</div>
-              </div>
-            </div>
-          </div>
-        `;
-        content.appendChild(cardDiv);
-        attachListeners(cardDiv);
-        scrollToBottom();
-
-        addDebugLog('tool', `read_chapter_content: ${targetDesc}`);
-        addDebugLog('raw', `>>> TOOL CALL read_chapter_content:\n${typeof tc.function.arguments === 'string' ? tc.function.arguments : JSON.stringify(tc.function.arguments, null, 2)}`);
-
-        const ragRes = ragService && ragService.resolveChapterToolCall
-          ? await ragService.resolveChapterToolCall(tc.function.arguments)
-          : { success: false, error: 'Servicio de RAG no disponible' };
-
-        const badgeEl = cardDiv.querySelector('.tool-card-badge');
-        const resContainer = cardDiv.querySelector('.tool-card-result');
-
-        if (badgeEl) {
-          badgeEl.className = ragRes.success ? 'tool-card-badge status-success' : 'tool-card-badge status-error';
-          badgeEl.textContent = ragRes.success
-            ? (parsedReqs.length > 1 ? `✅ ${parsedReqs.length} Capítulos recuperados (${FileParser.formatBytes ? FileParser.formatBytes(ragRes.charCount || 0) : (ragRes.charCount || 0) + ' chars'})` : `Capítulo ${ragRes.chapterId} (${FileParser.formatBytes ? FileParser.formatBytes(ragRes.charCount || 0) : (ragRes.charCount || 0) + ' chars'})`)
-            : 'Error al recuperar';
-        }
-
-        const outText = ragRes.success
-          ? (ragRes.content || '')
-          : (ragRes.error || 'No se encontró el capítulo.');
-
-        if (resContainer) {
-          resContainer.innerHTML = `<div class="result-text-block ${ragRes.success ? 'result-success' : 'result-error'}"><pre><code>${Markdown.escapeHtml(outText)}</code></pre></div>`;
-        }
-
-        // Colapsar la tarjeta por defecto tras recibir el contenido del RAG para no saturar la vista
-        const cardEl = cardDiv.querySelector('.tool-execution-card');
-        if (cardEl) {
-          cardEl.classList.add('collapsed');
-          const collapseSpan = cardDiv.querySelector('.btn-tool-collapse span');
-          if (collapseSpan) collapseSpan.textContent = '▸';
-        }
-
-        addDebugLog('tool', `read_chapter_content Result: ${outText.substring(0, 200)}...`);
-        addDebugLog('raw', `<<< TOOL RESULT read_chapter_content:\n${outText}`);
-
-        chatHistory.push({
-          id: `${assistantMsgId}_turn_${turnIndex}_assistant`,
-          role: 'assistant',
-          content: currentTurnText || null,
-          tool_calls: [tc]
-        });
-
-        chatHistory.push({
-          id: `${assistantMsgId}_turn_${turnIndex}_tool_${tc.id || 'res'}`,
-          role: 'tool',
-          tool_call_id: tc.id,
-          name: 'read_chapter_content',
-          content: outText
-        });
-
-        const toolMd = `> 📖 **read_chapter_content** (${targetDesc})\n> \`\`\`text\n> ${String(outText).split('\n').join('\n> ')}\n> \`\`\`\n\n`;
-        accumulatedConversationMarkdown += (currentTurnText ? currentTurnText + '\n\n' : '') + toolMd + '\n\n';
-
-        turnIndex++;
-        continue;
-      }
-
-      // 6. Herramientas MCP y Herramientas Genéricas Registradas en AgentCore
-      else {
-        const AgentCore = window.ChatAgentCore;
-        const toolInstance = AgentCore?.registry?.getTool(rawFuncName);
-        const serverName = toolInstance?.metadata?.mcpServerName || 'Herramienta Externa';
-        const displayToolName = toolInstance?.metadata?.originalName || rawFuncName;
-
-        let toolArgs = {};
-        try {
-          toolArgs = typeof tc.function.arguments === 'object' ? tc.function.arguments : JSON.parse(tc.function.arguments || '{}');
-        } catch (e) {
-          toolArgs = { input: tc.function.arguments || '' };
-        }
-
-        const cardDiv = document.createElement('div');
-        cardDiv.className = 'tool-card-wrapper';
-        cardDiv.innerHTML = `
-          <div class="tool-execution-card mcp-tool-card">
-            <div class="tool-card-header">
-              <div class="tool-card-title">
-                <span>🔌</span>
-                <span><strong>MCP:</strong> ${Markdown.escapeHtml(displayToolName)} <small style="opacity:0.7;">(${Markdown.escapeHtml(serverName)})</small></span>
-              </div>
-              <div class="tool-card-header-actions">
-                <span class="tool-card-badge status-running">⏳ ${t('tool_running') || 'Ejecutando...'}</span>
-                <button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Minimizar'}"><span>▾</span></button>
-              </div>
-            </div>
-            <div class="tool-card-collapsible-body">
-              <div class="tool-card-section">
-                <div class="section-label">${t('tool_js_code') || 'Argumentos'}</div>
-                <div class="code-preview-block"><pre><code>${Markdown.escapeHtml(JSON.stringify(toolArgs, null, 2))}</code></pre></div>
-              </div>
-              <div class="tool-card-section tool-result-section">
-                <div class="section-label">${t('tool_js_result') || 'Resultado'}</div>
-                <div class="tool-result-container">
-                  <div class="tool-loading-placeholder">⏳ Ejecutando en servidor MCP...</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        `;
-        content.appendChild(cardDiv);
-        attachListeners(cardDiv);
-        scrollToBottom();
-
-        addDebugLog('tool', `MCP Tool [${serverName}]: ${displayToolName}`);
-        addDebugLog('raw', `>>> TOOL CALL ${rawFuncName}:\n${JSON.stringify(toolArgs, null, 2)}`);
-
-        const execResult = AgentCore
-          ? await AgentCore.executor.executeToolCall(tc, { signal: currentAbortController ? currentAbortController.signal : undefined })
-          : { success: false, error: 'AgentCore no disponible' };
-
-        const badgeEl = cardDiv.querySelector('.tool-card-badge');
-        const resContainer = cardDiv.querySelector('.tool-result-container');
-
-        if (badgeEl) {
-          badgeEl.className = execResult.success ? 'tool-card-badge status-success' : 'tool-card-badge status-error';
-          badgeEl.textContent = execResult.success
-            ? `${t('tool_status_success') || 'Éxito'} (${execResult.executionTimeMs || 0}ms)`
-            : (t('tool_status_error') || 'Error');
-        }
-
-        const outText = execResult.success
-          ? (execResult.result?.content || (typeof execResult.result === 'object' ? JSON.stringify(execResult.result, null, 2) : String(execResult.result || '')))
-          : (execResult.error || 'Error desconocido');
-
-        if (resContainer) {
-          resContainer.innerHTML = `<div class="result-text-block ${execResult.success ? 'result-success' : 'result-error'}"><pre><code>${Markdown.escapeHtml(outText)}</code></pre></div>`;
-        }
-
-        addDebugLog('tool', `MCP Result [${displayToolName}]: ${outText.substring(0, 200)}...`);
-        addDebugLog('raw', `<<< TOOL RESULT ${rawFuncName}:\n${outText}`);
-
-        chatHistory.push({
-          id: `${assistantMsgId}_turn_${turnIndex}_assistant`,
-          role: 'assistant',
-          content: currentTurnText || null,
-          tool_calls: [tc]
-        });
-
-        chatHistory.push({
-          id: `${assistantMsgId}_turn_${turnIndex}_tool_${tc.id || 'res'}`,
-          role: 'tool',
-          tool_call_id: tc.id,
-          name: rawFuncName,
-          content: outText
-        });
-
-        const toolMd = `> 🔌 **MCP: ${displayToolName}** (*${serverName}*)\n> \`\`\`json\n> ${JSON.stringify(toolArgs, null, 2).split('\n').join('\n> ')}\n> \`\`\`\n> \`\`\`\n> ${String(outText).split('\n').join('\n> ')}\n> \`\`\`\n\n`;
-        accumulatedConversationMarkdown += (currentTurnText ? currentTurnText + '\n\n' : '') + toolMd + '\n\n';
-
-        turnIndex++;
-        continue;
-      }
-    }
-
-    // Si se agotaron los turnos máximos y el último mensaje fue de una herramienta (role: 'tool'),
-    // realizar una última petición de síntesis al modelo con toolChoice: 'none' para garantizar el resumen final.
-    if (turnIndex >= maxAgentTurns && chatHistory.length > 0 && chatHistory[chatHistory.length - 1].role === 'tool' && !(currentAbortController && currentAbortController.signal.aborted)) {
-      const finalSynthBlock = document.createElement('div');
-      finalSynthBlock.className = 'agentic-turn-block';
-      content.appendChild(finalSynthBlock);
-
-      let finalSynthText = '';
-      let finalSynthStats = null;
-
-      const isEn = appConfig.language === 'en';
-      const synthMessages = buildEffectiveMessages({ forceSystemPromptGuide: true });
-      synthMessages.push({
-        role: 'user',
-        content: isEn
-          ? 'Based on all the information gathered from the tools above, please write a comprehensive, detailed, and well-structured final answer to my initial question, organizing the findings clearly and citing sources.'
-          : 'A partir de toda la información obtenida por las herramientas anteriores, redacta ahora una respuesta final completa, detallada y bien estructurada para mi consulta inicial, organizando los hallazgos con claridad y citando las fuentes consultadas.'
-      });
-
-      await API.streamChatCompletion({
-        apiUrl: appConfig.apiUrl,
-        apiType: appConfig.apiType,
-        apiKey: appConfig.apiKey,
-        model: appConfig.model,
-        messages: synthMessages,
-        temperature: appConfig.temperature,
-        reasoningEffort: appConfig.reasoningEffort || 'none',
-        enableTools: true,
-        toolChoice: 'none', // Preservar declaraciones de herramientas pero forzar respuesta textual
-        enableAgentJs: appConfig.enableAgentJs !== false,
-        enableAgentWeb: appConfig.enableAgentWeb !== false,
-        enableAgentSearch: appConfig.enableAgentSearch !== false,
-        enableAgentChart: appConfig.enableAgentChart !== false,
-        enableContextCache: appConfig.enableContextCache !== false,
-        signal: currentAbortController ? currentAbortController.signal : undefined,
-
-        onReasoningChunk: function (chunk) {
-          addDebugLog('thinking', chunk);
-          setDebugStatus('streaming', t('debug_status_thinking'));
-        },
-        onLog: function (logData) {
-          if (logData && logData.type !== 'thinking') addDebugLog(logData.type, logData.text);
-        },
-        onChunk: function (fullTextSoFar, delta, stats) {
-          finalSynthText = fullTextSoFar;
-          finalSynthBlock.innerHTML = injectStreamingCursor(parseMd(finalSynthText));
-          attachListeners(finalSynthBlock);
-          if (stats) updateStatsDisplay(stats);
-          scrollToBottom();
-        },
-        onDone: function (finalText, stats) {
-          finalSynthText = finalText || finalSynthText;
-          finalSynthStats = stats;
-        }
-      });
-
-      if (!finalSynthText || finalSynthText.trim() === '') {
-        const toolResults = chatHistory
-          .filter(m => m.role === 'tool' && m.content)
-          .map(m => m.content)
-          .filter(Boolean);
-
-        if (toolResults.length > 0) {
-          finalSynthText = isEn
-            ? '### Summary of Search Results\n\n' + toolResults.join('\n\n---\n\n')
-            : '### Resumen de la Información Consultada\n\n' + toolResults.join('\n\n---\n\n');
-        }
-      }
-
-      if (finalSynthText) {
-        finalSynthBlock.innerHTML = parseMd(finalSynthText);
-        attachListeners(finalSynthBlock);
-        chatHistory.push({
-          id: `${assistantMsgId}_final`,
-          role: 'assistant',
-          content: finalSynthText
-        });
-        if (finalSynthStats) updateStatsDisplay(finalSynthStats);
-      }
-
+        </div>
+      `;
       actions.style.display = 'inline-flex';
-      btnCopy.onclick = async () => {
-        try {
-          const finalFullMarkdown = (accumulatedConversationMarkdown ? accumulatedConversationMarkdown : '') + finalSynthText;
-          await navigator.clipboard.writeText(finalFullMarkdown);
-          const span = btnCopy.querySelector('span');
-          const originalText = span.textContent;
-          span.textContent = t('copied_text');
-          btnCopy.classList.add('copied');
-          setTimeout(() => {
-            span.textContent = originalText;
-            btnCopy.classList.remove('copied');
-          }, 2000);
-        } catch (err) {
-          console.error('Error copying response:', err);
-        }
-      };
+      finishGeneration();
+      return;
     }
+
+    if (loopResult && loopResult.stats) {
+      updateStatsDisplay(loopResult.stats);
+    }
+
+    actions.style.display = 'inline-flex';
+    btnCopy.onclick = async () => {
+      try {
+        const fullMd = loopResult?.accumulatedMarkdown || loopResult?.finalAssistantText || '';
+        await navigator.clipboard.writeText(fullMd);
+        const span = btnCopy.querySelector('span');
+        const originalText = span.textContent;
+        span.textContent = t('copied_text');
+        btnCopy.classList.add('copied');
+        setTimeout(() => {
+          span.textContent = originalText;
+          btnCopy.classList.remove('copied');
+        }, 2000);
+      } catch (err) {
+        console.error('Error copying composite response:', err);
+      }
+    };
 
     setDebugStatus('done', t('debug_status_done'));
     finishGeneration();
@@ -2452,10 +1416,217 @@
   }
 
   // ==========================================================================
-  // Modal de Configuración
+  // Modal de Configuración & Gestión de Perfiles
   // ==========================================================================
 
+  /**
+   * Puebla el combobox auxiliar y el datalist con todos los perfiles disponibles.
+   */
+  function populateProfileSelector(selectedProfileName) {
+    if (!Storage.getProfiles) return;
+    const profiles = Storage.getProfiles();
+    const profileNames = Object.keys(profiles);
+
+    if (elements.profileDatalist) {
+      elements.profileDatalist.innerHTML = '';
+      profileNames.forEach(name => {
+        const opt = document.createElement('option');
+        opt.value = name;
+        elements.profileDatalist.appendChild(opt);
+      });
+    }
+
+    if (elements.profileSelectHelper) {
+      elements.profileSelectHelper.innerHTML = `<option value="" disabled data-i18n="profile_select_default">▾ Elegir perfil guardado...</option>`;
+      profileNames.forEach(name => {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        if (name === selectedProfileName) {
+          opt.selected = true;
+        }
+        elements.profileSelectHelper.appendChild(opt);
+      });
+    }
+
+    if (elements.settingProfileName) {
+      elements.settingProfileName.value = selectedProfileName || '';
+    }
+  }
+
+  /**
+   * Renderiza dinámicamente las tarjetas de herramientas agénticas registradas en ToolRegistry.
+   */
+  function renderAgentToolsUI(container, currentEnabledTools = {}) {
+    if (!container) return;
+    const tools = (AgentCore.registry && typeof AgentCore.registry.listToolsForUI === 'function')
+      ? AgentCore.registry.listToolsForUI()
+      : [];
+
+    container.innerHTML = '';
+    tools.forEach(tool => {
+      const isChecked = currentEnabledTools[tool.id] !== undefined
+        ? currentEnabledTools[tool.id] !== false
+        : (currentEnabledTools[tool.name] !== undefined ? currentEnabledTools[tool.name] !== false : tool.defaultEnabled !== false);
+
+      const title = t(tool.titleKey) || tool.titleFallback || tool.name;
+      const desc = t(tool.descKey) || tool.descFallback || '';
+
+      const card = document.createElement('div');
+      card.className = 'setting-toggle-card';
+      card.innerHTML = `
+        <div class="toggle-card-info">
+          <div class="toggle-card-title">
+            <span data-i18n="${Markdown.escapeHtml ? Markdown.escapeHtml(tool.titleKey) : tool.titleKey}">${Markdown.escapeHtml ? Markdown.escapeHtml(title) : title}</span>
+          </div>
+          <p class="toggle-card-desc" data-i18n="${Markdown.escapeHtml ? Markdown.escapeHtml(tool.descKey) : tool.descKey}">${Markdown.escapeHtml ? Markdown.escapeHtml(desc) : desc}</p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" class="agent-tool-checkbox" data-tool-id="${Markdown.escapeHtml ? Markdown.escapeHtml(tool.id) : tool.id}" ${isChecked ? 'checked' : ''}>
+          <span class="slider"></span>
+        </label>
+      `;
+      container.appendChild(card);
+    });
+  }
+
+  /**
+   * Recoge el estado de activación de todas las herramientas desde la UI.
+   */
+  function gatherEnabledToolsFromUI() {
+    const map = {};
+    if (elements.agentToolsContainer) {
+      elements.agentToolsContainer.querySelectorAll('.agent-tool-checkbox').forEach(cb => {
+        const tid = cb.getAttribute('data-tool-id');
+        if (tid) map[tid] = cb.checked;
+      });
+    }
+    return map;
+  }
+
+  /**
+   * Rellena todos los campos de todas las pestañas de configuración con los valores de un perfil.
+   */
+  function applyProfileToForm(profileData) {
+    if (!profileData) return;
+
+    if (elements.settingApiType && profileData.apiType !== undefined) {
+      elements.settingApiType.value = profileData.apiType;
+    }
+    if (elements.settingApiUrl && profileData.apiUrl !== undefined) {
+      elements.settingApiUrl.value = profileData.apiUrl;
+    }
+    if (elements.settingApiKey && profileData.apiKey !== undefined) {
+      elements.settingApiKey.value = profileData.apiKey;
+    }
+    if (elements.settingModel && profileData.model !== undefined) {
+      elements.settingModel.value = profileData.model;
+    }
+    if (elements.modelSelectHelper && profileData.model !== undefined) {
+      elements.modelSelectHelper.value = profileData.model;
+    }
+    if (elements.settingSystemPrompt && profileData.systemPrompt !== undefined) {
+      elements.settingSystemPrompt.value = profileData.systemPrompt;
+    }
+    if (elements.settingTemperature && profileData.temperature !== undefined) {
+      elements.settingTemperature.value = profileData.temperature;
+      if (elements.temperatureVal) {
+        elements.temperatureVal.textContent = profileData.temperature;
+      }
+    }
+    if (elements.agentToolsContainer) {
+      renderAgentToolsUI(elements.agentToolsContainer, profileData.enabledTools || {});
+    }
+    if (elements.settingEnableContextCache && profileData.enableContextCache !== undefined) {
+      elements.settingEnableContextCache.checked = profileData.enableContextCache !== false;
+    }
+    if (elements.settingEnableRawLogs && profileData.enableRawLogs !== undefined) {
+      elements.settingEnableRawLogs.checked = profileData.enableRawLogs === true;
+    }
+    if (elements.settingSendDateTime && profileData.sendDateTime !== undefined) {
+      elements.settingSendDateTime.checked = profileData.sendDateTime !== false;
+    }
+  }
+
+  /**
+   * Recoge la configuración completa de todos los campos actuales del formulario.
+   */
+  function gatherCurrentFormConfig() {
+    const profileName = elements.settingProfileName ? elements.settingProfileName.value.trim() : (appConfig.activeProfileName || 'Local chat');
+    const selectedModel = elements.settingModel ? elements.settingModel.value.trim() : '';
+
+    return {
+      activeProfileName: profileName,
+      apiUrl: elements.settingApiUrl ? elements.settingApiUrl.value.trim() : (appConfig.apiUrl || 'http://localhost:1234/v1'),
+      apiType: elements.settingApiType ? elements.settingApiType.value : (appConfig.apiType || 'openai'),
+      apiKey: elements.settingApiKey ? elements.settingApiKey.value.trim() : '',
+      model: selectedModel,
+      systemPrompt: elements.settingSystemPrompt ? elements.settingSystemPrompt.value.trim() : '',
+      temperature: elements.settingTemperature ? elements.settingTemperature.value : '0.7',
+      reasoningEffort: appConfig.reasoningEffort || 'none',
+      modelReasoningConfig: appConfig.modelReasoningConfig || null,
+      theme: appConfig.theme || 'light',
+      language: appConfig.language || 'es',
+      enabledTools: gatherEnabledToolsFromUI(),
+      enableContextCache: elements.settingEnableContextCache ? elements.settingEnableContextCache.checked : true,
+      enableRawLogs: elements.settingEnableRawLogs ? elements.settingEnableRawLogs.checked : Boolean(appConfig.enableRawLogs),
+      enableDebugMessages: Boolean(appConfig.enableDebugMessages),
+      sendDateTime: elements.settingSendDateTime ? elements.settingSendDateTime.checked : true,
+      activeRagBranchId: appConfig.activeRagBranchId || '',
+      ragContextLimitK: appConfig.ragContextLimitK || 128
+    };
+  }
+
+  function showProfileFeedback(msg, type = 'success') {
+    if (!elements.profileActionFeedback) return;
+    elements.profileActionFeedback.style.display = 'block';
+    elements.profileActionFeedback.className = `server-query-status status-${type}`;
+    elements.profileActionFeedback.textContent = msg;
+    setTimeout(() => {
+      if (elements.profileActionFeedback) {
+        elements.profileActionFeedback.style.display = 'none';
+      }
+    }, 4000);
+  }
+
+  function handleSaveProfile() {
+    const name = elements.settingProfileName ? elements.settingProfileName.value.trim() : '';
+    if (!name) {
+      showProfileFeedback(t('err_profile_name_empty') || 'Por favor, escribe un nombre para el perfil.', 'error');
+      return;
+    }
+
+    const currentConfig = gatherCurrentFormConfig();
+    if (Storage.saveProfile) {
+      Storage.saveProfile(name, currentConfig);
+      populateProfileSelector(name);
+      showProfileFeedback(t('msg_profile_saved', { name: name }) || `Perfil "${name}" guardado con éxito.`, 'success');
+    }
+  }
+
+  function handleDeleteProfile() {
+    const name = elements.settingProfileName ? elements.settingProfileName.value.trim() : '';
+    if (!name) return;
+
+    const confirmMsg = t('confirm_delete_profile', { name: name }) || `¿Estás seguro de que deseas eliminar el perfil "${name}"?`;
+    if (!confirm(confirmMsg)) return;
+
+    if (Storage.deleteProfile) {
+      Storage.deleteProfile(name);
+      const newActive = Storage.getActiveProfileName ? Storage.getActiveProfileName() : 'Local chat';
+      populateProfileSelector(newActive);
+      const newProfileData = Storage.getProfile ? Storage.getProfile(newActive) : null;
+      if (newProfileData) {
+        applyProfileToForm(newProfileData);
+      }
+      showProfileFeedback(t('msg_profile_deleted', { name: name }) || `Perfil "${name}" eliminado.`, 'success');
+    }
+  }
+
   function openSettingsModal() {
+    const activeProfileName = (Storage.getActiveProfileName ? Storage.getActiveProfileName() : appConfig.activeProfileName) || 'Local chat';
+    populateProfileSelector(activeProfileName);
+
     if (elements.settingApiType) {
       elements.settingApiType.value = appConfig.apiType || 'openai';
     }
@@ -2471,20 +1642,14 @@
     if (elements.serverQueryStatus) {
       elements.serverQueryStatus.style.display = 'none';
     }
+    if (elements.profileActionFeedback) {
+      elements.profileActionFeedback.style.display = 'none';
+    }
 
     loadCachedModels();
 
-    if (elements.settingEnableAgentJs) {
-      elements.settingEnableAgentJs.checked = appConfig.enableAgentJs !== false;
-    }
-    if (elements.settingEnableAgentWeb) {
-      elements.settingEnableAgentWeb.checked = appConfig.enableAgentWeb !== false;
-    }
-    if (elements.settingEnableAgentSearch) {
-      elements.settingEnableAgentSearch.checked = appConfig.enableAgentSearch !== false;
-    }
-    if (elements.settingEnableAgentChart) {
-      elements.settingEnableAgentChart.checked = appConfig.enableAgentChart !== false;
+    if (elements.agentToolsContainer) {
+      renderAgentToolsUI(elements.agentToolsContainer, appConfig.enabledTools || {});
     }
     if (elements.settingEnableContextCache) {
       elements.settingEnableContextCache.checked = appConfig.enableContextCache !== false;
@@ -2514,29 +1679,7 @@
   function handleSaveSettings(e) {
     e.preventDefault();
 
-    const selectedModel = elements.settingModel.value.trim();
-
-    const newConfig = {
-      apiUrl: elements.settingApiUrl.value.trim(),
-      apiType: elements.settingApiType ? elements.settingApiType.value : (appConfig.apiType || 'openai'),
-      apiKey: elements.settingApiKey.value.trim(),
-      model: selectedModel,
-      systemPrompt: elements.settingSystemPrompt.value.trim(),
-      temperature: elements.settingTemperature.value,
-      reasoningEffort: appConfig.reasoningEffort || 'none',
-      theme: appConfig.theme || 'light',
-      language: appConfig.language || 'es',
-      enableAgentJs: elements.settingEnableAgentJs ? elements.settingEnableAgentJs.checked : true,
-      enableAgentWeb: elements.settingEnableAgentWeb ? elements.settingEnableAgentWeb.checked : true,
-      enableAgentSearch: elements.settingEnableAgentSearch ? elements.settingEnableAgentSearch.checked : true,
-      enableAgentChart: elements.settingEnableAgentChart ? elements.settingEnableAgentChart.checked : true,
-      enableContextCache: elements.settingEnableContextCache ? elements.settingEnableContextCache.checked : true,
-      enableRawLogs: elements.settingEnableRawLogs ? elements.settingEnableRawLogs.checked : Boolean(appConfig.enableRawLogs),
-      enableDebugMessages: Boolean(appConfig.enableDebugMessages),
-      sendDateTime: elements.settingSendDateTime ? elements.settingSendDateTime.checked : true,
-      activeRagBranchId: appConfig.activeRagBranchId || '',
-      ragContextLimitK: appConfig.ragContextLimitK || 16
-    };
+    const newConfig = gatherCurrentFormConfig();
 
     if (Storage.saveConfig) {
       Storage.saveConfig(newConfig);
@@ -2570,17 +1713,8 @@
         elements.modelSelectHelper.value = defaults.model;
       }
 
-      if (elements.settingEnableAgentJs) {
-        elements.settingEnableAgentJs.checked = defaults.enableAgentJs !== false;
-      }
-      if (elements.settingEnableAgentWeb) {
-        elements.settingEnableAgentWeb.checked = defaults.enableAgentWeb !== false;
-      }
-      if (elements.settingEnableAgentSearch) {
-        elements.settingEnableAgentSearch.checked = defaults.enableAgentSearch !== false;
-      }
-      if (elements.settingEnableAgentChart) {
-        elements.settingEnableAgentChart.checked = defaults.enableAgentChart !== false;
+      if (elements.agentToolsContainer) {
+        renderAgentToolsUI(elements.agentToolsContainer, defaults.enabledTools || {});
       }
       if (elements.settingEnableContextCache) {
         elements.settingEnableContextCache.checked = defaults.enableContextCache !== false;
@@ -2798,8 +1932,8 @@
     }
   }
 
-  async function createNewSession() {
-    await saveCurrentSession();
+  async function createNewSession({ saveCurrent = true } = {}) {
+    if (saveCurrent) await saveCurrentSession();
 
     currentSessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
     chatHistory = createInitialChatHistory();
@@ -2838,7 +1972,7 @@
     }
 
     if (savedSessions.length === 0) {
-      await createNewSession();
+      await createNewSession({ saveCurrent: false });
     } else if (currentSessionId === sessionId) {
       const next = savedSessions[0];
       await switchToSession(next.id);
@@ -2853,7 +1987,16 @@
 
     savedSessions = [];
     if (Storage.deleteAllConversations) {
-      await Storage.deleteAllConversations();
+      const deleted = await Storage.deleteAllConversations();
+      if (!deleted) {
+        alert('No se pudo borrar el historial persistente. Revisa la consola para más detalles.');
+        return;
+      }
+      // Evita que la migración de arranque reimporte sesiones legacy tras F5.
+      if (Storage.deleteStorageItem) Storage.deleteStorageItem('chat_sessions');
+      else {
+        try { localStorage.removeItem('chat_sessions'); } catch (e) {}
+      }
     } else {
       try {
         if (Storage.setStorageItem) Storage.setStorageItem('chat_sessions', JSON.stringify([]));
@@ -2861,7 +2004,7 @@
       } catch (e) {}
     }
 
-    await createNewSession();
+    await createNewSession({ saveCurrent: false });
   }
 
   async function renameSession(sessionId, event) {
@@ -2883,11 +2026,17 @@
     if (!elements.chatSidebar) return;
     const isHidden = elements.chatSidebar.style.display === 'none' || !elements.chatSidebar.style.display;
     elements.chatSidebar.style.display = isHidden ? 'flex' : 'none';
+    if (elements.btnToggleSidebar) {
+      elements.btnToggleSidebar.style.display = isHidden ? 'none' : 'inline-flex';
+    }
   }
 
   function closeSidebar() {
     if (elements.chatSidebar) {
       elements.chatSidebar.style.display = 'none';
+    }
+    if (elements.btnToggleSidebar) {
+      elements.btnToggleSidebar.style.display = 'inline-flex';
     }
   }
 
@@ -3070,7 +2219,7 @@
 
   function exportConversationAsMarkdown() {
     const sess = savedSessions.find(s => s.id === currentSessionId);
-    const title = (sess && sess.title) || 'ChatCLI_Conversation';
+    const title = (sess && sess.title) || 'ZeroChat_Conversation';
     const dateStr = new Date().toISOString().slice(0, 10);
     const md = Export.buildMarkdownExport ? Export.buildMarkdownExport(chatHistory, { title, model: appConfig.model }) : '';
     if (Export.downloadFile) {
@@ -3081,7 +2230,7 @@
 
   function exportConversationAsJson() {
     const sess = savedSessions.find(s => s.id === currentSessionId);
-    const title = (sess && sess.title) || 'ChatCLI_Conversation';
+    const title = (sess && sess.title) || 'ZeroChat_Conversation';
     const dateStr = new Date().toISOString().slice(0, 10);
     const jsonStr = Export.buildJsonExport ? Export.buildJsonExport(sess, chatHistory, appConfig) : '{}';
     if (Export.downloadFile) {
@@ -3236,6 +2385,9 @@
     if (elements.btnOpenSettings) {
       elements.btnOpenSettings.addEventListener('click', openSettingsModal);
     }
+    if (elements.badgeProfile) {
+      elements.badgeProfile.addEventListener('click', openSettingsModal);
+    }
     if (elements.badgeServer) {
       elements.badgeServer.addEventListener('click', openSettingsModal);
     }
@@ -3246,6 +2398,22 @@
     // Barra Lateral de Chats (Sidebar)
     if (elements.btnToggleSidebar) {
       elements.btnToggleSidebar.addEventListener('click', toggleSidebar);
+    }
+    if (elements.activeProfileSelect) {
+      elements.activeProfileSelect.addEventListener('change', function () {
+        const profile = Storage.getProfile ? Storage.getProfile(this.value) : null;
+        if (!profile) return;
+        appConfig = {
+          ...appConfig,
+          ...profile,
+          activeProfileName: this.value,
+          reasoningEffort: profile.reasoningEffort || 'none',
+          modelReasoningConfig: profile.modelReasoningConfig || null
+        };
+        if (Storage.setActiveProfileName) Storage.setActiveProfileName(this.value);
+        if (Storage.saveConfig) Storage.saveConfig(appConfig);
+        updateUIFromConfig();
+      });
     }
     if (elements.btnCloseSidebar) {
       elements.btnCloseSidebar.addEventListener('click', closeSidebar);
@@ -3405,13 +2573,59 @@
       }
     });
 
-    // Modal de Configuración
+    // Modal de Configuración & Perfiles
     elements.btnCloseSettings.addEventListener('click', closeSettingsModal);
     elements.btnCancelSettings.addEventListener('click', closeSettingsModal);
     elements.settingsForm.addEventListener('submit', handleSaveSettings);
     elements.btnResetSettings.addEventListener('click', handleResetSettings);
     if (elements.btnClearAllData) {
       elements.btnClearAllData.addEventListener('click', handleClearAllData);
+    }
+
+    if (elements.profileSelectHelper) {
+      elements.profileSelectHelper.addEventListener('change', function () {
+        const selectedName = this.value;
+        if (!selectedName) return;
+        if (elements.settingProfileName) {
+          elements.settingProfileName.value = selectedName;
+        }
+        if (Storage.getProfile) {
+          const prof = Storage.getProfile(selectedName);
+          if (prof) {
+            applyProfileToForm(prof);
+          }
+        }
+      });
+    }
+
+    if (elements.settingProfileName) {
+      elements.settingProfileName.addEventListener('change', function () {
+        const typedName = this.value.trim();
+        if (!typedName) return;
+        if (Storage.getProfile) {
+          const prof = Storage.getProfile(typedName);
+          if (prof) {
+            applyProfileToForm(prof);
+            if (elements.profileSelectHelper) {
+              elements.profileSelectHelper.value = typedName;
+            }
+          }
+        }
+      });
+    }
+
+    if (elements.btnSaveProfile) {
+      elements.btnSaveProfile.addEventListener('click', (e) => {
+        e.preventDefault();
+        handleSaveProfile();
+      });
+    }
+
+    if (elements.btnDeleteProfile) {
+      elements.btnDeleteProfile.addEventListener('click', (e) => {
+        e.preventDefault();
+        handleDeleteProfile();
+      });
     }
 
     if (elements.settingApiType) {
@@ -3594,7 +2808,7 @@
       exportConversationAsPrint
     };
 
-    console.log('💬 ZeroChat v5.2 initialized successfully with Autonomous Agentic Engine, Traffic Debug Logs and Tree-RAG.');
+    console.log('💬 ZeroChat v5.3 initialized successfully with Autonomous Agentic Engine, Traffic Debug Logs and Tree-RAG.');
   }
 
   if (document.readyState === 'loading') {

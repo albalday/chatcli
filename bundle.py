@@ -43,6 +43,17 @@ JS_MODULE_FILES = [
     "providers.js",
     "api.js",
     "file-parser.js",
+    "tools/tool-runtime.js",
+    "tools/tool-manifest.js",
+    "tools/builtin/execute-javascript.tool.js",
+    "tools/builtin/search-web.tool.js",
+    "tools/builtin/fetch-web-page.tool.js",
+    "tools/builtin/download-pdf.tool.js",
+    "tools/builtin/render-chart.tool.js",
+    "tools/builtin/get-current-datetime.tool.js",
+    "tools/builtin/list-documents.tool.js",
+    "tools/builtin/search-knowledge-base.tool.js",
+    "tools/builtin/read-chapter-content.tool.js",
     "agent-core.js",
     "mcp.js",
     "debug.js",
@@ -51,6 +62,7 @@ JS_MODULE_FILES = [
     "export.js",
     "state.js",
     "context-manager.js",
+    "chat-engine.js",
     "app.js"
 ]
 
@@ -70,6 +82,12 @@ CORE_EXPORT_SYMBOLS = [
     "ChatProviders",
     "ChatAPI",
     "ChatFileParser",
+    "ChatToolRuntime",
+    "ChatToolManifest",
+    "ChatBuiltinExecuteJavascriptTool",
+    "ChatBuiltinSearchWebTool",
+    "ChatBuiltinFetchWebPageTool",
+    "ChatBuiltinDownloadPdfTool",
     "ChatAgentCore",
     "ChatMCP",
     "ChatDebug",
@@ -77,7 +95,8 @@ CORE_EXPORT_SYMBOLS = [
     "ChatAttachments",
     "ChatExport",
     "ChatState",
-    "ChatContextManager"
+    "ChatContextManager",
+    "ChatEngine"
 ]
 
 BOOTSTRAP_LOADER_SCRIPT = """<script>

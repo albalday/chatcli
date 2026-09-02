@@ -1,5 +1,5 @@
 /**
- * Módulo de Gestión de Adjuntos (ChatAttachments) para ChatCLI.
+ * Módulo de Gestión de Adjuntos (ChatAttachments) para ZeroChat.
  * Gestiona la lista de archivos adjuntos (texto, código, imágenes, PDF),
  * su renderizado visual en chips y el ensamblado del prompt enriquecido con adjuntos.
  */
