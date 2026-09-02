@@ -89,52 +89,6 @@ test('Storage IndexedDB - Borrado individual y borrado total', async () => {
   assert.equal(emptyList.length, 0);
 });
 
-test('Storage IndexedDB - Migración automática desde localStorage (formato legacy)', async () => {
-  await Storage.deleteAllConversations();
-
-  // Simular sesiones legacy en formato JSON de chat_sessions
-  const legacySessions = [
-    {
-      id: 'legacy_sess_1',
-      title: 'Conversación Antigua 1',
-      createdAt: 1700000000000,
-      updatedAt: 1700000005000,
-      history: [
-        { id: 'leg_m1', role: 'user', content: 'Pregunta legacy' },
-        { id: 'leg_m2', role: 'assistant', content: 'Respuesta legacy' }
-      ]
-    },
-    {
-      id: 'legacy_sess_2',
-      title: 'Conversación Antigua 2',
-      createdAt: 1700000010000,
-      updatedAt: 1700000020000,
-      history: [
-        { id: 'leg_m3', role: 'user', content: 'Otra pregunta' }
-      ]
-    }
-  ];
-
-  Storage.setStorageItem('chat_sessions', JSON.stringify(legacySessions));
-  assert.ok(Storage.getStorageItem('chat_sessions'), 'La clave legacy debe existir antes de la migración');
-
-  // Ejecutar migración
-  await Storage.migrateFromLocalStorage();
-
-  // Verificar que se hayan restaurado en el storage
-  const list = await Storage.getConversationsList();
-  assert.equal(list.length, 2);
-
-  const conv1 = await Storage.getConversation('legacy_sess_1');
-  assert.ok(conv1);
-  assert.equal(conv1.title, 'Conversación Antigua 1');
-  assert.equal(conv1.history.length, 2);
-  assert.equal(conv1.history[0].content, 'Pregunta legacy');
-
-  // Verificar que la clave legacy fue limpiada para evitar re-migraciones
-  assert.equal(Storage.getStorageItem('chat_sessions'), null);
-});
-
 test('Storage IndexedDB - Preservación íntegra de turnos del asistente y herramientas', async () => {
   const sessionId = 'test_agentic_turn_session';
   const sessionMeta = { id: sessionId, title: 'Chat con herramientas' };
@@ -194,4 +148,3 @@ test('Storage IndexedDB - Preservación de turnos iniciales de fecha/hora para c
   assert.equal(loaded.history[1].content, 'OK');
   assert.equal(loaded.history[2].content, '¿Qué eventos ocurrieron hoy?');
 });
-

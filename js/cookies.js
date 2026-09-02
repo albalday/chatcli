@@ -636,42 +636,6 @@
   }
 
   /**
-   * Migración automática de sesiones legacy desde localStorage hacia IndexedDB.
-   */
-  async function migrateFromLocalStorage() {
-    try {
-      const raw = getStorageItem('chat_sessions');
-      if (!raw) return;
-
-      const parsed = JSON.parse(raw);
-      if (!Array.isArray(parsed) || parsed.length === 0) return;
-
-      for (const sess of parsed) {
-        if (!sess || !sess.id) continue;
-        const messages = Array.isArray(sess.history) ? sess.history : [];
-        const sessionMeta = {
-          id: sess.id,
-          title: sess.title || 'Nueva conversación',
-          createdAt: sess.createdAt || Date.now(),
-          updatedAt: sess.updatedAt || sess.createdAt || Date.now(),
-          messageCount: messages.length,
-          model: sess.model || '',
-          summary: sess.summary || '',
-          tags: sess.tags || [],
-          pinned: Boolean(sess.pinned),
-          metadata: sess.metadata || {}
-        };
-        await saveConversation(sessionMeta, messages);
-      }
-
-      // Eliminar clave antigua de localStorage tras migración exitosa
-      deleteStorageItem('chat_sessions');
-    } catch (e) {
-      console.warn('ChatStorage: Error durante la migración desde localStorage:', e);
-    }
-  }
-
-  /**
    * Obtiene la lista de cabeceras de conversaciones (sin cargar todos los mensajes en memoria).
    * @param {string} filterText - Filtro opcional por título
    * @returns {Promise<Array<{ id: string, title: string, createdAt: number, updatedAt: number, messageCount: number }>>}
@@ -1016,7 +980,6 @@
   async function initDB() {
     const db = await openDatabase();
     if (db) {
-      await migrateFromLocalStorage();
     }
     return db;
   }
@@ -1044,7 +1007,6 @@
 
     // Persistencia Asíncrona en IndexedDB (Conversaciones & Mensajes)
     initDB,
-    migrateFromLocalStorage,
     getConversationsList,
     getConversation,
     saveConversation,
