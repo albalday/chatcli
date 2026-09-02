@@ -495,45 +495,50 @@
               : 'A partir de toda la información obtenida por las herramientas anteriores, redacta ahora una respuesta final completa, detallada y bien estructurada para mi consulta inicial, organizando los hallazgos con claridad y citando las fuentes consultadas.'
           });
 
-          await API.streamChatCompletion({
-            apiUrl: apiUrl || appConfig.apiUrl,
-            apiType: apiType || appConfig.apiType,
-            apiKey: apiKey || appConfig.apiKey,
-            model: model || appConfig.model,
-            messages: synthMessages,
-            temperature: temperature !== undefined ? temperature : appConfig.temperature,
-            reasoningEffort: reasoningEffort || appConfig.reasoningEffort || 'none',
-            enableTools: true,
-            toolChoice: 'none',
-            enableAgentJs: appConfig.enableAgentJs !== false,
-            enableAgentWeb: appConfig.enableAgentWeb !== false,
-            enableAgentSearch: appConfig.enableAgentSearch !== false,
-            enableAgentChart: appConfig.enableAgentChart !== false,
-            activeRagBranchId: activeRagBranchId || '',
-            enableContextCache: appConfig.enableContextCache !== false,
-            signal: signal,
+          try {
+            await API.streamChatCompletion({
+              apiUrl: apiUrl || appConfig.apiUrl,
+              apiType: apiType || appConfig.apiType,
+              apiKey: apiKey || appConfig.apiKey,
+              model: model || appConfig.model,
+              messages: synthMessages,
+              temperature: temperature !== undefined ? temperature : appConfig.temperature,
+              reasoningEffort: reasoningEffort || appConfig.reasoningEffort || 'none',
+              tools: [],
+              enableTools: false,
+              toolChoice: 'none',
+              enableAgentJs: false,
+              enableAgentWeb: false,
+              enableAgentSearch: false,
+              enableAgentChart: false,
+              activeRagBranchId: activeRagBranchId || '',
+              enableContextCache: appConfig.enableContextCache !== false,
+              signal: signal,
 
-            onReasoningChunk: function (chunk) {
-              if (typeof onReasoningChunk === 'function') onReasoningChunk(chunk);
-              if (typeof onLog === 'function') onLog('thinking', chunk);
-            },
-            onLog: function (logData) {
-              if (typeof onLog === 'function' && logData && logData.type !== 'thinking') onLog(logData.type, logData.text);
-            },
-            onChunk: function (fullTextSoFar, delta, stats) {
-              synthText = fullTextSoFar;
-              if (turnBlock) {
-                turnBlock.innerHTML = injectStreamingCursor(parseMd(synthText));
-                attachEvts(turnBlock);
+              onReasoningChunk: function (chunk) {
+                if (typeof onReasoningChunk === 'function') onReasoningChunk(chunk);
+                if (typeof onLog === 'function') onLog('thinking', chunk);
+              },
+              onLog: function (logData) {
+                if (typeof onLog === 'function' && logData && logData.type !== 'thinking') onLog(logData.type, logData.text);
+              },
+              onChunk: function (fullTextSoFar, delta, stats) {
+                synthText = fullTextSoFar;
+                if (turnBlock) {
+                  turnBlock.innerHTML = injectStreamingCursor(parseMd(synthText));
+                  attachEvts(turnBlock);
+                }
+                if (stats && typeof onStats === 'function') onStats(stats);
+                scrollFn();
+              },
+              onDone: function (finalText, stats) {
+                synthText = finalText || synthText;
+                synthStats = stats;
               }
-              if (stats && typeof onStats === 'function') onStats(stats);
-              scrollFn();
-            },
-            onDone: function (finalText, stats) {
-              synthText = finalText || synthText;
-              synthStats = stats;
-            }
-          });
+            });
+          } catch (intSynthErr) {
+            if (typeof onLog === 'function') onLog('warn', `Error en síntesis intermedia: ${intSynthErr.message}`);
+          }
 
           if (synthText && synthText.trim() !== '') {
             currentTurnText = synthText;
@@ -724,42 +729,46 @@
           : 'A partir de toda la información obtenida por las herramientas anteriores, redacta ahora una respuesta final completa, detallada y bien estructurada para mi consulta inicial, organizando los hallazgos con claridad y citando las fuentes consultadas.'
       });
 
-      await API.streamChatCompletion({
-        apiUrl: apiUrl || appConfig.apiUrl,
-        apiType: apiType || appConfig.apiType,
-        apiKey: apiKey || appConfig.apiKey,
-        model: model || appConfig.model,
-        messages: synthMessages,
-        temperature: temperature !== undefined ? temperature : appConfig.temperature,
-        reasoningEffort: reasoningEffort || appConfig.reasoningEffort || 'none',
-        tools: activeToolDefs,
-        enableTools: true,
-        toolChoice: 'none',
-        activeRagBranchId: activeRagBranchId || '',
-        enableContextCache: appConfig.enableContextCache !== false,
-        signal: signal,
+      try {
+        await API.streamChatCompletion({
+          apiUrl: apiUrl || appConfig.apiUrl,
+          apiType: apiType || appConfig.apiType,
+          apiKey: apiKey || appConfig.apiKey,
+          model: model || appConfig.model,
+          messages: synthMessages,
+          temperature: temperature !== undefined ? temperature : appConfig.temperature,
+          reasoningEffort: reasoningEffort || appConfig.reasoningEffort || 'none',
+          tools: [],
+          enableTools: false,
+          toolChoice: 'none',
+          activeRagBranchId: activeRagBranchId || '',
+          enableContextCache: appConfig.enableContextCache !== false,
+          signal: signal,
 
-        onReasoningChunk: function (chunk) {
-          if (typeof onReasoningChunk === 'function') onReasoningChunk(chunk);
-          if (typeof onLog === 'function') onLog('thinking', chunk);
-        },
-        onLog: function (logData) {
-          if (typeof onLog === 'function' && logData && logData.type !== 'thinking') onLog(logData.type, logData.text);
-        },
-        onChunk: function (fullTextSoFar, delta, stats) {
-          finalSynthText = fullTextSoFar;
-          if (finalSynthBlock) {
-            finalSynthBlock.innerHTML = injectStreamingCursor(parseMd(finalSynthText));
-            attachEvts(finalSynthBlock);
+          onReasoningChunk: function (chunk) {
+            if (typeof onReasoningChunk === 'function') onReasoningChunk(chunk);
+            if (typeof onLog === 'function') onLog('thinking', chunk);
+          },
+          onLog: function (logData) {
+            if (typeof onLog === 'function' && logData && logData.type !== 'thinking') onLog(logData.type, logData.text);
+          },
+          onChunk: function (fullTextSoFar, delta, stats) {
+            finalSynthText = fullTextSoFar;
+            if (finalSynthBlock) {
+              finalSynthBlock.innerHTML = injectStreamingCursor(parseMd(finalSynthText));
+              attachEvts(finalSynthBlock);
+            }
+            if (stats && typeof onStats === 'function') onStats(stats);
+            scrollFn();
+          },
+          onDone: function (finalText, stats) {
+            finalSynthText = finalText || finalSynthText;
+            finalSynthStats = stats;
           }
-          if (stats && typeof onStats === 'function') onStats(stats);
-          scrollFn();
-        },
-        onDone: function (finalText, stats) {
-          finalSynthText = finalText || finalSynthText;
-          finalSynthStats = stats;
-        }
-      });
+        });
+      } catch (synthErr) {
+        if (typeof onLog === 'function') onLog('warn', `Error en síntesis final: ${synthErr.message}`);
+      }
 
       if (!finalSynthText || finalSynthText.trim() === '') {
         const toolResults = chatHistory

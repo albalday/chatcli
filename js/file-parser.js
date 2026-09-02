@@ -200,40 +200,58 @@
     const raw = decodePdfEscapes(lit);
     if (!cmap || cmap.size === 0) return raw;
 
-    // Intentar decodificar como pares de 2 bytes (UTF-16BE / CID) o bytes simples mapeados en CMap
-    let decoded = '';
-    let hasMapping = false;
+    // Si la cadena ya es texto ASCII estándar legible y no contiene bytes nulos/no imprimibles,
+    // preservarla para evitar colisiones con CMaps de fuentes secundarias o de símbolos.
+    let hasNulls = false;
+    let nonPrintableCount = 0;
     for (let k = 0; k < raw.length; k++) {
-      const c1 = raw.charCodeAt(k);
-      const hex1 = c1.toString(16).padStart(2, '0').toLowerCase();
-      
-      if (k + 1 < raw.length) {
-        const c2 = raw.charCodeAt(k + 1);
-        const hex2 = hex1 + c2.toString(16).padStart(2, '0').toLowerCase();
-        if (cmap.has(hex2)) {
-          decoded += cmap.get(hex2);
-          hasMapping = true;
-          k++;
-          continue;
-        }
-      }
-
-      if (cmap.has(hex1)) {
-        decoded += cmap.get(hex1);
-        hasMapping = true;
-      } else if (cmap.has('00' + hex1)) {
-        decoded += cmap.get('00' + hex1);
-        hasMapping = true;
-      } else if (c1 >= 32 && c1 <= 126) {
-        decoded += raw.charAt(k);
-      } else if (c1 === 0 && k + 1 < raw.length && raw.charCodeAt(k + 1) >= 32 && raw.charCodeAt(k + 1) <= 126) {
-        // Ignorar byte nulo en UTF-16BE de ASCII estándar
-        decoded += raw.charAt(k + 1);
-        k++;
-      }
+      const code = raw.charCodeAt(k);
+      if (code === 0) hasNulls = true;
+      else if (code < 32 || code > 126) nonPrintableCount++;
     }
 
-    return (hasMapping || decoded.length >= raw.length * 0.5) ? decoded : raw;
+    if (!hasNulls && nonPrintableCount === 0 && raw.length > 0) {
+      return raw;
+    }
+
+    // Si contiene bytes nulos o secuencias de 2 bytes (UTF-16BE / CID)
+    if (hasNulls || nonPrintableCount > raw.length * 0.3) {
+      let decoded = '';
+      for (let k = 0; k < raw.length; k++) {
+        const c1 = raw.charCodeAt(k);
+        const hex1 = c1.toString(16).padStart(2, '0').toLowerCase();
+
+        if (k + 1 < raw.length) {
+          const c2 = raw.charCodeAt(k + 1);
+          const hex2 = hex1 + c2.toString(16).padStart(2, '0').toLowerCase();
+          if (cmap.has(hex2)) {
+            decoded += cmap.get(hex2);
+            k++;
+            continue;
+          }
+        }
+
+        if (c1 === 0 && k + 1 < raw.length) {
+          const c2 = raw.charCodeAt(k + 1);
+          const hex2 = '00' + c2.toString(16).padStart(2, '0').toLowerCase();
+          if (cmap.has(hex2)) {
+            decoded += cmap.get(hex2);
+          } else if (c2 >= 32 && c2 <= 126) {
+            decoded += raw.charAt(k + 1);
+          }
+          k++;
+        } else if (cmap.has(hex1)) {
+          decoded += cmap.get(hex1);
+        } else if (cmap.has('00' + hex1)) {
+          decoded += cmap.get('00' + hex1);
+        } else if (c1 >= 32 && c1 <= 126) {
+          decoded += raw.charAt(k);
+        }
+      }
+      if (decoded.length > 0) return decoded;
+    }
+
+    return raw;
   }
 
   function parsePdfStreamText(streamString, cmap = new Map()) {
