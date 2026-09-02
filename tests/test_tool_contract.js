@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 
 const AgentCore = require('../js/agent-core.js');
 
-test('Tool contract - conserva compatibilidad deprecada para herramientas históricas', () => {
+test('Tool contract - exige el contrato declarativo sin aliases legacy', () => {
   const tool = new AgentCore.Tool({
     name: 'legacy_echo',
     description: 'Devuelve el texto recibido.',
@@ -12,15 +12,15 @@ test('Tool contract - conserva compatibilidad deprecada para herramientas histó
       properties: { text: { type: 'string' } },
       required: ['text']
     },
-    ui: { showInSettings: true, defaultEnabled: false },
-    handler: async ({ text }) => ({ success: true, text })
+    settings: { showInSettings: true, defaultEnabled: false },
+    execute: async ({ text }) => ({ success: true, text })
   });
 
   const validation = AgentCore.validateToolContract(tool);
   assert.equal(validation.valid, true, validation.errors.join(' '));
   assert.equal(tool.contractVersion, AgentCore.TOOL_CONTRACT_VERSION);
   assert.equal(tool.settings.defaultEnabled, false);
-  assert.equal(tool.ui, tool.settings, 'ui sigue siendo un alias de compatibilidad');
+  assert.equal(tool.ui, undefined);
   assert.deepEqual(tool.getDefinition().function.parameters.required, ['text']);
 });
 

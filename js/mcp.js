@@ -300,7 +300,7 @@
             originalName: rt.name,
             mcpServerId: this.client.id
           },
-          handler: async (args, context = {}) => {
+          execute: async (args, context = {}) => {
             return this.client.callTool(rt.name, args, {
               signal: context.signal,
               timeoutMs: options.timeoutMs
@@ -506,4 +506,3 @@
     manager
   };
 });
-

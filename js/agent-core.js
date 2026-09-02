@@ -152,9 +152,7 @@
       this.aliases = Array.isArray(options.aliases) ? options.aliases : [];
       this.category = options.category || 'general';
       this.metadata = options.metadata || {};
-      // Compatibilidad deprecada: las tools nuevas deben declarar `settings`.
-      // `ui` se conserva para módulos MCP o extensiones de versiones anteriores.
-      const settings = options.settings || options.ui || {};
+      const settings = options.settings || {};
       this.settings = {
         titleKey: settings.titleKey || `agent_${this.name}_title`,
         titleFallback: settings.titleFallback || options.metadata?.label || this.name,
@@ -164,10 +162,7 @@
         defaultEnabled: settings.defaultEnabled !== false,
         showInSettings: settings.showInSettings !== false
       };
-      // Alias deprecado; la UI interna consume exclusivamente `settings`.
-      this.ui = this.settings;
-      // Compatibilidad deprecada: las tools nuevas deben declarar `execute`.
-      this.handler = options.execute || options.handler || null;
+      this.executeHandler = options.execute || null;
       this.result = options.result || {};
       this.formatter = options.formatter || null;
       this.promptGuide = options.promptGuide || options.getSystemPromptGuide || null;
@@ -203,8 +198,8 @@
      * Ejecuta la herramienta asíncronamente.
      */
     async execute(args, context = {}) {
-      if (typeof this.handler === 'function') {
-        return this.handler(args, context);
+      if (typeof this.executeHandler === 'function') {
+        return this.executeHandler(args, context);
       }
       throw new Error(`La herramienta ${this.name} no tiene handler de ejecución implementado.`);
     }

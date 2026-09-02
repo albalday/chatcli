@@ -54,7 +54,7 @@ test('AgentCore - Registro de herramientas personalizadas (ToolProvider preparad
             required: ['path']
           },
           category: 'mcp',
-          handler: async (args) => {
+          execute: async (args) => {
             return { success: true, content: `Contenido de ${args.path}` };
           }
         })
@@ -88,7 +88,7 @@ test('AgentCore - ToolExecutor parseo tolerante de argumentos y captura de error
   registry.registerTool(new AgentCoreModule.Tool({
     name: 'failing_tool',
     description: 'Herramienta que lanza un error deliberado',
-    handler: async () => {
+    execute: async () => {
       throw new Error('Fallo crítico simulado');
     }
   }));
@@ -124,7 +124,7 @@ test('AgentCore - Cancelación de ejecución de herramientas mediante AbortSigna
   const registry = new AgentCoreModule.ToolRegistry();
   registry.registerTool(new AgentCoreModule.Tool({
     name: 'slow_tool',
-    handler: async (args, ctx) => {
+    execute: async (args, ctx) => {
       if (ctx.signal && ctx.signal.aborted) throw new Error('Abortado');
       return { success: true };
     }
@@ -236,5 +236,4 @@ test('AgentCore - Formal Tools Interface (listToolsForUI, getActiveDefinitions, 
   assert.match(guideEn, /search_web/);
   assert.doesNotMatch(guideEn, /fetch_web_page/);
 });
-
 
