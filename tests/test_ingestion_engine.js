@@ -103,3 +103,57 @@ trailer
   assert.ok(text.includes('ABC'), `El texto extraído debería contener 'ABC', obtenido: '${text}'`);
 });
 
+test('IngestionEngine & FileParser - extrae texto decodificando cadenas literales con sustitución CMap de 1 byte', async () => {
+  const FileParser = require('../js/file-parser.js');
+  const pdfContent = `%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /ToUnicode 6 0 R >>
+endobj
+6 0 obj
+<< /Length 200 >>
+stream
+/CIDInit /ProcSet findresource begin
+12 dict begin
+begincmap
+1 begincodespacerange
+<00> <FF>
+endcodespacerange
+1 beginbfchar
+<77> <0054>
+<6c> <0061>
+<48> <0062>
+<61> <006c>
+<73> <0065>
+endbfchar
+endcmap
+end
+endstream
+endobj
+5 0 obj
+<< /Length 40 >>
+stream
+BT
+/F1 12 Tf
+(wlas) Tj
+ET
+endstream
+endobj
+trailer
+<< /Size 7 /Root 1 0 R >>
+%%EOF`;
+
+  const buffer = Buffer.from(pdfContent, 'latin1');
+  const text = await FileParser.extractTextFromPdf(buffer);
+  assert.ok(text.includes('Tale'), `El texto extraído debería contener 'Tale', obtenido: '${text}'`);
+});
+
+

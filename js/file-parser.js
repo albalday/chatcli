@@ -70,57 +70,70 @@
   function parseCMapData(text, cmap) {
     if (!text || typeof text !== 'string') return;
 
-    // 1. beginbfchar
-    const bfcharRegex = /<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>/g;
-    let cm;
-    while ((cm = bfcharRegex.exec(text)) !== null) {
-      const src = cm[1].toLowerCase();
-      const dstHex = cm[2];
-      let dstChar = '';
-      for (let k = 0; k < dstHex.length; k += 4) {
-        const code = parseInt(dstHex.substr(k, 4), 16);
-        if (!isNaN(code)) dstChar += String.fromCharCode(code);
-      }
-      if (dstChar) {
-        cmap.set(src, dstChar);
-        if (src.length === 2) cmap.set('00' + src, dstChar);
-        if (src.startsWith('00') && src.length === 4) cmap.set(src.substring(2), dstChar);
-      }
-    }
-
-    // 2. beginbfrange con destino simple: <start> <end> <destStart>
-    const bfrangeSimpleRegex = /<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>/g;
-    while ((cm = bfrangeSimpleRegex.exec(text)) !== null) {
-      const start = parseInt(cm[1], 16);
-      const end = parseInt(cm[2], 16);
-      const destStart = parseInt(cm[3], 16);
-      const len = cm[1].length;
-      for (let s = start; s <= end; s++) {
-        const srcHex = s.toString(16).padStart(len, '0').toLowerCase();
-        const dstCode = destStart + (s - start);
-        const dstChar = String.fromCharCode(dstCode);
-        cmap.set(srcHex, dstChar);
-        if (srcHex.length === 2) cmap.set('00' + srcHex, dstChar);
-        if (srcHex.startsWith('00') && srcHex.length === 4) cmap.set(srcHex.substring(2), dstChar);
-      }
-    }
-
-    // 3. beginbfrange con array de destinos: <start> <end> [ <dest1> <dest2> ... ]
-    const bfrangeArrayRegex = /<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>\s*\[([\s\S]*?)\]/g;
-    while ((cm = bfrangeArrayRegex.exec(text)) !== null) {
-      const start = parseInt(cm[1], 16);
-      const end = parseInt(cm[2], 16);
-      const len = cm[1].length;
-      const destMatches = cm[3].match(/<([0-9a-fA-F]+)>/g) || [];
-      for (let s = start, idx = 0; s <= end && idx < destMatches.length; s++, idx++) {
-        const srcHex = s.toString(16).padStart(len, '0').toLowerCase();
-        const dstHex = destMatches[idx].replace(/[<>]/g, '');
+    // 1. Extraer bloques beginbfchar ... endbfchar
+    const bfcharBlockRegex = /beginbfchar([\s\S]*?)endbfchar/g;
+    let block;
+    while ((block = bfcharBlockRegex.exec(text)) !== null) {
+      const blockText = block[1];
+      const bfcharRegex = /<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>/g;
+      let cm;
+      while ((cm = bfcharRegex.exec(blockText)) !== null) {
+        const src = cm[1].toLowerCase();
+        const dstHex = cm[2];
         let dstChar = '';
         for (let k = 0; k < dstHex.length; k += 4) {
           const code = parseInt(dstHex.substr(k, 4), 16);
           if (!isNaN(code)) dstChar += String.fromCharCode(code);
         }
         if (dstChar) {
+          cmap.set(src, dstChar);
+          if (src.length === 2) cmap.set('00' + src, dstChar);
+          if (src.startsWith('00') && src.length === 4) cmap.set(src.substring(2), dstChar);
+        }
+      }
+    }
+
+    // 2. Extraer bloques beginbfrange ... endbfrange
+    const bfrangeBlockRegex = /beginbfrange([\s\S]*?)endbfrange/g;
+    while ((block = bfrangeBlockRegex.exec(text)) !== null) {
+      const blockText = block[1];
+
+      // 2a. beginbfrange con array de destinos: <start> <end> [ <dest1> <dest2> ... ]
+      const bfrangeArrayRegex = /<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>\s*\[([\s\S]*?)\]/g;
+      let cm;
+      while ((cm = bfrangeArrayRegex.exec(blockText)) !== null) {
+        const start = parseInt(cm[1], 16);
+        const end = parseInt(cm[2], 16);
+        const len = cm[1].length;
+        const destMatches = cm[3].match(/<([0-9a-fA-F]+)>/g) || [];
+        for (let s = start, idx = 0; s <= end && idx < destMatches.length; s++, idx++) {
+          const srcHex = s.toString(16).padStart(len, '0').toLowerCase();
+          const dstHex = destMatches[idx].replace(/[<>]/g, '');
+          let dstChar = '';
+          for (let k = 0; k < dstHex.length; k += 4) {
+            const code = parseInt(dstHex.substr(k, 4), 16);
+            if (!isNaN(code)) dstChar += String.fromCharCode(code);
+          }
+          if (dstChar) {
+            cmap.set(srcHex, dstChar);
+            if (srcHex.length === 2) cmap.set('00' + srcHex, dstChar);
+            if (srcHex.startsWith('00') && srcHex.length === 4) cmap.set(srcHex.substring(2), dstChar);
+          }
+        }
+      }
+
+      // 2b. beginbfrange con destino simple: <start> <end> <destStart>
+      const cleanBlockText = blockText.replace(/<[0-9a-fA-F]+>\s*<[0-9a-fA-F]+>\s*\[[\s\S]*?\]/g, '');
+      const bfrangeSimpleRegex = /<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>/g;
+      while ((cm = bfrangeSimpleRegex.exec(cleanBlockText)) !== null) {
+        const start = parseInt(cm[1], 16);
+        const end = parseInt(cm[2], 16);
+        const destStart = parseInt(cm[3], 16);
+        const len = cm[1].length;
+        for (let s = start; s <= end; s++) {
+          const srcHex = s.toString(16).padStart(len, '0').toLowerCase();
+          const dstCode = destStart + (s - start);
+          const dstChar = String.fromCharCode(dstCode);
           cmap.set(srcHex, dstChar);
           if (srcHex.length === 2) cmap.set('00' + srcHex, dstChar);
           if (srcHex.startsWith('00') && srcHex.length === 4) cmap.set(srcHex.substring(2), dstChar);
@@ -198,60 +211,53 @@
 
   function mapPdfLiteralString(lit, cmap) {
     const raw = decodePdfEscapes(lit);
-    if (!cmap || cmap.size === 0) return raw;
+    if (!cmap || cmap.size === 0 || !raw) return raw;
 
-    // Si la cadena ya es texto ASCII estándar legible y no contiene bytes nulos/no imprimibles,
-    // preservarla para evitar colisiones con CMaps de fuentes secundarias o de símbolos.
-    let hasNulls = false;
-    let nonPrintableCount = 0;
+    let decoded = '';
+    let hasMapping = false;
     for (let k = 0; k < raw.length; k++) {
-      const code = raw.charCodeAt(k);
-      if (code === 0) hasNulls = true;
-      else if (code < 32 || code > 126) nonPrintableCount++;
-    }
+      const c1 = raw.charCodeAt(k);
+      const hex1 = c1.toString(16).padStart(2, '0').toLowerCase();
 
-    if (!hasNulls && nonPrintableCount === 0 && raw.length > 0) {
-      return raw;
-    }
-
-    // Si contiene bytes nulos o secuencias de 2 bytes (UTF-16BE / CID)
-    if (hasNulls || nonPrintableCount > raw.length * 0.3) {
-      let decoded = '';
-      for (let k = 0; k < raw.length; k++) {
-        const c1 = raw.charCodeAt(k);
-        const hex1 = c1.toString(16).padStart(2, '0').toLowerCase();
-
-        if (k + 1 < raw.length) {
-          const c2 = raw.charCodeAt(k + 1);
-          const hex2 = hex1 + c2.toString(16).padStart(2, '0').toLowerCase();
-          if (cmap.has(hex2)) {
-            decoded += cmap.get(hex2);
-            k++;
-            continue;
-          }
-        }
-
-        if (c1 === 0 && k + 1 < raw.length) {
-          const c2 = raw.charCodeAt(k + 1);
-          const hex2 = '00' + c2.toString(16).padStart(2, '0').toLowerCase();
-          if (cmap.has(hex2)) {
-            decoded += cmap.get(hex2);
-          } else if (c2 >= 32 && c2 <= 126) {
-            decoded += raw.charAt(k + 1);
-          }
+      // Probar secuencia de 2 bytes (UTF-16BE / 2-byte CID)
+      if (k + 1 < raw.length) {
+        const c2 = raw.charCodeAt(k + 1);
+        const hex2 = hex1 + c2.toString(16).padStart(2, '0').toLowerCase();
+        if (cmap.has(hex2)) {
+          decoded += cmap.get(hex2);
+          hasMapping = true;
           k++;
-        } else if (cmap.has(hex1)) {
-          decoded += cmap.get(hex1);
-        } else if (cmap.has('00' + hex1)) {
-          decoded += cmap.get('00' + hex1);
-        } else if (c1 >= 32 && c1 <= 126) {
-          decoded += raw.charAt(k);
+          continue;
         }
       }
-      if (decoded.length > 0) return decoded;
+
+      // Probar byte nulo + carácter en UTF-16BE estándar
+      if (c1 === 0 && k + 1 < raw.length) {
+        const c2 = raw.charCodeAt(k + 1);
+        const hex2 = '00' + c2.toString(16).padStart(2, '0').toLowerCase();
+        if (cmap.has(hex2)) {
+          decoded += cmap.get(hex2);
+          hasMapping = true;
+        } else if (c2 >= 32 && c2 <= 126) {
+          decoded += raw.charAt(k + 1);
+        }
+        k++;
+        continue;
+      }
+
+      // Probar 1 byte mapeado en CMap
+      if (cmap.has(hex1)) {
+        decoded += cmap.get(hex1);
+        hasMapping = true;
+      } else if (cmap.has('00' + hex1)) {
+        decoded += cmap.get('00' + hex1);
+        hasMapping = true;
+      } else if (c1 >= 32 && c1 <= 126) {
+        decoded += raw.charAt(k);
+      }
     }
 
-    return raw;
+    return (hasMapping || decoded.length >= raw.length * 0.5) ? decoded : raw;
   }
 
   function parsePdfStreamText(streamString, cmap = new Map()) {
