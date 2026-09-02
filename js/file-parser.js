@@ -180,8 +180,12 @@
           let dataStart = streamIdx + 6;
           if (fullText.charCodeAt(dataStart) === 13) dataStart++;
           if (fullText.charCodeAt(dataStart) === 10) dataStart++;
+          let dataEnd = endStreamIdx;
+          while (dataEnd > dataStart && (fullText.charCodeAt(dataEnd - 1) === 10 || fullText.charCodeAt(dataEnd - 1) === 13 || fullText.charCodeAt(dataEnd - 1) === 32)) {
+            dataEnd--;
+          }
           try {
-            const rawBytes = bytes.subarray(dataStart, endStreamIdx);
+            const rawBytes = bytes.subarray(dataStart, dataEnd);
             const decomp = await decompressDeflateData(rawBytes);
             if (decomp) {
               const text = new TextDecoder('latin1').decode(decomp);
