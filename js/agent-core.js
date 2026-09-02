@@ -87,30 +87,105 @@
   }
 
   /**
-   * Representa una herramienta individual ejecutable (Tool).
+   * Versión del contrato público que deben implementar las herramientas.
+   *
+   * Una herramienta puede exponerse como una instancia de Tool (adaptador de
+   * compatibilidad) o como un módulo que implemente los mismos métodos. Las
+   * futuras herramientas autocontenidas usarán este contrato directamente.
+   */
+  const TOOL_CONTRACT_VERSION = 1;
+
+  /**
+   * Resultado normalizado de una ejecución. Mantiene el resultado nativo en
+   * `data` para no alterar el comportamiento de las herramientas existentes.
+   */
+  class ToolOutcome {
+    constructor(options = {}) {
+      this.ok = options.ok !== false;
+      this.data = options.data === undefined ? null : options.data;
+      this.error = options.error || null;
+      this.meta = options.meta || {};
+    }
+
+    static fromExecution(result, meta = {}) {
+      const ok = result?.success !== false;
+      return new ToolOutcome({
+        ok,
+        data: result,
+        error: result?.error || null,
+        meta
+      });
+    }
+
+    static fromError(error, meta = {}) {
+      return new ToolOutcome({
+        ok: false,
+        data: null,
+        error: error?.message || String(error || 'Error de ejecución de herramienta.'),
+        meta
+      });
+    }
+  }
+
+  /**
+   * Valida el contrato mínimo de una herramienta antes de registrarla.
+   * La validación no impone todavía una vista específica: durante la migración
+   * las herramientas existentes pueden usar el renderer genérico.
+   */
+  function validateToolContract(tool) {
+    const errors = [];
+    if (!tool || typeof tool !== 'object') {
+      return { valid: false, errors: ['La herramienta debe ser un objeto.'] };
+    }
+    if (!tool.id || typeof tool.id !== 'string') errors.push('Falta un id de herramienta válido.');
+    if (!tool.name || typeof tool.name !== 'string') errors.push('Falta un nombre de función válido.');
+    if (!tool.description || typeof tool.description !== 'string') errors.push('Falta una descripción válida.');
+    if (!tool.parameters || tool.parameters.type !== 'object') errors.push('El esquema parameters debe ser un objeto JSON Schema.');
+    if (typeof tool.getDefinition !== 'function') errors.push('Falta getDefinition().');
+    if (typeof tool.execute !== 'function') errors.push('Falta execute(args, context).');
+    if (typeof tool.isAvailable !== 'function') errors.push('Falta isAvailable(context).');
+    if (typeof tool.serializeResultForModel !== 'function') errors.push('Falta serializeResultForModel(args, result).');
+    if (typeof tool.formatMarkdownResult !== 'function') errors.push('Falta formatMarkdownResult(args, result).');
+    if (!tool.settings || typeof tool.settings !== 'object') errors.push('Falta descriptor settings.');
+
+    return { valid: errors.length === 0, errors };
+  }
+
+  /**
+   * Representa una herramienta individual ejecutable y adapta la API histórica
+   * al contrato ToolModule v1.
    */
   class Tool {
     constructor(options = {}) {
-      this.id = options.id || options.name || '';
-      this.name = options.name || '';
-      this.description = options.description || '';
-      this.parameters = options.parameters || { type: 'object', properties: {} };
+      const definition = options.definition || {};
+      this.contractVersion = options.contractVersion || TOOL_CONTRACT_VERSION;
+      this.id = options.id || definition.id || definition.name || options.name || '';
+      this.name = definition.name || options.name || '';
+      // Las tools históricas podían omitir descripción; el adaptador conserva
+      // su registro y les proporciona una descripción mínima válida.
+      this.description = definition.description || options.description || this.name;
+      this.parameters = definition.parameters || options.parameters || { type: 'object', properties: {} };
       this.aliases = Array.isArray(options.aliases) ? options.aliases : [];
       this.category = options.category || 'general';
       this.metadata = options.metadata || {};
-      this.ui = {
-        titleKey: options.ui?.titleKey || `agent_${this.name}_title`,
-        titleFallback: options.ui?.titleFallback || options.metadata?.label || this.name,
-        descKey: options.ui?.descKey || `agent_${this.name}_desc`,
-        descFallback: options.ui?.descFallback || this.description,
-        icon: options.ui?.icon || options.metadata?.icon || '⚙️',
-        defaultEnabled: options.ui?.defaultEnabled !== false,
-        showInSettings: options.ui?.showInSettings !== false
+      const settings = options.settings || options.ui || {};
+      this.settings = {
+        titleKey: settings.titleKey || `agent_${this.name}_title`,
+        titleFallback: settings.titleFallback || options.metadata?.label || this.name,
+        descKey: settings.descKey || `agent_${this.name}_desc`,
+        descFallback: settings.descFallback || this.description,
+        icon: settings.icon || options.metadata?.icon || '⚙️',
+        defaultEnabled: settings.defaultEnabled !== false,
+        showInSettings: settings.showInSettings !== false
       };
-      this.handler = options.handler || null;
-      this.formatter = options.formatter || null;
+      // `ui` se conserva mientras app.js completa su migración a `settings`.
+      this.ui = this.settings;
+      this.handler = options.execute || options.handler || null;
+      this.result = options.result || {};
+      this.formatter = this.result.toMarkdown || options.formatter || null;
       this.promptGuide = options.promptGuide || options.getSystemPromptGuide || null;
       this.isAvailable = typeof options.isAvailable === 'function' ? options.isAvailable : (() => true);
+      this.view = options.view || null;
     }
 
     /**
@@ -145,6 +220,16 @@
         return this.handler(args, context);
       }
       throw new Error(`La herramienta ${this.name} no tiene handler de ejecución implementado.`);
+    }
+
+    /**
+     * Serializa una salida para el mensaje con rol `tool` que consume el LLM.
+     */
+    serializeResultForModel(args, result, outcome) {
+      if (typeof this.result.toModel === 'function') {
+        return this.result.toModel(args, result, outcome);
+      }
+      return typeof result === 'object' ? JSON.stringify(result) : String(result ?? '');
     }
 
     /**
@@ -610,7 +695,10 @@
      * Registra una herramienta individual.
      */
     registerTool(tool) {
-      if (!tool || !tool.name) return;
+      const validation = validateToolContract(tool);
+      if (!validation.valid) {
+        throw new Error(`Contrato de herramienta inválido: ${validation.errors.join(' ')}`);
+      }
       const canonicalName = tool.name.trim().toLowerCase();
       this.tools.set(canonicalName, tool);
 
@@ -625,6 +713,7 @@
           this.aliasMap.set(cleanAlias.replace(/_/g, ''), canonicalName);
         });
       }
+      return tool;
     }
 
     /**
@@ -656,17 +745,17 @@
     listToolsForUI() {
       const list = [];
       for (const tool of this.tools.values()) {
-        if (tool.ui && tool.ui.showInSettings !== false) {
+        if (tool.settings && tool.settings.showInSettings !== false) {
           list.push({
             id: tool.id || tool.name,
             name: tool.name,
             category: tool.category,
-            icon: tool.ui.icon,
-            titleKey: tool.ui.titleKey,
-            titleFallback: tool.ui.titleFallback,
-            descKey: tool.ui.descKey,
-            descFallback: tool.ui.descFallback,
-            defaultEnabled: tool.ui.defaultEnabled !== false
+            icon: tool.settings.icon,
+            titleKey: tool.settings.titleKey,
+            titleFallback: tool.settings.titleFallback,
+            descKey: tool.settings.descKey,
+            descFallback: tool.settings.descFallback,
+            defaultEnabled: tool.settings.defaultEnabled !== false
           });
         }
       }
@@ -687,11 +776,11 @@
         }
 
         // 2. Si la herramienta se configura en la UI, verificar si está activada
-        if (tool.ui && tool.ui.showInSettings !== false) {
+        if (tool.settings && tool.settings.showInSettings !== false) {
           const toolId = tool.id || tool.name;
           const isEnabled = enabledTools[toolId] !== undefined
             ? enabledTools[toolId] !== false
-            : (enabledTools[tool.name] !== undefined ? enabledTools[tool.name] !== false : tool.ui.defaultEnabled !== false);
+            : (enabledTools[tool.name] !== undefined ? enabledTools[tool.name] !== false : tool.settings.defaultEnabled !== false);
 
           if (!isEnabled) {
             continue;
@@ -723,11 +812,11 @@
           continue;
         }
 
-        if (tool.ui && tool.ui.showInSettings !== false) {
+        if (tool.settings && tool.settings.showInSettings !== false) {
           const toolId = tool.id || tool.name;
           const isEnabled = enabledTools[toolId] !== undefined
             ? enabledTools[toolId] !== false
-            : (enabledTools[tool.name] !== undefined ? enabledTools[tool.name] !== false : tool.ui.defaultEnabled !== false);
+            : (enabledTools[tool.name] !== undefined ? enabledTools[tool.name] !== false : tool.settings.defaultEnabled !== false);
 
           if (!isEnabled) {
             continue;
@@ -798,12 +887,19 @@
       const parsedArgs = this.parseArguments(toolCall?.function?.arguments);
 
       if (!tool) {
+        const error = `Herramienta '${rawName}' no encontrada en el registro.`;
         return {
           success: false,
           toolName: rawName,
-          error: `Herramienta '${rawName}' no encontrada en el registro.`,
+          error,
           executionTimeMs: 0,
-          result: null
+          result: null,
+          outcome: ToolOutcome.fromError(error, {
+            toolId: null,
+            toolName: rawName,
+            contractVersion: TOOL_CONTRACT_VERSION,
+            executionTimeMs: 0
+          })
         };
       }
 
@@ -818,12 +914,19 @@
         const endTime = typeof performance !== 'undefined' ? performance.now() : Date.now();
         const elapsed = parseFloat((endTime - startTime).toFixed(2));
 
+        const meta = {
+          toolId: tool.id,
+          toolName: tool.name,
+          contractVersion: tool.contractVersion || TOOL_CONTRACT_VERSION,
+          executionTimeMs: elapsed
+        };
         return {
           success: execResult?.success !== false,
           tool: tool,
           toolName: tool.name,
           args: parsedArgs,
           result: execResult,
+          outcome: ToolOutcome.fromExecution(execResult, meta),
           executionTimeMs: elapsed,
           error: execResult?.error
         };
@@ -831,6 +934,12 @@
         const endTime = typeof performance !== 'undefined' ? performance.now() : Date.now();
         const elapsed = parseFloat((endTime - startTime).toFixed(2));
 
+        const meta = {
+          toolId: tool.id,
+          toolName: tool.name,
+          contractVersion: tool.contractVersion || TOOL_CONTRACT_VERSION,
+          executionTimeMs: elapsed
+        };
         return {
           success: false,
           tool: tool,
@@ -838,7 +947,8 @@
           args: parsedArgs,
           error: err.message || String(err),
           executionTimeMs: elapsed,
-          result: null
+          result: null,
+          outcome: ToolOutcome.fromError(err, meta)
         };
       }
     }
@@ -1534,6 +1644,9 @@
   const globalAgent = new AgentCore({ registry: globalRegistry, executor: globalExecutor });
 
   return {
+    TOOL_CONTRACT_VERSION,
+    ToolOutcome,
+    validateToolContract,
     Tool,
     BaseToolProvider,
     BuiltinToolProvider,
@@ -1549,4 +1662,3 @@
     executeToolCall: (toolCall, context) => globalExecutor.executeToolCall(toolCall, context)
   };
 });
-
