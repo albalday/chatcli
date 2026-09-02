@@ -18,12 +18,12 @@
   'use strict';
 
   // Resolutores perezosos de dependencias del entorno
-  function getExecuteJavascriptToolModule() {
-    if (typeof window !== 'undefined' && window.ChatBuiltinExecuteJavascriptTool) {
-      return window.ChatBuiltinExecuteJavascriptTool;
+  function getBuiltinToolModule(globalName, modulePath) {
+    if (typeof window !== 'undefined' && window[globalName]) {
+      return window[globalName];
     }
     if (typeof require !== 'undefined') {
-      try { return require('./tools/builtin/execute-javascript.tool.js'); } catch (e) {}
+      try { return require(modulePath); } catch (e) {}
     }
     return null;
   }
@@ -36,20 +36,13 @@
     return null;
   }
 
-  function getWebSearch() {
-    if (typeof window !== 'undefined' && window.ChatWebSearch) return window.ChatWebSearch;
-    if (typeof require !== 'undefined') {
-      try { return require('./web-search.js'); } catch (e) {}
+  function createBuiltinTool(toolId, globalName, modulePath) {
+    const builtinManifest = getBuiltinToolManifest();
+    const toolModule = builtinManifest?.get(toolId) || getBuiltinToolModule(globalName, modulePath);
+    if (!toolModule || typeof toolModule.createTool !== 'function') {
+      throw new Error(`No se pudo cargar el módulo de la herramienta ${toolId}.`);
     }
-    return null;
-  }
-
-  function getWebBrowser() {
-    if (typeof window !== 'undefined' && window.ChatWebBrowser) return window.ChatWebBrowser;
-    if (typeof require !== 'undefined') {
-      try { return require('./web-browser.js'); } catch (e) {}
-    }
-    return null;
+    return toolModule.createTool(Tool);
   }
 
   function getCharts() {
@@ -304,138 +297,12 @@
       const tools = [];
 
       // 1. Herramienta execute_javascript (módulo autocontenido)
-      const builtinManifest = getBuiltinToolManifest();
-      const executeJavascriptModule = builtinManifest?.get('execute_javascript') || getExecuteJavascriptToolModule();
-      if (!executeJavascriptModule || typeof executeJavascriptModule.createTool !== 'function') {
-        throw new Error('No se pudo cargar el módulo de la herramienta execute_javascript.');
-      }
-      tools.push(executeJavascriptModule.createTool(Tool));
+      tools.push(createBuiltinTool('execute_javascript', 'ChatBuiltinExecuteJavascriptTool', './tools/builtin/execute-javascript.tool.js'));
 
-      // 2. Herramienta search_web
-      tools.push(new Tool({
-        id: 'search_web',
-        name: 'search_web',
-        description: 'Busca en internet en tiempo real información actualizada, noticias, artículos y enlaces web utilizando DuckDuckGo.',
-        parameters: {
-          type: 'object',
-          properties: {
-            query: { type: 'string', description: 'Términos o consulta de búsqueda (ej: "INE poblacion Ceuta padron", "DeepSeek R1").' }
-          },
-          required: ['query']
-        },
-        aliases: ['searchweb', 'web_search', 'duckduckgo_search', 'duckduckgo', 'search_internet', 'internet_search', 'search'],
-        category: 'web',
-        metadata: { icon: '🔍', label: 'search_web' },
-        ui: {
-          titleKey: 'agent_search_title',
-          titleFallback: '🔍 Búsqueda en DuckDuckGo en Tiempo Real',
-          descKey: 'agent_search_desc',
-          descFallback: 'Permite al modelo invocar search_web para buscar información actualizada, definiciones, noticias y enlaces web mediante la API de DuckDuckGo.',
-          icon: '🔍',
-          defaultEnabled: true,
-          showInSettings: true
-        },
-        promptGuide: (lang) => lang === 'en'
-          ? '- `search_web(query="...")`: Searches up-to-date information, news, articles, and links on the internet using DuckDuckGo.'
-          : '- `search_web(query="...")`: Busca información actualizada, noticias, artículos y enlaces en internet mediante DuckDuckGo.',
-        handler: async (args, context) => {
-          const WebSearch = getWebSearch();
-          const query = args.query || args.q || args.search || args.keyword || args.term || args.input || (typeof args === 'string' ? args : '');
-          if (!WebSearch || !WebSearch.search) {
-            return { success: false, error: 'Módulo WebSearch no disponible.' };
-          }
-          return WebSearch.search(query, context.lang || 'es');
-        },
-        result: {
-          toModel: (_args, result) => result?.markdown || JSON.stringify(result || {}),
-          toMarkdown: (args, result) => {
-            const resultText = result?.markdown || JSON.stringify(result || {});
-            return `> 🔍 **search_web** (${result?.count || 0} fuentes)\n> Query: "${args.query || ''}"\n> \`\`\`markdown\n> ${resultText.split('\n').join('\n> ')}\n> \`\`\``;
-          }
-        }
-      }));
-
-      // 3. Herramienta fetch_web_page
-      tools.push(new Tool({
-        id: 'fetch_web_page',
-        name: 'fetch_web_page',
-        description: 'Descarga y lee el texto y contenido de una página web pública o artículo HTML a partir de su URL (ej: "https://es.wikipedia.org/wiki/Sol").',
-        parameters: {
-          type: 'object',
-          properties: {
-            url: { type: 'string', description: 'URL de la página web a consultar.' }
-          },
-          required: ['url']
-        },
-        aliases: ['fetchwebpage', 'fetch_web', 'fetch_url', 'get_web_page', 'read_web_page', 'web_fetch', 'browse_web', 'webpage'],
-        category: 'web',
-        metadata: { icon: '🌐', label: 'fetch_web_page' },
-        ui: {
-          titleKey: 'agent_web_title',
-          titleFallback: '🌐 Navegación Web en Tiempo Real',
-          descKey: 'agent_web_desc',
-          descFallback: 'Permite al modelo invocar fetch_web_page para consultar páginas web públicas y extraer su contenido textual en tiempo real.',
-          icon: '🌐',
-          defaultEnabled: true,
-          showInSettings: true
-        },
-        promptGuide: (lang) => lang === 'en'
-          ? '- `fetch_web_page(url="...")`: Reads and extracts clean text content from public web pages or HTML articles.'
-          : '- `fetch_web_page(url="...")`: Lee y extrae el texto de páginas web públicas o artículos HTML.',
-        handler: async (args, context) => {
-          const WebBrowser = getWebBrowser();
-          const url = args.url || args.URL || args.uri || args.link || args.href || args.path || args.input || (typeof args === 'string' ? args : '');
-          if (!WebBrowser || !WebBrowser.fetchPage) {
-            return { success: false, error: 'Módulo WebBrowser no disponible.' };
-          }
-          return WebBrowser.fetchPage(url, context.options || {});
-        },
-        result: {
-          toModel: (_args, result) => JSON.stringify(result || {}),
-          toMarkdown: (args) => `> 🌐 **fetch_web_page**\n> URL: "${args.url || ''}"\n\n`
-        }
-      }));
-
-      // 4. Herramienta download_pdf
-      tools.push(new Tool({
-        id: 'download_pdf',
-        name: 'download_pdf',
-        description: 'Descarga un archivo o documento PDF desde una URL web y extrae todo su texto legible para analizarlo e integrarlo en el contexto (ej: "https://arxiv.org/pdf/2310.06825.pdf").',
-        parameters: {
-          type: 'object',
-          properties: {
-            url: { type: 'string', description: 'URL directa del documento PDF a descargar y extraer.' }
-          },
-          required: ['url']
-        },
-        aliases: ['downloadpdf', 'fetch_pdf', 'download_pdf_document', 'fetch_pdf_document', 'download_file', 'getpdf', 'readpdf'],
-        category: 'web',
-        metadata: { icon: '📄', label: 'download_pdf' },
-        ui: {
-          titleKey: 'agent_pdf_title',
-          titleFallback: '📄 Descarga y Lectura de Documentos PDF',
-          descKey: 'agent_pdf_desc',
-          descFallback: 'Permite al modelo descargar documentos PDF desde la web y extraer todo su texto al contexto en tiempo real.',
-          icon: '📄',
-          defaultEnabled: true,
-          showInSettings: true
-        },
-        promptGuide: (lang) => lang === 'en'
-          ? '- `download_pdf(url="...")`: Downloads a PDF file from a URL and extracts its readable text into the prompt context.'
-          : '- `download_pdf(url="...")`: Descarga un documento PDF desde una URL y extrae todo su texto legible al contexto.',
-        handler: async (args, context) => {
-          const WebBrowser = getWebBrowser();
-          const url = args.url || args.URL || args.uri || args.link || args.href || args.path || args.input || (typeof args === 'string' ? args : '');
-          if (!WebBrowser || !WebBrowser.downloadPdf) {
-            return { success: false, error: 'Módulo WebBrowser no disponible.' };
-          }
-          return WebBrowser.downloadPdf(url, context.options || {});
-        },
-        result: {
-          toModel: (_args, result) => JSON.stringify(result || {}),
-          toMarkdown: (args) => `> 📄 **download_pdf**\n> URL: "${args.url || ''}"\n\n`
-        }
-      }));
+      // 2-4. Herramientas web autocontenidas
+      tools.push(createBuiltinTool('search_web', 'ChatBuiltinSearchWebTool', './tools/builtin/search-web.tool.js'));
+      tools.push(createBuiltinTool('fetch_web_page', 'ChatBuiltinFetchWebPageTool', './tools/builtin/fetch-web-page.tool.js'));
+      tools.push(createBuiltinTool('download_pdf', 'ChatBuiltinDownloadPdfTool', './tools/builtin/download-pdf.tool.js'));
 
       // 5. Herramienta render_chart
       tools.push(new Tool({
