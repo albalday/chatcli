@@ -521,9 +521,8 @@
   function updateConnectionTokensBadge(stats) {
     if (!elements.connectionTokensBadge) return;
 
-    const contextLimitK = appConfig.ragContextLimitK || 128;
-    const maxTokens = contextLimitK * 1024;
-    const maxFormatted = contextLimitK + 'k';
+    const maxTokens = ContextManager.getModelContextLimit ? ContextManager.getModelContextLimit(appConfig.model, appConfig.apiType) : 128000;
+    const maxFormatted = formatTokenCount(maxTokens);
 
     // Mostrar la insignia únicamente si el servidor devolvió explícitamente usage (promptTokens o totalTokens)
     const promptTok = (stats && typeof stats === 'object') ? (stats.promptTokens || stats.totalTokens || 0) : 0;
@@ -878,16 +877,16 @@
       updateConnectionTokensBadge(stats);
     }
 
-    // Sincronizar dinámicamente la rama RAG activa desde ChatTreeRagUI o Storage
-    const activeRagBranchId = (typeof window !== 'undefined' && window.ChatTreeRagUI && window.ChatTreeRagUI.getActiveChatBranchId)
-      ? window.ChatTreeRagUI.getActiveChatBranchId()
+    // Sincronizar dinámicamente la rama local activa.
+    const activeRagBranchId = (typeof window !== 'undefined' && window.ChatRagUI && window.ChatRagUI.getActiveBranchId)
+      ? window.ChatRagUI.getActiveBranchId()
       : (appConfig.activeRagBranchId || (Storage.loadConfig ? Storage.loadConfig()?.activeRagBranchId : '') || '');
     appConfig.activeRagBranchId = activeRagBranchId;
 
-    // Cargar contexto jerárquico inicial de la rama RAG para Context-Caching en System Prompt
-    if (activeRagBranchId && window.ChatTreeRagService && window.ChatTreeRagService.buildTreeRagSystemContext) {
+    // Cargar únicamente la instrucción compacta de la rama activa.
+    if (activeRagBranchId && window.ChatRagService && window.ChatRagService.buildRagSystemContext) {
       try {
-        currentRagSystemContext = await window.ChatTreeRagService.buildTreeRagSystemContext(activeRagBranchId);
+        currentRagSystemContext = await window.ChatRagService.buildRagSystemContext(activeRagBranchId);
       } catch (err) {
         console.warn('Error al cargar contexto inicial de RAG:', err);
         currentRagSystemContext = '';
@@ -1161,15 +1160,8 @@
 
   async function loadSessionsFromStorage() {
     try {
-      if (Storage.initDB) {
-        await Storage.initDB();
-      }
-      if (Storage.getConversationsList) {
-        savedSessions = await Storage.getConversationsList();
-      } else {
-        const raw = Storage.getStorageItem ? Storage.getStorageItem('chat_sessions') : localStorage.getItem('chat_sessions');
-        savedSessions = raw ? JSON.parse(raw) : [];
-      }
+      await Storage.initDB();
+      savedSessions = await Storage.getConversationsList();
     } catch (e) {
       console.warn('Error al cargar sesiones de chat:', e);
       savedSessions = [];
@@ -1198,15 +1190,7 @@
     if (!hasRealUserMessages) {
       if (Array.isArray(savedSessions)) {
         savedSessions = savedSessions.filter(s => s.id !== currentSessionId);
-        if (Storage.deleteConversation) {
-          await Storage.deleteConversation(currentSessionId);
-        } else {
-          try {
-            const serialized = JSON.stringify(savedSessions);
-            if (Storage.setStorageItem) Storage.setStorageItem('chat_sessions', serialized);
-            else localStorage.setItem('chat_sessions', serialized);
-          } catch (e) {}
-        }
+        await Storage.deleteConversation(currentSessionId);
       }
       renderSidebarChats();
       return;
@@ -1245,15 +1229,7 @@
       }
     }
 
-    if (Storage.saveConversation) {
-      await Storage.saveConversation(sess, chatHistory);
-    } else {
-      try {
-        const serialized = JSON.stringify(savedSessions);
-        if (Storage.setStorageItem) Storage.setStorageItem('chat_sessions', serialized);
-        else localStorage.setItem('chat_sessions', serialized);
-      } catch (e) {}
-    }
+    await Storage.saveConversation(sess, chatHistory);
 
     renderSidebarChats();
   }
@@ -1326,15 +1302,7 @@
 
     savedSessions.splice(idx, 1);
 
-    if (Storage.deleteConversation) {
-      await Storage.deleteConversation(sessionId);
-    } else {
-      try {
-        const serialized = JSON.stringify(savedSessions);
-        if (Storage.setStorageItem) Storage.setStorageItem('chat_sessions', serialized);
-        else localStorage.setItem('chat_sessions', serialized);
-      } catch (e) {}
-    }
+    await Storage.deleteConversation(sessionId);
 
     if (savedSessions.length === 0) {
       await createNewSession({ saveCurrent: false });
@@ -1351,22 +1319,10 @@
     if (!confirm(t('chat_delete_all_confirm'))) return;
 
     savedSessions = [];
-    if (Storage.deleteAllConversations) {
-      const deleted = await Storage.deleteAllConversations();
-      if (!deleted) {
-        alert('No se pudo borrar el historial persistente. Revisa la consola para más detalles.');
-        return;
-      }
-      // Evita que la migración de arranque reimporte sesiones legacy tras F5.
-      if (Storage.deleteStorageItem) Storage.deleteStorageItem('chat_sessions');
-      else {
-        try { localStorage.removeItem('chat_sessions'); } catch (e) {}
-      }
-    } else {
-      try {
-        if (Storage.setStorageItem) Storage.setStorageItem('chat_sessions', JSON.stringify([]));
-        else localStorage.setItem('chat_sessions', JSON.stringify([]));
-      } catch (e) {}
+    const deleted = await Storage.deleteAllConversations();
+    if (!deleted) {
+      alert('No se pudo borrar el historial persistente. Revisa la consola para más detalles.');
+      return;
     }
 
     await createNewSession({ saveCurrent: false });
@@ -2135,8 +2091,8 @@
     loadSessionsFromStorage();
     setupEventListeners();
 
-    if (window.ChatTreeRagUI && window.ChatTreeRagUI.initTreeRagUI) {
-      window.ChatTreeRagUI.initTreeRagUI();
+    if (window.ChatRagUI && window.ChatRagUI.initRagUI) {
+      window.ChatRagUI.initRagUI();
     }
 
     window.ChatApp = {
@@ -2156,7 +2112,7 @@
       exportConversationAsPrint
     };
 
-    console.log('💬 ZeroChat v5.3 initialized successfully with Autonomous Agentic Engine, Traffic Debug Logs and Tree-RAG.');
+    console.log('💬 ZeroChat v5.3 initialized with autonomous tools and local Orama knowledge.');
   }
 
   if (document.readyState === 'loading') {

@@ -12,7 +12,7 @@ const RenderChartTool = require('../js/tools/builtin/render-chart.tool.js');
 const DateTimeTool = require('../js/tools/builtin/get-current-datetime.tool.js');
 const ListDocumentsTool = require('../js/tools/builtin/list-documents.tool.js');
 const SearchKnowledgeBaseTool = require('../js/tools/builtin/search-knowledge-base.tool.js');
-const ReadChapterContentTool = require('../js/tools/builtin/read-chapter-content.tool.js');
+const ReadKnowledgeChunkTool = require('../js/tools/builtin/read-knowledge-chunk.tool.js');
 
 const ALL_BUILTIN_MODULES = [
   ExecuteJavascriptTool,
@@ -23,7 +23,7 @@ const ALL_BUILTIN_MODULES = [
   DateTimeTool,
   ListDocumentsTool,
   SearchKnowledgeBaseTool,
-  ReadChapterContentTool
+  ReadKnowledgeChunkTool
 ];
 
 test('Builtin Tools - Todos los módulos cumplen el contrato declarativo y se registran en el manifiesto', () => {
@@ -148,25 +148,25 @@ test('Builtin Tools - render_chart y get_current_datetime ejecutan de forma auto
 
 test('Builtin Tools - RAG tools consumen el servicio inyectado y propagan rama activa', async () => {
   const calls = [];
-  const treeRagService = {
-    resolveListDocumentsToolCall: async (branchId) => {
+  const ragService = {
+    listDocuments: async (branchId) => {
       calls.push({ name: 'list', branchId });
       return { success: true, count: 1, text: 'Documento' };
     },
-    resolveSearchKnowledgeBaseToolCall: async (branchId, args) => {
+    searchKnowledgeBase: async (branchId, args) => {
       calls.push({ name: 'search', branchId, args });
       return { success: true, matchesCount: 1, text: 'Coincidencia' };
     },
-    resolveChapterToolCall: async (args) => {
-      calls.push({ name: 'read', args });
-      return { success: true, docId: args.docId, chapterId: args.chapterId, content: 'Contenido', charCount: 9 };
+    readKnowledgeChunk: async (branchId, args) => {
+      calls.push({ name: 'read', branchId, args });
+      return { success: true, chunkId: args.chunkId, content: 'Contenido', charCount: 9 };
     }
   };
-  const context = { config: { activeRagBranchId: 'branch-1' }, services: { treeRagService } };
+  const context = { config: { activeRagBranchId: 'branch-1' }, services: { ragService } };
 
   const listResult = await ListDocumentsTool.createTool(AgentCore.Tool).execute({}, context);
   const searchResult = await SearchKnowledgeBaseTool.createTool(AgentCore.Tool).execute({ query: 'seguridad' }, context);
-  const readResult = await ReadChapterContentTool.createTool(AgentCore.Tool).execute({ docId: 'doc-1', chapterId: 2 }, context);
+  const readResult = await ReadKnowledgeChunkTool.createTool(AgentCore.Tool).execute({ chunkId: 'doc-1:chunk:2' }, context);
 
   assert.equal(listResult.text, 'Documento');
   assert.equal(searchResult.text, 'Coincidencia');
@@ -174,6 +174,6 @@ test('Builtin Tools - RAG tools consumen el servicio inyectado y propagan rama a
   assert.deepEqual(calls, [
     { name: 'list', branchId: 'branch-1' },
     { name: 'search', branchId: 'branch-1', args: { query: 'seguridad' } },
-    { name: 'read', args: { docId: 'doc-1', chapterId: 2 } }
+    { name: 'read', branchId: 'branch-1', args: { chunkId: 'doc-1:chunk:2' } }
   ]);
 });

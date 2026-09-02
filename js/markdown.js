@@ -69,9 +69,6 @@
     if (/^blob:[^\s"'<>]+/i.test(trimmed)) {
       return escapeHtml(trimmed);
     }
-    if (/^rag-image:\/\/[^\s"'<>]+/i.test(trimmed)) {
-      return escapeHtml(trimmed);
-    }
     return '';
   }
 
@@ -293,31 +290,7 @@
       if (!safeSrc) return altText || '';
       const cleanAlt = altText ? escapeHtml(altText.trim()) : 'Imagen';
       const caption = cleanAlt && !cleanAlt.startsWith('#img') ? `<figcaption class="chat-image-caption">${cleanAlt}</figcaption>` : '';
-      const ragSrcAttr = url.startsWith('rag-image://') ? ` data-rag-src="${url}"` : '';
-      return `\n<figure class="chat-image-figure"${ragSrcAttr}><img class="chat-embedded-image" src="${safeSrc}" alt="${cleanAlt}"${ragSrcAttr} loading="lazy" />${caption}</figure>\n`;
-    });
-
-    // 9. Referencias textuales a diagramas del RAG (ej: "Diagrama (Pág. 7) #img_7_12", "#img_87_79", "<code>#img_87_79</code>")
-    // A. Desempaquetar tags dentro de <code>
-    p = p.replace(/<code>#?(?:img_)?([0-9]+(?:_[0-9]+)?)<\/code>/gi, '#img_$1');
-
-    // B. Reemplazar líneas completas dedicadas o titulares breves
-    p = p.replace(/(?:^|\n)([ \t]*(?:(?:Diagrama|Esquema|Figura|Ilustración|Captura|Imagen)[^\n<]*?|#)[^\n<]*?#(?:img_)?([0-9]+(?:_[0-9]+)?)[^\n<]*)(?:\n|$)/gi, function (match, fullLine, imgNum) {
-      if (fullLine.includes('<img') || fullLine.includes('<figure') || fullLine.includes('![') || fullLine.includes('src=') || fullLine.length > 90) {
-        return match;
-      }
-      const cleanCaption = fullLine.trim().replace(/^#+\s*/, '');
-      const imgId = imgNum.startsWith('img_') ? imgNum : (`img_${imgNum}`);
-      const ragUrl = `rag-image://${imgId}`;
-      return `\n<figure class="chat-image-figure" data-rag-src="${ragUrl}"><img class="chat-embedded-image" src="${ragUrl}" alt="${escapeHtml(cleanCaption)}" data-rag-src="${ragUrl}" loading="lazy" /><figcaption class="chat-image-caption">${escapeHtml(cleanCaption)}</figcaption></figure>\n`;
-    });
-
-    // C. Reemplazar tags inline residuales en medio de prosa
-    p = p.replace(/(<figure[\s\S]*?<\/figure>)|(#(?:img_)?([0-9]+(?:_[0-9]+)?))/gi, function (match, figureBlock, tagMatch, imgNum) {
-      if (figureBlock) return figureBlock;
-      const imgId = imgNum.startsWith('img_') ? imgNum : (`img_${imgNum}`);
-      const ragUrl = `rag-image://${imgId}`;
-      return `<figure class="chat-image-figure" data-rag-src="${ragUrl}"><img class="chat-embedded-image" src="${ragUrl}" alt="Diagrama #${imgId.replace('img_', '')}" data-rag-src="${ragUrl}" loading="lazy" /></figure>`;
+      return `\n<figure class="chat-image-figure"><img class="chat-embedded-image" src="${safeSrc}" alt="${cleanAlt}" loading="lazy" />${caption}</figure>\n`;
     });
 
     // 10. Enlaces [texto](url)
@@ -545,35 +518,6 @@
       });
     });
 
-    // 4. Hidratación de imágenes dinámicas del RAG (rag-image://)
-    hydrateRagImages(container);
-  }
-
-  async function hydrateRagImages(container) {
-    if (!container || !container.querySelectorAll) return;
-    const RagStorage = typeof window !== 'undefined' ? (window.ChatRagStorage || {}) : {};
-    const TreeRagUI = typeof window !== 'undefined' ? (window.ChatTreeRagUI || {}) : {};
-    const activeBranchId = TreeRagUI.getActiveChatBranchId ? TreeRagUI.getActiveChatBranchId() : null;
-
-    const imgEls = container.querySelectorAll('img[data-rag-src], img[src^="rag-image://"], figure[data-rag-src]');
-    if (imgEls.length === 0) return;
-
-    for (const el of imgEls) {
-      const img = el.tagName === 'IMG' ? el : el.querySelector('img');
-      if (!img) continue;
-      const ragSrc = img.getAttribute('data-rag-src') || img.getAttribute('src');
-      if (!ragSrc || !ragSrc.startsWith('rag-image://')) continue;
-
-      if (RagStorage && typeof RagStorage.resolveImageSrc === 'function') {
-        try {
-          const dataUrl = await RagStorage.resolveImageSrc(ragSrc, activeBranchId);
-          if (dataUrl && (dataUrl.startsWith('data:image/') || dataUrl.startsWith('http') || dataUrl.startsWith('blob:'))) {
-            img.src = dataUrl;
-            img.removeAttribute('data-rag-src');
-          }
-        } catch (e) {}
-      }
-    }
   }
 
   return {

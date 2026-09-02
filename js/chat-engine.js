@@ -184,7 +184,7 @@
       ? appConfig.systemPrompt.trim()
       : '';
 
-    // Inyección de Base de Conocimiento (RAG Jerárquico por Ramas) para Context-Caching
+    // Inyección de la instrucción compacta de conocimiento local.
     const ragContext = options.currentRagSystemContext || appConfig.currentRagSystemContext || '';
     if (ragContext) {
       activePrompt = activePrompt ? `${ragContext}\n\n${activePrompt}` : ragContext;
@@ -228,13 +228,13 @@
 
     // Directiva proactiva de Base de Conocimiento activa
     const activeBranchId = options.activeRagBranchId ||
-      (typeof window !== 'undefined' && window.ChatTreeRagUI && window.ChatTreeRagUI.getActiveChatBranchId ? window.ChatTreeRagUI.getActiveChatBranchId() : '') ||
+      (typeof window !== 'undefined' && window.ChatRagUI && window.ChatRagUI.getActiveBranchId ? window.ChatRagUI.getActiveBranchId() : '') ||
       (appConfig.activeRagBranchId || '');
 
     if (activeBranchId) {
       const ragInstruction = (lang === 'en')
-        ? `*Knowledge Base active:* You have access to the user's private local knowledge base via 'list_documents', 'search_knowledge_base', and 'read_chapter_content'. When the user asks about available manuals, documentation, guides, or technical information, proactively consult these tools before concluding.`
-        : `*Base de Conocimiento activa:* Tienes acceso a la base de conocimiento local y manuales privados del usuario mediante las herramientas 'list_documents', 'search_knowledge_base' y 'read_chapter_content'. Ante preguntas sobre documentación disponible, manuales, procedimientos técnicos o normativas, consulta proactivamente los documentos indexados utilizando estas herramientas antes de responder.`;
+        ? `*Knowledge Base active:* Use 'list_documents', 'search_knowledge_base', and 'read_knowledge_chunk' to consult the user's private local documents before answering related questions.`
+        : `*Base de Conocimiento activa:* Usa 'list_documents', 'search_knowledge_base' y 'read_knowledge_chunk' para consultar los documentos privados locales antes de responder preguntas relacionadas.`;
       toolsGuide = toolsGuide ? `${toolsGuide}\n\n${ragInstruction}` : ragInstruction;
     }
 
@@ -509,7 +509,6 @@
             enableAgentWeb: appConfig.enableAgentWeb !== false,
             enableAgentSearch: appConfig.enableAgentSearch !== false,
             enableAgentChart: appConfig.enableAgentChart !== false,
-            enableAgentRag: Boolean(activeRagBranchId),
             activeRagBranchId: activeRagBranchId || '',
             enableContextCache: appConfig.enableContextCache !== false,
             signal: signal,

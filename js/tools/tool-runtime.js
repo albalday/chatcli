@@ -18,8 +18,8 @@
     webSearch: { globalName: 'ChatWebSearch', modulePath: '../web-search.js' },
     webBrowser: { globalName: 'ChatWebBrowser', modulePath: '../web-browser.js' },
     charts: { globalName: 'ChatCharts', modulePath: '../charts.js' },
-    ragStorage: { globalName: 'ChatRagStorage', fallbackGlobalName: 'RagStorage', modulePath: '../ragStorage.js' },
-    treeRagService: { globalName: 'ChatTreeRagService', fallbackGlobalName: 'ChatService', modulePath: '../chatService.js' }
+    ragStorage: { globalName: 'ChatRagStorage', modulePath: '../ragStorage.js' },
+    ragService: { globalName: 'ChatRagService', modulePath: '../rag-service.js' }
   };
 
   function resolveService(name) {

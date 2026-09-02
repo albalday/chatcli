@@ -2,25 +2,24 @@
  * Módulo de almacenamiento y persistencia de configuración y conversaciones (ChatStorage).
  * - Configuración síncrona en localStorage / cookies (preferencias ligeras y API keys).
  * - Persistencia estructurada y asíncrona de conversaciones, mensajes y adjuntos en IndexedDB (ZeroChatDB).
- * - Migración automática de sesiones legacy desde localStorage sin pérdida de datos.
  * - Carga bajo demanda de mensajes para optimizar el consumo de memoria.
  * - Fallback transparente para entornos sin soporte de IndexedDB.
  */
 
 (function (root, factory) {
   if (typeof exports === 'object' && typeof module !== 'undefined') {
-    module.exports = factory();
+    module.exports = factory(require('./storage-db.js'));
   } else {
-    root.ChatStorage = factory();
+    root.ChatStorage = factory(root.ZeroChatDB);
   }
-})(typeof self !== 'undefined' ? self : this, function () {
+})(typeof self !== 'undefined' ? self : this, function (Database) {
   'use strict';
 
-  const DB_NAME = 'ZeroChatDB';
-  const DB_VERSION = 1;
-  const STORE_CONVERSATIONS = 'conversations';
-  const STORE_MESSAGES = 'messages';
-  const STORE_ATTACHMENTS = 'attachments';
+  const DB_NAME = Database?.DB_NAME || 'ZeroChatDB';
+  const DB_VERSION = Database?.DB_VERSION || 2;
+  const STORE_CONVERSATIONS = Database?.STORES?.conversations || 'conversations';
+  const STORE_MESSAGES = Database?.STORES?.messages || 'messages';
+  const STORE_ATTACHMENTS = Database?.STORES?.attachments || 'attachments';
 
   const DEFAULT_CONFIG = {
     apiUrl: 'http://localhost:1234/v1',
@@ -43,9 +42,7 @@
     enableRawLogs: false,
     enableDebugMessages: false,
     sendDateTime: true,
-    activeRagBranchId: '',
-    ragContextLimitK: 128,
-    ragSummaryProfile: 'Local resumen'
+    activeRagBranchId: ''
   };
 
   const STORAGE_PREFIX = 'zerochat_';
@@ -59,9 +56,6 @@
   function isLocalStorageAvailable() {
     try {
       const testKey = '__zerochat_test__';
-      localStorage.setItem(testKey, testKey);
-      localStorage.removeItem(testKey);
-      return true;
       localStorage.setItem(testKey, testKey);
       localStorage.removeItem(testKey);
       return true;
@@ -155,15 +149,11 @@
       temperature: '0.7',
       reasoningEffort: 'none',
       modelReasoningConfig: null,
-      enableAgentJs: true,
-      enableAgentWeb: true,
-      enableAgentSearch: true,
-      enableAgentChart: true,
+      enabledTools: { ...DEFAULT_CONFIG.enabledTools },
       enableContextCache: true,
       enableRawLogs: false,
       enableDebugMessages: false,
-      sendDateTime: true,
-      ragContextLimitK: 128
+      sendDateTime: true
     },
     'Remoto chat': {
       apiUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
@@ -174,62 +164,11 @@
       temperature: '0.7',
       reasoningEffort: 'none',
       modelReasoningConfig: null,
-      enabledTools: {
-        execute_javascript: true,
-        search_web: true,
-        fetch_web_page: true,
-        download_pdf: true,
-        render_chart: true
-      },
+      enabledTools: { ...DEFAULT_CONFIG.enabledTools },
       enableContextCache: true,
       enableRawLogs: false,
       enableDebugMessages: false,
-      sendDateTime: true,
-      ragContextLimitK: 128
-    },
-    'Local resumen': {
-      apiUrl: 'http://localhost:1234/v1',
-      apiType: 'openai',
-      apiKey: '',
-      model: 'google/gemma-4-e4b',
-      systemPrompt: '',
-      temperature: '0.7',
-      reasoningEffort: 'none',
-      modelReasoningConfig: null,
-      enabledTools: {
-        execute_javascript: true,
-        search_web: true,
-        fetch_web_page: true,
-        download_pdf: true,
-        render_chart: true
-      },
-      enableContextCache: true,
-      enableRawLogs: false,
-      enableDebugMessages: false,
-      sendDateTime: true,
-      ragContextLimitK: 128
-    },
-    'Remoto resumen': {
-      apiUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
-      apiType: 'gemini',
-      apiKey: '',
-      model: 'gemini-3.6-flash',
-      systemPrompt: '',
-      temperature: '0.7',
-      reasoningEffort: 'none',
-      modelReasoningConfig: null,
-      enabledTools: {
-        execute_javascript: true,
-        search_web: true,
-        fetch_web_page: true,
-        download_pdf: true,
-        render_chart: true
-      },
-      enableContextCache: true,
-      enableRawLogs: false,
-      enableDebugMessages: false,
-      sendDateTime: true,
-      ragContextLimitK: 128
+      sendDateTime: true
     },
     'Nuevo': {
       apiUrl: '',
@@ -240,18 +179,11 @@
       temperature: '0.7',
       reasoningEffort: 'none',
       modelReasoningConfig: null,
-      enabledTools: {
-        execute_javascript: true,
-        search_web: true,
-        fetch_web_page: true,
-        download_pdf: true,
-        render_chart: true
-      },
+      enabledTools: { ...DEFAULT_CONFIG.enabledTools },
       enableContextCache: true,
       enableRawLogs: false,
       enableDebugMessages: false,
-      sendDateTime: true,
-      ragContextLimitK: 128
+      sendDateTime: true
     }
   };
 
@@ -334,13 +266,7 @@
       enableContextCache: profileData.enableContextCache !== false,
       enableRawLogs: profileData.enableRawLogs === true,
       enableDebugMessages: profileData.enableDebugMessages === true,
-      sendDateTime: profileData.sendDateTime !== false,
-      ragContextLimitK: (() => {
-        const val = parseInt(profileData.ragContextLimitK, 10);
-        if (isNaN(val) || val < 16) return 64;
-        if (val > 1024) return 1024;
-        return val;
-      })()
+      sendDateTime: profileData.sendDateTime !== false
     };
 
     setStorageItem('profiles', JSON.stringify(profiles));
@@ -395,7 +321,6 @@
     const enableDebugMessages = getStorageItem('enableDebugMessages');
     const sendDateTime = getStorageItem('sendDateTime');
     const activeRagBranchId = getStorageItem('activeRagBranchId');
-    const ragContextLimitK = getStorageItem('ragContextLimitK');
     const modelReasoningConfigRaw = getStorageItem('modelReasoningConfig');
 
     let effectiveApiUrl = apiUrl !== null ? apiUrl : (activeProfile.apiUrl || DEFAULT_CONFIG.apiUrl);
@@ -461,14 +386,7 @@
       enableRawLogs: parseBool(enableRawLogs, activeProfile.enableRawLogs !== undefined ? activeProfile.enableRawLogs : DEFAULT_CONFIG.enableRawLogs),
       enableDebugMessages: parseBool(enableDebugMessages, activeProfile.enableDebugMessages !== undefined ? activeProfile.enableDebugMessages : DEFAULT_CONFIG.enableDebugMessages),
       sendDateTime: parseBool(sendDateTime, activeProfile.sendDateTime !== undefined ? activeProfile.sendDateTime : DEFAULT_CONFIG.sendDateTime),
-      activeRagBranchId: activeRagBranchId !== null ? activeRagBranchId : DEFAULT_CONFIG.activeRagBranchId,
-      ragSummaryProfile: getStorageItem('ragSummaryProfile') || DEFAULT_CONFIG.ragSummaryProfile,
-      ragContextLimitK: (() => {
-        const val = parseInt(ragContextLimitK !== null ? ragContextLimitK : activeProfile.ragContextLimitK, 10);
-        if (isNaN(val) || val < 32) return DEFAULT_CONFIG.ragContextLimitK;
-        if (val > 1024) return 1024;
-        return val;
-      })()
+      activeRagBranchId: activeRagBranchId !== null ? activeRagBranchId : DEFAULT_CONFIG.activeRagBranchId
     };
   }
 
@@ -498,13 +416,6 @@
     if (config.enableDebugMessages !== undefined) setStorageItem('enableDebugMessages', String(config.enableDebugMessages));
     if (config.sendDateTime !== undefined) setStorageItem('sendDateTime', String(config.sendDateTime));
     if (config.activeRagBranchId !== undefined) setStorageItem('activeRagBranchId', String(config.activeRagBranchId));
-    if (config.ragSummaryProfile !== undefined) setStorageItem('ragSummaryProfile', String(config.ragSummaryProfile).trim());
-    if (config.ragContextLimitK !== undefined) {
-      let k = parseInt(config.ragContextLimitK, 10);
-      if (isNaN(k) || k < 32) k = 128;
-      if (k > 1024) k = 1024;
-      setStorageItem('ragContextLimitK', String(k));
-    }
   }
 
   function resetConfigToDefaults() {
@@ -526,7 +437,7 @@
         const keysToRemove = [];
         for (let i = 0; i < localStorage.length; i++) {
           const k = localStorage.key(i);
-          if (k && (k.startsWith(STORAGE_PREFIX) || k === 'chat_sessions' || k.startsWith('zerochat'))) {
+          if (k && k.startsWith(STORAGE_PREFIX)) {
             keysToRemove.push(k);
           }
         }
@@ -564,10 +475,8 @@
   // Capa de Persistencia en IndexedDB para Conversaciones y Mensajes
   // ==========================================================================
 
-  let dbPromise = null;
-
   function isIndexedDBAvailable() {
-    return typeof indexedDB !== 'undefined' && indexedDB !== null;
+    return Database?.isAvailable ? Database.isAvailable() : (typeof indexedDB !== 'undefined' && indexedDB !== null);
   }
 
   /**
@@ -575,64 +484,8 @@
    * @returns {Promise<IDBDatabase|null>}
    */
   function openDatabase() {
-    if (!isIndexedDBAvailable()) {
-      return Promise.resolve(null);
-    }
-
-    if (dbPromise) {
-      return dbPromise;
-    }
-
-    dbPromise = new Promise((resolve) => {
-      try {
-        const request = indexedDB.open(DB_NAME, DB_VERSION);
-
-        request.onupgradeneeded = function (event) {
-          const db = event.target.result;
-
-          // 1. Store de Conversaciones
-          if (!db.objectStoreNames.contains(STORE_CONVERSATIONS)) {
-            const convStore = db.createObjectStore(STORE_CONVERSATIONS, { keyPath: 'id' });
-            convStore.createIndex('by_updatedAt', 'updatedAt', { unique: false });
-            convStore.createIndex('by_createdAt', 'createdAt', { unique: false });
-          }
-
-          // 2. Store de Mensajes
-          if (!db.objectStoreNames.contains(STORE_MESSAGES)) {
-            const msgStore = db.createObjectStore(STORE_MESSAGES, { keyPath: 'id' });
-            msgStore.createIndex('by_conversationId', 'conversationId', { unique: false });
-            msgStore.createIndex('by_createdAt', 'createdAt', { unique: false });
-            msgStore.createIndex('by_role', 'role', { unique: false });
-          }
-
-          // 3. Store de Adjuntos (PDFs, imágenes Base64, archivos)
-          if (!db.objectStoreNames.contains(STORE_ATTACHMENTS)) {
-            const attStore = db.createObjectStore(STORE_ATTACHMENTS, { keyPath: 'id' });
-            attStore.createIndex('by_conversationId', 'conversationId', { unique: false });
-            attStore.createIndex('by_messageId', 'messageId', { unique: false });
-          }
-        };
-
-        request.onsuccess = function (event) {
-          const db = event.target.result;
-          resolve(db);
-        };
-
-        request.onerror = function (event) {
-          console.warn('ChatStorage: No se pudo abrir IndexedDB. Usando fallback en memoria.', event.target.error);
-          resolve(null);
-        };
-
-        request.onblocked = function () {
-          console.warn('ChatStorage: La base de datos IndexedDB está bloqueada por otra pestaña.');
-        };
-      } catch (e) {
-        console.warn('ChatStorage: Error al intentar inicializar IndexedDB:', e);
-        resolve(null);
-      }
-    });
-
-    return dbPromise;
+    if (!isIndexedDBAvailable()) return Promise.resolve(null);
+    return Database?.openDatabase ? Database.openDatabase() : Promise.resolve(null);
   }
 
   /**
@@ -973,9 +826,7 @@
     });
   }
 
-  /**
-   * Inicializa el almacenamiento IndexedDB y ejecuta migraciones si es necesario.
-   */
+  /** Inicializa el almacenamiento IndexedDB. */
   async function initDB() {
     const db = await openDatabase();
     if (db) {

@@ -117,32 +117,30 @@ test('ToolDispatcher - getDefinitions excluye todas las herramientas RAG si RAG 
     enableAgentWeb: true,
     enableAgentSearch: true,
     enableAgentChart: true,
-    enableAgentRag: false,
     activeRagBranchId: ''
   });
 
   const listDocsTool = defsWithoutRag.find(d => d.function?.name === 'list_documents');
   const searchKbTool = defsWithoutRag.find(d => d.function?.name === 'search_knowledge_base');
-  const readChapTool = defsWithoutRag.find(d => d.function?.name === 'read_chapter_content');
+  const readChunkTool = defsWithoutRag.find(d => d.function?.name === 'read_knowledge_chunk');
 
   assert.equal(listDocsTool, undefined, 'list_documents NO debe enviarse si RAG está inactivo');
   assert.equal(searchKbTool, undefined, 'search_knowledge_base NO debe enviarse si RAG está inactivo');
-  assert.equal(readChapTool, undefined, 'read_chapter_content NO debe enviarse si RAG está inactivo');
+  assert.equal(readChunkTool, undefined, 'read_knowledge_chunk NO debe enviarse si RAG está inactivo');
 
   const defsWithRag = AgentCore.registry.getDefinitions({
     enableAgentJs: true,
     enableAgentWeb: true,
     enableAgentSearch: true,
     enableAgentChart: true,
-    enableAgentRag: true,
     activeRagBranchId: 'branch_123'
   });
 
   const listDocsActive = defsWithRag.find(d => d.function?.name === 'list_documents');
   const searchKbActive = defsWithRag.find(d => d.function?.name === 'search_knowledge_base');
-  const readChapActive = defsWithRag.find(d => d.function?.name === 'read_chapter_content');
+  const readChunkActive = defsWithRag.find(d => d.function?.name === 'read_knowledge_chunk');
 
   assert.ok(listDocsActive, 'list_documents DEBE enviarse cuando RAG está activo');
   assert.ok(searchKbActive, 'search_knowledge_base DEBE enviarse cuando RAG está activo');
-  assert.ok(readChapActive, 'read_chapter_content DEBE enviarse cuando RAG está activo');
+  assert.ok(readChunkActive, 'read_knowledge_chunk DEBE enviarse cuando RAG está activo');
 });

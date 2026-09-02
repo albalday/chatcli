@@ -23,13 +23,12 @@ test('I18n - Reemplazo dinámico de parámetros en t()', () => {
   assert.match(msg, /0\.85/);
 });
 
-test('I18n - Traducciones de configuración de límite de contexto RAG', () => {
+test('I18n - Traducciones del conocimiento local', () => {
   I18n.setLanguage('es', false);
-  assert.ok(I18n.t('rag_context_limit_title').includes('Tamaño de Contexto'));
-  assert.ok(I18n.t('rag_context_limit_desc').includes('32K a 1M'));
+  assert.equal(I18n.t('rag_modal_title'), 'Conocimiento local');
+  assert.ok(I18n.t('rag_help_storage_desc').includes('IndexedDB'));
 
   I18n.setLanguage('en', false);
-  assert.ok(I18n.t('rag_context_limit_title').includes('Chapter Context Size'));
-  assert.ok(I18n.t('rag_context_limit_desc').includes('32K to 1M'));
+  assert.equal(I18n.t('rag_modal_title'), 'Local knowledge');
+  assert.ok(I18n.t('rag_help_storage_desc').includes('Orama'));
 });
-

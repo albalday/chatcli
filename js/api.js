@@ -118,20 +118,12 @@
       return 'render_chart';
     }
 
-    // 6. Base de Conocimiento RAG (read_chapter_content)
+    // 6. Base de Conocimiento RAG (read_knowledge_chunk)
     if (
-      clean === 'read_chapter_content' ||
-      clean === 'read_chapter' ||
-      clean === 'get_chapter' ||
-      clean === 'get_chapter_content' ||
-      clean === 'read_doc_chapter' ||
-      noUnderscore === 'readchaptercontent' ||
-      noUnderscore === 'readchapter' ||
-      noUnderscore === 'getchapter' ||
-      noUnderscore === 'getchaptercontent' ||
-      noUnderscore === 'readdocchapter'
+      clean === 'read_knowledge_chunk' ||
+      noUnderscore === 'readknowledgechunk'
     ) {
-      return 'read_chapter_content';
+      return 'read_knowledge_chunk';
     }
 
     return clean;
@@ -432,7 +424,6 @@
       enableAgentWeb = false,
       enableAgentSearch = false,
       enableAgentChart = false,
-      enableAgentRag = false,
       activeRagBranchId = '',
       enableContextCache = true,
       cacheInvalidated = false,
@@ -456,7 +447,7 @@
     let toolsList = [];
     if (Array.isArray(params.tools) && params.tools.length > 0) {
       toolsList = params.tools;
-    } else if (enableTools || toolChoice === 'none' || Boolean(activeRagBranchId) || params.enableAgentRag) {
+    } else if (enableTools || toolChoice === 'none' || Boolean(activeRagBranchId)) {
       const AgentCore = typeof window !== 'undefined' ? window.ChatAgentCore : (typeof require !== 'undefined' ? (() => { try { return require('./agent-core.js'); } catch(e){ return null; } })() : null);
       if (AgentCore && AgentCore.registry && typeof AgentCore.registry.getActiveDefinitions === 'function') {
         toolsList = AgentCore.registry.getActiveDefinitions(params);

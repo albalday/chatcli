@@ -279,7 +279,7 @@
       tools.push(createBuiltinTool('get_current_datetime', 'ChatBuiltinGetCurrentDatetimeTool', './tools/builtin/get-current-datetime.tool.js'));
       tools.push(createBuiltinTool('list_documents', 'ChatBuiltinListDocumentsTool', './tools/builtin/list-documents.tool.js'));
       tools.push(createBuiltinTool('search_knowledge_base', 'ChatBuiltinSearchKnowledgeBaseTool', './tools/builtin/search-knowledge-base.tool.js'));
-      tools.push(createBuiltinTool('read_chapter_content', 'ChatBuiltinReadChapterContentTool', './tools/builtin/read-chapter-content.tool.js'));
+      tools.push(createBuiltinTool('read_knowledge_chunk', 'ChatBuiltinReadKnowledgeChunkTool', './tools/builtin/read-knowledge-chunk.tool.js'));
 
       return tools;
     }

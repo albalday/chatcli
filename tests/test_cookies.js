@@ -46,8 +46,6 @@ test('Storage - Gestión completa de perfiles (crear, listar, conmutar, actualiz
   const profiles = Storage.getProfiles();
   assert.ok(profiles['Local chat']);
   assert.ok(profiles['Remoto chat']);
-  assert.ok(profiles['Local resumen']);
-  assert.ok(profiles['Remoto resumen']);
   assert.ok(profiles['Nuevo']);
 
   // 2. Guardar nuevo perfil personalizado con todos los campos
@@ -70,7 +68,6 @@ test('Storage - Gestión completa de perfiles (crear, listar, conmutar, actualiz
     enableRawLogs: true,
     enableDebugMessages: false,
     sendDateTime: true,
-    ragContextLimitK: 128
   };
 
   Storage.saveProfile('Servidor Oficina', customProfile);
@@ -84,7 +81,6 @@ test('Storage - Gestión completa de perfiles (crear, listar, conmutar, actualiz
   assert.equal(retrieved.model, 'qwen2.5-coder-32b');
   assert.equal(retrieved.enabledTools.fetch_web_page, false);
   assert.equal(retrieved.enableRawLogs, true);
-  assert.equal(retrieved.ragContextLimitK, 128);
 
   // 4. Cambiar de perfil activo
   Storage.setActiveProfileName('Remoto chat');
@@ -95,4 +91,3 @@ test('Storage - Gestión completa de perfiles (crear, listar, conmutar, actualiz
   assert.equal(deleted, true);
   assert.equal(Storage.getProfile('Servidor Oficina'), null);
 });
-
