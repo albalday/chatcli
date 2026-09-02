@@ -2403,7 +2403,13 @@
       elements.activeProfileSelect.addEventListener('change', function () {
         const profile = Storage.getProfile ? Storage.getProfile(this.value) : null;
         if (!profile) return;
-        appConfig = { ...appConfig, ...profile, activeProfileName: this.value };
+        appConfig = {
+          ...appConfig,
+          ...profile,
+          activeProfileName: this.value,
+          reasoningEffort: profile.reasoningEffort || 'none',
+          modelReasoningConfig: profile.modelReasoningConfig || null
+        };
         if (Storage.setActiveProfileName) Storage.setActiveProfileName(this.value);
         if (Storage.saveConfig) Storage.saveConfig(appConfig);
         updateUIFromConfig();
