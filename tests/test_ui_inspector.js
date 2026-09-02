@@ -1,0 +1,79 @@
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const UIInspector = require('../js/ui-inspector.js');
+
+test('UIInspector - getBadgeClass, getBadgeIcon y getStatusLabel', () => {
+  assert.equal(UIInspector.getBadgeClass('confirmed'), 'cap-badge cap-badge-confirmed');
+  assert.equal(UIInspector.getBadgeClass('unsupported'), 'cap-badge cap-badge-unsupported');
+  assert.equal(UIInspector.getBadgeClass('other'), 'cap-badge cap-badge-unknown');
+
+  assert.equal(UIInspector.getBadgeIcon('confirmed'), '✓');
+  assert.equal(UIInspector.getBadgeIcon('unsupported'), '✕');
+
+  assert.ok(UIInspector.getStatusLabel('confirmed'));
+});
+
+test('UIInspector - populateModelList puebla datalist y selectHelper', () => {
+  const datalistOptions = [];
+  const selectOptions = [];
+
+  const fakeDatalist = {
+    innerHTML: '',
+    ownerDocument: {
+      createElement: (tag) => ({ tagName: tag, value: '', textContent: '' })
+    },
+    appendChild: (opt) => datalistOptions.push(opt)
+  };
+
+  const fakeSelectHelper = {
+    innerHTML: '',
+    ownerDocument: {
+      createElement: (tag) => ({ tagName: tag, value: '', textContent: '', disabled: false, selected: false })
+    },
+    appendChild: (opt) => selectOptions.push(opt)
+  };
+
+  const fakeSettingModel = { value: '' };
+
+  const elements = {
+    modelDatalist: fakeDatalist,
+    modelSelectHelper: fakeSelectHelper,
+    settingModel: fakeSettingModel
+  };
+
+  const models = ['gpt-4o', 'claude-3-7-sonnet', 'gemini-2.5-flash'];
+  UIInspector.populateModelList(elements, { model: '' }, models, true);
+
+  assert.equal(datalistOptions.length, 3);
+  assert.equal(datalistOptions[0].value, 'gpt-4o');
+
+  // Primer elemento del helper es el placeholder, seguido de los 3 modelos
+  assert.equal(selectOptions.length, 4);
+  assert.equal(selectOptions[1].value, 'gpt-4o');
+
+  // selectFirstIfEmpty establece el primer modelo si estaba vacío
+  assert.equal(fakeSettingModel.value, 'gpt-4o');
+});
+
+test('UIInspector - renderInspectorReport genera markup de metadatos y capacidades', () => {
+  const fakeResultsContainer = { innerHTML: '' };
+  const elements = { inspectorResults: fakeResultsContainer };
+
+  const fakeReport = {
+    provider: { id: 'openai', label: 'OpenAI Server' },
+    endpoint: { normalized: 'https://api.openai.com/v1/chat/completions' },
+    model: { selected: 'gpt-4o', totalDiscovered: 1 },
+    inspectionTimeMs: 145,
+    capabilities: {
+      streaming: { status: 'confirmed', detail: 'SSE Chunks verified' },
+      tools: { status: 'confirmed', detail: 'Function Calling supported' }
+    }
+  };
+
+  UIInspector.renderInspectorReport(elements, fakeReport);
+
+  assert.ok(fakeResultsContainer.innerHTML.includes('OpenAI Server'));
+  assert.ok(fakeResultsContainer.innerHTML.includes('https://api.openai.com/v1/chat/completions'));
+  assert.ok(fakeResultsContainer.innerHTML.includes('145 ms'));
+  assert.ok(fakeResultsContainer.innerHTML.includes('cap-badge-confirmed'));
+});

@@ -34,6 +34,7 @@
   const AgentCore = window.ChatAgentCore || {};
   const Engine = window.ChatEngine || {};
   const UIReasoning = window.ChatUIReasoning || {};
+  const UIInspector = window.ChatUIInspector || {};
 
   function t(key, params) {
     if (I18n.t) return I18n.t(key, params);
@@ -364,141 +365,29 @@
   // Modelos y Consulta al Servidor (API Query & Combobox)
   // ==========================================================================
 
-  let discoveredModels = [];
-
   function loadCachedModels() {
-    try {
-      const cached = Storage.getStorageItem ? Storage.getStorageItem('cached_models') : null;
-      if (cached) {
-        discoveredModels = JSON.parse(cached);
-        if (Array.isArray(discoveredModels) && discoveredModels.length > 0) {
-          populateModelList(discoveredModels, false);
-        }
-      }
-    } catch (e) {
-      console.warn('No se pudieron cargar modelos de caché:', e);
+    if (UIInspector.loadCachedModels) {
+      return UIInspector.loadCachedModels(elements, appConfig);
     }
+    return [];
   }
 
   function saveCachedModels(models) {
-    discoveredModels = models || [];
-    try {
-      if (Storage.setStorageItem) {
-        Storage.setStorageItem('cached_models', JSON.stringify(discoveredModels));
-      }
-    } catch (e) {}
+    if (UIInspector.saveCachedModels) {
+      return UIInspector.saveCachedModels(models);
+    }
+    return [];
   }
 
   function populateModelList(models, selectFirstIfEmpty = false) {
-    if (!models || !Array.isArray(models) || models.length === 0) return;
-
-    if (elements.modelDatalist) {
-      elements.modelDatalist.innerHTML = '';
-      models.forEach(m => {
-        const id = (typeof m === 'string' ? m : (m.id || m.name || '')).trim();
-        if (id) {
-          const opt = document.createElement('option');
-          opt.value = id;
-          elements.modelDatalist.appendChild(opt);
-        }
-      });
-    }
-
-    if (elements.modelSelectHelper) {
-      elements.modelSelectHelper.innerHTML = '';
-      const defaultOpt = document.createElement('option');
-      defaultOpt.value = '';
-      defaultOpt.disabled = true;
-      defaultOpt.selected = true;
-      defaultOpt.textContent = t('model_select_count', { count: models.length });
-      elements.modelSelectHelper.appendChild(defaultOpt);
-
-      const currentVal = elements.settingModel ? elements.settingModel.value.trim() : (appConfig.model || '');
-
-      models.forEach(m => {
-        const id = (typeof m === 'string' ? m : (m.id || m.name || '')).trim();
-        if (id) {
-          const opt = document.createElement('option');
-          opt.value = id;
-          opt.textContent = id;
-          if (currentVal && currentVal === id) {
-            opt.selected = true;
-            defaultOpt.selected = false;
-          }
-          elements.modelSelectHelper.appendChild(opt);
-        }
-      });
-    }
-
-    if (selectFirstIfEmpty && elements.settingModel) {
-      const currentVal = elements.settingModel.value.trim();
-      const firstId = (typeof models[0] === 'string' ? models[0] : (models[0].id || models[0].name || '')).trim();
-      if (!currentVal && firstId) {
-        elements.settingModel.value = firstId;
-        if (elements.modelSelectHelper) elements.modelSelectHelper.value = firstId;
-      }
+    if (UIInspector.populateModelList) {
+      UIInspector.populateModelList(elements, appConfig, models, selectFirstIfEmpty);
     }
   }
 
   async function handleQueryServer() {
-    if (!elements.btnQueryServer) return;
-
-    const apiUrl = (elements.settingApiUrl ? elements.settingApiUrl.value : appConfig.apiUrl || '').trim();
-    const apiKey = (elements.settingApiKey ? elements.settingApiKey.value : appConfig.apiKey || '').trim();
-    const apiType = (elements.settingApiType ? elements.settingApiType.value : appConfig.apiType || 'openai').trim();
-
-    if (!apiUrl) {
-      if (elements.serverQueryStatus) {
-        elements.serverQueryStatus.style.display = 'block';
-        elements.serverQueryStatus.className = 'server-query-status status-error';
-        elements.serverQueryStatus.textContent = t('err_invalid_url');
-      }
-      return;
-    }
-
-    elements.btnQueryServer.disabled = true;
-    elements.btnQueryServer.classList.add('loading');
-    const queryText = elements.btnQueryServer.querySelector('.query-btn-text');
-    if (queryText) queryText.textContent = t('btn_querying_text');
-
-    if (elements.serverQueryStatus) {
-      elements.serverQueryStatus.style.display = 'block';
-      elements.serverQueryStatus.className = 'server-query-status status-loading';
-      elements.serverQueryStatus.textContent = t('err_connecting_models', { url: apiUrl });
-    }
-
-    try {
-      if (!API.fetchServerModels) {
-        throw new Error('API query function not available.');
-      }
-
-      addDebugLog('network', `Consultando modelos en ${apiUrl} [${apiType}]`);
-      addDebugLog('raw', `>>> OUTGOING GET/POST ${apiUrl} (fetchServerModels)`);
-      const res = await API.fetchServerModels(apiUrl, apiKey, apiType);
-      addDebugLog('raw', `<<< INCOMING (fetchServerModels):\n${JSON.stringify(res, null, 2)}`);
-
-      if (res.success && res.models && res.models.length > 0) {
-        saveCachedModels(res.models);
-        populateModelList(res.models, true);
-
-        if (elements.serverQueryStatus) {
-          elements.serverQueryStatus.className = 'server-query-status status-success';
-          elements.serverQueryStatus.innerHTML = t('msg_models_success', { count: res.count, endpoint: res.endpoint });
-        }
-      } else {
-        throw new Error(res.error || 'Server did not return a valid models list.');
-      }
-    } catch (err) {
-      console.error('Error querying server models:', err);
-      if (elements.serverQueryStatus) {
-        const esc = Markdown.escapeHtml || function(s) { return s; };
-        elements.serverQueryStatus.className = 'server-query-status status-error';
-        elements.serverQueryStatus.innerHTML = t('err_api_connect', { err: esc(err.message || String(err)) });
-      }
-    } finally {
-      elements.btnQueryServer.disabled = false;
-      elements.btnQueryServer.classList.remove('loading');
-      if (queryText) queryText.textContent = t('btn_query_text');
+    if (UIInspector.handleQueryServer) {
+      await UIInspector.handleQueryServer(elements, appConfig);
     }
   }
 
@@ -507,149 +396,15 @@
   // ==========================================================================
 
   async function handleRunInspector() {
-    if (!elements.btnRunInspector || !elements.inspectorResults) return;
-
-    const apiUrl = elements.settingApiUrl ? elements.settingApiUrl.value.trim() : appConfig.apiUrl;
-    const apiType = elements.settingApiType ? elements.settingApiType.value : appConfig.apiType;
-    const apiKey = elements.settingApiKey ? elements.settingApiKey.value.trim() : appConfig.apiKey;
-    const model = elements.settingModel ? elements.settingModel.value.trim() : appConfig.model;
-
-    if (!apiUrl) {
-      alert(t('err_api_connect', { err: 'Por favor, introduce una URL de servidor válida.' }));
-      return;
-    }
-
-    elements.btnRunInspector.disabled = true;
-    const btnText = elements.btnRunInspector.querySelector('.inspector-btn-text');
-    const originalText = btnText ? btnText.textContent : '';
-    if (btnText) btnText.textContent = t('btn_running_inspector');
-
-    elements.inspectorResults.style.display = 'block';
-    elements.inspectorResults.innerHTML = `
-      <div style="padding: 1.5rem; text-align: center; color: var(--text-muted);">
-        <span class="query-icon" style="display:inline-block; font-size: 1.5rem; animation: spin 1s linear infinite;">⏳</span>
-        <p style="margin-top: 0.5rem; font-size: 0.85rem;">${t('btn_running_inspector')}</p>
-      </div>
-    `;
-
-    try {
-      if (!API.inspectProvider) {
-        throw new Error('Módulo de inspección no disponible.');
-      }
-
-      addDebugLog('network', `Ejecutando Provider Inspector en ${apiUrl} [${apiType}]`);
-      const report = await API.inspectProvider({ apiUrl, apiType, apiKey, model });
-
-      renderInspectorReport(report);
-    } catch (err) {
-      console.error('Error in Provider Inspector:', err);
-      elements.inspectorResults.innerHTML = `
-        <div class="server-query-status status-error" style="display: block;">
-          ${Markdown.escapeHtml ? Markdown.escapeHtml(err.message || String(err)) : String(err)}
-        </div>
-      `;
-    } finally {
-      elements.btnRunInspector.disabled = false;
-      if (btnText) btnText.textContent = originalText;
+    if (UIInspector.handleRunInspector) {
+      await UIInspector.handleRunInspector(elements, appConfig);
     }
   }
 
   function renderInspectorReport(report) {
-    if (!elements.inspectorResults || !report) return;
-
-    const esc = (Markdown && Markdown.escapeHtml) ? Markdown.escapeHtml : function(s) { return String(s || '').replace(/[&<>"']/g, ''); };
-    const p = report.provider || {};
-    const ep = report.endpoint || {};
-    const m = report.model || {};
-    const caps = report.capabilities || {};
-
-    function getBadgeClass(status) {
-      switch (status) {
-        case 'confirmed': return 'cap-badge cap-badge-confirmed';
-        case 'inferred': return 'cap-badge cap-badge-inferred';
-        case 'declared': return 'cap-badge cap-badge-declared';
-        case 'unsupported': return 'cap-badge cap-badge-unsupported';
-        default: return 'cap-badge cap-badge-unknown';
-      }
+    if (UIInspector.renderInspectorReport) {
+      UIInspector.renderInspectorReport(elements, report);
     }
-
-    function getBadgeIcon(status) {
-      switch (status) {
-        case 'confirmed': return '✓';
-        case 'inferred': return '✦';
-        case 'declared': return 'ℹ';
-        case 'unsupported': return '✕';
-        default: return '?';
-      }
-    }
-
-    function getStatusLabel(status) {
-      switch (status) {
-        case 'confirmed': return t('inspector_status_confirmed');
-        case 'inferred': return t('inspector_status_inferred');
-        case 'declared': return t('inspector_status_declared');
-        case 'unsupported': return t('inspector_status_unsupported');
-        default: return t('inspector_status_unknown');
-      }
-    }
-
-    const capKeys = [
-      { key: 'streaming', title: t('inspector_cap_streaming'), icon: '📡' },
-      { key: 'tools', title: t('inspector_cap_tools'), icon: '⚙️' },
-      { key: 'vision', title: t('inspector_cap_vision'), icon: '👁️' },
-      { key: 'reasoning', title: t('inspector_cap_reasoning'), icon: '🧠' },
-      { key: 'jsonMode', title: t('inspector_cap_jsonMode'), icon: '📋' },
-      { key: 'promptCaching', title: t('inspector_cap_promptCaching'), icon: '💾' },
-      { key: 'embeddings', title: t('inspector_cap_embeddings'), icon: '🔢' },
-      { key: 'modelListing', title: t('inspector_cap_modelListing'), icon: '🤖' }
-    ];
-
-    let cardsHtml = '';
-    capKeys.forEach(item => {
-      const c = caps[item.key] || { status: 'unknown', detail: '' };
-      const badgeCls = getBadgeClass(c.status);
-      const badgeIcon = getBadgeIcon(c.status);
-      const statusLabel = getStatusLabel(c.status);
-
-      cardsHtml += `
-        <div class="inspector-cap-card">
-          <div class="cap-card-header">
-            <span class="cap-card-title">${item.icon} ${item.title}</span>
-            <span class="${badgeCls}">${badgeIcon} ${statusLabel}</span>
-          </div>
-          <div class="cap-card-detail">${esc(c.detail || '')}</div>
-        </div>
-      `;
-    });
-
-    const modelInfoText = m.totalDiscovered > 0
-      ? `${m.totalDiscovered} modelo(s) descubierto(s)`
-      : (m.selected ? `Modelo: ${esc(m.selected)}` : 'Sin modelos listados');
-
-    elements.inspectorResults.innerHTML = `
-      <div class="inspector-header-meta">
-        <div class="inspector-meta-item">
-          <span class="meta-label">Proveedor</span>
-          <span class="meta-value">${esc(p.label || p.id || 'Desconocido')}</span>
-        </div>
-        <div class="inspector-meta-item">
-          <span class="meta-label">Endpoint Chat</span>
-          <span class="meta-value" style="font-family: monospace; font-size: 0.775rem;">${esc(ep.normalized || ep.raw || '')}</span>
-        </div>
-        <div class="inspector-meta-item">
-          <span class="meta-label">Modelos</span>
-          <span class="meta-value">${esc(modelInfoText)}</span>
-        </div>
-        <div class="inspector-meta-item">
-          <span class="meta-label">Latencia Diagnóstico</span>
-          <span class="meta-value">${report.inspectionTimeMs || 0} ms</span>
-        </div>
-      </div>
-
-      <div class="inspector-cap-grid">
-        ${cardsHtml}
-      </div>
-    `;
   }
 
   // ==========================================================================
