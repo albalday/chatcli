@@ -20,18 +20,10 @@
       app_title: 'ZeroChat v5.3 - Cliente Web Universal de Chat & Agente IA',
       app_description: 'Cliente web universal, agente IA autónomo y RAG local en un solo archivo con cero instalación',
       
-      // Bienvenida y Sugerencias
-      welcome_heading: '¿En qué puedo ayudarte hoy?',
-      welcome_desc: 'Cliente de chat conectado a tu API. Puedes configurar el servidor, modelo, API Key y prompt en el botón de configuración junto a la caja de chat.',
-      sug_explain_title: '💡 Explicar conceptos',
-      sug_explain_text: '¿Cómo funciona una API REST con JavaScript?',
-      sug_explain_prompt: 'Explícame cómo funciona una API REST con un ejemplo sencillo en JavaScript.',
-      sug_code_title: '💻 Escribir código',
-      sug_code_text: 'Función JS para ordenar un array de objetos',
-      sug_code_prompt: 'Escribe una función en JavaScript para ordenar un array de objetos por una clave específica.',
-      sug_ideas_title: '🚀 Ideas de proyectos',
-      sug_ideas_text: '3 ideas de proyectos web en JavaScript Vanilla',
-      sug_ideas_prompt: 'Dame 3 ideas de proyectos web interesantes que utilicen HTML5 y JavaScript Vanilla.',
+      // Estado de Bienvenida inicial
+      welcome_heading: 'ZeroCli',
+      welcome_desc: 'Entorno conversacional y agente autónomo local.',
+      welcome_status: 'Chat vacío · A la espera de un comando',
 
       // Barra de herramientas superior
       profile_badge_title: 'Perfil de conexión activo (clic para abrir Configuración)',
@@ -378,18 +370,10 @@
       app_title: 'ZeroChat v5.3 - Universal AI Chat & Agent Web Client',
       app_description: 'Universal, zero-install, standalone web chat client, autonomous AI agent and local RAG in a single file',
       
-      // Bienvenida y Sugerencias
-      welcome_heading: 'How can I help you today?',
-      welcome_desc: 'Chat client connected to your API. You can configure the server, model, API Key, and system prompt using the settings button next to the input box.',
-      sug_explain_title: '💡 Explain concepts',
-      sug_explain_text: 'How does a REST API work with JavaScript?',
-      sug_explain_prompt: 'Explain how a REST API works with a simple example in JavaScript.',
-      sug_code_title: '💻 Write code',
-      sug_code_text: 'JS function to sort an array of objects',
-      sug_code_prompt: 'Write a JavaScript function to sort an array of objects by a specific key.',
-      sug_ideas_title: '🚀 Project ideas',
-      sug_ideas_text: '3 interesting web project ideas in Vanilla JavaScript',
-      sug_ideas_prompt: 'Give me 3 interesting web project ideas using HTML5 and Vanilla JavaScript.',
+      // Welcome state
+      welcome_heading: 'ZeroCli',
+      welcome_desc: 'Conversational environment & local autonomous agent.',
+      welcome_status: 'Empty chat · Awaiting a command',
 
       // Barra de herramientas superior
       profile_badge_title: 'Active connection profile (click to open Settings)',

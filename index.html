@@ -63,28 +63,18 @@
       <!-- Estado de Bienvenida inicial -->
       <div id="welcome-banner" class="welcome-banner">
         <div class="welcome-icon">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="4 17 10 11 4 5"></polyline>
+            <line x1="12" y1="19" x2="20" y2="19"></line>
           </svg>
         </div>
-        <h2 data-i18n="welcome_heading">¿En qué puedo ayudarte hoy?</h2>
+        <h2 data-i18n="welcome_heading">ZeroCli</h2>
         <p class="welcome-desc" data-i18n="welcome_desc">
-          Cliente de chat conectado a tu API. Puedes configurar el servidor, modelo, API Key y prompt en el botón de configuración junto a la caja de chat.
+          Entorno conversacional y agente autónomo local.
         </p>
-
-        <div class="suggestion-cards">
-          <button class="suggestion-card" id="sug-card-explain" data-prompt="Explícame cómo funciona una API REST con un ejemplo sencillo en JavaScript.">
-            <span class="suggestion-title" data-i18n="sug_explain_title">💡 Explicar conceptos</span>
-            <span class="suggestion-text" data-i18n="sug_explain_text">¿Cómo funciona una API REST con JavaScript?</span>
-          </button>
-          <button class="suggestion-card" id="sug-card-code" data-prompt="Escribe una función en JavaScript para ordenar un array de objetos por una clave específica.">
-            <span class="suggestion-title" data-i18n="sug_code_title">💻 Escribir código</span>
-            <span class="suggestion-text" data-i18n="sug_code_text">Función JS para ordenar un array de objetos</span>
-          </button>
-          <button class="suggestion-card" id="sug-card-ideas" data-prompt="Dame 3 ideas de proyectos web interesantes que utilicen HTML5 y JavaScript Vanilla.">
-            <span class="suggestion-title" data-i18n="sug_ideas_title">🚀 Ideas de proyectos</span>
-            <span class="suggestion-text" data-i18n="sug_ideas_text">3 ideas de proyectos web en JavaScript Vanilla</span>
-          </button>
+        <div class="welcome-status-badge">
+          <span class="status-dot"></span>
+          <span data-i18n="welcome_status">Chat vacío · A la espera de un comando</span>
         </div>
       </div>
     </div>

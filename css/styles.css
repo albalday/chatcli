@@ -164,75 +164,63 @@ body {
 .welcome-banner {
   margin: auto 0;
   text-align: center;
-  padding: 2.5rem 1rem;
-  max-width: 960px;
+  padding: 3rem 1.5rem;
+  max-width: 600px;
   width: 100%;
   align-self: center;
   animation: fadeIn 0.3s ease-out;
 }
 
 .welcome-icon {
-  width: 64px;
-  height: 64px;
+  width: 56px;
+  height: 56px;
   margin: 0 auto 1.25rem auto;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, var(--primary-light), #e0e7ff);
+  background: linear-gradient(135deg, var(--primary-light), var(--bg-surface));
   color: var(--primary);
   border-radius: var(--radius-lg);
-  border: 1px solid #bfdbfe;
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
 }
 
 .welcome-banner h2 {
-  font-size: 1.8rem;
+  font-size: 1.75rem;
   font-weight: 700;
-  margin-bottom: 0.5rem;
+  letter-spacing: -0.025em;
+  margin-bottom: 0.35rem;
   color: var(--text-main);
 }
 
 .welcome-desc {
   color: var(--text-muted);
-  font-size: 1rem;
-  margin-bottom: 2rem;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  margin-bottom: 1.5rem;
 }
 
-.suggestion-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 1rem;
-  text-align: left;
-}
-
-.suggestion-card {
+.welcome-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 1rem;
   background-color: var(--bg-surface);
   border: 1px solid var(--border-color);
-  padding: 0.9rem;
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  transition: all 0.2s ease;
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
+  border-radius: 9999px;
+  font-size: 0.825rem;
+  font-weight: 500;
+  color: var(--text-muted);
   box-shadow: var(--shadow-sm);
 }
 
-.suggestion-card:hover {
-  border-color: var(--primary);
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
-}
-
-.suggestion-title {
-  font-weight: 600;
-  font-size: 0.85rem;
-  color: var(--primary);
-}
-
-.suggestion-text {
-  font-size: 0.825rem;
-  color: var(--text-muted);
-  line-height: 1.35;
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: var(--success);
+  display: inline-block;
+  box-shadow: 0 0 6px var(--success);
 }
 
 /* ==========================================================================
@@ -2393,10 +2381,6 @@ input:checked + .slider:before {
 
   .message-content {
     padding: 0.75rem 0.9rem;
-  }
-
-  .suggestion-cards {
-    grid-template-columns: 1fr;
   }
 
   .modal-footer {

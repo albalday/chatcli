@@ -2748,18 +2748,6 @@
         closeSettingsModal();
       }
     });
-
-    // Sugerencias iniciales
-    document.querySelectorAll('.suggestion-card').forEach(function (card) {
-      card.addEventListener('click', function () {
-        const prompt = card.getAttribute('data-prompt');
-        if (prompt) {
-          elements.userInput.value = prompt;
-          autoResizeTextarea();
-          handleSendMessage();
-        }
-      });
-    });
   }
 
   function init() {
