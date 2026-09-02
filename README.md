@@ -90,7 +90,8 @@ zerochat/
 │   ├── i18n.js         # Módulo de internacionalización reactiva (ES/EN)
 │   ├── markdown.js     # Renderizador de Markdown con tablas GFM y sanitización
 │   └── mcp.js          # Cliente del protocolo Model Context Protocol (MCP)
-├── tests/              # Suite de pruebas automatizadas (139+ tests unitarios)
+├── tests/              # Suite de pruebas automatizadas (177+ tests unitarios)
+├── ROADMAP.md          # 🔮 Roadmap de mejoras técnicas, calidad y pruebas E2E en navegador
 ├── LICENSE             # Licencia MIT
 └── README.md           # Documentación del proyecto
 ```

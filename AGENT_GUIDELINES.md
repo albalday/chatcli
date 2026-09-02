@@ -102,10 +102,11 @@ git commit -m "<tipo>: <descripción breve y clara de los cambios>"
 
 ---
 
-## 7. 📄 Actualización de Documentación
+## 7. 📄 Actualización de Documentación y Roadmap
 
 Si los cambios afectan a:
 - Requisitos del proyecto o estructura de archivos ➜ Actualizar `README.md`.
 - Flujos de trabajo, comandos o reglas para agentes ➜ Actualizar `AGENT_GUIDELINES.md`.
+- Iniciativas de calidad o mejoras técnicas pendientes ➜ Actualizar `ROADMAP.md`.
 - Comentarios JSDoc / API en módulos ➜ Actualizar los comentarios del código fuente.
 
