@@ -97,10 +97,10 @@
       <!-- Barra de herramientas y configuración compacta al lado de la pregunta -->
       <div class="input-toolbar-top">
         <div class="toolbar-left">
-          <button type="button" class="badge-pill badge-profile" id="badge-profile" data-i18n-title="profile_badge_title" title="Perfil de conexión activo (clic para cambiar)">
+          <label class="badge-pill badge-profile" data-i18n-title="profile_badge_title" title="Perfil de conexión activo">
             <span class="profile-icon">⚡</span>
-            <span id="current-profile-name">Local chat</span>
-          </button>
+            <select id="active-profile-select" aria-label="Perfil de conexión activo"></select>
+          </label>
         </div>
         <div class="toolbar-right">
           <button type="button" id="btn-open-tree-rag" class="btn-tool-mini btn-rag-mini" data-i18n-title="btn_tree_rag_title" title="Gestionar Base de Conocimiento por Ramas (RAG Jerárquico)">

@@ -110,6 +110,7 @@
 
       badgeProfile: document.getElementById('badge-profile'),
       currentProfileName: document.getElementById('current-profile-name'),
+      activeProfileSelect: document.getElementById('active-profile-select'),
       badgeServer: document.getElementById('badge-server'),
       currentServerUrl: document.getElementById('current-server-url'),
       badgeModel: document.getElementById('badge-model'),
@@ -891,6 +892,10 @@
   }
 
   function updateUIFromConfig() {
+    if (elements.activeProfileSelect && Storage.getProfiles) {
+      const active = (Storage.getActiveProfileName ? Storage.getActiveProfileName() : appConfig.activeProfileName) || 'Local chat';
+      elements.activeProfileSelect.innerHTML = Object.keys(Storage.getProfiles()).map(name => `<option value="${Markdown.escapeHtml(name)}"${name === active ? ' selected' : ''}>${Markdown.escapeHtml(name)}</option>`).join('');
+    }
     if (elements.currentProfileName) {
       const activeProf = (Storage.getActiveProfileName ? Storage.getActiveProfileName() : appConfig.activeProfileName) || appConfig.activeProfileName || 'Local chat';
       elements.currentProfileName.textContent = activeProf;
@@ -2393,6 +2398,16 @@
     // Barra Lateral de Chats (Sidebar)
     if (elements.btnToggleSidebar) {
       elements.btnToggleSidebar.addEventListener('click', toggleSidebar);
+    }
+    if (elements.activeProfileSelect) {
+      elements.activeProfileSelect.addEventListener('change', function () {
+        const profile = Storage.getProfile ? Storage.getProfile(this.value) : null;
+        if (!profile) return;
+        appConfig = { ...appConfig, ...profile, activeProfileName: this.value };
+        if (Storage.setActiveProfileName) Storage.setActiveProfileName(this.value);
+        if (Storage.saveConfig) Storage.saveConfig(appConfig);
+        updateUIFromConfig();
+      });
     }
     if (elements.btnCloseSidebar) {
       elements.btnCloseSidebar.addEventListener('click', closeSidebar);
