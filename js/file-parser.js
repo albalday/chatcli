@@ -397,7 +397,7 @@
           j++;
         }
         if (j < len && streamString.charCodeAt(j) === 93) j++;
-        if (arrText) out.push(arrText + ' ');
+        if (arrText) out.push(arrText);
         i = j;
         continue;
       }
