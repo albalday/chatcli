@@ -25,7 +25,7 @@
     if (!branchId) return '';
     try {
       const branch = await requireBranch(branchId);
-      return `[BASE DE CONOCIMIENTO ACTIVA: ${branch.name}]\nBusca primero con search_knowledge_base y usa read_knowledge_chunk cuando necesites el texto completo de un resultado.\nSi un fragmento de conocimiento incluye una referencia de imagen del tipo [IMAGEN: ... | Para mostrar al usuario usa: ![...](rag-image://docId:imgId)], incluye esa misma etiqueta Markdown en tu respuesta para mostrar la imagen al usuario.`;
+      return `[BASE DE CONOCIMIENTO ACTIVA: ${branch.name}]\nBusca primero con search_knowledge_base y usa read_knowledge_chunk cuando necesites el texto completo de un resultado.\nPuedes incluir las referencias a imágenes incrustadas que aparezcan en los fragmentos consultados (![...](rag-image://...)) para mostrarlas al usuario.`;
     } catch (_) {
       return '';
     }

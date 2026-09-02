@@ -101,7 +101,7 @@
           dataUrl: cleanDataUrl,
           label
         });
-        return `[IMAGEN: ${label} | ID: __DOC_ID__:${imgId} | Para mostrar al usuario usa: ![${label}](rag-image://__DOC_ID__:${imgId})]`;
+        return `![${label}](rag-image://__DOC_ID__:${imgId})`;
       });
       return { text: normalizeExtractedText(rawText), images };
     }

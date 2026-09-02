@@ -205,8 +205,8 @@ trailer
   assert.strictEqual(docResult.images[0].mimeType, 'image/jpeg');
   assert.ok(docResult.images[0].dataUrl.startsWith('data:image/jpeg;base64,'));
 
-  // Verificar que el texto incluye el marcador de imagen
-  assert.ok(docResult.text.includes('[IMAGEN:'), 'El texto debe incluir la etiqueta de imagen');
+  // Verificar que el texto incluye la referencia de imagen
+  assert.ok(docResult.text.includes('![Diagrama'), 'El texto debe incluir la etiqueta de imagen');
   assert.ok(docResult.text.includes('rag-image://'), 'El texto debe incluir la sintaxis rag-image://');
 
   // Guardar y recuperar desde RagStorage
@@ -230,5 +230,66 @@ trailer
 
   await RagStorage.deleteBranch(branch.id);
 });
+
+test('IngestionEngine & FileParser - no corrompe texto plano ASCII por CIDs de 16 bits en ToUnicode', async () => {
+  const FileParser = require('../js/file-parser.js');
+
+  // CMap que contiene un mapeo de 16 bits <0047> -> <0064> (donde 47 es 'G' en ASCII)
+  const cmapStream = `/CIDInit /ProcSet findresource begin
+12 dict begin
+begincmap
+/CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def
+/CMapName /Custom-ToUnicode def
+/CMapType 2 def
+1 begincodespacerange
+<0000> <FFFF>
+endcodespacerange
+1 beginbfchar
+<0047> <0064>
+endbfchar
+endcmap
+CMapName currentdict /CMap defineresource pop
+end
+end`;
+
+  const pdfContent = `%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 4 0 R >> >> /Contents 6 0 R >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type0 /ToUnicode 5 0 R >>
+endobj
+5 0 obj
+<< /Length ${cmapStream.length} >>
+stream
+${cmapStream}
+endstream
+endobj
+6 0 obj
+<< /Length 70 >>
+stream
+BT
+/F1 12 Tf
+(GA-Z77P-D3 User's Manual GIGABYTE) Tj
+ET
+endstream
+endobj
+trailer
+<< /Size 7 /Root 1 0 R >>
+%%EOF`;
+
+  const buffer = Buffer.from(pdfContent, 'latin1');
+  const text = await FileParser.extractTextFromPdf(buffer);
+  assert.ok(text.includes('GA-Z77P-D3'), `El texto no debe corromperse a 'dA-wTTm-aP', obtenido: '${text}'`);
+  assert.ok(text.includes("User's Manual"), `El texto debe mantener 'User\\'s Manual', obtenido: '${text}'`);
+  assert.ok(text.includes('GIGABYTE'), `El texto debe mantener 'GIGABYTE', obtenido: '${text}'`);
+});
+
 
 
