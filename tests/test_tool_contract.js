@@ -54,7 +54,7 @@ test('Tool contract - acepta la API declarativa para futuras tools autocontenida
   assert.equal(execution.outcome.data.value, 'hola');
   assert.equal(execution.outcome.meta.toolId, 'contract_echo');
   assert.equal(tool.serializeResultForModel({}, execution.result, execution.outcome), 'hola');
-  assert.equal(tool.formatMarkdownResult({}, execution.result), '> hola');
+  assert.equal(tool.formatDispatchMarkdown({}, execution.result), '> hola');
 });
 
 test('Tool contract - rechaza módulos incompletos antes de registrarlos', () => {
@@ -77,4 +77,26 @@ test('Tool contract - normaliza errores y herramientas no encontradas', async ()
   assert.equal(execution.outcome.ok, false);
   assert.match(execution.outcome.error, /no encontrada/i);
   assert.equal(execution.outcome.meta.toolName, 'missing_contract_tool');
+});
+
+test('Tool contract - el dispatcher delega serialización y exportación en la tool', async () => {
+  const registry = new AgentCore.ToolRegistry();
+  registry.registerTool(new AgentCore.Tool({
+    name: 'delegated_result',
+    description: 'Comprueba la delegación de resultados.',
+    parameters: { type: 'object', properties: {} },
+    settings: { showInSettings: false },
+    execute: async () => ({ success: true, payload: 42 }),
+    result: {
+      toModel: (_args, result) => `model:${result.payload}`,
+      toMarkdown: (_args, result) => `> export:${result.payload}`
+    }
+  }));
+
+  const response = await new AgentCore.ToolExecutor(registry).dispatchToolCall({
+    function: { name: 'delegated_result', arguments: '{}' }
+  });
+
+  assert.equal(response.resultText, 'model:42');
+  assert.equal(response.markdownBlock, '> export:42');
 });

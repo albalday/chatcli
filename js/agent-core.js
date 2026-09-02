@@ -146,6 +146,7 @@
     if (typeof tool.isAvailable !== 'function') errors.push('Falta isAvailable(context).');
     if (typeof tool.serializeResultForModel !== 'function') errors.push('Falta serializeResultForModel(args, result).');
     if (typeof tool.formatMarkdownResult !== 'function') errors.push('Falta formatMarkdownResult(args, result).');
+    if (typeof tool.formatDispatchMarkdown !== 'function') errors.push('Falta formatDispatchMarkdown(args, result).');
     if (!tool.settings || typeof tool.settings !== 'object') errors.push('Falta descriptor settings.');
 
     return { valid: errors.length === 0, errors };
@@ -182,7 +183,7 @@
       this.ui = this.settings;
       this.handler = options.execute || options.handler || null;
       this.result = options.result || {};
-      this.formatter = this.result.toMarkdown || options.formatter || null;
+      this.formatter = options.formatter || null;
       this.promptGuide = options.promptGuide || options.getSystemPromptGuide || null;
       this.isAvailable = typeof options.isAvailable === 'function' ? options.isAvailable : (() => true);
       this.view = options.view || null;
@@ -235,12 +236,23 @@
     /**
      * Formatea el resultado en Markdown para su inserción en el historial o exportación.
      */
-    formatMarkdownResult(args, result) {
+    formatMarkdownResult(args, result, outcome) {
       if (typeof this.formatter === 'function') {
-        return this.formatter(args, result);
+        return this.formatter(args, result, outcome);
       }
       const output = typeof result === 'object' ? JSON.stringify(result, null, 2) : String(result);
       return `> ⚙️ **${this.name}**\n> \`\`\`json\n> ${output.split('\n').join('\n> ')}\n> \`\`\``;
+    }
+
+    /**
+     * Formato resumido que se añade al despacho y a la exportación de chat.
+     * Puede diferir del formato detallado conservado por la API histórica.
+     */
+    formatDispatchMarkdown(args, result, outcome) {
+      if (typeof this.result.toMarkdown === 'function') {
+        return this.result.toMarkdown(args, result, outcome);
+      }
+      return this.formatMarkdownResult(args, result, outcome);
     }
   }
 
@@ -309,12 +321,17 @@
           const timeoutMs = typeof context?.timeoutMs === 'number' ? context.timeoutMs : (typeof context?.options?.timeoutMs === 'number' ? context.options.timeoutMs : undefined);
           return Sandbox.execute(code, timeoutMs);
         },
-        formatter: (args, result) => {
-          const code = args.code || '';
-          const output = result.success
+        result: {
+          toModel: (_args, result, outcome) => result?.success
             ? (result.result || (result.logs && result.logs.length > 0 ? result.logs.join('\n') : 'undefined'))
-            : `Error: ${result.error}`;
-          return `> ⚡ **execute_javascript**\n> \`\`\`javascript\n> ${code.split('\n').join('\n> ')}\n> \`\`\`\n> \`\`\`\n> ${String(output).split('\n').join('\n> ')}\n> \`\`\``;
+            : `Error: ${result?.error || outcome?.error || 'Error de ejecución'}`,
+          toMarkdown: (args, result, outcome) => {
+            const code = args.code || args.javascript || args.js || args.script || args.input || '';
+            const output = result?.success
+              ? (result.result || (result.logs && result.logs.length > 0 ? result.logs.join('\n') : 'undefined'))
+              : `Error: ${result?.error || outcome?.error || 'Error de ejecución'}`;
+            return `> ⚡ **execute_javascript**\n> \`\`\`javascript\n> ${code.split('\n').join('\n> ')}\n> \`\`\`\n> \`\`\`\n> ${String(output).split('\n').join('\n> ')}\n> \`\`\``;
+          }
         }
       }));
 
@@ -353,8 +370,12 @@
           }
           return WebSearch.search(query, context.lang || 'es');
         },
-        formatter: (args, result) => {
-          return result.markdown || `> 🔍 **search_web**: ${args.query}`;
+        result: {
+          toModel: (_args, result) => result?.markdown || JSON.stringify(result || {}),
+          toMarkdown: (args, result) => {
+            const resultText = result?.markdown || JSON.stringify(result || {});
+            return `> 🔍 **search_web** (${result?.count || 0} fuentes)\n> Query: "${args.query || ''}"\n> \`\`\`markdown\n> ${resultText.split('\n').join('\n> ')}\n> \`\`\``;
+          }
         }
       }));
 
@@ -393,10 +414,9 @@
           }
           return WebBrowser.fetchPage(url, context.options || {});
         },
-        formatter: (args, result) => {
-          const url = args.url || '';
-          const preview = result.success ? (result.content || '(Página vacía)') : (result.error || 'Error al conectar');
-          return `> 🌐 **fetch_web_page** (HTTP ${result.status || 200})\n> URL: ${url}\n> \`\`\`\n> ${preview.slice(0, 500).split('\n').join('\n> ')}\n> \`\`\``;
+        result: {
+          toModel: (_args, result) => JSON.stringify(result || {}),
+          toMarkdown: (args) => `> 🌐 **fetch_web_page**\n> URL: "${args.url || ''}"\n\n`
         }
       }));
 
@@ -435,10 +455,9 @@
           }
           return WebBrowser.downloadPdf(url, context.options || {});
         },
-        formatter: (args, result) => {
-          const url = args.url || '';
-          const preview = result.success ? (result.content || '(PDF vacío)') : (result.error || 'Error descargando PDF');
-          return `> 📄 **download_pdf**\n> URL: ${url}\n> \`\`\`\n> ${preview.slice(0, 500).split('\n').join('\n> ')}\n> \`\`\``;
+        result: {
+          toModel: (_args, result) => JSON.stringify(result || {}),
+          toMarkdown: (args) => `> 📄 **download_pdf**\n> URL: "${args.url || ''}"\n\n`
         }
       }));
 
@@ -498,8 +517,13 @@
             title: args.title || 'Gráfico'
           };
         },
-        formatter: (args, result) => {
-          return `> 📊 **render_chart**: ${args.title || 'Gráfico'} (${args.type || 'bar'})\n> [Gráfico interactivo generado correctamente]`;
+        result: {
+          toModel: (args, _result, outcome) => JSON.stringify({
+            success: outcome?.ok !== false,
+            type: args.type || 'bar',
+            title: args.title || 'Gráfico'
+          }),
+          toMarkdown: (args) => `> 📊 **render_chart** (${args.type || 'bar'})\n> Título: "${args.title || 'Gráfico'}"\n\n`
         }
       }));
 
@@ -533,8 +557,11 @@
             timezone: tz
           };
         },
-        formatter: (args, result) => {
-          return `> ⏱️ **get_current_datetime**: ${result.date} ${result.time} (${result.timezone})`;
+        result: {
+          toMarkdown: (_args, result) => {
+            const resultText = typeof result === 'object' ? JSON.stringify(result) : String(result ?? '');
+            return `> ⚙️ **get_current_datetime**\n> \`\`\`\n> ${resultText.slice(0, 300)}\n> \`\`\``;
+          }
         }
       }));
 
@@ -561,7 +588,11 @@
           const branchId = context?.activeRagBranchId || context?.branchId || (typeof window !== 'undefined' && window.ChatStorage?.loadConfig?.()?.activeRagBranchId) || '';
           return TreeRagService.resolveListDocumentsToolCall(branchId);
         },
-        formatter: (args, result) => {
+        result: {
+          toModel: (_args, result) => result?.text || JSON.stringify(result || {}),
+          toMarkdown: (_args, result) => `> 📖 **list_documents** (${result?.count || 0} documentos indexados)\n\n`
+        },
+        formatter: (_args, result) => {
           return `> 📖 **list_documents** (${result.count || 0} documentos disponibles)\n> \`\`\`\n> ${String(result.text || '').split('\n').join('\n> ')}\n> \`\`\``;
         }
       }));
@@ -593,6 +624,10 @@
           }
           const branchId = context?.activeRagBranchId || context?.branchId || (typeof window !== 'undefined' && window.ChatStorage?.loadConfig?.()?.activeRagBranchId) || '';
           return TreeRagService.resolveSearchKnowledgeBaseToolCall(branchId, args);
+        },
+        result: {
+          toModel: (_args, result) => result?.text || JSON.stringify(result || {}),
+          toMarkdown: (args, result) => `> 🔍 **search_knowledge_base** ("${args.query || ''}") [${result?.matchesCount || 0} coincidencias]\n\n`
         },
         formatter: (args, result) => {
           return `> 🔍 **search_knowledge_base** ("${args.query || ''}") [${result.matchesCount || 0} coincidencias]\n> \`\`\`\n> ${String(result.text || '').split('\n').join('\n> ')}\n> \`\`\``;
@@ -653,6 +688,10 @@
             success: false,
             error: `No se encontró el capítulo ${chapterId} en el documento [${docId}].`
           };
+        },
+        result: {
+          toModel: (_args, result) => result?.content || JSON.stringify(result || {}),
+          toMarkdown: (args) => `> 📖 **read_chapter_content** (Doc: "${args.docId}", Cap: ${args.chapterId})\n\n`
         },
         formatter: (args, result) => {
           if (result.success) {
@@ -974,7 +1013,6 @@
       const rawFuncName = toolCall?.function?.name || '';
       const parsedArgs = this.parseArguments(toolCall?.function?.arguments);
       const ToolCards = (typeof window !== 'undefined' && window.ChatToolCards) ? window.ChatToolCards : null;
-      const norm = (rawFuncName || '').toLowerCase().replace(/_/g, '');
 
       // 1. Crear e insertar la tarjeta DOM en vivo con estado de carga
       let cardEl = null;
@@ -1003,31 +1041,16 @@
         if (typeof scrollToBottom === 'function') scrollToBottom();
       }
 
-      // 5. Formatear la salida para el mensaje 'tool' de chatHistory
+      // 5. Formatear la salida para el mensaje `tool` sin conocer tipos concretos.
+      const resolvedTool = execRes.tool;
       let resultText = '';
-      if (norm === 'executejavascript') {
-        const res = execRes.result;
-        resultText = res?.success
-          ? (res.result || (res.logs && res.logs.length > 0 ? res.logs.join('\n') : 'undefined'))
-          : `Error: ${res?.error || execRes.error || 'Error de ejecución'}`;
-      } else if (norm === 'searchweb') {
-        resultText = execRes.result?.markdown || JSON.stringify(execRes.result || {});
-      } else if (norm === 'fetchwebpage' || norm === 'downloadpdf') {
-        resultText = JSON.stringify(execRes.result || {});
-      } else if (norm === 'renderchart' || norm === 'generatechart') {
-        resultText = JSON.stringify({
-          success: execRes.success !== false,
-          type: parsedArgs.type || 'bar',
-          title: parsedArgs.title || 'Gráfico'
-        });
-      } else if (norm === 'listdocuments' || norm === 'listknowledgebase' || norm === 'getdocuments' || norm === 'listdocs' || norm === 'listardocumentos') {
-        resultText = execRes.result?.text || JSON.stringify(execRes.result || {});
-      } else if (norm === 'searchknowledgebase' || norm === 'searchkb' || norm === 'searchdocuments' || norm === 'searchknowledge' || norm === 'buscarendocumentos') {
-        resultText = execRes.result?.text || JSON.stringify(execRes.result || {});
-      } else if (norm === 'readchaptercontent' || norm === 'readchapter') {
-        resultText = execRes.result?.content || JSON.stringify(execRes.result || {});
-      } else {
-        resultText = typeof execRes.result === 'object' ? JSON.stringify(execRes.result) : String(execRes.result ?? execRes.error ?? '');
+      try {
+        const serialized = resolvedTool
+          ? resolvedTool.serializeResultForModel(parsedArgs, execRes.result, execRes.outcome)
+          : (execRes.error || 'Error de ejecución de herramienta.');
+        resultText = typeof serialized === 'string' ? serialized : JSON.stringify(serialized);
+      } catch (err) {
+        resultText = `Error al serializar el resultado de ${rawFuncName}: ${err.message || String(err)}`;
       }
 
       // 6. Logging posterior
@@ -1036,29 +1059,14 @@
         onLog('raw', `<<< TOOL RESULT ${rawFuncName} (${execRes.executionTimeMs || 0}ms):\n${resultText}`);
       }
 
-      // 7. Formatear bloque markdown acumulado para el portapapeles/exportación
+      // 7. Formatear bloque Markdown para portapapeles/exportación desde la tool.
       let toolMd = '';
-      if (norm === 'executejavascript') {
-        const code = parsedArgs.code || parsedArgs.javascript || parsedArgs.js || parsedArgs.script || parsedArgs.input || '';
-        toolMd = `> ⚡ **execute_javascript**\n> \`\`\`javascript\n> ${code.split('\n').join('\n> ')}\n> \`\`\`\n> \`\`\`\n> ${String(resultText).split('\n').join('\n> ')}\n> \`\`\``;
-      } else if (norm === 'searchweb') {
-        const count = execRes.result?.count || 0;
-        toolMd = `> 🔍 **search_web** (${count} fuentes)\n> Query: "${parsedArgs.query || ''}"\n> \`\`\`markdown\n> ${(resultText || '').split('\n').join('\n> ')}\n> \`\`\``;
-      } else if (norm === 'fetchwebpage' || norm === 'downloadpdf') {
-        const isPdf = norm === 'downloadpdf';
-        toolMd = `> ${isPdf ? '📄' : '🌐'} **${rawFuncName}**\n> URL: "${parsedArgs.url || ''}"\n\n`;
-      } else if (norm === 'renderchart' || norm === 'generatechart') {
-        toolMd = `> 📊 **render_chart** (${parsedArgs.type || 'bar'})\n> Título: "${parsedArgs.title || 'Gráfico'}"\n\n`;
-      } else if (norm === 'listdocuments' || norm === 'listknowledgebase' || norm === 'getdocuments' || norm === 'listdocs' || norm === 'listardocumentos') {
-        const count = execRes.result?.count || 0;
-        toolMd = `> 📖 **list_documents** (${count} documentos indexados)\n\n`;
-      } else if (norm === 'searchknowledgebase' || norm === 'searchkb' || norm === 'searchdocuments' || norm === 'searchknowledge' || norm === 'buscarendocumentos') {
-        const matches = execRes.result?.matchesCount || 0;
-        toolMd = `> 🔍 **search_knowledge_base** ("${parsedArgs.query || ''}") [${matches} coincidencias]\n\n`;
-      } else if (norm === 'readchaptercontent' || norm === 'readchapter') {
-        toolMd = `> 📖 **read_chapter_content** (Doc: "${parsedArgs.docId}", Cap: ${parsedArgs.chapterId})\n\n`;
-      } else {
-        toolMd = `> ⚙️ **${rawFuncName}**\n> \`\`\`\n> ${String(resultText).slice(0, 300)}\n> \`\`\``;
+      try {
+        toolMd = resolvedTool
+          ? resolvedTool.formatDispatchMarkdown(parsedArgs, execRes.result, execRes.outcome)
+          : `> ⚙️ **${rawFuncName}**\n> \`\`\`\n> ${String(resultText).slice(0, 300)}\n> \`\`\``;
+      } catch (err) {
+        toolMd = `> ❌ **${rawFuncName}**: ${err.message || String(err)}`;
       }
 
       return {
