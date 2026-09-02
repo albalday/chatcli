@@ -441,7 +441,115 @@
     }
 
     const res = out.join('').replace(/[ \t]+/g, ' ').replace(/\n\s*\n+/g, '\n\n').trim();
+    return decodePdfShiftedText(res);
+  }
+
+  const KNOWN_PDF_ANCHORS = new Set([
+    // English
+    'LIQUIDITY', 'COAL', 'MINED', 'ASSET', 'ASSETS', 'LIABILITY', 'LIABILITIES',
+    'EQUITY', 'REVENUE', 'REVENUES', 'PROFIT', 'PROFITS', 'INCOME', 'EXPENSE', 'EXPENSES',
+    'CASH', 'FLOW', 'FLOWS', 'BALANCE', 'SHEET', 'TOTAL', 'MARGIN', 'MARGINS',
+    'DIVIDEND', 'DIVIDENDS', 'EARNING', 'EARNINGS', 'SHARE', 'SHARES', 'DEBT',
+    'SALES', 'COST', 'COSTS', 'OPERATING', 'FINANCIAL', 'REPORT', 'REPORTS',
+    'TAX', 'TAXES', 'NET', 'GROSS', 'CAPITAL', 'INTEREST', 'PERIOD', 'QUARTER',
+    'ANNUAL', 'CURRENT', 'INVESTMENT', 'INVESTMENTS', 'DEPRECIATION', 'AMORTIZATION',
+    'PRODUCTION', 'TONNES', 'TONS', 'PRICE', 'PRICES', 'VOLUME', 'SEGMENT', 'RESULTS',
+    'AUDIT', 'AUDITED', 'COMPANY', 'CORPORATION', 'GROUP', 'CONSOLIDATED', 'MILLION', 'THOUSAND',
+    // Spanish
+    'LIQUIDEZ', 'ACTIVO', 'ACTIVOS', 'PASIVO', 'PASIVOS', 'PATRIMONIO', 'NETO',
+    'INGRESO', 'INGRESOS', 'GASTO', 'GASTOS', 'BENEFICIO', 'BENEFICIOS',
+    'RESULTADO', 'RESULTADOS', 'BALANCE', 'TOTAL', 'MARGEN', 'MARGENES',
+    'DIVIDENDO', 'DIVIDENDOS', 'CUENTA', 'CUENTAS', 'PERIODO', 'PERIODOS',
+    'EJERCICIO', 'EJERCICIOS', 'VENTA', 'VENTAS', 'COSTE', 'COSTES',
+    'FINANCIERO', 'FINANCIEROS', 'FINANCIERA', 'FINANCIERAS', 'INFORME', 'INFORMES',
+    'IMPUESTO', 'IMPUESTOS', 'EXPLOTACION', 'CONSOLIDADO', 'CONSOLIDADA',
+    'AUDITORIA', 'MEMORIA', 'CAPITAL', 'INTERES', 'INTERESES', 'INVERSION',
+    'INVERSIONES', 'DEPRECIACION', 'AMORTIZACION', 'PRODUCCION', 'TONELADAS',
+    'PRECIO', 'PRECIOS', 'VOLUMEN', 'EMPRESA', 'SOCIEDAD', 'GRUPO', 'MILLONES', 'MILES'
+  ]);
+
+  function unshiftAsciiString(str, offset = 3) {
+    if (!str) return '';
+    let res = '';
+    for (let i = 0; i < str.length; i++) {
+      const code = str.charCodeAt(i);
+      if (code >= 33 && code <= 126) {
+        const unshifted = code - offset;
+        res += (unshifted >= 32 && unshifted <= 126) ? String.fromCharCode(unshifted) : str.charAt(i);
+      } else {
+        res += str.charAt(i);
+      }
+    }
     return res;
+  }
+
+  function splitKnownConcatenatedWords(str) {
+    for (const kw of KNOWN_PDF_ANCHORS) {
+      if (str.startsWith(kw) && str.length > kw.length) {
+        const rest = str.slice(kw.length);
+        if (KNOWN_PDF_ANCHORS.has(rest)) {
+          return `${kw} ${rest}`;
+        }
+      }
+    }
+    return str;
+  }
+
+  function collapseSpacedLettersAndNumbers(text) {
+    if (!text || text.length < 3) return text;
+    let out = text.replace(/((?:[A-Za-z]\s+){2,}[A-Za-z])/g, (match) => {
+      const parts = match.split(/\s{2,}/);
+      return parts.map(p => {
+        const joined = p.replace(/\s+/g, '');
+        return splitKnownConcatenatedWords(joined.toUpperCase());
+      }).join(' ');
+    });
+
+    out = out.replace(/((?:[\d.,\-+()\/]\s+){2,}[\d.,\-+()\/])/g, (match) => {
+      return match.replace(/\s+/g, '');
+    });
+
+    return out;
+  }
+
+  function decodePdfShiftedText(text, offset = 3) {
+    if (!text || typeof text !== 'string' || text.length < 3) return text;
+    const lines = text.split(/\r?\n/);
+    let anyDecoded = false;
+    let tableContextActive = false;
+
+    const decodedLines = lines.map(line => {
+      const trimmed = line.trim();
+      if (!trimmed) {
+        tableContextActive = false;
+        return line;
+      }
+
+      const candidate = unshiftAsciiString(trimmed, offset);
+      const collapsed = collapseSpacedLettersAndNumbers(candidate);
+
+      const candidateUpper = collapsed.toUpperCase();
+      const tokens = candidateUpper.split(/[^A-Z]+/);
+      let keywordHits = 0;
+      for (const tok of tokens) {
+        if (tok.length >= 3 && KNOWN_PDF_ANCHORS.has(tok)) {
+          keywordHits++;
+        }
+      }
+
+      const hasBackslashGlitch = /\b[A-Za-z0-9\s]{2,}\\[\s\d]*/.test(trimmed) || /\\(?:\s+|$)/.test(trimmed);
+      const hasShiftedNumberFormat = /[0-9:<;]\s*[\/1]\s*[0-9:<;]/.test(trimmed);
+
+      if (keywordHits > 0 || hasBackslashGlitch || (tableContextActive && hasShiftedNumberFormat)) {
+        anyDecoded = true;
+        tableContextActive = true;
+        return collapsed.replace(/[ \t]+/g, ' ').trim();
+      }
+
+      return line;
+    });
+
+    return anyDecoded ? decodedLines.join('\n') : text;
   }
 
   async function decompressDeflateData(uint8Array) {
@@ -1574,6 +1682,10 @@
 
     let finalCleanText = pages.join('\n\n').trim();
 
+    if (finalCleanText) {
+      finalCleanText = decodePdfShiftedText(finalCleanText);
+    }
+
     if (!finalCleanText) {
       finalCleanText = `[Documento PDF adjunto: No se pudo extraer texto seleccionable. Es posible que el PDF contenga únicamente imágenes escaneadas o esté protegido por contraseña.]`;
     }
@@ -1689,6 +1801,9 @@
     extractTextFromPdf,
     parsePdfDocument,
     convertCmykJpegToRgbDataUrl,
-    convertCmykDataUrlToRgb
+    convertCmykDataUrlToRgb,
+    decodePdfShiftedText,
+    unshiftAsciiString,
+    collapseSpacedLettersAndNumbers
   };
 });
