@@ -21,10 +21,6 @@
     };
   }
 
-  function getCharts() {
-    return (typeof window !== 'undefined' && window.ChatCharts) ? window.ChatCharts : null;
-  }
-
   function getFileParser() {
     return (typeof window !== 'undefined' && window.ChatFileParser) ? window.ChatFileParser : {
       formatBytes: (b) => `${b} B`
@@ -54,6 +50,7 @@
     return {
       document: typeof document !== 'undefined' ? document : null,
       markdown: getMarkdown(),
+      charts: (typeof window !== 'undefined' && window.ChatCharts) ? window.ChatCharts : null,
       t
     };
   }
@@ -105,36 +102,6 @@
             <div class="web-card-section web-response-section">
               <div class="section-label section-response-label">${t('tool_web_receiving') || 'Recibiendo contenido...'}</div>
               <div class="web-response-body tool-loading-placeholder">⏳ ${isPdfCall ? t('tool_loading_pdf') : t('tool_loading_web')}</div>
-            </div>
-          </div>
-        </div>
-      `;
-      return cardDiv;
-    }
-
-    // 3. Web Search
-    if (norm === 'searchweb') {
-      const queryToSearch = toolArgs.query || toolArgs.q || toolArgs.search || toolArgs.keyword || toolArgs.text || toolArgs.input || '';
-      cardDiv.innerHTML = `
-        <div class="web-search-card">
-          <div class="search-card-header">
-            <div class="search-card-title">
-              <span>🔍</span>
-              <span>${t('tool_search_title') || 'Búsqueda en Internet'}</span>
-            </div>
-            <div class="tool-card-header-actions">
-              <span class="search-card-badge status-loading">⏳ ${t('tool_badge_searching') || 'Buscando...'}</span>
-              <button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Minimizar'}"><span>▾</span></button>
-            </div>
-          </div>
-          <div class="tool-card-collapsible-body">
-            <div class="search-query-section">
-              <div class="section-label">${t('tool_search_query')}</div>
-              <div class="query-badge">🔍 <strong>${Markdown.escapeHtml(queryToSearch)}</strong></div>
-            </div>
-            <div class="search-results-section">
-              <div class="section-label search-sources-label">${t('tool_search_searching') || 'Buscando fuentes...'}</div>
-              <div class="search-results-list tool-loading-placeholder">⏳ ${t('tool_loading_search') || 'Consultando motores de búsqueda...'}</div>
             </div>
           </div>
         </div>
@@ -243,54 +210,6 @@
 
     const cardDiv = document.createElement('div');
     cardDiv.className = 'tool-card-wrapper';
-
-    // 1. Gráficos interactivos SVG (render_chart)
-    if (norm === 'renderchart') {
-      const Charts = getCharts();
-      if (Charts && Charts.renderChartCard) {
-        cardDiv.innerHTML = Charts.renderChartCard(toolArgs);
-      } else {
-        cardDiv.innerHTML = `<div class="chat-chart-card">📊 ${Markdown.escapeHtml(toolArgs.title || 'Gráfico')}</div>`;
-      }
-      return cardDiv;
-    }
-
-    // 2. Búsqueda Web
-    if (norm === 'searchweb') {
-      const queryToSearch = toolArgs.query || toolArgs.q || toolArgs.search || toolArgs.keyword || toolArgs.text || '';
-      let resultsHtml = '';
-      if (toolMsg && toolMsg.content) {
-        resultsHtml = `<div class="search-results-list"><div class="search-result-snippet">${Markdown.renderMarkdown(toolMsg.content)}</div></div>`;
-      } else {
-        resultsHtml = `<div class="search-results-list"><div class="search-result-snippet">${t('tool_search_empty')}</div></div>`;
-      }
-
-      cardDiv.innerHTML = `
-        <div class="web-search-card">
-          <div class="search-card-header">
-            <div class="search-card-title">
-              <span>🔍</span>
-              <span>${t('tool_search_title') || 'Búsqueda en Internet'}</span>
-            </div>
-            <div class="tool-card-header-actions">
-              <span class="search-card-badge status-success">✅ ${t('tool_status_success') || 'Completado'}</span>
-              <button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Minimizar'}"><span>▾</span></button>
-            </div>
-          </div>
-          <div class="tool-card-collapsible-body">
-            <div class="search-query-section">
-              <div class="section-label">${t('tool_search_query') || 'Consulta realizada:'}</div>
-              <div class="query-badge">🔍 <strong>${Markdown.escapeHtml(queryToSearch)}</strong></div>
-            </div>
-            <div class="search-results-section">
-              <div class="section-label">${t('tool_search_sources_label') || 'Fuentes y resultados encontrados:'}</div>
-              ${resultsHtml}
-            </div>
-          </div>
-        </div>
-      `;
-      return cardDiv;
-    }
 
     // 4. Consulta Web o Descarga de PDF
     if (norm === 'fetchwebpage' || norm === 'downloadpdf') {
@@ -493,40 +412,6 @@
       return;
     }
 
-    // 3. Web Search
-    if (norm === 'searchweb') {
-      const isSuccess = result?.success !== false && !result?.error;
-      const count = result?.count || (Array.isArray(result?.results) ? result.results.length : 0);
-
-      const badgeEl = cardDiv.querySelector('.search-card-badge');
-      if (badgeEl) {
-        badgeEl.className = `search-card-badge ${isSuccess ? 'status-success' : 'status-error'}`;
-        badgeEl.textContent = isSuccess ? `${count} fuentes (${elapsedMs || 0}ms)` : `❌ Error búsqueda (${elapsedMs || 0}ms)`;
-      }
-
-      const sourcesLabel = cardDiv.querySelector('.search-sources-label');
-      if (sourcesLabel) {
-        sourcesLabel.textContent = t('tool_search_sources_label') || 'Fuentes y resultados encontrados:';
-      }
-
-      const resultsList = cardDiv.querySelector('.search-results-list');
-      if (resultsList) {
-        if (result?.results && result.results.length > 0) {
-          resultsList.innerHTML = result.results.map(r => `
-            <div class="search-result-item">
-              <div><a href="${Markdown.sanitizeUrl(r.url)}" target="_blank" rel="noopener noreferrer">🔗 ${Markdown.escapeHtml(r.title)}</a> <small style="opacity:0.75;">(${Markdown.escapeHtml(r.source || 'web')})</small></div>
-              ${r.snippet ? `<div class="search-result-snippet">${Markdown.escapeHtml(r.snippet)}</div>` : ''}
-            </div>
-          `).join('');
-        } else if (result?.markdown) {
-          resultsList.innerHTML = `<div class="search-result-snippet">${Markdown.renderMarkdown(result.markdown)}</div>`;
-        } else {
-          resultsList.innerHTML = `<div class="search-result-snippet"><em>${t('tool_search_empty') || 'No se encontraron resultados relevantes.'}</em></div>`;
-        }
-      }
-      return;
-    }
-
     // 4a. Base de Conocimiento RAG (list_documents / search_knowledge_base)
     if (norm === 'listdocuments' || norm === 'listknowledgebase' || norm === 'getdocuments' || norm === 'listdocs' || norm === 'listardocumentos' ||
         norm === 'searchknowledgebase' || norm === 'searchkb' || norm === 'searchdocuments' || norm === 'searchknowledge' || norm === 'buscarendocumentos') {
@@ -570,15 +455,6 @@
         resContainer.innerHTML = `
           <pre class="tool-result-pre"><code>${Markdown.escapeHtml(contentStr.slice(0, 2000))}${contentStr.length > 2000 ? '\n... (texto completo truncado en tarjeta)' : ''}</code></pre>
         `;
-      }
-      return;
-    }
-
-    // 5. Gráficos interactivos SVG (render_chart)
-    if (norm === 'renderchart' || norm === 'generatechart') {
-      const Charts = getCharts();
-      if (Charts && Charts.renderChartCard) {
-        cardDiv.innerHTML = Charts.renderChartCard(toolArgs);
       }
       return;
     }

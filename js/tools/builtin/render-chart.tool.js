@@ -21,6 +21,31 @@
     }
   };
 
+  function createCardWrapper(ui) {
+    const doc = ui?.document || (typeof document !== 'undefined' ? document : null);
+    if (!doc) return null;
+    const cardDiv = doc.createElement('div');
+    cardDiv.className = 'tool-card-wrapper';
+    return cardDiv;
+  }
+
+  function renderChart(args, ui) {
+    const Charts = ui?.charts || null;
+    if (Charts?.renderChartCard) return Charts.renderChartCard(args);
+    const escapeHtml = ui?.markdown?.escapeHtml || ((value) => String(value || ''));
+    return `<div class="chat-chart-card">📊 ${escapeHtml(args.title || 'Gráfico')}</div>`;
+  }
+
+  function updateLiveCard(cardDiv, args, _result, _elapsedMs, ui) {
+    if (cardDiv) cardDiv.innerHTML = renderChart(args, ui);
+  }
+
+  function renderHistoricalCard(args, _toolMessage, ui) {
+    const cardDiv = createCardWrapper(ui);
+    if (cardDiv) cardDiv.innerHTML = renderChart(args, ui);
+    return cardDiv;
+  }
+
   function createTool(Tool) {
     if (typeof Tool !== 'function') throw new Error('La clase Tool es necesaria para crear render_chart.');
     return new Tool({
@@ -43,11 +68,11 @@
         toModel: (args, _result, outcome) => JSON.stringify({ success: outcome?.ok !== false, type: args.type || 'bar', title: args.title || 'Gráfico' }),
         toMarkdown: (args) => `> 📊 **render_chart** (${args.type || 'bar'})\n> Título: "${args.title || 'Gráfico'}"\n\n`
       },
-      view: { id: definition.name }
+      view: { id: definition.name, updateLiveCard, renderHistoricalCard }
     });
   }
 
-  const toolModule = { id: definition.name, definition, createTool };
+  const toolModule = { id: definition.name, definition, createTool, view: { id: definition.name, updateLiveCard, renderHistoricalCard } };
   let manifestApi = null;
   if (typeof window !== 'undefined' && window.ChatToolManifest) manifestApi = window.ChatToolManifest;
   else if (typeof require !== 'undefined') { try { manifestApi = require('../tool-manifest.js'); } catch (e) {} }

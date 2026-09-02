@@ -21,6 +21,24 @@ test('Remaining builtin tool modules - cumplen contrato y se registran en el man
   }
 });
 
+test('render_chart - su vista delegada reconstruye el SVG sin el renderer legacy', () => {
+  const tool = RenderChartTool.createTool(AgentCore.Tool);
+  const fakeDocument = {
+    createElement: () => ({ className: '', innerHTML: '' })
+  };
+  const viewContext = {
+    document: fakeDocument,
+    charts: { renderChartCard: (args) => `<svg data-chart="${args.title}"></svg>` },
+    markdown: { escapeHtml: (value) => String(value) }
+  };
+  const historical = tool.view.renderHistoricalCard({ title: 'Evolución' }, {}, viewContext);
+  const live = { innerHTML: '' };
+  tool.view.updateLiveCard(live, { title: 'Evolución' }, {}, 2, viewContext);
+
+  assert.match(historical.innerHTML, /data-chart="Evolución"/);
+  assert.match(live.innerHTML, /data-chart="Evolución"/);
+});
+
 test('render_chart y get_current_datetime - ejecutan de forma autocontenida', async () => {
   const chartTool = RenderChartTool.createTool(AgentCore.Tool);
   const chartResult = await chartTool.execute({ type: 'bar', title: 'Ventas', labels: ['Enero'], datasets: [{ label: '2026', data: [10] }] }, {
