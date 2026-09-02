@@ -178,7 +178,40 @@
     const db = await openDatabase();
     if (!db) return null;
     const tx = db.transaction(storeName, 'readonly');
-    return requestResult(tx.objectStore(storeName).index(indexName).getAll(value));
+    const index = tx.objectStore(storeName).index(indexName);
+    // Usar openCursor en streaming para evitar el límite de IPC de Chromium
+    // ("The serialized value is too large: max=257949696 bytes") en ramas con cientos de documentos
+    if (typeof index.openCursor === 'function') {
+      return new Promise((resolve, reject) => {
+        const results = [];
+        try {
+          const keyRange = (typeof IDBKeyRange !== 'undefined' && IDBKeyRange && typeof IDBKeyRange.only === 'function')
+            ? IDBKeyRange.only(value)
+            : value;
+          const request = index.openCursor(keyRange);
+          request.onsuccess = (event) => {
+            const cursor = event.target.result;
+            if (cursor) {
+              results.push(cursor.value);
+              cursor.continue();
+            } else {
+              resolve(results);
+            }
+          };
+          request.onerror = () => reject(request.error || new Error(`Error en cursor de ${storeName}.${indexName}`));
+        } catch (err) {
+          if (typeof index.getAll === 'function') {
+            requestResult(index.getAll(value)).then(resolve, reject);
+          } else {
+            reject(err);
+          }
+        }
+      });
+    }
+    if (typeof index.getAll === 'function') {
+      return requestResult(index.getAll(value));
+    }
+    return [];
   }
 
   async function createBranch(nameOrData, description = '') {
