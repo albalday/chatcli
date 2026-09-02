@@ -66,19 +66,12 @@
       ? Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
       : 'UTC';
     const dayName = now.toLocaleDateString(lang === 'en' ? 'en-US' : 'es-ES', { weekday: 'long' });
-    const year = now.getFullYear();
 
     if (lang === 'en') {
-      return `[System Context: Real-time Host Temporal Anchor]\n` +
-        `Current Date: ${isoDate} (${dayName}), Year: ${year}, Timezone: ${tz}.\n` +
-        `MANDATORY TEMPORAL GROUNDING: The date above is the real, verified current system date provided directly by the host operating system. ` +
-        `Treat ${year} as the undisputed present factual year. Do not defer to your training cutoff date, do not claim uncertainty about the current date/year, and answer questions about today's date or the current year with full certainty.`;
+      return `[System Context: Current real date is ${isoDate} (${dayName}), Timezone: ${tz}. Command: This is the verified real-time system date; treat it as factual present and answer with total certainty.]`;
     }
 
-    return `[Contexto del Sistema: Ancla Temporal en Tiempo Real del Host]\n` +
-      `Fecha actual: ${isoDate} (${dayName}), Año: ${year}, Zona Horaria: ${tz}.\n` +
-      `INSTRUCCIÓN TEMPORAL OBLIGATORIA: La fecha anterior es la fecha real y verificada del sistema proporcionada directamente por el entorno del usuario. ` +
-      `Trata el año ${year} y esta fecha como el presente factual absoluto. No te limites por la fecha de corte de tu entrenamiento (knowledge cutoff), no expreses dudas sobre la fecha o año actual, y responde con total certeza ante cualquier consulta sobre la fecha, el día o el año actual.`;
+    return `[Contexto del Sistema: La fecha real actual es ${isoDate} (${dayName}), Zona Horaria: ${tz}. Orden: Esta es la fecha verificada del sistema en tiempo real; acéptala como presente factual y responde con total certeza.]`;
   }
 
   /**
