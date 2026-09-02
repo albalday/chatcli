@@ -217,17 +217,36 @@
   function formatMathExpression(tex) {
     if (!tex) return '';
     let s = String(tex).trim();
+
+    // Arrays y matrices LaTeX: \begin{array}... \end{array}
+    s = s.replace(/\\?begin\{(?:array|matrix|align|aligned)\}(?:\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\})?([\s\S]*?)\\?end\{(?:array|matrix|align|aligned)\}/gi, function (_m, inner) {
+      const lines = inner
+        .replace(/\\hline/g, '')
+        .split(/\\\\/)
+        .map(l => l.replace(/\\quad|&amp;|&/g, ' ').replace(/\s+/g, ' ').trim())
+        .filter(Boolean);
+      return lines.join('\n');
+    });
+
+    // Delimitadores \left, \right
+    s = s.replace(/\\(?:left|right)\b/g, '');
+
+    // Espaciado LaTeX: \, \; \! \: \quad \qquad
+    s = s.replace(/\\(?:quad|qquad)\b/g, ' ');
+    s = s.replace(/(\d)\\,\s*(\d)/g, '$1.$2');
+    s = s.replace(/\\([,;:!])/g, '');
+
     s = s.replace(/\\mathbf\{([^}]+)\}/g, '<strong>$1</strong>');
     s = s.replace(/\\(?:text|mathrm)\{([^}]+)\}/g, '$1');
-    s = s.replace(/\\times/g, '×');
-    s = s.replace(/\\cdot/g, '·');
-    s = s.replace(/\\div/g, '÷');
-    s = s.replace(/\\pm/g, '±');
-    s = s.replace(/\\approx/g, '≈');
-    s = s.replace(/\\(?:neq|ne)/g, '≠');
-    s = s.replace(/\\(?:leq|le)/g, '≤');
-    s = s.replace(/\\(?:geq|ge)/g, '≥');
-    s = s.replace(/\\infty/g, '∞');
+    s = s.replace(/\\times\b/g, '×');
+    s = s.replace(/\\cdot\b/g, '·');
+    s = s.replace(/\\div\b/g, '÷');
+    s = s.replace(/\\pm\b/g, '±');
+    s = s.replace(/\\approx\b/g, '≈');
+    s = s.replace(/\\(?:neq|ne)\b/g, '≠');
+    s = s.replace(/\\(?:leq|le)\b/g, '≤');
+    s = s.replace(/\\(?:geq|ge)\b/g, '≥');
+    s = s.replace(/\\infty\b/g, '∞');
     s = s.replace(/\\sqrt\{([^}]+)\}/g, '√($1)');
     s = s.replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '($1 / $2)');
     s = s.replace(/\^\{([^}]+)\}/g, '<sup>$1</sup>');
@@ -257,6 +276,20 @@
     p = p.replace(/(?<!\\)\$(?!\s)([^$\n]+?)(?<!\s)\$/g, function (_match, formula) {
       return `<span class="math-inline">${formatMathExpression(formula)}</span>`;
     });
+
+    // Limpieza de artefactos LaTeX emitidos por el modelo fuera de delimitadores
+    p = p.replace(/\\?begin\{(?:array|matrix|align|aligned)\}(?:\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\})?([\s\S]*?)\\?end\{(?:array|matrix|align|aligned)\}/gi, function (_m, inner) {
+      const lines = inner
+        .replace(/\\hline/g, '')
+        .split(/\\\\/)
+        .map(l => l.replace(/\\quad|&amp;|&/g, ' ').replace(/\s+/g, ' ').trim())
+        .filter(Boolean);
+      return `\n<div class="math-block">${lines.join('<br>')}</div>\n`;
+    });
+    p = p.replace(/\\(?:left|right)\b/g, '');
+    p = p.replace(/(\d)\\,\s*(\d)/g, '$1.$2');
+    p = p.replace(/(\d)\{,(\d+)\}/g, '$1,$2');
+    p = p.replace(/\\([,;:!])/g, '');
 
     // Desescapar dólares literales (\$ -> $)
     p = p.replace(/\\\$/g, '$');

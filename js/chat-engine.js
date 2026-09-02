@@ -197,6 +197,11 @@
       activePrompt = activePrompt ? (dateAnchor + '\n\n' + activePrompt) : dateAnchor;
     }
 
+    const formatDirective = (lang === 'en')
+      ? '[Format: Standard Markdown. Do not use LaTeX commands (avoid \\left, \\right, \\begin, \\,); write math and numbers plainly with standard symbols (+, -, ×, /, =).]'
+      : '[Formato: Markdown estándar. No uses comandos LaTeX (evita \\left, \\right, \\begin, \\,); escribe matemáticas y números directamente con símbolos estándar (+, -, ×, /, =).]';
+    activePrompt = activePrompt ? (activePrompt + '\n\n' + formatDirective) : formatDirective;
+
     const isToolsEnabled = options.enableTools !== undefined
       ? Boolean(options.enableTools)
       : (appConfig.enableAgentJs !== false || appConfig.enableAgentWeb !== false || appConfig.enableAgentSearch !== false || appConfig.enableAgentChart !== false || Boolean(appConfig.activeRagBranchId));

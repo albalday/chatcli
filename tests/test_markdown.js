@@ -90,4 +90,18 @@ Aproximadamente $1,61 \\times 10^{25}$`;
   assert.ok(html.includes('10<sup>25</sup>'), 'Debe procesar exponentes en superíndice');
 });
 
+test('Markdown - Limpieza de artefactos LaTeX (array, \\left, \\right, \\,)', () => {
+  const sample = `Cálculo:
+22! · \\left(1 + 23\\right) = 13\\,800
+\\begin{array}{r@{quad}l} & 1\\,124 \\\\ + & 25 \\\\ \\hline = & 1\\,149 \\end{array}`;
+
+  const html = Markdown.parseMarkdown(sample);
+  assert.ok(!html.includes('\\left'), 'No debe quedar \\left');
+  assert.ok(!html.includes('\\right'), 'No debe quedar \\right');
+  assert.ok(!html.includes('≤ft'), 'No debe convertir \\left erróneamente en ≤ft');
+  assert.ok(html.includes('13.800'), 'Debe convertir \\, en separador de miles');
+  assert.ok(!html.includes('\\begin{array}'), 'Debe limpiar \\begin{array}');
+  assert.ok(html.includes('1.124'), 'Debe limpiar array y mostrar números');
+});
+
 
