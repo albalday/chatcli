@@ -105,6 +105,35 @@
     };
   }
 
+  async function searchBranches(branchIds, term, options = {}) {
+    const list = Array.isArray(branchIds) ? branchIds : (branchIds ? [branchIds] : []);
+    const cleanIds = Array.from(new Set(list.map(id => String(id || '').trim()).filter(Boolean)));
+    if (cleanIds.length === 0) return { count: 0, elapsed: null, hits: [] };
+    if (cleanIds.length === 1) return searchBranch(cleanIds[0], term, options);
+
+    const limit = Number(options.limit) > 0 ? Number(options.limit) : 8;
+    const branchResults = await Promise.all(
+      cleanIds.map(async (id) => {
+        try {
+          const res = await searchBranch(id, term, { ...options, limit });
+          return (res.hits || []).map(hit => ({ ...hit, branchId: id }));
+        } catch (_) {
+          return [];
+        }
+      })
+    );
+
+    const allHits = branchResults.flat();
+    allHits.sort((a, b) => (b.score || 0) - (a.score || 0));
+    const topHits = allHits.slice(0, limit);
+
+    return {
+      count: allHits.length,
+      elapsed: null,
+      hits: topHits
+    };
+  }
+
   function invalidateBranch(branchId) {
     indexes.delete(branchId);
     builds.delete(branchId);
@@ -117,5 +146,5 @@
     revisions.clear();
   }
 
-  return { buildBranchIndex, searchBranch, invalidateBranch, clearCache };
+  return { buildBranchIndex, searchBranch, searchBranches, invalidateBranch, clearCache };
 });

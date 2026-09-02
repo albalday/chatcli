@@ -11,9 +11,10 @@
     parameters: { type: 'object', properties: { query: { type: 'string', description: 'Término, tema o pregunta clave a buscar en la base de conocimiento.' } }, required: ['query'] }
   };
 
-  function getBranchId(context = {}) {
-    return context.activeRagBranchId || context.branchId || context.config?.activeRagBranchId || '';
+  function getBranchIds(context = {}) {
+    return context.activeRagBranchIds || context.activeRagBranchId || context.branchId || context.config?.activeRagBranchIds || context.config?.activeRagBranchId || '';
   }
+  const getBranchId = getBranchIds;
 
   function getRagService(context = {}) {
     if (context.services?.ragService) return context.services.ragService;
@@ -41,11 +42,11 @@
       category: 'rag',
       metadata: { icon: '🔍', label: definition.name },
       settings: { showInSettings: false },
-      isAvailable: (config = {}) => Boolean(config.activeRagBranchId),
+      isAvailable: (config = {}) => Boolean(config.activeRagBranchId || (config.activeRagBranchIds && config.activeRagBranchIds.length > 0)),
       execute: async (args, context = {}) => {
         const RagService = getRagService(context);
         if (!RagService?.searchKnowledgeBase) return { success: false, error: 'Servicio de RAG no disponible.' };
-        return RagService.searchKnowledgeBase(getBranchId(context), args);
+        return RagService.searchKnowledgeBase(getBranchIds(context), args);
       },
       result: {
         toModel: (_args, result) => result?.text || JSON.stringify(result || {}),

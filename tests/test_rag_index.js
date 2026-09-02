@@ -36,3 +36,17 @@ test('RagIndex - aísla ramas y reconstruye tras invalidar', async () => {
   RagIndex.invalidateBranch(second.id);
   assert.equal((await RagIndex.searchBranch(second.id, 'paella', { tolerance: 0 })).hits[0].documentTitle, 'dos.txt');
 });
+
+test('RagIndex - busca federadamente entre múltiples ramas', async () => {
+  const dev = await RagStorage.createBranch('Logs-Dispositivo-1');
+  const prod = await RagStorage.createBranch('Logs-Dispositivo-2');
+  await RagStorage.saveDocument({ branchId: dev.id, title: 'dev.log', chunks: [{ title: 'Error 500', content: 'Database timeout connection error on node 1' }] });
+  await RagStorage.saveDocument({ branchId: prod.id, title: 'prod.log', chunks: [{ title: 'Warning', content: 'Database high memory usage warning on node 2' }] });
+
+  const result = await RagIndex.searchBranches([dev.id, prod.id], 'database', { tolerance: 0 });
+  assert.equal(result.count, 2);
+  assert.equal(result.hits.length, 2);
+  const branchIds = result.hits.map(h => h.branchId);
+  assert.ok(branchIds.includes(dev.id));
+  assert.ok(branchIds.includes(prod.id));
+});

@@ -54,5 +54,35 @@ test('RagService - impide leer chunks de una rama distinta', async () => {
   const search = await RagService.searchKnowledgeBase(branch.id, { query: 'Kubernetes', tolerance: 0 });
   const read = await RagService.readKnowledgeChunk(foreign.id, { chunkId: search.matches[0].chunkId });
   assert.equal(read.success, false);
-  assert.match(read.error, /rama activa/);
+  assert.match(read.error, /ramas activas/);
+});
+
+test('RagService - soporta múltiples ramas activas simultáneamente', async () => {
+  const { branch: b1 } = await seed();
+  const b2 = await RagStorage.createBranch('Redes', 'Configuración de red');
+  await RagStorage.saveDocument({
+    branchId: b2.id, title: 'firewall.md', fileType: 'md',
+    chunks: [
+      { title: 'Puertos', content: 'El puerto 443 HTTPS y el puerto 22 SSH están abiertos.' }
+    ]
+  });
+
+  const context = await RagService.buildRagSystemContext([b1.id, b2.id]);
+  assert.match(context, /BASES DE CONOCIMIENTO ACTIVAS/);
+  assert.match(context, /Operaciones/);
+  assert.match(context, /Redes/);
+
+  const list = await RagService.listDocuments([b1.id, b2.id]);
+  assert.equal(list.count, 2);
+  assert.match(list.text, /DOCUMENTOS EN Operaciones/);
+  assert.match(list.text, /DOCUMENTOS EN Redes/);
+
+  const search = await RagService.searchKnowledgeBase([b1.id, b2.id], { query: 'puerto SSH', tolerance: 0 });
+  assert.ok(search.matchesCount >= 1);
+  assert.match(search.text, /Rama: Redes/);
+  const chunkId = search.matches[0].chunkId;
+
+  const read = await RagService.readKnowledgeChunk([b1.id, b2.id], { chunkId });
+  assert.equal(read.success, true);
+  assert.match(read.content, /puerto 443/);
 });

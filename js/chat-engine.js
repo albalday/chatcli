@@ -227,11 +227,15 @@
     }
 
     // Directiva proactiva de Base de Conocimiento activa
-    const activeBranchId = options.activeRagBranchId ||
+    const activeBranchIds = options.activeRagBranchIds ||
+      (options.activeRagBranchId ? [options.activeRagBranchId] : []) ||
+      (typeof window !== 'undefined' && window.ChatRagUI && window.ChatRagUI.getActiveBranchIds ? window.ChatRagUI.getActiveBranchIds() : []) ||
+      (appConfig.activeRagBranchIds || (appConfig.activeRagBranchId ? [appConfig.activeRagBranchId] : []));
+    const activeBranchId = options.activeRagBranchId || (Array.isArray(activeBranchIds) ? activeBranchIds[0] : '') ||
       (typeof window !== 'undefined' && window.ChatRagUI && window.ChatRagUI.getActiveBranchId ? window.ChatRagUI.getActiveBranchId() : '') ||
       (appConfig.activeRagBranchId || '');
 
-    if (activeBranchId) {
+    if (activeBranchId || (Array.isArray(activeBranchIds) && activeBranchIds.length > 0)) {
       const ragInstruction = (lang === 'en')
         ? `*Knowledge Base active:* Use 'list_documents', 'search_knowledge_base', and 'read_knowledge_chunk' to consult the user's private local documents before answering related questions.`
         : `*Base de Conocimiento activa:* Usa 'list_documents', 'search_knowledge_base' y 'read_knowledge_chunk' para consultar los documentos privados locales antes de responder preguntas relacionadas.`;
@@ -311,6 +315,7 @@
       appConfig = {},
       assistantMsgId = `asst_${Date.now()}`,
       activeRagBranchId = '',
+      activeRagBranchIds = [],
       currentRagSystemContext = '',
       sessionCacheInvalidated = false,
       sessionCacheRevision = Date.now(),
@@ -327,6 +332,11 @@
       scrollToBottom,
       attachListeners
     } = params;
+
+    const resolvedActiveRagBranchIds = (Array.isArray(activeRagBranchIds) && activeRagBranchIds.length > 0)
+      ? activeRagBranchIds
+      : (activeRagBranchId ? [activeRagBranchId] : (appConfig.activeRagBranchIds || (appConfig.activeRagBranchId ? [appConfig.activeRagBranchId] : [])));
+    const resolvedActiveRagBranchId = activeRagBranchId || resolvedActiveRagBranchIds[0] || (appConfig.activeRagBranchId || '');
 
     const API = getAPI();
     const AgentCore = getAgentCore();
@@ -385,12 +395,13 @@
 
       const effectiveMessages = buildEffectiveMessages(chatHistory, appConfig, {
         currentRagSystemContext,
-        activeRagBranchId
+        activeRagBranchId: resolvedActiveRagBranchId,
+        activeRagBranchIds: resolvedActiveRagBranchIds
       });
 
       const AgentCore = getAgentCore();
       const activeToolDefs = (AgentCore && AgentCore.registry && typeof AgentCore.registry.getActiveDefinitions === 'function')
-        ? AgentCore.registry.getActiveDefinitions({ ...appConfig, activeRagBranchId })
+        ? AgentCore.registry.getActiveDefinitions({ ...appConfig, activeRagBranchId: resolvedActiveRagBranchId, activeRagBranchIds: resolvedActiveRagBranchIds })
         : [];
 
       const streamResult = await API.streamChatCompletion({
@@ -403,7 +414,8 @@
         reasoningEffort: reasoningEffort || appConfig.reasoningEffort || 'none',
         tools: activeToolDefs,
         enableTools: activeToolDefs.length > 0,
-        activeRagBranchId: activeRagBranchId || '',
+        activeRagBranchId: resolvedActiveRagBranchId || '',
+        activeRagBranchIds: resolvedActiveRagBranchIds,
         enableContextCache: appConfig.enableContextCache !== false,
         cacheInvalidated: currentCacheInvalidated,
         cacheRevision: sessionCacheRevision,
@@ -484,7 +496,8 @@
           const isEn = appConfig.language === 'en';
           const synthMessages = buildEffectiveMessages(chatHistory, appConfig, {
             currentRagSystemContext,
-            activeRagBranchId,
+            activeRagBranchId: resolvedActiveRagBranchId,
+            activeRagBranchIds: resolvedActiveRagBranchIds,
             forceSystemPromptGuide: true
           });
 
@@ -511,7 +524,8 @@
               enableAgentWeb: false,
               enableAgentSearch: false,
               enableAgentChart: false,
-              activeRagBranchId: activeRagBranchId || '',
+              activeRagBranchId: resolvedActiveRagBranchId || '',
+              activeRagBranchIds: resolvedActiveRagBranchIds,
               enableContextCache: appConfig.enableContextCache !== false,
               signal: signal,
 
@@ -666,7 +680,8 @@
           scrollToBottom: scrollFn,
           language: appConfig.language || 'es',
           signal: signal,
-          activeRagBranchId: activeRagBranchId
+          activeRagBranchId: resolvedActiveRagBranchId,
+          activeRagBranchIds: resolvedActiveRagBranchIds
         });
       } else {
         toolExecRes = {
@@ -718,7 +733,8 @@
       const isEn = appConfig.language === 'en';
       const synthMessages = buildEffectiveMessages(chatHistory, appConfig, {
         currentRagSystemContext,
-        activeRagBranchId,
+        activeRagBranchId: resolvedActiveRagBranchId,
+        activeRagBranchIds: resolvedActiveRagBranchIds,
         forceSystemPromptGuide: true
       });
 
@@ -741,7 +757,8 @@
           tools: [],
           enableTools: false,
           toolChoice: 'none',
-          activeRagBranchId: activeRagBranchId || '',
+          activeRagBranchId: resolvedActiveRagBranchId || '',
+          activeRagBranchIds: resolvedActiveRagBranchIds,
           enableContextCache: appConfig.enableContextCache !== false,
           signal: signal,
 

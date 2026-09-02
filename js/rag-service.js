@@ -14,38 +14,61 @@
     try { return JSON.parse(String(rawArgs)); } catch (_) { return { query: String(rawArgs) }; }
   }
 
-  async function requireBranch(branchId) {
-    if (!branchId) throw new Error('No hay ninguna rama de conocimiento activa.');
-    const branch = await RagStorage.getBranchById(branchId);
-    if (!branch) throw new Error(`No existe la rama de conocimiento ${branchId}.`);
-    return branch;
+  function normalizeBranchIds(input) {
+    if (!input) return [];
+    const list = Array.isArray(input) ? input : String(input).split(',');
+    return Array.from(new Set(list.map(id => String(id || '').trim()).filter(Boolean)));
   }
 
-  async function buildRagSystemContext(branchId) {
-    if (!branchId) return '';
+  async function resolveBranches(branchIdsInput) {
+    const ids = normalizeBranchIds(branchIdsInput);
+    if (ids.length === 0) throw new Error('No hay ninguna rama de conocimiento activa.');
+    const branches = (await Promise.all(ids.map(id => RagStorage.getBranchById(id)))).filter(Boolean);
+    if (branches.length === 0) throw new Error(`No se encontró ninguna de las ramas especificadas: ${ids.join(', ')}.`);
+    return branches;
+  }
+
+  async function buildRagSystemContext(branchIds) {
+    if (!branchIds) return '';
     try {
-      const branch = await requireBranch(branchId);
-      return `[BASE DE CONOCIMIENTO ACTIVA: ${branch.name}]\nBusca primero con search_knowledge_base y usa read_knowledge_chunk cuando necesites el texto completo de un resultado.\nPuedes incluir las referencias a imágenes incrustadas que aparezcan en los fragmentos consultados (![...](rag-image://...)) para mostrarlas al usuario.`;
+      const branches = await resolveBranches(branchIds);
+      const names = branches.map(b => b.name).join(', ');
+      const label = branches.length === 1 ? `[BASE DE CONOCIMIENTO ACTIVA: ${names}]` : `[BASES DE CONOCIMIENTO ACTIVAS: ${names}]`;
+      return `${label}\nBusca primero con search_knowledge_base y usa read_knowledge_chunk cuando necesites el texto completo de un resultado.\nPuedes incluir las referencias a imágenes incrustadas que aparezcan en los fragmentos consultados (![...](rag-image://...)) para mostrarlas al usuario.`;
     } catch (_) {
       return '';
     }
   }
 
-  async function injectRagContext(systemPrompt, branchId) {
-    const context = await buildRagSystemContext(branchId);
+  async function injectRagContext(systemPrompt, branchIds) {
+    const context = await buildRagSystemContext(branchIds);
     return [context, String(systemPrompt || '').trim()].filter(Boolean).join('\n\n');
   }
 
-  async function listDocuments(branchId) {
+  async function listDocuments(branchIds) {
     try {
-      const branch = await requireBranch(branchId);
-      const documents = await RagStorage.getDocumentsByBranch(branchId);
-      const lines = [`[DOCUMENTOS EN ${branch.name}]`];
-      for (const document of documents) {
-        lines.push(`- ${document.title} (documentId: ${document.id}, ${document.chunkCount} fragmentos, ${document.fileType})`);
+      const branches = await resolveBranches(branchIds);
+      const allDocs = [];
+      const sections = [];
+      for (const branch of branches) {
+        const documents = await RagStorage.getDocumentsByBranch(branch.id);
+        allDocs.push(...documents);
+        const lines = [`[DOCUMENTOS EN ${branch.name}]`];
+        for (const document of documents) {
+          lines.push(`- ${document.title} (documentId: ${document.id}, ${document.chunkCount} fragmentos, ${document.fileType})`);
+        }
+        if (!documents.length) lines.push('La rama no contiene documentos.');
+        sections.push(lines.join('\n'));
       }
-      if (!documents.length) lines.push('La rama no contiene documentos.');
-      return { success: true, branchId, branchName: branch.name, count: documents.length, documents, text: lines.join('\n') };
+      return {
+        success: true,
+        branchId: branches[0]?.id || '',
+        branchName: branches.map(b => b.name).join(', '),
+        branchIds: branches.map(b => b.id),
+        count: allDocs.length,
+        documents: allDocs,
+        text: sections.join('\n\n')
+      };
     } catch (error) {
       return { success: false, error: error.message || String(error) };
     }
@@ -60,50 +83,80 @@
     return `${start > 0 ? '…' : ''}${text.slice(start, start + maxLength)}${start + maxLength < text.length ? '…' : ''}`;
   }
 
-  async function searchKnowledgeBase(branchId, rawArgs) {
+  async function searchKnowledgeBase(branchIds, rawArgs) {
     const args = parseArguments(rawArgs);
     const query = String(args.query || '').trim();
     if (!query) return { success: false, error: 'La consulta de búsqueda está vacía.' };
     try {
-      const branch = await requireBranch(branchId);
-      const result = await RagIndex.searchBranch(branchId, query, { limit: args.limit || 8, tolerance: args.tolerance });
-      const matches = result.hits.map(hit => ({
-        documentId: hit.documentId,
-        chunkId: hit.chunkId,
-        documentTitle: hit.documentTitle,
-        sectionTitle: hit.sectionTitle,
-        score: hit.score,
-        snippet: makeSnippet(hit.content, query)
-      }));
-      const lines = [`[RESULTADOS EN ${branch.name} PARA: ${query}]`];
+      const branches = await resolveBranches(branchIds);
+      const branchNamesById = new Map(branches.map(b => [b.id, b.name]));
+      const ids = branches.map(b => b.id);
+      const result = typeof RagIndex.searchBranches === 'function'
+        ? await RagIndex.searchBranches(ids, query, { limit: args.limit || 8, tolerance: args.tolerance })
+        : await RagIndex.searchBranch(ids[0], query, { limit: args.limit || 8, tolerance: args.tolerance });
+
+      const matches = result.hits.map(hit => {
+        const bName = branchNamesById.get(hit.branchId) || branches[0].name;
+        return {
+          branchId: hit.branchId || branches[0].id,
+          branchName: bName,
+          documentId: hit.documentId,
+          chunkId: hit.chunkId,
+          documentTitle: hit.documentTitle,
+          sectionTitle: hit.sectionTitle,
+          score: hit.score,
+          snippet: makeSnippet(hit.content, query)
+        };
+      });
+
+      const branchLabel = branches.map(b => b.name).join(', ');
+      const lines = [`[RESULTADOS EN ${branchLabel} PARA: ${query}]`];
       for (const match of matches) {
-        lines.push(`- ${match.documentTitle} · ${match.sectionTitle} (chunkId: ${match.chunkId}, score: ${match.score.toFixed(3)})`);
+        const branchBadge = branches.length > 1 ? ` [Rama: ${match.branchName}]` : '';
+        lines.push(`- ${match.documentTitle} · ${match.sectionTitle}${branchBadge} (chunkId: ${match.chunkId}, score: ${match.score.toFixed(3)})`);
         lines.push(`  ${match.snippet}`);
       }
       if (!matches.length) lines.push('No se encontraron fragmentos relevantes.');
+
       return {
-        success: true, branchId, branchName: branch.name, query,
-        matchesCount: matches.length, totalMatches: result.count, matches, text: lines.join('\n')
+        success: true,
+        branchId: branches[0]?.id || '',
+        branchName: branchLabel,
+        branchIds: ids,
+        query,
+        matchesCount: matches.length,
+        totalMatches: result.count,
+        matches,
+        text: lines.join('\n')
       };
     } catch (error) {
       return { success: false, error: error.message || String(error) };
     }
   }
 
-  async function readKnowledgeChunk(branchId, rawArgs) {
+  async function readKnowledgeChunk(branchIds, rawArgs) {
     const args = parseArguments(rawArgs);
     const chunkId = String(args.chunkId || '').trim();
     if (!chunkId) return { success: false, error: 'chunkId es obligatorio.' };
     try {
-      await requireBranch(branchId);
+      const branches = await resolveBranches(branchIds);
+      const allowedBranchIds = new Set(branches.map(b => b.id));
       const chunk = await RagStorage.getChunkById(chunkId);
-      if (!chunk || chunk.branchId !== branchId) return { success: false, error: `No existe el fragmento ${chunkId} en la rama activa.` };
+      if (!chunk || !allowedBranchIds.has(chunk.branchId)) {
+        return { success: false, error: `No existe el fragmento ${chunkId} en las ramas activas.` };
+      }
       const document = await RagStorage.getDocumentById(chunk.documentId);
       return {
-        success: true, chunkId, documentId: chunk.documentId,
-        documentTitle: document?.title || '', sectionTitle: chunk.title,
-        charCount: chunk.content.length, content: chunk.content,
-        pageStart: chunk.pageStart, pageEnd: chunk.pageEnd
+        success: true,
+        chunkId,
+        documentId: chunk.documentId,
+        branchId: chunk.branchId,
+        documentTitle: document?.title || '',
+        sectionTitle: chunk.title,
+        charCount: chunk.content.length,
+        content: chunk.content,
+        pageStart: chunk.pageStart,
+        pageEnd: chunk.pageEnd
       };
     } catch (error) {
       return { success: false, error: error.message || String(error) };
@@ -111,7 +164,8 @@
   }
 
   return {
-    parseArguments, buildRagSystemContext, injectRagContext,
+    parseArguments, normalizeBranchIds, resolveBranches,
+    buildRagSystemContext, injectRagContext,
     listDocuments, searchKnowledgeBase, readKnowledgeChunk
   };
 });

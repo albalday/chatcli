@@ -5,7 +5,7 @@
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  let activeBranchId = '';
+  let activeBranchIds = new Set();
   let initialized = false;
 
   function storage() {
@@ -34,21 +34,57 @@
     return `${(bytes / Math.pow(1024, exponent)).toFixed(exponent ? 1 : 0)} ${units[exponent]}`;
   }
 
-  function getActiveBranchId() { return activeBranchId; }
-  function setActiveBranchId(branchId) {
-    activeBranchId = String(branchId || '');
+  function getActiveBranchIds() {
+    return Array.from(activeBranchIds);
+  }
+
+  function getActiveBranchId() {
+    return activeBranchIds.values().next().value || '';
+  }
+
+  function setActiveBranchIds(ids) {
+    const list = Array.isArray(ids) ? ids : (ids ? [ids] : []);
+    activeBranchIds = new Set(list.map(id => String(id || '').trim()).filter(Boolean));
     const store = configStorage();
-    if (store?.saveConfig) store.saveConfig({ activeRagBranchId: activeBranchId });
+    if (store?.saveConfig) {
+      store.saveConfig({
+        activeRagBranchIds: Array.from(activeBranchIds),
+        activeRagBranchId: getActiveBranchId()
+      });
+    }
     updateToolbarStatus();
-    return activeBranchId;
+    return Array.from(activeBranchIds);
+  }
+
+  function setActiveBranchId(branchId) {
+    if (!branchId) return setActiveBranchIds([]);
+    return setActiveBranchIds([branchId]);
+  }
+
+  function toggleBranchActive(branchId) {
+    const cleanId = String(branchId || '').trim();
+    if (!cleanId) return getActiveBranchIds();
+    if (activeBranchIds.has(cleanId)) {
+      activeBranchIds.delete(cleanId);
+    } else {
+      activeBranchIds.add(cleanId);
+    }
+    return setActiveBranchIds(Array.from(activeBranchIds));
+  }
+
+  function isBranchActive(branchId) {
+    return activeBranchIds.has(String(branchId || '').trim());
   }
 
   async function updateToolbarStatus() {
     if (typeof document === 'undefined') return;
     const button = document.getElementById('btn-open-rag');
     if (!button) return;
-    button.classList.toggle('active', Boolean(activeBranchId));
-    button.title = activeBranchId ? 'Conocimiento local activo' : 'Gestionar conocimiento local';
+    const count = activeBranchIds.size;
+    button.classList.toggle('active', count > 0);
+    button.title = count === 0
+      ? 'Gestionar conocimiento local'
+      : (count === 1 ? 'Conocimiento local activo (1 rama)' : `Conocimiento local activo (${count} ramas)`);
   }
 
   async function renderActiveTab() {
@@ -58,22 +94,38 @@
     const title = document.getElementById('rag-active-status-title');
     const description = document.getElementById('rag-active-status-desc');
     const toggle = document.getElementById('btn-rag-toggle-master');
-    const active = branches.find(branch => branch.id === activeBranchId);
-    if (title) title.textContent = active ? `🔎 ${active.name}` : 'Conocimiento desactivado';
-    if (description) description.textContent = active ? 'El agente puede buscar fragmentos de esta rama mediante Orama.' : 'Selecciona una rama para activar la búsqueda local.';
-    if (toggle) { toggle.disabled = !active; toggle.textContent = 'Desactivar'; }
+    const activeList = branches.filter(branch => activeBranchIds.has(branch.id));
+    const activeCount = activeList.length;
+
+    if (title) {
+      if (activeCount === 0) title.textContent = 'Conocimiento desactivado';
+      else if (activeCount === 1) title.textContent = `🔎 ${activeList[0].name}`;
+      else title.textContent = `🔎 ${activeCount} ramas activas (${activeList.map(b => b.name).join(', ')})`;
+    }
+    if (description) {
+      if (activeCount === 0) description.textContent = 'Selecciona una o varias ramas para que el agente pueda buscar en tus documentos.';
+      else if (activeCount === 1) description.textContent = 'El agente puede buscar fragmentos de esta rama mediante Orama.';
+      else description.textContent = `El agente consultará en paralelo las ${activeCount} ramas activas en cada búsqueda.`;
+    }
+    if (toggle) {
+      toggle.disabled = activeCount === 0;
+      toggle.textContent = 'Desactivar todas';
+    }
     if (!list) return;
     if (!branches.length) {
       list.innerHTML = '<div class="rag-empty-state">No hay ramas. Crea la primera en la pestaña Documentos.</div>';
       return;
     }
-    list.innerHTML = branches.map(branch => `
-      <button type="button" class="setting-toggle-card rag-branch-select-card${branch.id === activeBranchId ? ' active' : ''}" data-branch-id="${escapeHtml(branch.id)}">
+    list.innerHTML = branches.map(branch => {
+      const isActive = activeBranchIds.has(branch.id);
+      return `
+      <button type="button" class="setting-toggle-card rag-branch-select-card${isActive ? ' active' : ''}" data-branch-id="${escapeHtml(branch.id)}">
         <span class="toggle-card-info"><strong>${escapeHtml(branch.name)}</strong><span class="toggle-card-desc">${escapeHtml(branch.description || 'Sin descripción')}</span></span>
-        <span>${branch.id === activeBranchId ? '✓ Activa' : 'Activar'}</span>
-      </button>`).join('');
+        <span class="rag-branch-badge-status">${isActive ? '✓ Activa' : '+ Activar'}</span>
+      </button>`;
+    }).join('');
     list.querySelectorAll('[data-branch-id]').forEach(button => button.addEventListener('click', async () => {
-      setActiveBranchId(button.dataset.branchId);
+      toggleBranchActive(button.dataset.branchId);
       await renderActiveTab();
     }));
   }
@@ -172,7 +224,10 @@
     if (!id || !confirm('¿Eliminar la rama y todos sus documentos?')) return;
     await storage().deleteBranch(id);
     indexer()?.invalidateBranch(id);
-    if (activeBranchId === id) setActiveBranchId('');
+    if (activeBranchIds.has(id)) {
+      activeBranchIds.delete(id);
+      setActiveBranchIds(Array.from(activeBranchIds));
+    }
     await renderManageTab();
     await renderActiveTab();
     await updateQuota();
@@ -221,12 +276,24 @@
   function initRagUI() {
     if (initialized || typeof document === 'undefined') return;
     initialized = true;
-    activeBranchId = configStorage()?.loadConfig?.()?.activeRagBranchId || '';
+    const cfg = configStorage()?.loadConfig?.() || {};
+    if (Array.isArray(cfg.activeRagBranchIds) && cfg.activeRagBranchIds.length > 0) {
+      activeBranchIds = new Set(cfg.activeRagBranchIds.map(String).filter(Boolean));
+    } else if (cfg.activeRagBranchId) {
+      activeBranchIds = new Set([String(cfg.activeRagBranchId)]);
+    } else {
+      activeBranchIds = new Set();
+    }
     const modal = document.getElementById('rag-modal');
     document.getElementById('btn-open-rag')?.addEventListener('click', async () => { await refresh(); modal?.showModal(); });
     document.getElementById('btn-close-rag')?.addEventListener('click', () => modal?.close());
     document.getElementById('btn-close-rag-footer')?.addEventListener('click', () => modal?.close());
-    document.getElementById('btn-rag-toggle-master')?.addEventListener('click', async () => { setActiveBranchId(''); await renderActiveTab(); });
+    document.getElementById('btn-rag-toggle-master')?.addEventListener('click', async () => { setActiveBranchIds([]); await renderActiveTab(); });
+    document.getElementById('btn-rag-activate-all')?.addEventListener('click', async () => {
+      const branches = await storage().getBranches();
+      setActiveBranchIds(branches.map(b => b.id));
+      await renderActiveTab();
+    });
     document.getElementById('btn-rag-new-branch')?.addEventListener('click', createBranch);
     document.getElementById('btn-rag-edit-branch')?.addEventListener('click', editBranch);
     document.getElementById('btn-rag-delete-branch')?.addEventListener('click', deleteBranch);
@@ -249,6 +316,8 @@
 
   return {
     initRagUI, refresh, renderActiveTab, renderManageTab,
-    getActiveBranchId, setActiveBranchId, updateToolbarStatus, exportBranch, importBranchFile
+    getActiveBranchId, setActiveBranchId,
+    getActiveBranchIds, setActiveBranchIds, toggleBranchActive, isBranchActive,
+    updateToolbarStatus, exportBranch, importBranchFile
   };
 });

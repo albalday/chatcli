@@ -678,12 +678,15 @@
         <div class="setting-toggle-card rag-master-toggle-card">
           <div class="toggle-card-info">
             <div class="toggle-card-title"><span id="rag-active-status-title" data-i18n="rag_status_disabled">Conocimiento desactivado</span></div>
-            <p class="toggle-card-desc" id="rag-active-status-desc" data-i18n="rag_status_disabled_desc">Selecciona una rama para que el agente pueda buscar en tus documentos.</p>
+            <p class="toggle-card-desc" id="rag-active-status-desc" data-i18n="rag_status_disabled_desc">Selecciona una o varias ramas para que el agente pueda buscar en tus documentos.</p>
           </div>
-          <button type="button" id="btn-rag-toggle-master" class="btn-secondary" data-i18n="rag_disable">Desactivar</button>
+          <div class="rag-master-toggle-actions" style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <button type="button" id="btn-rag-activate-all" class="btn-secondary" data-i18n="rag_activate_all">Activar todas</button>
+            <button type="button" id="btn-rag-toggle-master" class="btn-secondary" data-i18n="rag_disable_all">Desactivar todas</button>
+          </div>
         </div>
         <div class="form-field">
-          <label><strong data-i18n="rag_available_branches">Ramas disponibles</strong><span class="label-hint" data-i18n="rag_available_branches_hint">Solo una rama puede estar activa en el chat.</span></label>
+          <label><strong data-i18n="rag_available_branches">Ramas disponibles</strong><span class="label-hint" data-i18n="rag_available_branches_hint">Puedes activar una o varias ramas simultáneamente para búsquedas cruzadas.</span></label>
           <div id="rag-active-branch-list" class="rag-active-branch-list"></div>
         </div>
       </div>
