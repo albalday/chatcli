@@ -86,6 +86,14 @@
     return null;
   }
 
+  function getToolRuntime() {
+    if (typeof window !== 'undefined' && window.ChatToolRuntime) return window.ChatToolRuntime;
+    if (typeof require !== 'undefined') {
+      try { return require('./tools/tool-runtime.js'); } catch (e) {}
+    }
+    return null;
+  }
+
   /**
    * Versión del contrato público que deben implementar las herramientas.
    *
@@ -949,7 +957,11 @@
           throw new Error('Ejecución de herramienta cancelada por el usuario.');
         }
 
-        const execResult = await tool.execute(parsedArgs, context);
+        const ToolRuntime = getToolRuntime();
+        const executionContext = ToolRuntime?.createToolExecutionContext
+          ? ToolRuntime.createToolExecutionContext(context)
+          : context;
+        const execResult = await tool.execute(parsedArgs, executionContext);
         const endTime = typeof performance !== 'undefined' ? performance.now() : Date.now();
         const elapsed = parseFloat((endTime - startTime).toFixed(2));
 
