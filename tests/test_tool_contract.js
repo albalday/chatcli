@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 
 const AgentCore = require('../js/agent-core.js');
 
-test('Tool contract - adapta herramientas históricas al contrato canónico v1', () => {
+test('Tool contract - conserva compatibilidad deprecada para herramientas históricas', () => {
   const tool = new AgentCore.Tool({
     name: 'legacy_echo',
     description: 'Devuelve el texto recibido.',

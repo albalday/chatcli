@@ -152,6 +152,8 @@
       this.aliases = Array.isArray(options.aliases) ? options.aliases : [];
       this.category = options.category || 'general';
       this.metadata = options.metadata || {};
+      // Compatibilidad deprecada: las tools nuevas deben declarar `settings`.
+      // `ui` se conserva para módulos MCP o extensiones de versiones anteriores.
       const settings = options.settings || options.ui || {};
       this.settings = {
         titleKey: settings.titleKey || `agent_${this.name}_title`,
@@ -162,8 +164,9 @@
         defaultEnabled: settings.defaultEnabled !== false,
         showInSettings: settings.showInSettings !== false
       };
-      // `ui` se conserva mientras app.js completa su migración a `settings`.
+      // Alias deprecado; la UI interna consume exclusivamente `settings`.
       this.ui = this.settings;
+      // Compatibilidad deprecada: las tools nuevas deben declarar `execute`.
       this.handler = options.execute || options.handler || null;
       this.result = options.result || {};
       this.formatter = options.formatter || null;
