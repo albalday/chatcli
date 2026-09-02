@@ -91,6 +91,10 @@
             <span class="profile-icon">⚡</span>
             <select id="active-profile-select" aria-label="Perfil de conexión activo"></select>
           </label>
+          <div id="connection-tokens-badge" class="badge-pill badge-tokens" style="display: none;" title="Uso de tokens en la conversación actual y límite de contexto">
+            <span class="tokens-icon">📊</span>
+            <span id="connection-tokens-text" class="tokens-text">0 / 128k tok</span>
+          </div>
         </div>
         <div class="toolbar-right">
           <button type="button" id="btn-open-tree-rag" class="btn-tool-mini btn-rag-mini" data-i18n-title="btn_tree_rag_title" title="Gestionar Base de Conocimiento por Ramas (RAG Jerárquico)">

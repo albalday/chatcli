@@ -535,6 +535,9 @@
     let activeReasoningTag = null;
     let serverCachedTokens = 0;
     let serverCacheCreationTokens = 0;
+    let serverPromptTokens = 0;
+    let serverCompletionTokens = 0;
+    let serverTotalTokens = 0;
     const requestStartTime = performance.now();
     let firstTokenTime = null;
 
@@ -556,7 +559,10 @@
           tokens: tokens,
           tokensPerSec: tokensPerSec,
           cachedTokens: serverCachedTokens,
-          cacheCreationTokens: serverCacheCreationTokens
+          cacheCreationTokens: serverCacheCreationTokens,
+          promptTokens: serverPromptTokens,
+          completionTokens: serverCompletionTokens || tokens,
+          totalTokens: serverTotalTokens || (serverPromptTokens + (serverCompletionTokens || tokens))
         };
       } else {
         return {
@@ -566,7 +572,10 @@
           tokens: 0,
           tokensPerSec: '0.0',
           cachedTokens: serverCachedTokens,
-          cacheCreationTokens: serverCacheCreationTokens
+          cacheCreationTokens: serverCacheCreationTokens,
+          promptTokens: serverPromptTokens,
+          completionTokens: serverCompletionTokens,
+          totalTokens: serverTotalTokens
         };
       }
     }
@@ -786,14 +795,20 @@
               }
 
               // Usage logging si viene en el chunk
-              if (chunkData.usage && onLog) {
-                const streamUsage = chunkData.usage;
-                const rTokens = streamUsage.completion_tokens_details?.reasoning_tokens;
-                const cTokens = serverCachedTokens > 0 ? ` (⚡ Cache: ${serverCachedTokens} tok)` : '';
-                onLog({
-                  type: 'stats',
-                  text: `Uso de tokens: Prompt=${streamUsage.prompt_tokens || 0}, Respuesta=${streamUsage.completion_tokens || 0}, Total=${streamUsage.total_tokens || 0}${rTokens ? ` (Razonamiento: ${rTokens})` : ''}${cTokens}`
-                });
+              const streamUsage = chunkData.usage || parsed.usage;
+              if (streamUsage) {
+                if (streamUsage.prompt_tokens) serverPromptTokens = streamUsage.prompt_tokens;
+                if (streamUsage.completion_tokens) serverCompletionTokens = streamUsage.completion_tokens;
+                if (streamUsage.total_tokens) serverTotalTokens = streamUsage.total_tokens;
+
+                if (onLog) {
+                  const rTokens = streamUsage.completion_tokens_details?.reasoning_tokens;
+                  const cTokens = serverCachedTokens > 0 ? ` (⚡ Cache: ${serverCachedTokens} tok)` : '';
+                  onLog({
+                    type: 'stats',
+                    text: `Uso de tokens: Prompt=${streamUsage.prompt_tokens || 0}, Respuesta=${streamUsage.completion_tokens || 0}, Total=${streamUsage.total_tokens || 0}${rTokens ? ` (Razonamiento: ${rTokens})` : ''}${cTokens}`
+                  });
+                }
               }
 
             } catch (jsonErr) {}

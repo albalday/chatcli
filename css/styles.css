@@ -1139,6 +1139,27 @@ body {
   box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.14), var(--shadow-sm);
 }
 
+.badge-tokens {
+  cursor: help;
+  color: var(--text-muted);
+  background-color: var(--bg-surface);
+  border-color: var(--border-color);
+  font-size: 0.725rem;
+  font-weight: 500;
+  padding: 0.2rem 0.55rem;
+  user-select: none;
+}
+
+.badge-tokens:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.tokens-icon {
+  font-size: 0.8rem;
+  line-height: 1;
+}
+
 #active-profile-select {
   appearance: none;
   -webkit-appearance: none;

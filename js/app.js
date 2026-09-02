@@ -115,6 +115,8 @@
       badgeProfile: document.getElementById('badge-profile'),
       currentProfileName: document.getElementById('current-profile-name'),
       activeProfileSelect: document.getElementById('active-profile-select'),
+      connectionTokensBadge: document.getElementById('connection-tokens-badge'),
+      connectionTokensText: document.getElementById('connection-tokens-text'),
       badgeServer: document.getElementById('badge-server'),
       currentServerUrl: document.getElementById('current-server-url'),
       badgeModel: document.getElementById('badge-model'),
@@ -506,6 +508,54 @@
     }
 
     syncDebugMessagesState(appConfig.enableDebugMessages, false);
+    updateConnectionTokensBadge(null);
+  }
+
+  function formatTokenCount(num) {
+    if (!num || isNaN(num)) return '0';
+    if (num >= 1000000) return (num / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+    if (num >= 1000) return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+    return String(num);
+  }
+
+  function updateConnectionTokensBadge(stats) {
+    if (!elements.connectionTokensBadge) return;
+
+    const contextLimitK = appConfig.ragContextLimitK || 128;
+    const maxTokens = contextLimitK * 1024;
+    const maxFormatted = contextLimitK + 'k';
+
+    let promptTok = stats?.promptTokens || stats?.totalTokens || stats?.tokens || 0;
+
+    // Si no se han recibido stats de streaming todavía, estimar tokens del historial activo
+    if (!promptTok && Array.isArray(chatHistory) && chatHistory.length > 0) {
+      const nonSystem = chatHistory.filter(m => m && m.role !== 'system');
+      if (nonSystem.length > 0) {
+        const text = JSON.stringify(chatHistory);
+        promptTok = Math.ceil(text.length / 4);
+      }
+    }
+
+    if (!promptTok || promptTok <= 0) {
+      elements.connectionTokensBadge.style.display = 'none';
+      return;
+    }
+
+    const usedFormatted = formatTokenCount(promptTok);
+    const percentage = maxTokens > 0 ? ((promptTok / maxTokens) * 100).toFixed(1) : '0';
+
+    if (elements.connectionTokensText) {
+      elements.connectionTokensText.textContent = `${usedFormatted} / ${maxFormatted} tok`;
+    }
+
+    const titleText = t('tokens_badge_title', {
+      used: promptTok.toLocaleString(),
+      limit: maxTokens.toLocaleString(),
+      percent: percentage
+    }) || `Contexto de conversación: ${promptTok.toLocaleString()} / ${maxTokens.toLocaleString()} tokens (${percentage}% ocupado)`;
+
+    elements.connectionTokensBadge.setAttribute('title', titleText);
+    elements.connectionTokensBadge.style.display = 'inline-flex';
   }
 
   function autoResizeTextarea() {
@@ -833,6 +883,7 @@
         <span>•</span>
         <span class="stat-item" title="${t('stat_tokens_title')}">${t('stat_tokens', { tokens: stats.tokens })}</span>${cacheHtml}
       `;
+      updateConnectionTokensBadge(stats);
     }
 
     // Sincronizar dinámicamente la rama RAG activa desde ChatTreeRagUI o Storage
@@ -1507,6 +1558,7 @@
     }
 
     scrollToBottom();
+    updateConnectionTokensBadge(null);
   }
 
   // ==========================================================================
