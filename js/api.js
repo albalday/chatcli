@@ -561,8 +561,8 @@
           cachedTokens: serverCachedTokens,
           cacheCreationTokens: serverCacheCreationTokens,
           promptTokens: serverPromptTokens,
-          completionTokens: serverCompletionTokens || tokens,
-          totalTokens: serverTotalTokens || (serverPromptTokens + (serverCompletionTokens || tokens))
+          completionTokens: serverCompletionTokens,
+          totalTokens: serverTotalTokens
         };
       } else {
         return {

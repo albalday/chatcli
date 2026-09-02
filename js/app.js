@@ -525,16 +525,8 @@
     const maxTokens = contextLimitK * 1024;
     const maxFormatted = contextLimitK + 'k';
 
-    let promptTok = stats?.promptTokens || stats?.totalTokens || stats?.tokens || 0;
-
-    // Si no se han recibido stats de streaming todavía, estimar tokens del historial activo
-    if (!promptTok && Array.isArray(chatHistory) && chatHistory.length > 0) {
-      const nonSystem = chatHistory.filter(m => m && m.role !== 'system');
-      if (nonSystem.length > 0) {
-        const text = JSON.stringify(chatHistory);
-        promptTok = Math.ceil(text.length / 4);
-      }
-    }
+    // Mostrar la insignia únicamente si el servidor devolvió explícitamente usage (promptTokens o totalTokens)
+    const promptTok = (stats && typeof stats === 'object') ? (stats.promptTokens || stats.totalTokens || 0) : 0;
 
     if (!promptTok || promptTok <= 0) {
       elements.connectionTokensBadge.style.display = 'none';
