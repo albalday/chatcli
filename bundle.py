@@ -51,6 +51,7 @@ JS_MODULE_FILES = [
     "export.js",
     "state.js",
     "context-manager.js",
+    "chat-engine.js",
     "app.js"
 ]
 
@@ -77,7 +78,8 @@ CORE_EXPORT_SYMBOLS = [
     "ChatAttachments",
     "ChatExport",
     "ChatState",
-    "ChatContextManager"
+    "ChatContextManager",
+    "ChatEngine"
 ]
 
 BOOTSTRAP_LOADER_SCRIPT = """<script>

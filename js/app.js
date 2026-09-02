@@ -32,6 +32,7 @@
   const State = window.ChatState || {};
   const ContextManager = window.ChatContextManager || {};
   const AgentCore = window.ChatAgentCore || {};
+  const Engine = window.ChatEngine || {};
 
   function t(key, params) {
     if (I18n.t) return I18n.t(key, params);
@@ -226,245 +227,22 @@
   }
 
   function getDailyDateAnchor() {
-    const now = new Date();
-    const isoDate = now.toISOString().slice(0, 10);
-    const lang = appConfig.language || (I18n.getLanguage ? I18n.getLanguage() : 'es');
-    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-    const dayName = now.toLocaleDateString(lang === 'en' ? 'en-US' : 'es-ES', { weekday: 'long' });
-    return lang === 'en'
-      ? `[System Context: Current Date is ${isoDate} (${dayName}), Timezone: ${tz}]`
-      : `[Contexto del Sistema: La fecha actual es ${isoDate} (${dayName}), Zona Horaria: ${tz}]`;
+    return Engine.getDailyDateAnchor ? Engine.getDailyDateAnchor(appConfig.language || 'es') : '';
   }
 
   function getToolsSystemPromptGuide() {
-    const lang = appConfig.language || (I18n.getLanguage ? I18n.getLanguage() : 'es');
-    const isEs = lang !== 'en';
-    const tools = [];
-
-    if (appConfig.enableAgentWeb !== false) {
-      if (isEs) {
-        tools.push(`- \`download_pdf(url="...")\`: Descarga y extrae el texto completo de un documento PDF desde una URL web para analizar su contenido (ej: "https://arxiv.org/pdf/2310.06825.pdf" o "https://samplelib.com/pdf/sample-scanned.pdf").`);
-        tools.push(`- \`fetch_web_page(url="...")\`: Descarga y lee el texto de una página web pública o artículo HTML a partir de su URL (ej: "https://es.wikipedia.org/wiki/Sol").`);
-      } else {
-        tools.push(`- \`download_pdf(url="...")\`: Downloads and extracts all text from a PDF document given its web URL (e.g. "https://arxiv.org/pdf/2310.06825.pdf" or "https://samplelib.com/pdf/sample-scanned.pdf").`);
-        tools.push(`- \`fetch_web_page(url="...")\`: Retrieves and reads the clean text of a public web page or HTML article from its URL (e.g. "https://en.wikipedia.org/wiki/Sun").`);
-      }
-    }
-
-    if (appConfig.enableAgentSearch !== false) {
-      if (isEs) {
-        tools.push(`- \`search_web(query="...")\`: Busca información actualizada, noticias, artículos y enlaces en internet mediante DuckDuckGo.`);
-      } else {
-        tools.push(`- \`search_web(query="...")\`: Searches up-to-date information, news, articles, and links on the internet using DuckDuckGo.`);
-      }
-    }
-
-    if (appConfig.enableAgentJs !== false) {
-      if (isEs) {
-        tools.push(`- \`execute_javascript(code="...")\`: Ejecuta código JavaScript localmente en un sandbox seguro en el navegador para cálculos matemáticos y procesamiento de datos.`);
-      } else {
-        tools.push(`- \`execute_javascript(code="...")\`: Executes JavaScript code safely in a local browser sandbox for math calculations and data processing.`);
-      }
-    }
-
-    // Herramienta de Gráficos Nativos
-    if (appConfig.enableAgentChart !== false) {
-      if (isEs) {
-        tools.push(`- \`render_chart(type="bar"|"line"|"doughnut"|"pie", title="...", labels=["..."], datasets=[{"label":"...", "data":[...]}])\`: Genera y visualiza un gráfico interactivo (barras, líneas, donut o sectores) a partir de datos numéricos o tablas.`);
-      } else {
-        tools.push(`- \`render_chart(type="bar"|"line"|"doughnut"|"pie", title="...", labels=["..."], datasets=[{"label":"...", "data":[...]}])\`: Generates and renders an interactive chart (bar, line, doughnut or pie) from numerical data or tables.`);
-      }
-    }
-
-    // Herramienta de Fecha y Hora en tiempo real
-    if (isEs) {
-      tools.push(`- \`get_current_datetime(timezone="...")\`: Obtiene la fecha, hora exacta, día de la semana y zona horaria actual en tiempo real.`);
-    } else {
-      tools.push(`- \`get_current_datetime(timezone="...")\`: Retrieves current date, exact time, day of week and timezone in real-time.`);
-    }
-
-    if (tools.length === 0) return '';
-
-    if (isEs) {
-      return `[HERRAMIENTAS Y FUNCIONES DISPONIBLES]:\nTienes disponibles las siguientes herramientas. Si necesitas consultar URLs, buscar en la web, leer documentos PDF o calcular, invoca la herramienta adecuada con sus parámetros obligatorios:\n${tools.join('\n')}\n*Instrucción de flujo:* Cuando obtengas el resultado de una herramienta, utilízalo para responder al usuario con una síntesis o resumen completo y estructurado, citando las fuentes consultadas. No invoques herramientas adicionales si la información obtenida ya es suficiente para responder.`;
-    } else {
-      return `[AVAILABLE TOOLS AND FUNCTIONS]:\nYou have the following tools available. If you need to fetch URLs, search the web, read PDF documents, or calculate, call the appropriate tool with its required parameters:\n${tools.join('\n')}\n*Workflow instruction:* Once you receive a tool's output, use it to answer the user with a comprehensive and well-structured summary, citing sources. Do not invoke further tools if the gathered information is already sufficient to answer.`;
-    }
+    return Engine.getToolsSystemPromptGuide ? Engine.getToolsSystemPromptGuide(appConfig, appConfig.language || 'es') : '';
   }
 
   function buildEffectiveMessages(options = {}) {
-    const rawMessages = chatHistory.filter(m => m && m.role);
-    const messages = [];
-
-    rawMessages.forEach(m => {
-      if (m.role === 'user') {
-        if (m.images && Array.isArray(m.images) && m.images.length > 0) {
-          const contentParts = [];
-          if (m.content) {
-            contentParts.push({ type: 'text', text: m.content });
-          }
-          m.images.forEach(img => {
-            if (img && img.dataUrl) {
-              contentParts.push({
-                type: 'image_url',
-                image_url: {
-                  url: img.dataUrl
-                }
-              });
-            }
-          });
-          messages.push({ role: 'user', content: contentParts });
-        } else {
-          messages.push({ role: 'user', content: m.content || '' });
-        }
-      } else if (m.role === 'assistant') {
-        const item = { role: 'assistant', content: m.content !== undefined ? m.content : '' };
-        if (m.tool_calls && Array.isArray(m.tool_calls) && m.tool_calls.length > 0) {
-          item.tool_calls = m.tool_calls;
-        }
-        messages.push(item);
-      } else if (m.role === 'tool') {
-        const toolCallId = m.tool_call_id || `call_${Date.now()}`;
-        const toolName = m.name || 'tool';
-        const toolContent = typeof m.content === 'object' ? JSON.stringify(m.content) : String(m.content !== undefined ? m.content : '');
-
-        // Validar que el mensaje previo sea un assistant con el tool_call correspondiente
-        const prevMsg = messages.length > 0 ? messages[messages.length - 1] : null;
-        const hasMatchingToolCall = prevMsg && prevMsg.role === 'assistant' && Array.isArray(prevMsg.tool_calls) &&
-          prevMsg.tool_calls.some(tc => tc.id === toolCallId || (tc.function && tc.function.name === toolName));
-
-        if (!hasMatchingToolCall) {
-          messages.push({
-            role: 'assistant',
-            content: null,
-            tool_calls: [{
-              id: toolCallId,
-              type: 'function',
-              function: {
-                name: toolName,
-                arguments: '{}'
-              }
-            }]
-          });
-        }
-
-        messages.push({
-          role: 'tool',
-          tool_call_id: toolCallId,
-          name: toolName,
-          content: toolContent
-        });
-      } else if (m.role === 'system') {
-        messages.push({ role: 'system', content: m.content || '' });
-      }
-    });
-
-    let activePrompt = (appConfig.systemPrompt && appConfig.systemPrompt.trim() !== '')
-      ? appConfig.systemPrompt.trim()
-      : '';
-
-    // Inyección de Base de Conocimiento (RAG Jerárquico por Ramas) para Context-Caching
-    if (currentRagSystemContext) {
-      activePrompt = activePrompt ? `${currentRagSystemContext}\n\n${activePrompt}` : currentRagSystemContext;
-    }
-
-    // Ancla de fecha diaria para máxima autoridad en System Prompt y 100% de aciertos en Context-Cache
-    if (appConfig.sendDateTime !== false) {
-      const dateAnchor = getDailyDateAnchor();
-      activePrompt = activePrompt ? (dateAnchor + '\n\n' + activePrompt) : dateAnchor;
-    }
-
-    const isToolsEnabled = options.enableTools !== undefined
-      ? Boolean(options.enableTools)
-      : (appConfig.enableAgentJs !== false || appConfig.enableAgentWeb !== false || appConfig.enableAgentSearch !== false || appConfig.enableAgentChart !== false);
-
-    // Consultar dinámicamente si el proveedor y modelo soportan Function Calling nativo en JSON
-    let isNativeToolsSupported = true;
-    if (API.getProviderCapabilities) {
-      const caps = API.getProviderCapabilities(appConfig.apiUrl, appConfig.apiType, appConfig.model);
-      isNativeToolsSupported = caps ? (caps.tools !== false) : true;
-    }
-
-    // Instrucción de flujo para herramientas
-    let toolsGuide = '';
-    if (isToolsEnabled) {
-      if (!isNativeToolsSupported || options.forceSystemPromptGuide) {
-        toolsGuide = getToolsSystemPromptGuide();
-      } else {
-        const lang = appConfig.language || 'es';
-        toolsGuide = (lang === 'en')
-          ? `*Workflow instruction:* Once you receive tool results in the conversation, synthesize the findings and write a comprehensive, well-structured final answer to the user, citing sources. Do not stop without providing a complete summary.`
-          : `*Instrucción de flujo:* Una vez recibidos los resultados de las herramientas en la conversación, sintetiza los hallazgos y redacta una respuesta final completa, bien estructurada y detallada para el usuario, citando las fuentes consultadas. No finalices la respuesta sin proporcionar el resumen completo.`;
-      }
-    }
-
-    // Directiva proactiva de Base de Conocimiento activa si procede
-    const activeBranchId = options.activeRagBranchId ||
-      (typeof window !== 'undefined' && window.ChatTreeRagUI && window.ChatTreeRagUI.getActiveChatBranchId ? window.ChatTreeRagUI.getActiveChatBranchId() : '') ||
-      (appConfig.activeRagBranchId || '');
-
-    if (activeBranchId) {
-      const lang = appConfig.language || 'es';
-      const ragInstruction = (lang === 'en')
-        ? `*Knowledge Base active:* You have access to the user's private local knowledge base via 'list_documents', 'search_knowledge_base', and 'read_chapter_content'. When the user asks about available manuals, documentation, guides, or technical information, proactively consult these tools before concluding.`
-        : `*Base de Conocimiento activa:* Tienes acceso a la base de conocimiento local y manuales privados del usuario mediante las herramientas 'list_documents', 'search_knowledge_base' y 'read_chapter_content'. Ante preguntas sobre documentación disponible, manuales, procedimientos técnicos o normativas, consulta proactivamente los documentos indexados utilizando estas herramientas antes de responder.`;
-      toolsGuide = toolsGuide ? `${toolsGuide}\n\n${ragInstruction}` : ragInstruction;
-    }
-
-    let fullSystemPrompt = activePrompt;
-    if (toolsGuide) {
-      fullSystemPrompt = fullSystemPrompt ? (fullSystemPrompt + '\n\n' + toolsGuide) : toolsGuide;
-    }
-
-    if (messages.length > 0 && messages[0].role === 'system') {
-      if (fullSystemPrompt) {
-        messages[0].content = fullSystemPrompt;
-      } else {
-        messages.shift();
-      }
-    } else if (fullSystemPrompt) {
-      messages.unshift({
-        role: 'system',
-        content: fullSystemPrompt
-      });
-    }
-
-    // Inyectar marca temporal exacta en el último mensaje de usuario (fuera del prefijo de caché histórica)
-    if (appConfig.sendDateTime !== false && messages.length > 0) {
-      const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
-      if (lastUserMsg) {
-        const lang = appConfig.language || 'es';
-        const nowTimeStr = new Date().toLocaleTimeString(lang === 'en' ? 'en-US' : 'es-ES', { hour: '2-digit', minute: '2-digit' });
-        if (typeof lastUserMsg.content === 'string' && !lastUserMsg.content.includes('[Context Time:')) {
-          lastUserMsg.content += `\n\n[Context Time: ${nowTimeStr}]`;
-        }
-      }
-    }
-
-    // Asegurar que la conversación comience con un turno de usuario válido tras el mensaje del sistema
-    const firstNonSysIdx = messages.findIndex(m => m.role !== 'system');
-    if (firstNonSysIdx !== -1 && messages[firstNonSysIdx].role === 'assistant') {
-      messages.splice(firstNonSysIdx, 0, {
-        role: 'user',
-        content: 'Continuar'
-      });
-    }
-
-    // Optimización dinámica de contexto, presupuesto de tokens y ventana deslizante
-    if (ContextManager.buildOptimizedContext) {
-      const optimization = ContextManager.buildOptimizedContext(messages, {
-        model: appConfig.model,
-        providerType: appConfig.apiType,
+    if (Engine.buildEffectiveMessages) {
+      return Engine.buildEffectiveMessages(chatHistory, appConfig, {
+        currentRagSystemContext,
+        activeRagBranchId: appConfig.activeRagBranchId,
         ...options
       });
-      const diag = optimization.diagnostics;
-      if (diag && (diag.excludedCount > 0 || diag.prunedToolsCount > 0) && typeof addDebugLog === 'function') {
-        addDebugLog('stats', `[ContextManager]: ${diag.totalTokens} tokens estimados | Presupuesto: ${diag.budget} | ${diag.includedCount} incluidos, ${diag.excludedCount} excluidos, ${diag.prunedToolsCount} tools podadas.`);
-      }
-      return optimization.messages;
     }
-
-    return messages;
+    return chatHistory;
   }
 
   function applyTheme(theme) {
@@ -1442,26 +1220,7 @@
 
     currentAbortController = new AbortController();
     const { wrapper, row, content, actions, btnCopy, statsContainer, msgId: assistantMsgId } = createAssistantMessagePlaceholder();
-
-    let accumulatedText = '';
-    let accumulatedConversationMarkdown = '';
-    let turnIndex = 0;
-    const toolCallSignatures = [];
-    const parseMd = Markdown.parseMarkdown || function(txt) { return txt; };
     const attachListeners = Markdown.attachCopyCodeListeners || function() {};
-
-    function injectStreamingCursor(html) {
-      if (!html || html.trim() === '') {
-        return '<span class="streaming-cursor"></span>';
-      }
-      const trimmed = html.trimEnd();
-      const match = trimmed.match(/(<\/(?:p|li|h[1-6]|span|code|strong|em|td|blockquote)>)$/i);
-      if (match) {
-        const closingTag = match[1];
-        return trimmed.slice(0, -closingTag.length) + '<span class="streaming-cursor"></span>' + closingTag;
-      }
-      return trimmed + '<span class="streaming-cursor"></span>';
-    }
 
     if (!API.streamChatCompletion) {
       row.classList.add('message-error');
@@ -1503,7 +1262,6 @@
       `;
     }
 
-    const maxAgentTurns = 8;
     // Sincronizar dinámicamente la rama RAG activa desde ChatTreeRagUI o Storage
     const activeRagBranchId = (typeof window !== 'undefined' && window.ChatTreeRagUI && window.ChatTreeRagUI.getActiveChatBranchId)
       ? window.ChatTreeRagUI.getActiveChatBranchId()
@@ -1522,455 +1280,111 @@
       currentRagSystemContext = '';
     }
 
-    while (turnIndex < maxAgentTurns) {
+    const runner = window.ChatEngine || Engine;
+    const loopResult = await runner.executeAgentTurnLoop({
+      apiUrl: appConfig.apiUrl,
+      apiType: appConfig.apiType,
+      apiKey: appConfig.apiKey,
+      model: appConfig.model,
+      temperature: appConfig.temperature,
+      reasoningEffort: appConfig.reasoningEffort || 'none',
+      chatHistory: chatHistory,
+      appConfig: appConfig,
+      assistantMsgId: assistantMsgId,
+      activeRagBranchId: activeRagBranchId,
+      currentRagSystemContext: currentRagSystemContext,
+      sessionCacheInvalidated: sessionCacheInvalidated,
+      sessionCacheRevision: sessionCacheRevision,
+      signal: currentAbortController.signal,
+      container: content,
+
+      onBeforeRequest: appConfig.enableDebugMessages ? async function ({ endpoint, headers, payload }) {
+        return await openDebugInterceptorModal({ endpoint, headers, payload });
+      } : null,
+
+      onReasoningChunk: function (chunk) {
+        addDebugLog('thinking', chunk);
+        setDebugStatus('streaming', t('debug_status_thinking'));
+      },
+
+      onLog: function (type, text) {
+        addDebugLog(type, text);
+      },
+
+      onStats: function (stats) {
+        updateStatsDisplay(stats);
+      },
+
+      onChunk: function ({ turnIndex, fullText, delta, stats }) {
+        if (stats) updateStatsDisplay(stats);
+        scrollToBottom();
+      },
+
+      scrollToBottom: () => scrollToBottom(),
+      attachListeners: (el) => attachListeners(el)
+    });
+
+    if (sessionCacheInvalidated) {
+      sessionCacheInvalidated = false;
+    }
+
+    if (loopResult && loopResult.cancelled) {
+      if (wrapper && !wrapper.querySelector('.agentic-turn-block') && wrapper.parentNode) {
+        wrapper.parentNode.removeChild(wrapper);
+      }
+      setDebugStatus('idle');
+      finishGeneration();
+      return;
+    }
+
+    if (loopResult && loopResult.error) {
       if (currentAbortController && currentAbortController.signal.aborted) {
-        break;
-      }
-
-      if (turnIndex === 0) {
-        content.innerHTML = '';
-      }
-
-      let currentTurnText = '';
-      const turnBlock = document.createElement('div');
-      turnBlock.className = 'agentic-turn-block';
-      content.appendChild(turnBlock);
-
-      let turnToolCalls = null;
-      let turnFinalStats = null;
-      let streamError = null;
-
-      const isFirstTurn = turnIndex === 0;
-      const currentCacheInvalidated = isFirstTurn && sessionCacheInvalidated;
-
-      const streamResult = await API.streamChatCompletion({
-        apiUrl: appConfig.apiUrl,
-        apiType: appConfig.apiType,
-        apiKey: appConfig.apiKey,
-        model: appConfig.model,
-        messages: buildEffectiveMessages(),
-        temperature: appConfig.temperature,
-        reasoningEffort: appConfig.reasoningEffort || 'none',
-        enableTools: (appConfig.enableAgentJs !== false || appConfig.enableAgentWeb !== false || appConfig.enableAgentSearch !== false || appConfig.enableAgentChart !== false || Boolean(activeRagBranchId)),
-        enableAgentJs: appConfig.enableAgentJs !== false,
-        enableAgentWeb: appConfig.enableAgentWeb !== false,
-        enableAgentSearch: appConfig.enableAgentSearch !== false,
-        enableAgentChart: appConfig.enableAgentChart !== false,
-        enableAgentRag: Boolean(activeRagBranchId),
-        activeRagBranchId: activeRagBranchId || '',
-        enableContextCache: appConfig.enableContextCache !== false,
-        cacheInvalidated: currentCacheInvalidated,
-        cacheRevision: sessionCacheRevision,
-        signal: currentAbortController.signal,
-
-        onBeforeRequest: appConfig.enableDebugMessages ? async function ({ endpoint, headers, payload }) {
-          return await openDebugInterceptorModal({ endpoint, headers, payload });
-        } : null,
-
-        onReasoningChunk: function (chunk) {
-          addDebugLog('thinking', chunk);
-          setDebugStatus('streaming', t('debug_status_thinking'));
-        },
-
-        onLog: function (logData) {
-          if (logData && logData.type !== 'thinking') {
-            addDebugLog(logData.type, logData.text);
-          }
-        },
-
-        onChunk: function (fullTextSoFar, delta, stats) {
-          currentTurnText = fullTextSoFar;
-          turnBlock.innerHTML = injectStreamingCursor(parseMd(currentTurnText));
-          attachListeners(turnBlock);
-          if (stats) updateStatsDisplay(stats);
-          scrollToBottom();
-        },
-
-        onDone: function (finalText, stats, toolCalls) {
-          currentTurnText = finalText || currentTurnText;
-          turnFinalStats = stats;
-          turnToolCalls = toolCalls;
-        },
-
-        onError: function (error) {
-          streamError = error;
-        }
-      });
-
-      if (streamResult && streamResult.cancelled) {
-        if (!currentTurnText && turnBlock.parentNode) {
-          turnBlock.parentNode.removeChild(turnBlock);
-        }
-        if (wrapper && !wrapper.querySelector('.agentic-turn-block') && wrapper.parentNode) {
-          wrapper.parentNode.removeChild(wrapper);
-        }
-        setDebugStatus('idle');
         finishGeneration();
         return;
       }
-
-      if (sessionCacheInvalidated) {
-        sessionCacheInvalidated = false;
-      }
-
-      if (streamError) {
-        if (currentAbortController && currentAbortController.signal.aborted) {
-          break;
-        }
-        setDebugStatus('error', t('debug_status_error'));
-        addDebugLog('error', streamError.message || String(streamError));
-        row.classList.add('message-error');
-        turnBlock.innerHTML = `
-          <div class="network-error-card">
-            <span>⚠️</span>
-            <div>
-              <strong>${t('err_server_connect_title')}</strong>
-              <p style="margin-top: 0.25rem;">
-                ${Markdown.escapeHtml(streamError.message || String(streamError))}
-              </p>
-              <p style="margin-top: 0.25rem; font-size: 0.75rem; color: var(--text-muted);">
-                ${t('err_server_connect_hint', { url: appConfig.apiUrl })}
-              </p>
-            </div>
+      setDebugStatus('error', t('debug_status_error'));
+      addDebugLog('error', loopResult.error.message || String(loopResult.error));
+      row.classList.add('message-error');
+      content.innerHTML = `
+        <div class="network-error-card">
+          <span>⚠️</span>
+          <div>
+            <strong>${t('err_server_connect_title')}</strong>
+            <p style="margin-top: 0.25rem;">
+              ${Markdown.escapeHtml ? Markdown.escapeHtml(loopResult.error.message || String(loopResult.error)) : String(loopResult.error)}
+            </p>
+            <p style="margin-top: 0.25rem; font-size: 0.75rem; color: var(--text-muted);">
+              ${t('err_server_connect_hint', { url: appConfig.apiUrl })}
+            </p>
           </div>
-        `;
-        actions.style.display = 'inline-flex';
-        finishGeneration();
-        return;
-      }
-
-      if (streamResult) {
-        currentTurnText = streamResult.accumulatedText || currentTurnText;
-        turnToolCalls = streamResult.toolCalls || turnToolCalls;
-        turnFinalStats = streamResult.stats || turnFinalStats;
-      }
-
-      // Extraer tool calls de texto si no llegaron en estructura nativa
-      if ((!turnToolCalls || turnToolCalls.length === 0) && currentTurnText) {
-        if (API.extractToolCallsFromText) {
-          const textCalls = API.extractToolCallsFromText(currentTurnText);
-          if (textCalls && textCalls.length > 0) {
-            turnToolCalls = textCalls;
-          }
-        }
-      }
-
-      // Si no hay herramientas para ejecutar, es la respuesta final o requiere síntesis
-      if (!turnToolCalls || turnToolCalls.length === 0) {
-        // Si el modelo devolvió un texto vacío tras haber ejecutado herramientas en turnos anteriores (común en Gemini cuando tool_choice es auto),
-        // solicitar inmediatamente un turno de síntesis forzado con instrucción explícita y toolChoice: 'none' para que el modelo redacte el resumen.
-        if ((!currentTurnText || currentTurnText.trim() === '') && turnIndex > 0 && chatHistory.length > 0 && chatHistory[chatHistory.length - 1].role === 'tool' && !(currentAbortController && currentAbortController.signal.aborted)) {
-          addDebugLog('info', 'El modelo finalizó el turno de herramientas sin texto. Solicitando síntesis final obligatoria...');
-
-          let synthText = '';
-          let synthStats = null;
-
-          const isEn = appConfig.language === 'en';
-          const synthMessages = buildEffectiveMessages({ forceSystemPromptGuide: true });
-          synthMessages.push({
-            role: 'user',
-            content: isEn
-              ? 'Based on all the information gathered from the tools above, please write a comprehensive, detailed, and well-structured final answer to my initial question, organizing the findings clearly and citing sources.'
-              : 'A partir de toda la información obtenida por las herramientas anteriores, redacta ahora una respuesta final completa, detallada y bien estructurada para mi consulta inicial, organizando los hallazgos con claridad y citando las fuentes consultadas.'
-          });
-
-          await API.streamChatCompletion({
-            apiUrl: appConfig.apiUrl,
-            apiType: appConfig.apiType,
-            apiKey: appConfig.apiKey,
-            model: appConfig.model,
-            messages: synthMessages,
-            temperature: appConfig.temperature,
-            reasoningEffort: appConfig.reasoningEffort || 'none',
-            enableTools: true,
-            toolChoice: 'none', // Preservar declaraciones de herramientas pero forzar respuesta textual
-            enableAgentJs: appConfig.enableAgentJs !== false,
-            enableAgentWeb: appConfig.enableAgentWeb !== false,
-            enableAgentSearch: appConfig.enableAgentSearch !== false,
-            enableAgentChart: appConfig.enableAgentChart !== false,
-            enableContextCache: appConfig.enableContextCache !== false,
-            signal: currentAbortController ? currentAbortController.signal : undefined,
-
-            onReasoningChunk: function (chunk) {
-              addDebugLog('thinking', chunk);
-              setDebugStatus('streaming', t('debug_status_thinking'));
-            },
-            onLog: function (logData) {
-              if (logData && logData.type !== 'thinking') addDebugLog(logData.type, logData.text);
-            },
-            onChunk: function (fullTextSoFar, delta, stats) {
-              synthText = fullTextSoFar;
-              turnBlock.innerHTML = injectStreamingCursor(parseMd(synthText));
-              attachListeners(turnBlock);
-              if (stats) updateStatsDisplay(stats);
-              scrollToBottom();
-            },
-            onDone: function (finalText, stats) {
-              synthText = finalText || synthText;
-              synthStats = stats;
-            }
-          });
-
-          if (synthText && synthText.trim() !== '') {
-            currentTurnText = synthText;
-            if (synthStats) turnFinalStats = synthStats;
-          }
-        }
-
-        // Si el modelo todavía no emitió texto tras la síntesis forzada, compilar los resultados de las herramientas
-        if (!currentTurnText || currentTurnText.trim() === '') {
-          const toolResults = chatHistory
-            .filter(m => m.role === 'tool' && m.content)
-            .map(m => m.content)
-            .filter(Boolean);
-
-          if (toolResults.length > 0) {
-            const isEn = appConfig.language === 'en';
-            currentTurnText = isEn
-              ? '### Summary of Search Results\n\n' + toolResults.join('\n\n---\n\n')
-              : '### Resumen de la Información Consultada\n\n' + toolResults.join('\n\n---\n\n');
-          }
-        }
-
-        turnBlock.innerHTML = parseMd(currentTurnText || t('empty_response'));
-        attachListeners(turnBlock);
-        chatHistory.push({
-          id: `${assistantMsgId}_final`,
-          role: 'assistant',
-          content: currentTurnText
-        });
-
-        if (turnFinalStats) updateStatsDisplay(turnFinalStats);
-        setDebugStatus('done', t('debug_status_done'));
-
-        actions.style.display = 'inline-flex';
-        btnCopy.onclick = async () => {
-          try {
-            const finalFullMarkdown = (accumulatedConversationMarkdown ? accumulatedConversationMarkdown : '') + currentTurnText;
-            await navigator.clipboard.writeText(finalFullMarkdown);
-            const span = btnCopy.querySelector('span');
-            const originalText = span.textContent;
-            span.textContent = t('copied_text');
-            btnCopy.classList.add('copied');
-
-            setTimeout(() => {
-              span.textContent = originalText;
-              btnCopy.classList.remove('copied');
-            }, 2000);
-          } catch (err) {
-            console.error('Error copying composite response:', err);
-          }
-        };
-
-        finishGeneration();
-        return;
-      }
-
-      // Procesar llamada a herramienta
-      const tc = turnToolCalls[0];
-      const rawFuncName = tc.function?.name || '';
-      const normName = API.normalizeToolName ? API.normalizeToolName(rawFuncName) : rawFuncName.toLowerCase().replace(/_/g, '');
-
-      // Protección contra Bucles Infinitos: Detectar repetición idéntica de llamadas
-      const callFingerprint = `${normName}:${typeof tc.function.arguments === 'object' ? JSON.stringify(tc.function.arguments) : String(tc.function.arguments || '').trim()}`;
-      const identicalCount = toolCallSignatures.filter(sig => sig === callFingerprint).length;
-      if (identicalCount >= 2) {
-        addDebugLog('error', `[Protección Bucle Infinito]: Herramienta '${normName}' invocada repetidamente con los mismos argumentos. Interrumpiendo ciclo agéntico.`);
-        const loopWarning = `\n\n> ⚠️ *[Protección de Bucle Infinito]*: La herramienta \`${normName}\` fue invocada repetidamente con los mismos parámetros sin progreso. Se finaliza la iteración.`;
-        currentTurnText = (currentTurnText || '') + loopWarning;
-        turnBlock.innerHTML = parseMd(currentTurnText);
-        attachListeners(turnBlock);
-
-        chatHistory.push({
-          id: `${assistantMsgId}_final`,
-          role: 'assistant',
-          content: currentTurnText
-        });
-
-        if (turnFinalStats) updateStatsDisplay(turnFinalStats);
-        setDebugStatus('done', t('debug_status_done'));
-        actions.style.display = 'inline-flex';
-        finishGeneration();
-        return;
-      }
-      toolCallSignatures.push(callFingerprint);
-
-      // Limpiar llamadas a herramientas emitidas como texto crudo en la UI
-      const trimmedAcc = (currentTurnText || '').trim();
-      if (
-        trimmedAcc.startsWith('<|') ||
-        trimmedAcc.startsWith('<tool_call') ||
-        trimmedAcc.startsWith('<function_call') ||
-        trimmedAcc.startsWith('call:') ||
-        trimmedAcc.startsWith('{"name"') ||
-        trimmedAcc.startsWith('```json\n{"name"') ||
-        trimmedAcc.startsWith('download_pdf(') ||
-        trimmedAcc.startsWith('downloadpdf(') ||
-        trimmedAcc.startsWith('fetch_web_page(') ||
-        trimmedAcc.startsWith('fetchwebpage(') ||
-        trimmedAcc.startsWith('search_web(') ||
-        trimmedAcc.startsWith('searchweb(') ||
-        trimmedAcc.startsWith('execute_javascript(') ||
-        trimmedAcc.startsWith('executejs(')
-      ) {
-        currentTurnText = '';
-      }
-
-      if (currentTurnText) {
-        turnBlock.innerHTML = parseMd(currentTurnText);
-        attachListeners(turnBlock);
-      } else {
-        turnBlock.remove();
-      }
-
-      // Ejecución desacoplada mediante ChatAgentCore.dispatchToolCall
-      const AgentCoreModule = window.ChatAgentCore || (typeof require !== 'undefined' ? (() => { try { return require('./agent-core.js'); } catch(e){ return null; } })() : null);
-
-      let toolExecRes = null;
-      if (AgentCoreModule && AgentCoreModule.dispatchToolCall) {
-        toolExecRes = await AgentCoreModule.dispatchToolCall(tc, {
-          container: content,
-          onLog: (type, text) => addDebugLog(type, text),
-          attachListeners: (el) => attachListeners(el),
-          scrollToBottom: () => scrollToBottom(),
-          language: appConfig.language || 'es',
-          signal: currentAbortController ? currentAbortController.signal : undefined
-        });
-      } else {
-        toolExecRes = {
-          success: false,
-          resultText: 'Error: Módulo de ejecución de herramientas no disponible.',
-          markdownBlock: `> ❌ **${rawFuncName}**: Módulo de ejecución no disponible.`
-        };
-      }
-
-      if (turnFinalStats) updateStatsDisplay(turnFinalStats);
-      scrollToBottom();
-
-      // 1. Guardar turno del asistente con la llamada a la herramienta
-      chatHistory.push({
-        id: `${assistantMsgId}_turn_${turnIndex}_assistant`,
-        role: 'assistant',
-        content: currentTurnText || null,
-        tool_calls: [tc]
-      });
-
-      // 2. Guardar turno de la herramienta con el resultado obtenido
-      chatHistory.push({
-        id: `${assistantMsgId}_turn_${turnIndex}_tool_${tc.id || 'res'}`,
-        role: 'tool',
-        tool_call_id: tc.id || `call_${Date.now()}`,
-        name: rawFuncName,
-        content: toolExecRes.resultText
-      });
-
-      // 3. Acumular markdown de la herramienta para copia íntegra de la respuesta compuesta
-      accumulatedConversationMarkdown += (currentTurnText ? currentTurnText + '\n\n' : '') + (toolExecRes.markdownBlock || '') + '\n\n';
-
-      turnIndex++;
-      continue;
-    }
-
-    // Si se agotaron los turnos máximos y el último mensaje fue de una herramienta (role: 'tool'),
-    // realizar una última petición de síntesis al modelo con toolChoice: 'none' para garantizar el resumen final.
-    if (turnIndex >= maxAgentTurns && chatHistory.length > 0 && chatHistory[chatHistory.length - 1].role === 'tool' && !(currentAbortController && currentAbortController.signal.aborted)) {
-      const finalSynthBlock = document.createElement('div');
-      finalSynthBlock.className = 'agentic-turn-block';
-      content.appendChild(finalSynthBlock);
-
-      let finalSynthText = '';
-      let finalSynthStats = null;
-
-      const isEn = appConfig.language === 'en';
-      const synthMessages = buildEffectiveMessages({ forceSystemPromptGuide: true });
-      synthMessages.push({
-        role: 'user',
-        content: isEn
-          ? 'Based on all the information gathered from the tools above, please write a comprehensive, detailed, and well-structured final answer to my initial question, organizing the findings clearly and citing sources.'
-          : 'A partir de toda la información obtenida por las herramientas anteriores, redacta ahora una respuesta final completa, detallada y bien estructurada para mi consulta inicial, organizando los hallazgos con claridad y citando las fuentes consultadas.'
-      });
-
-      await API.streamChatCompletion({
-        apiUrl: appConfig.apiUrl,
-        apiType: appConfig.apiType,
-        apiKey: appConfig.apiKey,
-        model: appConfig.model,
-        messages: synthMessages,
-        temperature: appConfig.temperature,
-        reasoningEffort: appConfig.reasoningEffort || 'none',
-        enableTools: true,
-        toolChoice: 'none', // Preservar declaraciones de herramientas pero forzar respuesta textual
-        enableAgentJs: appConfig.enableAgentJs !== false,
-        enableAgentWeb: appConfig.enableAgentWeb !== false,
-        enableAgentSearch: appConfig.enableAgentSearch !== false,
-        enableAgentChart: appConfig.enableAgentChart !== false,
-        enableAgentRag: Boolean(activeRagBranchId),
-        activeRagBranchId: activeRagBranchId || '',
-        enableContextCache: appConfig.enableContextCache !== false,
-        signal: currentAbortController ? currentAbortController.signal : undefined,
-
-        onReasoningChunk: function (chunk) {
-          addDebugLog('thinking', chunk);
-          setDebugStatus('streaming', t('debug_status_thinking'));
-        },
-        onLog: function (logData) {
-          if (logData && logData.type !== 'thinking') addDebugLog(logData.type, logData.text);
-        },
-        onChunk: function (fullTextSoFar, delta, stats) {
-          finalSynthText = fullTextSoFar;
-          finalSynthBlock.innerHTML = injectStreamingCursor(parseMd(finalSynthText));
-          attachListeners(finalSynthBlock);
-          if (stats) updateStatsDisplay(stats);
-          scrollToBottom();
-        },
-        onDone: function (finalText, stats) {
-          finalSynthText = finalText || finalSynthText;
-          finalSynthStats = stats;
-        }
-      });
-
-      if (!finalSynthText || finalSynthText.trim() === '') {
-        const toolResults = chatHistory
-          .filter(m => m.role === 'tool' && m.content)
-          .map(m => m.content)
-          .filter(Boolean);
-
-        if (toolResults.length > 0) {
-          finalSynthText = isEn
-            ? '### Summary of Search Results\n\n' + toolResults.join('\n\n---\n\n')
-            : '### Resumen de la Información Consultada\n\n' + toolResults.join('\n\n---\n\n');
-        }
-      }
-
-      if (finalSynthText) {
-        finalSynthBlock.innerHTML = parseMd(finalSynthText);
-        attachListeners(finalSynthBlock);
-        chatHistory.push({
-          id: `${assistantMsgId}_final`,
-          role: 'assistant',
-          content: finalSynthText
-        });
-        if (finalSynthStats) updateStatsDisplay(finalSynthStats);
-      }
-
+        </div>
+      `;
       actions.style.display = 'inline-flex';
-      btnCopy.onclick = async () => {
-        try {
-          const finalFullMarkdown = (accumulatedConversationMarkdown ? accumulatedConversationMarkdown : '') + finalSynthText;
-          await navigator.clipboard.writeText(finalFullMarkdown);
-          const span = btnCopy.querySelector('span');
-          const originalText = span.textContent;
-          span.textContent = t('copied_text');
-          btnCopy.classList.add('copied');
-          setTimeout(() => {
-            span.textContent = originalText;
-            btnCopy.classList.remove('copied');
-          }, 2000);
-        } catch (err) {
-          console.error('Error copying response:', err);
-        }
-      };
+      finishGeneration();
+      return;
     }
+
+    if (loopResult && loopResult.stats) {
+      updateStatsDisplay(loopResult.stats);
+    }
+
+    actions.style.display = 'inline-flex';
+    btnCopy.onclick = async () => {
+      try {
+        const fullMd = loopResult?.accumulatedMarkdown || loopResult?.finalAssistantText || '';
+        await navigator.clipboard.writeText(fullMd);
+        const span = btnCopy.querySelector('span');
+        const originalText = span.textContent;
+        span.textContent = t('copied_text');
+        btnCopy.classList.add('copied');
+        setTimeout(() => {
+          span.textContent = originalText;
+          btnCopy.classList.remove('copied');
+        }, 2000);
+      } catch (err) {
+        console.error('Error copying composite response:', err);
+      }
+    };
 
     setDebugStatus('done', t('debug_status_done'));
     finishGeneration();
