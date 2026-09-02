@@ -66,9 +66,19 @@
       ? Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
       : 'UTC';
     const dayName = now.toLocaleDateString(lang === 'en' ? 'en-US' : 'es-ES', { weekday: 'long' });
-    return lang === 'en'
-      ? `[System Context: Current Date is ${isoDate} (${dayName}), Timezone: ${tz}]`
-      : `[Contexto del Sistema: La fecha actual es ${isoDate} (${dayName}), Zona Horaria: ${tz}]`;
+    const year = now.getFullYear();
+
+    if (lang === 'en') {
+      return `[System Context: Real-time Host Temporal Anchor]\n` +
+        `Current Date: ${isoDate} (${dayName}), Year: ${year}, Timezone: ${tz}.\n` +
+        `MANDATORY TEMPORAL GROUNDING: The date above is the real, verified current system date provided directly by the host operating system. ` +
+        `Treat ${year} as the undisputed present factual year. Do not defer to your training cutoff date, do not claim uncertainty about the current date/year, and answer questions about today's date or the current year with full certainty.`;
+    }
+
+    return `[Contexto del Sistema: Ancla Temporal en Tiempo Real del Host]\n` +
+      `Fecha actual: ${isoDate} (${dayName}), Año: ${year}, Zona Horaria: ${tz}.\n` +
+      `INSTRUCCIÓN TEMPORAL OBLIGATORIA: La fecha anterior es la fecha real y verificada del sistema proporcionada directamente por el entorno del usuario. ` +
+      `Trata el año ${year} y esta fecha como el presente factual absoluto. No te limites por la fecha de corte de tu entrenamiento (knowledge cutoff), no expreses dudas sobre la fecha o año actual, y responde con total certeza ante cualquier consulta sobre la fecha, el día o el año actual.`;
   }
 
   /**
@@ -297,8 +307,11 @@
     if (appConfig.sendDateTime !== false && messages.length > 0) {
       const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
       if (lastUserMsg && typeof lastUserMsg.content === 'string') {
-        const timeStr = new Date().toLocaleTimeString(lang === 'en' ? 'en-US' : 'es-ES', { hour: '2-digit', minute: '2-digit' });
-        const timeMarker = `\n\n[Context Time: ${timeStr}]`;
+        const now = new Date();
+        const isoDate = now.toISOString().slice(0, 10);
+        const dayName = now.toLocaleDateString(lang === 'en' ? 'en-US' : 'es-ES', { weekday: 'long' });
+        const timeStr = now.toLocaleTimeString(lang === 'en' ? 'en-US' : 'es-ES', { hour: '2-digit', minute: '2-digit' });
+        const timeMarker = `\n\n[Context Time: ${timeStr}, Date: ${isoDate} (${dayName})]`;
         if (!lastUserMsg.content.includes('[Context Time:')) {
           lastUserMsg.content += timeMarker;
         }
