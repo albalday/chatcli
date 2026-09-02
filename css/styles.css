@@ -738,6 +738,13 @@ body {
 }
 
 /* Tarjeta Agentica de Ejecución de Herramienta */
+.tool-card-wrapper {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0.5rem 0;
+  text-align: left;
+}
+
 .tool-execution-card {
   margin: 0.75rem 0;
   border: 1px solid #6366f1;
@@ -745,6 +752,9 @@ body {
   border-radius: var(--radius-md);
   overflow: hidden;
   box-shadow: var(--shadow-sm);
+  width: 100%;
+  box-sizing: border-box;
+  text-align: left;
 }
 
 .tool-card-header,
@@ -959,14 +969,58 @@ body {
   border-radius: var(--radius-md);
   overflow: hidden;
   box-shadow: var(--shadow-sm);
+  width: 100%;
+  box-sizing: border-box;
+  text-align: left;
 }
 
-.web-search-card .web-card-header {
+.search-card-header {
   background: linear-gradient(135deg, #0d9488, #14b8a6);
+  color: white;
+  padding: 0.4rem 0.85rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+  user-select: none;
+  width: 100%;
+  box-sizing: border-box;
+  text-align: left;
 }
 
-.web-search-card .web-card-section {
+.search-card-title {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  text-align: left;
+}
+
+.search-card-badge {
+  font-size: 0.7rem;
+  background: rgba(255, 255, 255, 0.2);
+  padding: 0.15rem 0.45rem;
+  border-radius: var(--radius-full);
+}
+
+.search-query-section,
+.search-results-section {
+  padding: 0.5rem 0.85rem;
+  font-size: 0.825rem;
   border-top: 1px solid #ccfbf1;
+  width: 100%;
+  box-sizing: border-box;
+  text-align: left;
+}
+
+.search-query-section {
+  background: #ffffff;
+}
+
+.search-results-section {
+  background: #f0fdfa;
 }
 
 .web-search-card .query-badge {
@@ -974,6 +1028,7 @@ body {
   font-size: 0.875rem;
   font-weight: 600;
   color: #0f766e;
+  text-align: left;
 }
 
 .search-results-list {
@@ -981,6 +1036,9 @@ body {
   flex-direction: column;
   gap: 0.35rem;
   margin-top: 0.25rem;
+  width: 100%;
+  box-sizing: border-box;
+  text-align: left;
 }
 
 .search-result-item {
@@ -989,6 +1047,9 @@ body {
   border-radius: var(--radius-sm);
   padding: 0.4rem 0.6rem;
   font-size: 0.8rem;
+  width: 100%;
+  box-sizing: border-box;
+  text-align: left;
 }
 
 .search-result-item a {
@@ -1002,6 +1063,8 @@ body {
   margin-top: 0.15rem;
   font-size: 0.75rem;
   line-height: 1.35;
+  text-align: left;
+  word-break: break-word;
 }
 
 /* ==========================================================================
@@ -2662,7 +2725,12 @@ input:checked + .slider:before {
   background-color: #042f2e;
 }
 
-[data-theme="dark"] .web-search-card .web-card-section {
+[data-theme="dark"] .search-card-header {
+  background: linear-gradient(135deg, #0f766e, #115e59);
+}
+
+[data-theme="dark"] .search-query-section,
+[data-theme="dark"] .search-results-section {
   background-color: #071f1e;
   border-top-color: #115e59;
 }
