@@ -7,7 +7,7 @@
 
   const definition = {
     name: 'get_current_datetime',
-    description: 'Obtiene la hora exacta actual. NOTA: La fecha actual y la zona horaria ya están en tu System Prompt. Usa esta herramienta SÓLO si necesitas saber la hora/minuto exacto.',
+    description: 'Devuelve la hora exacta. Úsala solo si el usuario pide la hora actual.',
     parameters: { type: 'object', properties: {} }
   };
 
@@ -21,8 +21,8 @@
       metadata: { icon: '⏱️', label: definition.name },
       settings: { showInSettings: false },
       promptGuide: (lang) => lang === 'en'
-        ? '- `get_current_datetime()`: Retrieves the exact current time. Use ONLY if the user asks for the exact time (the current date is already in your system context).'
-        : '- `get_current_datetime()`: Obtiene la hora exacta. Usa SÓLO si el usuario pide la hora exacta (la fecha actual ya está en tu contexto de sistema).',
+        ? '- `get_current_datetime()`: Returns exact current time.'
+        : '- `get_current_datetime()`: Devuelve la hora exacta actual.',
       isAvailable: (appConfig = {}) => appConfig.sendDateTime !== false,
       execute: async () => {
         return {

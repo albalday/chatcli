@@ -68,10 +68,10 @@
     const dayName = now.toLocaleDateString(lang === 'en' ? 'en-US' : 'es-ES', { weekday: 'long' });
 
     if (lang === 'en') {
-      return `[System Context: Current real date is ${isoDate} (${dayName}), Timezone: ${tz}. Command: This is the verified real-time system date; treat it as factual present and answer with total certainty.]`;
+      return `[Current date: ${isoDate} (${dayName}), Timezone: ${tz}. Treat as present.]`;
     }
 
-    return `[Contexto del Sistema: La fecha real actual es ${isoDate} (${dayName}), Zona Horaria: ${tz}. Orden: Esta es la fecha verificada del sistema en tiempo real; acéptala como presente factual y responde con total certeza.]`;
+    return `[Fecha actual: ${isoDate} (${dayName}), Zona: ${tz}. Trátala como presente.]`;
   }
 
   /**

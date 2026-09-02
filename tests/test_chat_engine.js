@@ -19,14 +19,12 @@ const ChatAgentCore = require('../js/agent-core.js');
 
 test('ChatEngine - getDailyDateAnchor genera el ancla con fecha y zona horaria', (t) => {
   const anchorEs = ChatEngine.getDailyDateAnchor('es');
-  assert.ok(anchorEs.includes('Contexto del Sistema: La fecha real actual es'));
-  assert.ok(anchorEs.includes('Zona Horaria:'));
-  assert.ok(anchorEs.includes('Orden:'));
+  assert.ok(anchorEs.includes('Fecha actual:'));
+  assert.ok(anchorEs.includes('Zona:'));
 
   const anchorEn = ChatEngine.getDailyDateAnchor('en');
-  assert.ok(anchorEn.includes('System Context: Current real date is'));
+  assert.ok(anchorEn.includes('Current date:'));
   assert.ok(anchorEn.includes('Timezone:'));
-  assert.ok(anchorEn.includes('Command:'));
 });
 
 test('ChatEngine - getToolsSystemPromptGuide genera la lista de herramientas activas', (t) => {
@@ -79,7 +77,7 @@ test('ChatEngine - buildEffectiveMessages inyecta fecha, RAG y formatea mensajes
 
   assert.equal(messages[0].role, 'system');
   assert.ok(messages[0].content.includes('[BASE DE CONOCIMIENTO ACTIVA: Manual GA-Z77P-D3]'));
-  assert.ok(messages[0].content.includes('Contexto del Sistema: La fecha real actual es'));
+  assert.ok(messages[0].content.includes('Fecha actual:'));
   assert.ok(messages[0].content.includes('Eres un asistente experto.'));
   assert.ok(messages[0].content.includes('Base de Conocimiento activa'));
 
