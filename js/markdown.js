@@ -538,7 +538,18 @@
           try {
             const imageRecord = await ragStorage.getDocumentImage(docId, imgId);
             if (imageRecord && imageRecord.dataUrl) {
-              img.src = imageRecord.dataUrl;
+              let finalUrl = imageRecord.dataUrl;
+              if (imageRecord.isCmyk) {
+                const fileParser = (typeof window !== 'undefined' && window.ChatFileParser)
+                  ? window.ChatFileParser
+                  : (typeof require !== 'undefined' ? (() => { try { return require('./file-parser.js'); } catch (e) { return null; } })() : null);
+                if (fileParser && typeof fileParser.convertCmykDataUrlToRgb === 'function') {
+                  finalUrl = fileParser.convertCmykDataUrlToRgb(finalUrl);
+                  imageRecord.dataUrl = finalUrl;
+                  imageRecord.isCmyk = false;
+                }
+              }
+              img.src = finalUrl;
               img.classList.add('rag-resolved-image');
             }
           } catch (e) {}

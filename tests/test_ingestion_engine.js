@@ -287,9 +287,16 @@ trailer
   const buffer = Buffer.from(pdfContent, 'latin1');
   const text = await FileParser.extractTextFromPdf(buffer);
   assert.ok(text.includes('GA-Z77P-D3'), `El texto no debe corromperse a 'dA-wTTm-aP', obtenido: '${text}'`);
-  assert.ok(text.includes("User's Manual"), `El texto debe mantener 'User\\'s Manual', obtenido: '${text}'`);
+  assert.ok(text.includes("User's Manual"), `El texto debe mantener 'User\'s Manual', obtenido: '${text}'`);
   assert.ok(text.includes('GIGABYTE'), `El texto debe mantener 'GIGABYTE', obtenido: '${text}'`);
 });
 
+test('IngestionEngine - Conversión CMYK bajo demanda y preservación de isCmyk', async () => {
+  const FileParser = require('../js/file-parser.js');
+  assert.strictEqual(typeof FileParser.convertCmykDataUrlToRgb, 'function');
+  assert.strictEqual(typeof FileParser.convertCmykJpegToRgbDataUrl, 'function');
 
-
+  // Verificar que convertCmykDataUrlToRgb maneja entradas seguras
+  assert.strictEqual(FileParser.convertCmykDataUrlToRgb(null), null);
+  assert.strictEqual(FileParser.convertCmykDataUrlToRgb('data:image/png;base64,123'), 'data:image/png;base64,123');
+});

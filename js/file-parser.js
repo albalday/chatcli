@@ -1240,15 +1240,7 @@
 
       if (isDct || (rawBytes[0] === 0xFF && rawBytes[1] === 0xD8)) {
         mimeType = 'image/jpeg';
-        if (isCmyk) {
-          const cmykDataUrl = convertCmykJpegToRgbDataUrl(rawBytes);
-          if (cmykDataUrl) {
-            dataUrl = cmykDataUrl;
-          }
-        }
-        if (!dataUrl) {
-          dataUrl = `data:image/jpeg;base64,${bytesToBase64(rawBytes)}`;
-        }
+        dataUrl = `data:image/jpeg;base64,${bytesToBase64(rawBytes)}`;
       } else if (isJpx) {
         mimeType = 'image/jp2';
         dataUrl = `data:image/jp2;base64,${bytesToBase64(rawBytes)}`;
@@ -1265,6 +1257,7 @@
           height,
           sizeBytes: rawBytes.length,
           mimeType: mimeType || 'image/jpeg',
+          isCmyk: Boolean(isCmyk),
           dataUrl
         });
       }
@@ -1452,14 +1445,17 @@
 
         // Asociar imágenes de esta página
         const pageImages = [];
+        let combinedRefs = null;
         for (const [imgObjNum, imgData] of imagesByObjNum.entries()) {
-          const isReferencedInPage = body.includes(`${imgObjNum} 0 R`) ||
-            xobjDict.includes(`${imgObjNum} 0 R`) ||
-            contentObjs.some(cNum => {
+          if (assignedImages.has(imgObjNum)) continue;
+          if (combinedRefs === null) {
+            combinedRefs = body + ' ' + xobjDict;
+            for (const cNum of contentObjs) {
               const cBody = allObjects.get(String(cNum));
-              return cBody && cBody.includes(`${imgObjNum} 0 R`);
-            });
-          if (isReferencedInPage && !assignedImages.has(imgObjNum)) {
+              if (cBody) combinedRefs += ' ' + cBody;
+            }
+          }
+          if (combinedRefs.includes(imgObjNum + ' 0 R')) {
             assignedImages.add(imgObjNum);
             imgData.page = pageNum;
             imgData.label = `Diagrama / Esquema (Pág. ${pageNum})`;
@@ -1661,10 +1657,38 @@
     });
   }
 
+  /**
+   * Convierte un Data URL JPEG en espacio de color CMYK / YCCK a un Data URL JPEG sRGB bajo demanda.
+   */
+  function convertCmykDataUrlToRgb(dataUrl) {
+    if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image/jpeg;base64,')) {
+      return dataUrl;
+    }
+    try {
+      const b64 = dataUrl.substring('data:image/jpeg;base64,'.length);
+      let bytes;
+      if (typeof Buffer !== 'undefined') {
+        bytes = new Uint8Array(Buffer.from(b64, 'base64'));
+      } else if (typeof atob === 'function') {
+        const bin = atob(b64);
+        bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      } else {
+        return dataUrl;
+      }
+      const converted = convertCmykJpegToRgbDataUrl(bytes);
+      return converted || dataUrl;
+    } catch (_) {
+      return dataUrl;
+    }
+  }
+
   return {
     formatBytes,
     parseFile,
     extractTextFromPdf,
-    parsePdfDocument
+    parsePdfDocument,
+    convertCmykJpegToRgbDataUrl,
+    convertCmykDataUrlToRgb
   };
 });
