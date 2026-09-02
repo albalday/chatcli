@@ -882,27 +882,6 @@ body {
   word-break: break-word;
 }
 
-/* Fórmulas matemáticas y reglas horizontales */
-.math-block {
-  margin: 0.75rem 0;
-  padding: 0.5rem 0.85rem;
-  background: rgba(99, 102, 241, 0.05);
-  border-left: 3px solid #6366f1;
-  border-radius: var(--radius-sm);
-  overflow-x: auto;
-  font-family: var(--font-mono);
-  font-size: 0.9rem;
-  text-align: center;
-}
-
-.math-inline {
-  font-family: var(--font-mono);
-  font-size: 0.9em;
-  background: rgba(0, 0, 0, 0.04);
-  padding: 0.1em 0.3em;
-  border-radius: 3px;
-}
-
 hr {
   border: none;
   border-top: 1px solid var(--border-color, #e2e8f0);
@@ -2770,17 +2749,6 @@ input:checked + .slider:before {
 
 [data-theme="dark"] .tool-result-label {
   color: #94a3b8;
-}
-
-[data-theme="dark"] .math-block {
-  background: rgba(99, 102, 241, 0.12);
-  border-left-color: #818cf8;
-  color: #f1f5f9;
-}
-
-[data-theme="dark"] .math-inline {
-  background: rgba(255, 255, 255, 0.08);
-  color: #e2e8f0;
 }
 
 /* Estadísticas de respuesta con texto negro de alto contraste en Modo Oscuro */

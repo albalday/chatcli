@@ -198,8 +198,8 @@
     }
 
     const formatDirective = (lang === 'en')
-      ? '[Format: Standard Markdown. Do not use LaTeX commands (avoid \\left, \\right, \\begin, \\,); write math and numbers plainly with standard symbols (+, -, ×, /, =).]'
-      : '[Formato: Markdown estándar. No uses comandos LaTeX (evita \\left, \\right, \\begin, \\,); escribe matemáticas y números directamente con símbolos estándar (+, -, ×, /, =).]';
+      ? '[Format: Always use standard Markdown and plain text. Never use LaTeX syntax or delimiters ($ or $$); write all math, formulas, and numbers directly using readable plain text with standard symbols (+, -, ×, /, =).]'
+      : '[Formato: Usa siempre Markdown estándar y texto plano. Nunca uses sintaxis ni delimitadores LaTeX ($ o $$); escribe las matemáticas, fórmulas y números directamente en texto legible con símbolos estándar (+, -, ×, /, =).]';
     activePrompt = activePrompt ? (activePrompt + '\n\n' + formatDirective) : formatDirective;
 
     const isToolsEnabled = options.enableTools !== undefined

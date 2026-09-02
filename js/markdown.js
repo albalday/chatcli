@@ -214,48 +214,6 @@
     return result.join('\n');
   }
 
-  function formatMathExpression(tex) {
-    if (!tex) return '';
-    let s = String(tex).trim();
-
-    // Arrays y matrices LaTeX: \begin{array}... \end{array}
-    s = s.replace(/\\?begin\{(?:array|matrix|align|aligned)\}(?:\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\})?([\s\S]*?)\\?end\{(?:array|matrix|align|aligned)\}/gi, function (_m, inner) {
-      const lines = inner
-        .replace(/\\hline/g, '')
-        .split(/\\\\/)
-        .map(l => l.replace(/\\quad|&amp;|&/g, ' ').replace(/\s+/g, ' ').trim())
-        .filter(Boolean);
-      return lines.join('\n');
-    });
-
-    // Delimitadores \left, \right
-    s = s.replace(/\\(?:left|right)\b/g, '');
-
-    // Espaciado LaTeX: \, \; \! \: \quad \qquad
-    s = s.replace(/\\(?:quad|qquad)\b/g, ' ');
-    s = s.replace(/(\d)\\,\s*(\d)/g, '$1.$2');
-    s = s.replace(/\\([,;:!])/g, '');
-
-    s = s.replace(/\\mathbf\{([^}]+)\}/g, '<strong>$1</strong>');
-    s = s.replace(/\\(?:text|mathrm)\{([^}]+)\}/g, '$1');
-    s = s.replace(/\\times\b/g, '×');
-    s = s.replace(/\\cdot\b/g, '·');
-    s = s.replace(/\\div\b/g, '÷');
-    s = s.replace(/\\pm\b/g, '±');
-    s = s.replace(/\\approx\b/g, '≈');
-    s = s.replace(/\\(?:neq|ne)\b/g, '≠');
-    s = s.replace(/\\(?:leq|le)\b/g, '≤');
-    s = s.replace(/\\(?:geq|ge)\b/g, '≥');
-    s = s.replace(/\\infty\b/g, '∞');
-    s = s.replace(/\\sqrt\{([^}]+)\}/g, '√($1)');
-    s = s.replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '($1 / $2)');
-    s = s.replace(/\^\{([^}]+)\}/g, '<sup>$1</sup>');
-    s = s.replace(/\^([0-9a-zA-Z]+)/g, '<sup>$1</sup>');
-    s = s.replace(/_\{([^}]+)\}/g, '<sub>$1</sub>');
-    s = s.replace(/\\([a-zA-Z]+)/g, '$1');
-    return s;
-  }
-
   /**
    * Parsea segmentos de texto normales (fuera de bloques de código).
    */
@@ -266,33 +224,6 @@
 
     // Reglas horizontales (---, ***, ___)
     p = p.replace(/^[ \t]*(?:---|\*\*\*|___)[ \t]*$/gm, '<hr>');
-
-    // Bloques matemáticos ($$...$$)
-    p = p.replace(/\$\$([\s\S]+?)\$\$/g, function (_match, formula) {
-      return `\n<div class="math-block">${formatMathExpression(formula)}</div>\n`;
-    });
-
-    // Fórmulas matemáticas inline ($...$)
-    p = p.replace(/(?<!\\)\$(?!\s)([^$\n]+?)(?<!\s)\$/g, function (_match, formula) {
-      return `<span class="math-inline">${formatMathExpression(formula)}</span>`;
-    });
-
-    // Limpieza de artefactos LaTeX emitidos por el modelo fuera de delimitadores
-    p = p.replace(/\\?begin\{(?:array|matrix|align|aligned)\}(?:\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\})?([\s\S]*?)\\?end\{(?:array|matrix|align|aligned)\}/gi, function (_m, inner) {
-      const lines = inner
-        .replace(/\\hline/g, '')
-        .split(/\\\\/)
-        .map(l => l.replace(/\\quad|&amp;|&/g, ' ').replace(/\s+/g, ' ').trim())
-        .filter(Boolean);
-      return `\n<div class="math-block">${lines.join('<br>')}</div>\n`;
-    });
-    p = p.replace(/\\(?:left|right)\b/g, '');
-    p = p.replace(/(\d)\\,\s*(\d)/g, '$1.$2');
-    p = p.replace(/(\d)\{,(\d+)\}/g, '$1,$2');
-    p = p.replace(/\\([,;:!])/g, '');
-
-    // Desescapar dólares literales (\$ -> $)
-    p = p.replace(/\\\$/g, '$');
 
     const thoughtTitle = tr('md_thought_title', '💭 Proceso de razonamiento');
     const thoughtReasoning = tr('md_thought_reasoning', '💭 Razonando...');
@@ -414,7 +345,6 @@
         trimmed.startsWith('<details') ||
         trimmed.startsWith('<figure') ||
         trimmed.startsWith('<hr') ||
-        trimmed.startsWith('<div class="math-block"') ||
         trimmed.startsWith('<div class="table-container"')
       ) {
         return trimmed;

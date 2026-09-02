@@ -78,6 +78,7 @@ test('ChatEngine - buildEffectiveMessages inyecta fecha, RAG y formatea mensajes
   assert.equal(messages[0].role, 'system');
   assert.ok(messages[0].content.includes('[BASE DE CONOCIMIENTO ACTIVA: Manual GA-Z77P-D3]'));
   assert.ok(messages[0].content.includes('Fecha actual:'));
+  assert.ok(messages[0].content.includes('Formato: Usa siempre Markdown estándar'));
   assert.ok(messages[0].content.includes('Eres un asistente experto.'));
   assert.ok(messages[0].content.includes('Base de Conocimiento activa'));
 

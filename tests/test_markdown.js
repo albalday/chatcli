@@ -69,39 +69,12 @@ Diagrama / Esquema (Pág. 7) #img_7_12
   assert.ok(looseHtml.includes('<figcaption class="chat-image-caption">Diagrama / Esquema (Pág. 7) #img_7_12</figcaption>'));
 });
 
-test('Markdown - Renderizado de fórmulas matemáticas LaTeX ($...$ y $$...$$) y reglas horizontales', () => {
-  const md = `Para calcular la suma:
-$22!$ = $1.124$
-
----
-Factorización:
-$$\\text{Suma} = 22! \\times 14.376$$
-
-Resultado:
-$$\\mathbf{16.158}$$
-Aproximadamente $1,61 \\times 10^{25}$`;
-
+test('Markdown - Renderizado de reglas horizontales (---, ***, ___)', () => {
+  const md = `Sección 1\n\n---\n\nSección 2`;
   const html = Markdown.parseMarkdown(md);
-  assert.ok(!html.includes('$22!$'), 'No deben quedar delimitadores $ sin procesar');
-  assert.ok(html.includes('<span class="math-inline">22!</span>'), 'Debe generar span.math-inline');
   assert.ok(html.includes('<hr>'), 'Debe convertir --- a <hr>');
-  assert.ok(html.includes('<div class="math-block">Suma = 22! × 14.376</div>'), 'Debe convertir \\text y \\times en el bloque matemático');
-  assert.ok(html.includes('<div class="math-block"><strong>16.158</strong></div>'), 'Debe convertir \\mathbf en <strong>');
-  assert.ok(html.includes('10<sup>25</sup>'), 'Debe procesar exponentes en superíndice');
-});
-
-test('Markdown - Limpieza de artefactos LaTeX (array, \\left, \\right, \\,)', () => {
-  const sample = `Cálculo:
-22! · \\left(1 + 23\\right) = 13\\,800
-\\begin{array}{r@{quad}l} & 1\\,124 \\\\ + & 25 \\\\ \\hline = & 1\\,149 \\end{array}`;
-
-  const html = Markdown.parseMarkdown(sample);
-  assert.ok(!html.includes('\\left'), 'No debe quedar \\left');
-  assert.ok(!html.includes('\\right'), 'No debe quedar \\right');
-  assert.ok(!html.includes('≤ft'), 'No debe convertir \\left erróneamente en ≤ft');
-  assert.ok(html.includes('13.800'), 'Debe convertir \\, en separador de miles');
-  assert.ok(!html.includes('\\begin{array}'), 'Debe limpiar \\begin{array}');
-  assert.ok(html.includes('1.124'), 'Debe limpiar array y mostrar números');
+  assert.ok(html.includes('Sección 1'));
+  assert.ok(html.includes('Sección 2'));
 });
 
 
