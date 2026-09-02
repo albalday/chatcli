@@ -374,12 +374,57 @@
     return values.sort((a, b) => a.order - b.order);
   }
 
+  function resolveChunkIdAlias(id) {
+    if (!id || typeof id !== 'string') return null;
+    const m = id.match(/^([a-zA-Z0-9_-]+)[#:/](?:chunk:?)?(\d+)$/i);
+    if (m) {
+      return { docId: m[1], order: parseInt(m[2], 10), canonicalId: `${m[1]}:chunk:${m[2]}` };
+    }
+    return null;
+  }
+
   async function getChunkById(id) {
     if (!id) return null;
+    const strId = String(id).trim();
     const db = await openDatabase();
-    if (!db) return memory.chunks.has(id) ? { ...memory.chunks.get(id) } : null;
+    if (!db) {
+      if (memory.chunks.has(strId)) return { ...memory.chunks.get(strId) };
+      const alias = resolveChunkIdAlias(strId);
+      if (alias && memory.chunks.has(alias.canonicalId)) return { ...memory.chunks.get(alias.canonicalId) };
+      if (alias) {
+        for (const chunk of memory.chunks.values()) {
+          if (chunk.documentId === alias.docId && chunk.order === alias.order) return { ...chunk };
+        }
+      }
+      for (const chunk of memory.chunks.values()) {
+        if (chunk.documentId === strId && chunk.order === 0) return { ...chunk };
+      }
+      return null;
+    }
+
     const tx = db.transaction(STORES.ragChunks, 'readonly');
-    return (await requestResult(tx.objectStore(STORES.ragChunks).get(String(id)))) || null;
+    const store = tx.objectStore(STORES.ragChunks);
+    let record = (await requestResult(store.get(strId))) || null;
+    if (record) return record;
+
+    const alias = resolveChunkIdAlias(strId);
+    if (alias) {
+      record = (await requestResult(store.get(alias.canonicalId))) || null;
+      if (record) return record;
+
+      const docChunks = await getChunksByDocument(alias.docId);
+      if (docChunks && docChunks.length > 0) {
+        const found = docChunks.find(c => c.order === alias.order) || docChunks[alias.order];
+        if (found) return found;
+      }
+    } else {
+      const docChunks = await getChunksByDocument(strId);
+      if (docChunks && docChunks.length > 0) {
+        return docChunks[0];
+      }
+    }
+
+    return null;
   }
 
   async function getSourceFile(documentId) {

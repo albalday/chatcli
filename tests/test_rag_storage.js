@@ -105,3 +105,36 @@ test('RagStorage - exporta e importa únicamente el formato actual', async () =>
     RagStorage.ValidationError
   );
 });
+
+test('RagStorage - getChunkById resuelve alias comunes generados por LLMs (docId#0, docId:0)', async () => {
+  const branch = await RagStorage.createBranch('AliasTest');
+  const doc = await RagStorage.saveDocument({
+    branchId: branch.id,
+    title: 'doc.txt',
+    fileType: 'txt',
+    chunks: [
+      { order: 0, title: 'Sección 0', content: 'Contenido sección 0' },
+      { order: 1, title: 'Sección 1', content: 'Contenido sección 1' }
+    ]
+  }, 'doc');
+
+  // Consulta por ID canónico
+  const c0 = await RagStorage.getChunkById(`${doc.id}:chunk:0`);
+  assert.equal(c0.content, 'Contenido sección 0');
+
+  // Consulta por alias con almohadilla: doc_id#0
+  const c0Hash = await RagStorage.getChunkById(`${doc.id}#0`);
+  assert.ok(c0Hash);
+  assert.equal(c0Hash.content, 'Contenido sección 0');
+
+  // Consulta por alias doc_id#1
+  const c1Hash = await RagStorage.getChunkById(`${doc.id}#1`);
+  assert.ok(c1Hash);
+  assert.equal(c1Hash.content, 'Contenido sección 1');
+
+  // Consulta pasando directamente el documentId
+  const cDoc = await RagStorage.getChunkById(doc.id);
+  assert.ok(cDoc);
+  assert.equal(cDoc.content, 'Contenido sección 0');
+});
+
