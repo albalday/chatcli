@@ -52,9 +52,20 @@ test('ToolDispatcher - dispatchToolCall ejecuta search_web con alias searchweb',
     }
   };
 
-  const res = await AgentCore.dispatchToolCall(toolCall);
+  const mockWebSearch = {
+    search: async (query) => ({
+      success: true,
+      count: 1,
+      results: [{ title: 'DeepSeek R1', url: 'https://example.com', snippet: 'AI model' }],
+      markdown: `Resultados simulados para ${query}`
+    })
+  };
+
+  const res = await AgentCore.dispatchToolCall(toolCall, {
+    services: { webSearch: mockWebSearch }
+  });
   assert.ok(res.success);
-  assert.ok(typeof res.resultText === 'string');
+  assert.equal(res.resultText, 'Resultados simulados para DeepSeek R1');
 });
 
 test('ToolDispatcher - dispatchToolCall ejecuta render_chart y genera salida estructurada', async () => {

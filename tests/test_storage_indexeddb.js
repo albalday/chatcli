@@ -128,23 +128,24 @@ test('Storage IndexedDB - Preservación íntegra de turnos del asistente y herra
   assert.equal(loaded.history[3].content, 'Aquí tienes el gráfico generado.');
 });
 
-test('Storage IndexedDB - Preservación de turnos iniciales de fecha/hora para caché de contexto', async () => {
-  const sessionId = 'session_test_datetime_' + Date.now();
-  const sessionMeta = { id: sessionId, title: 'Consulta temporal' };
+test('Storage IndexedDB - Preservación íntegra de conversaciones multi-turno con mensajes de sistema y contexto', async () => {
+  const sessionId = 'session_test_multiturn_' + Date.now();
+  const sessionMeta = { id: sessionId, title: 'Consulta multi-turno' };
 
   const history = [
-    { id: 'msg_dt_user', role: 'user', content: 'La fecha y hora actual es: 29/8/2026, 03:50:00.' },
-    { id: 'msg_dt_ast', role: 'assistant', content: 'OK' },
-    { id: 'msg_user_q', role: 'user', content: '¿Qué eventos ocurrieron hoy?' },
-    { id: 'msg_ast_a', role: 'assistant', content: 'Hoy es 29 de agosto...' }
+    { id: 'msg_sys', role: 'system', content: '[Fecha actual: 2026-09-02, Zona: UTC]' },
+    { id: 'msg_user_1', role: 'user', content: 'Hola' },
+    { id: 'msg_ast_1', role: 'assistant', content: '¡Hola! ¿En qué puedo ayudarte?' },
+    { id: 'msg_user_2', role: 'user', content: '¿Qué día es hoy?' },
+    { id: 'msg_ast_2', role: 'assistant', content: 'Hoy es 2 de septiembre de 2026.' }
   ];
 
   await Storage.saveConversation(sessionMeta, history);
   const loaded = await Storage.getConversation(sessionId);
 
   assert.ok(loaded);
-  assert.equal(loaded.history.length, 4);
-  assert.equal(loaded.history[0].content, 'La fecha y hora actual es: 29/8/2026, 03:50:00.');
-  assert.equal(loaded.history[1].content, 'OK');
-  assert.equal(loaded.history[2].content, '¿Qué eventos ocurrieron hoy?');
+  assert.equal(loaded.history.length, 5);
+  assert.equal(loaded.history[0].role, 'system');
+  assert.equal(loaded.history[1].role, 'user');
+  assert.equal(loaded.history[4].content, 'Hoy es 2 de septiembre de 2026.');
 });
