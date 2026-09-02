@@ -69,6 +69,9 @@
     if (/^blob:[^\s"'<>]+/i.test(trimmed)) {
       return escapeHtml(trimmed);
     }
+    if (/^rag-image:\/\/[a-zA-Z0-9_\-:]+/i.test(trimmed)) {
+      return escapeHtml(trimmed);
+    }
     return '';
   }
 
@@ -516,6 +519,31 @@
         const iconSpan = button.querySelector('span');
         button.title = isCollapsed ? tr('tool_btn_expand', 'Expandir herramienta') : tr('tool_btn_collapse', 'Minimizar herramienta');
       });
+    });
+
+    // 4. Resolución de imágenes de la base de conocimiento (rag-image://docId:imgId)
+    container.querySelectorAll('img[src^="rag-image://"]').forEach(async function (img) {
+      if (img.dataset.ragResolved) return;
+      img.dataset.ragResolved = 'true';
+      const rawSrc = img.getAttribute('src') || '';
+      const cleanRef = rawSrc.replace(/^rag-image:\/\//i, '');
+      const colonIdx = cleanRef.indexOf(':');
+      if (colonIdx > 0) {
+        const docId = cleanRef.substring(0, colonIdx);
+        const imgId = cleanRef.substring(colonIdx + 1);
+        const ragStorage = (typeof window !== 'undefined' && window.ChatRagStorage)
+          ? window.ChatRagStorage
+          : (typeof require !== 'undefined' ? (() => { try { return require('./ragStorage.js'); } catch (e) { return null; } })() : null);
+        if (ragStorage && typeof ragStorage.getDocumentImage === 'function') {
+          try {
+            const imageRecord = await ragStorage.getDocumentImage(docId, imgId);
+            if (imageRecord && imageRecord.dataUrl) {
+              img.src = imageRecord.dataUrl;
+              img.classList.add('rag-resolved-image');
+            }
+          } catch (e) {}
+        }
+      }
     });
 
   }

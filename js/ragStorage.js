@@ -259,21 +259,29 @@
     return { success: true, deletedBranchId: id, deletedDocumentsCount: docs.length };
   }
 
-  async function saveDocument(data, sourceFile = null) {
+  async function saveDocument(data, sourceFile = null, images = []) {
     const { document, chunks } = validateDocument(data);
     if (!(await getBranchById(document.branchId))) throw new NotFoundError(`No existe la rama ${document.branchId}.`);
+    const docImages = Array.isArray(images) ? images : [];
     const db = await openDatabase();
     if (!db) {
       memory.documents.set(document.id, document);
-      if (sourceFile !== null && sourceFile !== undefined) memory.files.set(document.id, { documentId: document.id, branchId: document.branchId, blob: sourceFile });
+      if (sourceFile !== null && sourceFile !== undefined || docImages.length > 0) {
+        memory.files.set(document.id, { documentId: document.id, branchId: document.branchId, blob: sourceFile, images: docImages });
+      }
       chunks.forEach(chunk => memory.chunks.set(chunk.id, chunk));
       return { ...document };
     }
     try {
       const tx = db.transaction([STORES.ragDocuments, STORES.ragFiles, STORES.ragChunks], 'readwrite');
       tx.objectStore(STORES.ragDocuments).add(document);
-      if (sourceFile !== null && sourceFile !== undefined) {
-        tx.objectStore(STORES.ragFiles).put({ documentId: document.id, branchId: document.branchId, blob: sourceFile });
+      if (sourceFile !== null && sourceFile !== undefined || docImages.length > 0) {
+        tx.objectStore(STORES.ragFiles).put({
+          documentId: document.id,
+          branchId: document.branchId,
+          blob: sourceFile,
+          images: docImages
+        });
       }
       for (const chunk of chunks) tx.objectStore(STORES.ragChunks).add(chunk);
       await transactionDone(tx);
@@ -283,6 +291,25 @@
       if (isQuotaError(error)) throw new QuotaExceededError(undefined, { error });
       throw new RagStorageError(`No se pudo guardar el documento: ${error.message || error}`, { error });
     }
+  }
+
+  async function getDocumentImages(documentId) {
+    if (!documentId) return [];
+    const db = await openDatabase();
+    if (!db) {
+      const rec = memory.files.get(String(documentId));
+      return rec?.images || [];
+    }
+    const tx = db.transaction(STORES.ragFiles, 'readonly');
+    const rec = await requestResult(tx.objectStore(STORES.ragFiles).get(String(documentId)));
+    return rec?.images || [];
+  }
+
+  async function getDocumentImage(documentId, imageId) {
+    const images = await getDocumentImages(documentId);
+    if (!images || images.length === 0) return null;
+    const cleanId = String(imageId || '').trim();
+    return images.find(img => img.id === cleanId || `${documentId}:${img.id}` === cleanId) || null;
   }
 
   async function getDocumentsByBranch(branchId) {
@@ -436,6 +463,7 @@
     createBranch, getBranches, getBranchById, updateBranch, deleteBranch,
     saveDocument, getDocumentsByBranch, getDocumentById,
     getChunksByBranch, getChunksByDocument, getChunkById, getSourceFile, deleteDocument,
+    getDocumentImages, getDocumentImage,
     getStorageEstimate, requestPersistentStorage, clearAllData, exportBranch, importBranch, openDatabase,
     RagStorageError, ValidationError, QuotaExceededError, NotFoundError,
     DB_NAME: Database?.DB_NAME || 'ZeroChatDB', DB_VERSION: Database?.DB_VERSION || 2,

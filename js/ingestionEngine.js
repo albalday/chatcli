@@ -66,6 +66,50 @@
     return normalizeExtractedText(await parser.extractTextFromPdf(bytes));
   }
 
+  async function extractDocumentContent(file, fileType) {
+    if (fileType === 'pdf') {
+      const bytes = await toArrayBuffer(file);
+      const parser = getFileParser();
+      if (!parser) throw new Error('El extractor de PDF no está disponible.');
+      if (typeof parser.parsePdfDocument === 'function') {
+        const parsed = await parser.parsePdfDocument(bytes);
+        return {
+          text: normalizeExtractedText(parsed.text),
+          images: parsed.images || []
+        };
+      }
+      const rawText = await parser.extractTextFromPdf(bytes);
+      return { text: normalizeExtractedText(rawText), images: [] };
+    }
+
+    if (fileType === 'md') {
+      let rawText = await extractTextFromPlainText(file);
+      const images = [];
+      let imgCounter = 1;
+      rawText = rawText.replace(/!\[([^\]]*)\]\((data:image\/(?:png|jpeg|jpg|webp|gif|svg\+xml);base64,[A-Za-z0-9+/=\s]+)\)/gi, (match, alt, dataUrl) => {
+        const imgId = `img_${imgCounter++}`;
+        const cleanDataUrl = dataUrl.replace(/\s+/g, '');
+        const mimeMatch = cleanDataUrl.match(/^data:(image\/[a-zA-Z+]+);base64,/);
+        const mimeType = mimeMatch ? mimeMatch[1] : 'image/png';
+        const label = (alt && alt.trim()) || `Imagen ${imgCounter - 1}`;
+        images.push({
+          id: imgId,
+          page: 1,
+          width: 0,
+          height: 0,
+          mimeType,
+          dataUrl: cleanDataUrl,
+          label
+        });
+        return `[IMAGEN: ${label} | ID: __DOC_ID__:${imgId} | Para mostrar al usuario usa: ![${label}](rag-image://__DOC_ID__:${imgId})]`;
+      });
+      return { text: normalizeExtractedText(rawText), images };
+    }
+
+    const text = await extractTextFromPlainText(file);
+    return { text: normalizeExtractedText(text), images: [] };
+  }
+
   function detectSectionHeading(line) {
     const value = String(line || '').trim();
     if (!value || value.length > 140) return '';
@@ -146,18 +190,25 @@
       try {
         if (!fileType) throw new Error('Tipo de archivo no soportado. Usa PDF, Markdown o TXT.');
         emit(fileIndex, fileName, 'extracting', `Extrayendo texto de ${fileName}…`, 10);
-        const extracted = fileType === 'pdf' ? await extractTextFromPDF(file) : await extractTextFromPlainText(file);
+        const { text: extracted, images } = await extractDocumentContent(file, fileType);
         if (!extracted) throw new Error('El archivo no contiene texto extraíble.');
         emit(fileIndex, fileName, 'chunking', `Particionando ${fileName}…`, 45);
-        const chunks = partitionTextIntoChunks(extracted, options);
+
+        const documentId = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+          ? `doc_${crypto.randomUUID()}`
+          : `doc_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+        const preparedText = extracted.replace(/__DOC_ID__/g, documentId);
+
+        const chunks = partitionTextIntoChunks(preparedText, options);
         if (!chunks.length) throw new Error('No se pudieron generar fragmentos del documento.');
         emit(fileIndex, fileName, 'saving', `Guardando ${fileName} en IndexedDB…`, 75);
         const document = await storage.saveDocument({
+          id: documentId,
           branchId, title: fileName, fileType, mimeType: file?.type || '',
-          fileSize: Number(file?.size) || extracted.length, chunks
-        }, file);
+          fileSize: Number(file?.size) || preparedText.length, chunks
+        }, file, images);
         if (index?.invalidateBranch) index.invalidateBranch(branchId);
-        emit(fileIndex, fileName, 'completed', `${fileName} indexado (${chunks.length} fragmentos).`, 100);
+        emit(fileIndex, fileName, 'completed', `${fileName} indexado (${chunks.length} fragmentos, ${(images && images.length) || 0} imágenes).`, 100);
         result.processed++;
         result.documents.push(document);
       } catch (error) {

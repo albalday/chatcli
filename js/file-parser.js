@@ -494,8 +494,84 @@
     return null;
   }
 
-  /** Extrae texto de un PDF sin enviar su contenido a servicios externos. */
-  async function extractTextFromPdf(arrayBuffer) {
+  function bytesToBase64(uint8Array) {
+    if (!uint8Array || uint8Array.length === 0) return '';
+    if (typeof Buffer !== 'undefined') return Buffer.from(uint8Array).toString('base64');
+    let binary = '';
+    const len = uint8Array.byteLength;
+    const chunkSize = 0x8000;
+    for (let i = 0; i < len; i += chunkSize) {
+      binary += String.fromCharCode.apply(null, uint8Array.subarray(i, Math.min(i + chunkSize, len)));
+    }
+    return btoa(binary);
+  }
+
+  function extractImagesFromPdfObjects(allObjects, objOffsets, bytes) {
+    const imagesByObjNum = new Map();
+    let imgCounter = 1;
+
+    for (const [num, body] of allObjects.entries()) {
+      if (!/\/Subtype\s*\/Image\b/i.test(body)) continue;
+
+      const widthMatch = body.match(/\/Width\s+(\d+)/);
+      const heightMatch = body.match(/\/Height\s+(\d+)/);
+      const width = widthMatch ? parseInt(widthMatch[1], 10) : 0;
+      const height = heightMatch ? parseInt(heightMatch[1], 10) : 0;
+
+      // Filtrar elementos gráficos irrelevantes o viñetas diminutas
+      if (width < 30 || height < 30 || (width * height < 2500)) continue;
+
+      const sIdx = body.indexOf('stream');
+      const eIdx = body.indexOf('endstream', sIdx);
+      if (sIdx === -1 || eIdx === -1) continue;
+
+      let dStart = sIdx + 6;
+      if (body.charCodeAt(dStart) === 13) dStart++;
+      if (body.charCodeAt(dStart) === 10) dStart++;
+      let dEnd = eIdx;
+      while (dEnd > dStart && (body.charCodeAt(dEnd - 1) === 10 || body.charCodeAt(dEnd - 1) === 13 || body.charCodeAt(dEnd - 1) === 32)) {
+        dEnd--;
+      }
+
+      const offset = objOffsets.get(String(num)) || 0;
+      const rawBytes = bytes.subarray(offset + dStart, offset + dEnd);
+      if (!rawBytes || rawBytes.length < 50) continue;
+
+      const isDct = /\/Filter\s*(?:\/DCTDecode|\[\s*\/DCTDecode\s*\])/i.test(body);
+      const isJpx = /\/Filter\s*(?:\/JPXDecode|\[\s*\/JPXDecode\s*\])/i.test(body);
+
+      let mimeType = '';
+      let dataUrl = '';
+
+      if (isDct || (rawBytes[0] === 0xFF && rawBytes[1] === 0xD8)) {
+        mimeType = 'image/jpeg';
+        dataUrl = `data:image/jpeg;base64,${bytesToBase64(rawBytes)}`;
+      } else if (isJpx) {
+        mimeType = 'image/jp2';
+        dataUrl = `data:image/jp2;base64,${bytesToBase64(rawBytes)}`;
+      } else if (rawBytes[0] === 0x89 && rawBytes[1] === 0x50 && rawBytes[2] === 0x4E && rawBytes[3] === 0x47) {
+        mimeType = 'image/png';
+        dataUrl = `data:image/png;base64,${bytesToBase64(rawBytes)}`;
+      }
+
+      if (dataUrl) {
+        imagesByObjNum.set(String(num), {
+          id: `img_${imgCounter++}`,
+          objNum: String(num),
+          width,
+          height,
+          sizeBytes: rawBytes.length,
+          mimeType: mimeType || 'image/jpeg',
+          dataUrl
+        });
+      }
+    }
+
+    return imagesByObjNum;
+  }
+
+  /** Extrae texto y objetos de imagen de un PDF de forma interna. */
+  async function extractPdfInternal(arrayBuffer) {
     const bytes = new Uint8Array(arrayBuffer);
     const decoder = new TextDecoder('latin1');
     const fullText = decoder.decode(bytes);
@@ -555,6 +631,11 @@
 
     // 3. Extracción exhaustiva de CMaps / ToUnicode (incluyendo objetos dentro de ObjStm)
     const cmap = await parseCMaps(allObjects, fullText, bytes, objOffsets);
+
+    // 3b. Extracción de imágenes XObject (/Subtype /Image)
+    const imagesByObjNum = extractImagesFromPdfObjects(allObjects, objOffsets, bytes);
+    const assignedImages = new Set();
+    const allExtractedImages = [];
 
     // 4. Resolución del catálogo y árbol jerárquico de páginas (Page Tree)
     let catalogObjNum = null;
@@ -646,11 +727,45 @@
           }
         }
 
+        // Asociar imágenes de esta página
+        const pageImages = [];
+        for (const [imgObjNum, imgData] of imagesByObjNum.entries()) {
+          const isReferencedInPage = body.includes(`${imgObjNum} 0 R`) ||
+            contentObjs.some(cNum => {
+              const cBody = allObjects.get(String(cNum));
+              return cBody && cBody.includes(`${imgObjNum} 0 R`);
+            });
+          if (isReferencedInPage && !assignedImages.has(imgObjNum)) {
+            assignedImages.add(imgObjNum);
+            imgData.page = pageNum;
+            imgData.label = `Diagrama/Imagen en Página ${pageNum} (${imgData.width}x${imgData.height})`;
+            pageImages.push(imgData);
+            allExtractedImages.push(imgData);
+          }
+        }
+
+        for (const img of pageImages) {
+          pageItems.push(`\n[IMAGEN: ${img.label} | ID: __DOC_ID__:${img.id} | Para mostrar al usuario usa: ![${img.label}](rag-image://__DOC_ID__:${img.id})]\n`);
+        }
+
         const pageText = pageItems.join('\n\n').replace(/[ \t]+/g, ' ').trim();
         if (pageText.length > 0) {
           pages.push(`--- Página ${pageNum} ---\n${pageText}`);
         }
         pageNum++;
+      }
+    }
+
+    // Si quedaron imágenes no asociadas directamente al árbol de páginas, asignarlas
+    for (const [imgObjNum, imgData] of imagesByObjNum.entries()) {
+      if (!assignedImages.has(imgObjNum)) {
+        assignedImages.add(imgObjNum);
+        imgData.page = 1;
+        imgData.label = `Diagrama/Imagen (${imgData.width}x${imgData.height})`;
+        allExtractedImages.push(imgData);
+        if (pages.length > 0) {
+          pages[0] += `\n\n[IMAGEN: ${imgData.label} | ID: __DOC_ID__:${imgData.id} | Para mostrar al usuario usa: ![${imgData.label}](rag-image://__DOC_ID__:${imgData.id})]\n\n`;
+        }
       }
     }
 
@@ -743,7 +858,21 @@
       finalCleanText = `[Documento PDF adjunto: No se pudo extraer texto seleccionable. Es posible que el PDF contenga únicamente imágenes escaneadas o esté protegido por contraseña.]`;
     }
 
-    return finalCleanText;
+    return {
+      text: finalCleanText,
+      images: allExtractedImages
+    };
+  }
+
+  /** Extrae únicamente el texto plano de un PDF sin dependencias externas. */
+  async function extractTextFromPdf(arrayBuffer) {
+    const res = await extractPdfInternal(arrayBuffer);
+    return res.text;
+  }
+
+  /** Extrae texto estructurado e imágenes incrustadas de un PDF. */
+  async function parsePdfDocument(arrayBuffer) {
+    return await extractPdfInternal(arrayBuffer);
   }
 
   /**
@@ -811,6 +940,7 @@
   return {
     formatBytes,
     parseFile,
-    extractTextFromPdf
+    extractTextFromPdf,
+    parsePdfDocument
   };
 });

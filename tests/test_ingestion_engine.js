@@ -156,4 +156,79 @@ trailer
   assert.ok(text.includes('Tale'), `El texto extraído debería contener 'Tale', obtenido: '${text}'`);
 });
 
+test('IngestionEngine & FileParser - extrae imágenes XObject de PDF y genera referencias recuperables', async () => {
+  const FileParser = require('../js/file-parser.js');
+  const RagStorage = require('../js/ragStorage.js');
+  const Markdown = require('../js/markdown.js');
+
+  // JPEG mínimo válido (cabecera FFD8 y cierre FFD9)
+  const fakeJpegBytes = Buffer.from([0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0xFF, 0xDB, 0x00, 0x43, ...new Array(65).fill(0), 0xFF, 0xD9]);
+  const jpegString = fakeJpegBytes.toString('latin1');
+
+  const pdfContent = `%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /Resources << /XObject << /Im1 4 0 R >> >> /Contents 5 0 R >>
+endobj
+4 0 obj
+<< /Type /XObject /Subtype /Image /Width 800 /Height 600 /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${fakeJpegBytes.length} >>
+stream
+${jpegString}
+endstream
+endobj
+5 0 obj
+<< /Length 50 >>
+stream
+BT
+/F1 12 Tf
+(Motherboard Layout) Tj
+ET
+/Im1 Do
+endstream
+endobj
+trailer
+<< /Size 6 /Root 1 0 R >>
+%%EOF`;
+
+  const buffer = Buffer.from(pdfContent, 'latin1');
+  const docResult = await FileParser.parsePdfDocument(buffer);
+
+  assert.ok(Array.isArray(docResult.images), 'docResult.images debe ser un array');
+  assert.strictEqual(docResult.images.length, 1, 'Debe extraer exactamente 1 imagen');
+  assert.strictEqual(docResult.images[0].width, 800);
+  assert.strictEqual(docResult.images[0].height, 600);
+  assert.strictEqual(docResult.images[0].mimeType, 'image/jpeg');
+  assert.ok(docResult.images[0].dataUrl.startsWith('data:image/jpeg;base64,'));
+
+  // Verificar que el texto incluye el marcador de imagen
+  assert.ok(docResult.text.includes('[IMAGEN:'), 'El texto debe incluir la etiqueta de imagen');
+  assert.ok(docResult.text.includes('rag-image://'), 'El texto debe incluir la sintaxis rag-image://');
+
+  // Guardar y recuperar desde RagStorage
+  const branch = await RagStorage.createBranch('test-img-branch');
+  const savedDoc = await RagStorage.saveDocument({
+    branchId: branch.id,
+    title: 'test-img.pdf',
+    fileType: 'pdf',
+    chunks: [{ order: 0, title: 'Frag 1', content: docResult.text }]
+  }, null, docResult.images);
+
+  const imagesFromStorage = await RagStorage.getDocumentImages(savedDoc.id);
+  assert.strictEqual(imagesFromStorage.length, 1);
+  const singleImage = await RagStorage.getDocumentImage(savedDoc.id, 'img_1');
+  assert.ok(singleImage, 'Debe recuperar la imagen por ID');
+  assert.strictEqual(singleImage.width, 800);
+
+  // Verificar Markdown sanitizeImageUrl
+  const safeRagUrl = Markdown.sanitizeImageUrl(`rag-image://${savedDoc.id}:img_1`);
+  assert.strictEqual(safeRagUrl, `rag-image://${savedDoc.id}:img_1`);
+
+  await RagStorage.deleteBranch(branch.id);
+});
+
 
