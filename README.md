@@ -77,3 +77,12 @@ zerochat/
 ```
 
 Las reglas de contribución, pruebas y empaquetado están en [AGENT_GUIDELINES.md](AGENT_GUIDELINES.md). Las dependencias de terceros y sus licencias se detallan en [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+## Desarrollo colaborativo con IA (Zero-Code)
+
+Este proyecto ha sido desarrollado y evolucionado como un experimento real de **programación 100% asistida por IA sin intervención manual de código por parte del usuario**:
+
+- **Colaboración Codex & Antigravity**: La arquitectura modular dual, el motor RAG local, el pipeline de pruebas unitarias, la optimización de rendimiento y la resolución iterativa de incidencias complejas fueron guiados e implementados colaborativamente por los asistentes de IA Codex y Antigravity.
+- **Librería externa para RAG local**: Se integró [Orama](https://orama.com/orama-js) como única librería externa especializada, empaquetada como vendor local autónomo dentro del bundle, posibilitando un índice de búsqueda en memoria ultrarrápido y 100% privado en el cliente sobre IndexedDB.
+- **Flujo sin código manual**: Demuestra la viabilidad práctica de diseñar, depurar, perfilar y desplegar software web de alta complejidad técnica iterando mediante especificación conversacional de alto nivel.
+

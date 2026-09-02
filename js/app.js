@@ -1,5 +1,8 @@
 /**
  * Aplicación principal del cliente de chat Web (ZeroChat v5.4).
+ * Desarrollo 100% asistido por IA: colaboración entre Codex y Antigravity para implementar
+ * un motor RAG local funcional utilizando la librería externa Orama como vendor autónomo,
+ * iterando e implementando sin tocar una sola línea de código manual por parte del usuario.
  * Incluye:
  * - Soporte Multi-idioma (Castellano / Inglés) con autodetección por navegador y persistencia.
  * - Selector de nivel de razonamiento (Thinking/CoT) con detección automática de capacidades del modelo.
