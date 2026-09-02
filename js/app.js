@@ -1982,7 +1982,11 @@
 
     savedSessions = [];
     if (Storage.deleteAllConversations) {
-      await Storage.deleteAllConversations();
+      const deleted = await Storage.deleteAllConversations();
+      if (!deleted) {
+        alert('No se pudo borrar el historial persistente. Revisa la consola para más detalles.');
+        return;
+      }
       // Evita que la migración de arranque reimporte sesiones legacy tras F5.
       if (Storage.deleteStorageItem) Storage.deleteStorageItem('chat_sessions');
       else {

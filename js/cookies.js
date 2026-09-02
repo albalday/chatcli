@@ -859,7 +859,7 @@
 
     return new Promise((resolve) => {
       try {
-        const tx = db.transaction([STORE_CONVERSATIONS, STORE_MESSAGES, STORE_ATTACHMENTS, STORE_KNOWLEDGE], 'readwrite');
+        const tx = db.transaction([STORE_CONVERSATIONS, STORE_MESSAGES, STORE_ATTACHMENTS], 'readwrite');
         const convStore = tx.objectStore(STORE_CONVERSATIONS);
         const msgStore = tx.objectStore(STORE_MESSAGES);
         const msgIndex = msgStore.index('by_conversationId');
@@ -905,11 +905,10 @@
 
     return new Promise((resolve) => {
       try {
-        const tx = db.transaction([STORE_CONVERSATIONS, STORE_MESSAGES, STORE_ATTACHMENTS, STORE_KNOWLEDGE], 'readwrite');
+        const tx = db.transaction([STORE_CONVERSATIONS, STORE_MESSAGES, STORE_ATTACHMENTS], 'readwrite');
         tx.objectStore(STORE_CONVERSATIONS).clear();
         tx.objectStore(STORE_MESSAGES).clear();
         tx.objectStore(STORE_ATTACHMENTS).clear();
-        tx.objectStore(STORE_KNOWLEDGE).clear();
 
         tx.oncomplete = function () {
           resolve(true);
