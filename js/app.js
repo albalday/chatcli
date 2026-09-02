@@ -33,6 +33,7 @@
   const ContextManager = window.ChatContextManager || {};
   const AgentCore = window.ChatAgentCore || {};
   const Engine = window.ChatEngine || {};
+  const UIReasoning = window.ChatUIReasoning || {};
 
   function t(key, params) {
     if (I18n.t) return I18n.t(key, params);
@@ -656,179 +657,49 @@
   // ==========================================================================
 
   function getReasoningLevelLabel(lvl) {
-    const lower = String(lvl).toLowerCase().trim();
-    switch (lower) {
-      case 'off':
-      case 'none':
-        return { icon: '⚪', label: t('reasoning_level_none'), desc: t('reasoning_desc_none') };
-      case 'on':
-        return { icon: '🧠', label: t('reasoning_level_on'), desc: t('reasoning_desc_on') };
-      case 'minimal':
-        return { icon: '🟢', label: t('reasoning_level_minimal'), desc: t('reasoning_desc_minimal') };
-      case 'low':
-        return { icon: '🟢', label: t('reasoning_level_low'), desc: t('reasoning_desc_low') };
-      case 'medium':
-        return { icon: '🟡', label: t('reasoning_level_medium'), desc: t('reasoning_desc_medium') };
-      case 'high':
-        return { icon: '🔴', label: t('reasoning_level_high'), desc: t('reasoning_desc_high') };
-      case 'xhigh':
-        return { icon: '🔥', label: t('reasoning_level_xhigh'), desc: t('reasoning_desc_xhigh') };
-      default:
-        return { icon: '⚙️', label: lvl.charAt(0).toUpperCase() + lvl.slice(1), desc: '' };
-    }
+    if (UIReasoning.getReasoningLevelLabel) return UIReasoning.getReasoningLevelLabel(lvl);
+    return { icon: '⚙️', label: lvl, desc: '' };
   }
 
   function renderReasoningMenuOptions(reasoningInfo, activeLevel) {
-    if (!elements.reasoningOptionsContainer) return;
-
-    elements.reasoningOptionsContainer.innerHTML = '';
-    const levels = (reasoningInfo && Array.isArray(reasoningInfo.levels)) ? reasoningInfo.levels : ['off', 'low', 'medium', 'high'];
-
-    levels.forEach(lvl => {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'reasoning-option';
-      btn.setAttribute('data-level', lvl);
-
-      const info = getReasoningLevelLabel(lvl);
-      const lower = String(lvl).toLowerCase().trim();
-      const activeLower = String(activeLevel || 'off').toLowerCase().trim();
-
-      if (lower === activeLower || (activeLower === 'off' && lower === 'none') || (activeLower === 'none' && lower === 'off')) {
-        btn.classList.add('active');
-      }
-
-      btn.innerHTML = `
-        <span class="option-icon">${info.icon}</span>
-        <div class="option-text">
-          <strong>${info.label}</strong>
-          ${info.desc ? `<small>${info.desc}</small>` : ''}
-        </div>
-      `;
-
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        selectReasoningLevel(lvl);
-      });
-
-      elements.reasoningOptionsContainer.appendChild(btn);
-    });
+    if (UIReasoning.renderReasoningMenuOptions) {
+      UIReasoning.renderReasoningMenuOptions(elements, reasoningInfo, activeLevel, selectReasoningLevel);
+    }
   }
 
   function positionReasoningMenu() {
-    if (!elements.reasoningMenu || !elements.btnReasoning) return;
-    if (elements.reasoningMenu.style.display === 'none') return;
-
-    const btnRect = elements.btnReasoning.getBoundingClientRect();
-    const viewportHeight = window.visualViewport ? window.visualViewport.height : window.innerHeight;
-    const viewportWidth = window.innerWidth;
-
-    const spaceAbove = btnRect.top;
-    const menuWidth = Math.min(290, viewportWidth - 16);
-
-    let leftPos = btnRect.left;
-    if (leftPos + menuWidth > viewportWidth - 8) {
-      leftPos = viewportWidth - menuWidth - 8;
+    if (UIReasoning.positionReasoningMenu) {
+      UIReasoning.positionReasoningMenu(elements);
     }
-    if (leftPos < 8) {
-      leftPos = 8;
-    }
-
-    elements.reasoningMenu.style.position = 'fixed';
-    elements.reasoningMenu.style.left = `${Math.round(leftPos)}px`;
-    elements.reasoningMenu.style.width = `${Math.round(menuWidth)}px`;
-
-    // Posicionamiento estricto por encima del botón
-    const bottomPos = Math.max(8, viewportHeight - btnRect.top + 8);
-    const maxHeight = Math.max(140, Math.min(380, spaceAbove - 16));
-
-    elements.reasoningMenu.style.bottom = `${Math.round(bottomPos)}px`;
-    elements.reasoningMenu.style.top = 'auto';
-    elements.reasoningMenu.style.maxHeight = `${Math.round(maxHeight)}px`;
   }
 
   function toggleReasoningMenu() {
-    if (!elements.reasoningMenu) return;
-    const isVisible = elements.reasoningMenu.style.display === 'flex' || elements.reasoningMenu.style.display === 'block';
-    if (isVisible) {
-      closeReasoningMenu();
-    } else {
-      openReasoningMenu();
+    if (UIReasoning.toggleReasoningMenu) {
+      UIReasoning.toggleReasoningMenu(elements, appConfig, selectReasoningLevel);
     }
   }
 
   function openReasoningMenu() {
-    if (!elements.reasoningMenu) return;
-    elements.reasoningMenu.style.display = 'flex';
-
-    const apiType = appConfig.apiType || (elements.settingApiType ? elements.settingApiType.value : 'openai');
-    const reasoningConfig = API.getStandardReasoningOptions
-      ? API.getStandardReasoningOptions(apiType, appConfig.apiUrl)
-      : { levels: ['off', 'low', 'medium', 'high'], label: 'OpenAI / LM Studio' };
-
-    if (elements.reasoningModelBadge) {
-      elements.reasoningModelBadge.textContent = reasoningConfig.label || apiType.toUpperCase();
-      elements.reasoningModelBadge.title = `Protocol: ${reasoningConfig.label || apiType}`;
+    if (UIReasoning.openReasoningMenu) {
+      UIReasoning.openReasoningMenu(elements, appConfig, selectReasoningLevel);
     }
-
-    renderReasoningMenuOptions(reasoningConfig, appConfig.reasoningEffort || 'off');
-    positionReasoningMenu();
   }
 
   function selectReasoningLevel(level) {
-    let norm = String(level).trim();
-    if (norm.toLowerCase() === 'off') norm = 'none';
-    appConfig.reasoningEffort = norm;
-    if (Storage.saveConfig) {
-      Storage.saveConfig({ reasoningEffort: norm });
+    if (UIReasoning.selectReasoningLevel) {
+      UIReasoning.selectReasoningLevel(elements, appConfig, level);
     }
-    updateReasoningUI(norm);
-    closeReasoningMenu();
   }
 
   function updateReasoningUI(level) {
-    const val = level || appConfig.reasoningEffort || 'none';
-    const lower = String(val).toLowerCase().trim();
-
-    if (elements.reasoningLabel) {
-      if (lower === 'off' || lower === 'none') {
-        elements.reasoningLabel.textContent = 'None';
-        elements.btnReasoning.classList.remove('active', 'active-on', 'active-low', 'active-medium', 'active-high', 'active-xhigh', 'level-low', 'level-medium', 'level-high', 'level-xhigh');
-      } else {
-        let displayTxt = lower.charAt(0).toUpperCase() + lower.slice(1);
-        if (lower === 'low') displayTxt = 'Low';
-        else if (lower === 'medium') displayTxt = 'Med';
-        else if (lower === 'high') displayTxt = 'High';
-        else if (lower === 'xhigh') displayTxt = 'XHigh';
-        else if (lower === 'on') displayTxt = 'On';
-
-        elements.reasoningLabel.textContent = displayTxt;
-        elements.btnReasoning.classList.add('active');
-        elements.btnReasoning.classList.remove('active-on', 'active-low', 'active-medium', 'active-high', 'active-xhigh', 'level-low', 'level-medium', 'level-high', 'level-xhigh');
-        if (['low', 'medium', 'high', 'xhigh', 'on'].includes(lower)) {
-          elements.btnReasoning.classList.add(`active-${lower}`);
-        }
-      }
-    }
-
-    if (elements.reasoningOptionsContainer) {
-      const options = elements.reasoningOptionsContainer.querySelectorAll('.reasoning-option');
-      options.forEach(opt => {
-        const optLower = String(opt.getAttribute('data-level') || '').toLowerCase().trim();
-        if (optLower === lower || (lower === 'off' && optLower === 'none') || (lower === 'none' && optLower === 'off')) {
-          opt.classList.add('active');
-        } else {
-          opt.classList.remove('active');
-        }
-      });
+    if (UIReasoning.updateReasoningUI) {
+      UIReasoning.updateReasoningUI(elements, level);
     }
   }
 
   function closeReasoningMenu() {
-    if (elements.reasoningMenu) {
-      elements.reasoningMenu.style.display = 'none';
-      elements.reasoningMenu.style.left = '0px';
-      elements.reasoningMenu.style.right = 'auto';
+    if (UIReasoning.closeReasoningMenu) {
+      UIReasoning.closeReasoningMenu(elements);
     }
   }
 
