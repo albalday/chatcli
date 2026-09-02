@@ -1983,6 +1983,11 @@
     savedSessions = [];
     if (Storage.deleteAllConversations) {
       await Storage.deleteAllConversations();
+      // Evita que la migración de arranque reimporte sesiones legacy tras F5.
+      if (Storage.deleteStorageItem) Storage.deleteStorageItem('chat_sessions');
+      else {
+        try { localStorage.removeItem('chat_sessions'); } catch (e) {}
+      }
     } else {
       try {
         if (Storage.setStorageItem) Storage.setStorageItem('chat_sessions', JSON.stringify([]));
