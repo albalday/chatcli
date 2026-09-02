@@ -11,7 +11,13 @@
   const context = () => ({ document: typeof document === 'undefined' ? null : document, markdown: getMarkdown(), charts: typeof window !== 'undefined' ? window.ChatCharts : null, t });
   function fallback(name, args) {
     const card = document.createElement('div'); card.className = 'tool-card-wrapper';
-    card.innerHTML = `<div class="tool-execution-card"><div class="tool-card-header"><div class="tool-card-title"><span>⚙️</span><span>${getMarkdown().escapeHtml(name)}</span></div><span class="tool-card-badge status-loading">⏳ ${t('tool_badge_executing') || 'Ejecutando...'}</span></div><div class="tool-card-result"><pre class="tool-card-code"><code>${getMarkdown().escapeHtml(JSON.stringify(args, null, 2))}</code></pre></div></div>`;
+    const hasArgs = args && typeof args === 'object' && Object.keys(args).length > 0;
+    const tool = (typeof window !== 'undefined' && window.ChatAgentCore?.registry?.getTool) ? window.ChatAgentCore.registry.getTool(name) : null;
+    const icon = tool?.metadata?.icon || '⚙️';
+    const bodyHtml = hasArgs
+      ? `<div class="tool-card-result"><pre class="tool-card-code"><code>${getMarkdown().escapeHtml(JSON.stringify(args, null, 2))}</code></pre></div>`
+      : '';
+    card.innerHTML = `<div class="tool-execution-card"><div class="tool-card-header"><div class="tool-card-title"><span>${icon}</span><span>${getMarkdown().escapeHtml(name)}</span></div><span class="tool-card-badge status-loading">⏳ ${t('tool_badge_executing') || 'Ejecutando...'}</span></div>${bodyHtml}</div>`;
     return card;
   }
   function createLiveToolCard(name, args = {}) { if (typeof document === 'undefined') return null; const view = getView(name); return view?.createLiveCard ? view.createLiveCard(args, context()) : fallback(name, args); }

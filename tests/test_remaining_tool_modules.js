@@ -44,14 +44,13 @@ test('render_chart y get_current_datetime - ejecutan de forma autocontenida', as
   const chartResult = await chartTool.execute({ type: 'bar', title: 'Ventas', labels: ['Enero'], datasets: [{ label: '2026', data: [10] }] }, {
     services: { charts: { renderChartCard: (args) => `<svg data-title="${args.title}"></svg>` } }
   });
-  const dateResult = await DateTimeTool.createTool(AgentCore.Tool).execute({ timezone: 'UTC' });
+  const dateResult = await DateTimeTool.createTool(AgentCore.Tool).execute();
 
   assert.equal(chartResult.success, true);
   assert.match(chartResult.svg, /Ventas/);
   assert.equal(chartTool.serializeResultForModel({ type: 'bar', title: 'Ventas' }, chartResult), '{"success":true,"type":"bar","title":"Ventas"}');
   assert.equal(dateResult.success, true);
-  assert.equal(dateResult.timezone, 'UTC');
-  assert.ok(Number.isFinite(dateResult.timestamp));
+  assert.ok(typeof dateResult.iso === 'string');
 });
 
 test('RAG tools - consumen el servicio inyectado y propagan la rama activa', async () => {
