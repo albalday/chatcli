@@ -69,4 +69,25 @@ Diagrama / Esquema (Pág. 7) #img_7_12
   assert.ok(looseHtml.includes('<figcaption class="chat-image-caption">Diagrama / Esquema (Pág. 7) #img_7_12</figcaption>'));
 });
 
+test('Markdown - Renderizado de fórmulas matemáticas LaTeX ($...$ y $$...$$) y reglas horizontales', () => {
+  const md = `Para calcular la suma:
+$22!$ = $1.124$
+
+---
+Factorización:
+$$\\text{Suma} = 22! \\times 14.376$$
+
+Resultado:
+$$\\mathbf{16.158}$$
+Aproximadamente $1,61 \\times 10^{25}$`;
+
+  const html = Markdown.parseMarkdown(md);
+  assert.ok(!html.includes('$22!$'), 'No deben quedar delimitadores $ sin procesar');
+  assert.ok(html.includes('<span class="math-inline">22!</span>'), 'Debe generar span.math-inline');
+  assert.ok(html.includes('<hr>'), 'Debe convertir --- a <hr>');
+  assert.ok(html.includes('<div class="math-block">Suma = 22! × 14.376</div>'), 'Debe convertir \\text y \\times en el bloque matemático');
+  assert.ok(html.includes('<div class="math-block"><strong>16.158</strong></div>'), 'Debe convertir \\mathbf en <strong>');
+  assert.ok(html.includes('10<sup>25</sup>'), 'Debe procesar exponentes en superíndice');
+});
+
 

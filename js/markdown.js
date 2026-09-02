@@ -214,6 +214,29 @@
     return result.join('\n');
   }
 
+  function formatMathExpression(tex) {
+    if (!tex) return '';
+    let s = String(tex).trim();
+    s = s.replace(/\\mathbf\{([^}]+)\}/g, '<strong>$1</strong>');
+    s = s.replace(/\\(?:text|mathrm)\{([^}]+)\}/g, '$1');
+    s = s.replace(/\\times/g, '×');
+    s = s.replace(/\\cdot/g, '·');
+    s = s.replace(/\\div/g, '÷');
+    s = s.replace(/\\pm/g, '±');
+    s = s.replace(/\\approx/g, '≈');
+    s = s.replace(/\\(?:neq|ne)/g, '≠');
+    s = s.replace(/\\(?:leq|le)/g, '≤');
+    s = s.replace(/\\(?:geq|ge)/g, '≥');
+    s = s.replace(/\\infty/g, '∞');
+    s = s.replace(/\\sqrt\{([^}]+)\}/g, '√($1)');
+    s = s.replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '($1 / $2)');
+    s = s.replace(/\^\{([^}]+)\}/g, '<sup>$1</sup>');
+    s = s.replace(/\^([0-9a-zA-Z]+)/g, '<sup>$1</sup>');
+    s = s.replace(/_\{([^}]+)\}/g, '<sub>$1</sub>');
+    s = s.replace(/\\([a-zA-Z]+)/g, '$1');
+    return s;
+  }
+
   /**
    * Parsea segmentos de texto normales (fuera de bloques de código).
    */
@@ -221,6 +244,22 @@
     if (!text) return '';
 
     let p = escapeHtml(text);
+
+    // Reglas horizontales (---, ***, ___)
+    p = p.replace(/^[ \t]*(?:---|\*\*\*|___)[ \t]*$/gm, '<hr>');
+
+    // Bloques matemáticos ($$...$$)
+    p = p.replace(/\$\$([\s\S]+?)\$\$/g, function (_match, formula) {
+      return `\n<div class="math-block">${formatMathExpression(formula)}</div>\n`;
+    });
+
+    // Fórmulas matemáticas inline ($...$)
+    p = p.replace(/(?<!\\)\$(?!\s)([^$\n]+?)(?<!\s)\$/g, function (_match, formula) {
+      return `<span class="math-inline">${formatMathExpression(formula)}</span>`;
+    });
+
+    // Desescapar dólares literales (\$ -> $)
+    p = p.replace(/\\\$/g, '$');
 
     const thoughtTitle = tr('md_thought_title', '💭 Proceso de razonamiento');
     const thoughtReasoning = tr('md_thought_reasoning', '💭 Razonando...');
@@ -341,6 +380,8 @@
         trimmed.startsWith('<blockquote') ||
         trimmed.startsWith('<details') ||
         trimmed.startsWith('<figure') ||
+        trimmed.startsWith('<hr') ||
+        trimmed.startsWith('<div class="math-block"') ||
         trimmed.startsWith('<div class="table-container"')
       ) {
         return trimmed;
