@@ -18,10 +18,20 @@
   'use strict';
 
   // Resolutores perezosos de dependencias del entorno
-  function getSandbox() {
-    if (typeof window !== 'undefined' && window.ChatSandbox) return window.ChatSandbox;
+  function getExecuteJavascriptToolModule() {
+    if (typeof window !== 'undefined' && window.ChatBuiltinExecuteJavascriptTool) {
+      return window.ChatBuiltinExecuteJavascriptTool;
+    }
     if (typeof require !== 'undefined') {
-      try { return require('./sandbox.js'); } catch (e) {}
+      try { return require('./tools/builtin/execute-javascript.tool.js'); } catch (e) {}
+    }
+    return null;
+  }
+
+  function getBuiltinToolManifest() {
+    if (typeof window !== 'undefined' && window.ChatToolManifest) return window.ChatToolManifest.builtin;
+    if (typeof require !== 'undefined') {
+      try { return require('./tools/tool-manifest.js').builtin; } catch (e) {}
     }
     return null;
   }
@@ -293,55 +303,13 @@
     getTools() {
       const tools = [];
 
-      // 1. Herramienta execute_javascript
-      tools.push(new Tool({
-        id: 'execute_javascript',
-        name: 'execute_javascript',
-        description: 'Ejecuta código JavaScript localmente en un sandbox seguro en el navegador para cálculos matemáticos y procesamiento de datos.',
-        parameters: {
-          type: 'object',
-          properties: {
-            code: { type: 'string', description: 'Código JS ejecutable.' }
-          },
-          required: ['code']
-        },
-        aliases: ['executejs', 'execute_js', 'run_javascript', 'run_js', 'javascript', 'evaljs'],
-        category: 'sandbox',
-        metadata: { icon: '⚡', label: 'execute_javascript' },
-        ui: {
-          titleKey: 'agent_js_title',
-          titleFallback: '⚡ Ejecución de JavaScript Local (Sandbox)',
-          descKey: 'agent_js_desc',
-          descFallback: 'Permite al modelo invocar execute_javascript para calcular, procesar datos o validar algoritmos en un entorno seguro en el navegador.',
-          icon: '⚡',
-          defaultEnabled: true,
-          showInSettings: true
-        },
-        promptGuide: (lang) => lang === 'en'
-          ? '- `execute_javascript(code="...")`: Executes JavaScript code locally in the browser for math calculations, algorithms, and data processing.'
-          : '- `execute_javascript(code="...")`: Ejecuta código JavaScript localmente en el navegador para cálculos matemáticos, algoritmos y procesamiento de datos.',
-        handler: async (args, context) => {
-          const Sandbox = getSandbox();
-          const code = args.code || args.javascript || args.js || args.script || args.input || (typeof args === 'string' ? args : '');
-          if (!Sandbox || !Sandbox.execute) {
-            return { success: false, error: 'Módulo Sandbox no disponible.' };
-          }
-          const timeoutMs = typeof context?.timeoutMs === 'number' ? context.timeoutMs : (typeof context?.options?.timeoutMs === 'number' ? context.options.timeoutMs : undefined);
-          return Sandbox.execute(code, timeoutMs);
-        },
-        result: {
-          toModel: (_args, result, outcome) => result?.success
-            ? (result.result || (result.logs && result.logs.length > 0 ? result.logs.join('\n') : 'undefined'))
-            : `Error: ${result?.error || outcome?.error || 'Error de ejecución'}`,
-          toMarkdown: (args, result, outcome) => {
-            const code = args.code || args.javascript || args.js || args.script || args.input || '';
-            const output = result?.success
-              ? (result.result || (result.logs && result.logs.length > 0 ? result.logs.join('\n') : 'undefined'))
-              : `Error: ${result?.error || outcome?.error || 'Error de ejecución'}`;
-            return `> ⚡ **execute_javascript**\n> \`\`\`javascript\n> ${code.split('\n').join('\n> ')}\n> \`\`\`\n> \`\`\`\n> ${String(output).split('\n').join('\n> ')}\n> \`\`\``;
-          }
-        }
-      }));
+      // 1. Herramienta execute_javascript (módulo autocontenido)
+      const builtinManifest = getBuiltinToolManifest();
+      const executeJavascriptModule = builtinManifest?.get('execute_javascript') || getExecuteJavascriptToolModule();
+      if (!executeJavascriptModule || typeof executeJavascriptModule.createTool !== 'function') {
+        throw new Error('No se pudo cargar el módulo de la herramienta execute_javascript.');
+      }
+      tools.push(executeJavascriptModule.createTool(Tool));
 
       // 2. Herramienta search_web
       tools.push(new Tool({

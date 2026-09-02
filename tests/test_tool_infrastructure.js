@@ -26,6 +26,7 @@ test('Tool infrastructure - manifiesto registra módulos por id sin duplicados',
 
   assert.equal(manifest.register(toolModule), toolModule);
   assert.equal(manifest.has('example_tool'), true);
+  assert.equal(manifest.get('example_tool'), toolModule);
   assert.deepEqual(manifest.list(), [toolModule]);
   assert.throws(() => manifest.register(toolModule), /ya está registrado/);
   assert.throws(() => manifest.register({}), /id válido/);

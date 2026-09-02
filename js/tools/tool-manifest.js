@@ -35,6 +35,10 @@
       return this.modules.has(id);
     }
 
+    get(id) {
+      return this.modules.get(id) || null;
+    }
+
     list() {
       return Array.from(this.modules.values());
     }

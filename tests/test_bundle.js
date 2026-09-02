@@ -45,6 +45,7 @@ test('Bundler - Generación en modo Producción (Gzip Base64 Level 9)', () => {
       'ChatI18n', 'ChatSandbox', 'ChatCharts',
       'ChatWebBrowser', 'ChatWebSearch', 'ChatMarkdown',
       'ChatProviders', 'ChatAPI', 'ChatFileParser',
+      'ChatToolRuntime', 'ChatToolManifest', 'ChatBuiltinExecuteJavascriptTool',
       'ChatAgentCore', 'ChatMCP', 'ChatDebug',
       'ChatToolCards', 'ChatAttachments', 'ChatExport',
       'ChatState', 'ChatContextManager'
