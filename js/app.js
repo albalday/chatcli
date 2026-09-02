@@ -1927,8 +1927,8 @@
     }
   }
 
-  async function createNewSession() {
-    await saveCurrentSession();
+  async function createNewSession({ saveCurrent = true } = {}) {
+    if (saveCurrent) await saveCurrentSession();
 
     currentSessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
     chatHistory = createInitialChatHistory();
@@ -1967,7 +1967,7 @@
     }
 
     if (savedSessions.length === 0) {
-      await createNewSession();
+      await createNewSession({ saveCurrent: false });
     } else if (currentSessionId === sessionId) {
       const next = savedSessions[0];
       await switchToSession(next.id);
@@ -1990,7 +1990,7 @@
       } catch (e) {}
     }
 
-    await createNewSession();
+    await createNewSession({ saveCurrent: false });
   }
 
   async function renameSession(sessionId, event) {
