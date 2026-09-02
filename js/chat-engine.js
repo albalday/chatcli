@@ -81,56 +81,11 @@
    * @returns {string} - Guía formateada para el System Prompt.
    */
   function getToolsSystemPromptGuide(appConfig = {}, lang = 'es') {
-    const isEs = lang !== 'en';
-    const tools = [];
-
-    if (appConfig.enableAgentWeb !== false) {
-      if (isEs) {
-        tools.push(`- \`download_pdf(url="...")\`: Descarga y extrae el texto completo de un documento PDF desde una URL web para analizar su contenido (ej: "https://arxiv.org/pdf/2310.06825.pdf").`);
-        tools.push(`- \`fetch_web_page(url="...")\`: Descarga y lee el texto de una página web pública o artículo HTML a partir de su URL (ej: "https://es.wikipedia.org/wiki/Sol").`);
-      } else {
-        tools.push(`- \`download_pdf(url="...")\`: Downloads and extracts all text from a PDF document given its web URL (e.g. "https://arxiv.org/pdf/2310.06825.pdf").`);
-        tools.push(`- \`fetch_web_page(url="...")\`: Retrieves and reads the clean text of a public web page or HTML article from its URL (e.g. "https://en.wikipedia.org/wiki/Sun").`);
-      }
+    const AgentCore = getAgentCore();
+    if (AgentCore && AgentCore.registry && typeof AgentCore.registry.getActivePromptGuide === 'function') {
+      return AgentCore.registry.getActivePromptGuide(appConfig, lang);
     }
-
-    if (appConfig.enableAgentSearch !== false) {
-      if (isEs) {
-        tools.push(`- \`search_web(query="...")\`: Busca información actualizada, noticias, artículos y enlaces en internet mediante DuckDuckGo.`);
-      } else {
-        tools.push(`- \`search_web(query="...")\`: Searches up-to-date information, news, articles, and links on the internet using DuckDuckGo.`);
-      }
-    }
-
-    if (appConfig.enableAgentJs !== false) {
-      if (isEs) {
-        tools.push(`- \`execute_javascript(code="...")\`: Ejecuta código JavaScript localmente en un sandbox seguro en el navegador para cálculos matemáticos y procesamiento de datos.`);
-      } else {
-        tools.push(`- \`execute_javascript(code="...")\`: Executes JavaScript code safely in a local browser sandbox for math calculations and data processing.`);
-      }
-    }
-
-    if (appConfig.enableAgentChart !== false) {
-      if (isEs) {
-        tools.push(`- \`render_chart(type="bar"|"line"|"doughnut"|"pie", title="...", labels=["..."], datasets=[{"label":"...", "data":[...]}])\`: Genera y visualiza un gráfico interactivo (barras, líneas, donut o sectores) a partir de datos numéricos o tablas.`);
-      } else {
-        tools.push(`- \`render_chart(type="bar"|"line"|"doughnut"|"pie", title="...", labels=["..."], datasets=[{"label":"...", "data":[...]}])\`: Generates and renders an interactive chart (bar, line, doughnut or pie) from numerical data or tables.`);
-      }
-    }
-
-    if (isEs) {
-      tools.push(`- \`get_current_datetime(timezone="...")\`: Obtiene la fecha, hora exacta, día de la semana y zona horaria actual en tiempo real.`);
-    } else {
-      tools.push(`- \`get_current_datetime(timezone="...")\`: Retrieves current date, exact time, day of week and timezone in real-time.`);
-    }
-
-    if (tools.length === 0) return '';
-
-    if (isEs) {
-      return `[HERRAMIENTAS Y FUNCIONES DISPONIBLES]:\nTienes disponibles las siguientes herramientas. Si necesitas consultar URLs, buscar en la web, leer documentos PDF o calcular, invoca la herramienta adecuada con sus parámetros obligatorios:\n${tools.join('\n')}\n*Instrucción de flujo:* Cuando obtengas el resultado de una herramienta, utilízalo para responder al usuario con una síntesis o resumen completo y estructurado, citando las fuentes consultadas. No invoques herramientas adicionales si la información obtenida ya es suficiente para responder.`;
-    } else {
-      return `[AVAILABLE TOOLS AND FUNCTIONS]:\nYou have the following tools available. If you need to fetch URLs, search the web, read PDF documents, or calculate, call the appropriate tool with its required parameters:\n${tools.join('\n')}\n*Workflow instruction:* Once you receive a tool's output, use it to answer the user with a comprehensive and well-structured summary, citing sources. Do not invoke further tools if the gathered information is already sufficient to answer.`;
-    }
+    return '';
   }
 
   /**
@@ -428,6 +383,11 @@
         activeRagBranchId
       });
 
+      const AgentCore = getAgentCore();
+      const activeToolDefs = (AgentCore && AgentCore.registry && typeof AgentCore.registry.getActiveDefinitions === 'function')
+        ? AgentCore.registry.getActiveDefinitions({ ...appConfig, activeRagBranchId })
+        : [];
+
       const streamResult = await API.streamChatCompletion({
         apiUrl: apiUrl || appConfig.apiUrl,
         apiType: apiType || appConfig.apiType,
@@ -436,12 +396,8 @@
         messages: effectiveMessages,
         temperature: temperature !== undefined ? temperature : appConfig.temperature,
         reasoningEffort: reasoningEffort || appConfig.reasoningEffort || 'none',
-        enableTools: (appConfig.enableAgentJs !== false || appConfig.enableAgentWeb !== false || appConfig.enableAgentSearch !== false || appConfig.enableAgentChart !== false || Boolean(activeRagBranchId)),
-        enableAgentJs: appConfig.enableAgentJs !== false,
-        enableAgentWeb: appConfig.enableAgentWeb !== false,
-        enableAgentSearch: appConfig.enableAgentSearch !== false,
-        enableAgentChart: appConfig.enableAgentChart !== false,
-        enableAgentRag: Boolean(activeRagBranchId),
+        tools: activeToolDefs,
+        enableTools: activeToolDefs.length > 0,
         activeRagBranchId: activeRagBranchId || '',
         enableContextCache: appConfig.enableContextCache !== false,
         cacheInvalidated: currentCacheInvalidated,
@@ -772,13 +728,9 @@
         messages: synthMessages,
         temperature: temperature !== undefined ? temperature : appConfig.temperature,
         reasoningEffort: reasoningEffort || appConfig.reasoningEffort || 'none',
+        tools: activeToolDefs,
         enableTools: true,
         toolChoice: 'none',
-        enableAgentJs: appConfig.enableAgentJs !== false,
-        enableAgentWeb: appConfig.enableAgentWeb !== false,
-        enableAgentSearch: appConfig.enableAgentSearch !== false,
-        enableAgentChart: appConfig.enableAgentChart !== false,
-        enableAgentRag: Boolean(activeRagBranchId),
         activeRagBranchId: activeRagBranchId || '',
         enableContextCache: appConfig.enableContextCache !== false,
         signal: signal,

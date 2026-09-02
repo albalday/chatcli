@@ -32,10 +32,13 @@
     reasoningEffort: 'none', // 'none' | 'low' | 'medium' | 'high'
     theme: 'light', // 'light' | 'dark'
     language: 'es', // 'es' | 'en'
-    enableAgentJs: true,
-    enableAgentWeb: true,
-    enableAgentSearch: true,
-    enableAgentChart: true,
+    enabledTools: {
+      execute_javascript: true,
+      search_web: true,
+      fetch_web_page: true,
+      download_pdf: true,
+      render_chart: true
+    },
     enableContextCache: true,
     enableRawLogs: false,
     enableDebugMessages: false,
@@ -171,10 +174,13 @@
       temperature: '0.7',
       reasoningEffort: 'none',
       modelReasoningConfig: null,
-      enableAgentJs: true,
-      enableAgentWeb: true,
-      enableAgentSearch: true,
-      enableAgentChart: true,
+      enabledTools: {
+        execute_javascript: true,
+        search_web: true,
+        fetch_web_page: true,
+        download_pdf: true,
+        render_chart: true
+      },
       enableContextCache: true,
       enableRawLogs: false,
       enableDebugMessages: false,
@@ -190,10 +196,13 @@
       temperature: '0.7',
       reasoningEffort: 'none',
       modelReasoningConfig: null,
-      enableAgentJs: true,
-      enableAgentWeb: true,
-      enableAgentSearch: true,
-      enableAgentChart: true,
+      enabledTools: {
+        execute_javascript: true,
+        search_web: true,
+        fetch_web_page: true,
+        download_pdf: true,
+        render_chart: true
+      },
       enableContextCache: true,
       enableRawLogs: false,
       enableDebugMessages: false,
@@ -209,10 +218,13 @@
       temperature: '0.7',
       reasoningEffort: 'none',
       modelReasoningConfig: null,
-      enableAgentJs: true,
-      enableAgentWeb: true,
-      enableAgentSearch: true,
-      enableAgentChart: true,
+      enabledTools: {
+        execute_javascript: true,
+        search_web: true,
+        fetch_web_page: true,
+        download_pdf: true,
+        render_chart: true
+      },
       enableContextCache: true,
       enableRawLogs: false,
       enableDebugMessages: false,
@@ -228,10 +240,13 @@
       temperature: '0.7',
       reasoningEffort: 'none',
       modelReasoningConfig: null,
-      enableAgentJs: true,
-      enableAgentWeb: true,
-      enableAgentSearch: true,
-      enableAgentChart: true,
+      enabledTools: {
+        execute_javascript: true,
+        search_web: true,
+        fetch_web_page: true,
+        download_pdf: true,
+        render_chart: true
+      },
       enableContextCache: true,
       enableRawLogs: false,
       enableDebugMessages: false,
@@ -313,10 +328,9 @@
       temperature: profileData.temperature !== undefined ? String(profileData.temperature) : '0.7',
       reasoningEffort: profileData.reasoningEffort || 'none',
       modelReasoningConfig: profileData.modelReasoningConfig || null,
-      enableAgentJs: profileData.enableAgentJs !== false,
-      enableAgentWeb: profileData.enableAgentWeb !== false,
-      enableAgentSearch: profileData.enableAgentSearch !== false,
-      enableAgentChart: profileData.enableAgentChart !== false,
+      enabledTools: (profileData.enabledTools && typeof profileData.enabledTools === 'object')
+        ? { ...profileData.enabledTools }
+        : { ...DEFAULT_CONFIG.enabledTools },
       enableContextCache: profileData.enableContextCache !== false,
       enableRawLogs: profileData.enableRawLogs === true,
       enableDebugMessages: profileData.enableDebugMessages === true,
@@ -375,10 +389,7 @@
     const reasoningEffort = getStorageItem('reasoningEffort');
     const theme = getStorageItem('theme');
     const language = getStorageItem('language');
-    const enableAgentJs = getStorageItem('enableAgentJs');
-    const enableAgentWeb = getStorageItem('enableAgentWeb');
-    const enableAgentSearch = getStorageItem('enableAgentSearch');
-    const enableAgentChart = getStorageItem('enableAgentChart');
+    const enabledToolsRaw = getStorageItem('enabledTools');
     const enableContextCache = getStorageItem('enableContextCache');
     const enableRawLogs = getStorageItem('enableRawLogs');
     const enableDebugMessages = getStorageItem('enableDebugMessages');
@@ -423,6 +434,16 @@
       effectiveSystemPrompt = '';
     }
 
+    let effectiveEnabledTools = activeProfile.enabledTools ? { ...activeProfile.enabledTools } : { ...DEFAULT_CONFIG.enabledTools };
+    if (enabledToolsRaw) {
+      try {
+        const parsed = JSON.parse(enabledToolsRaw);
+        if (parsed && typeof parsed === 'object') {
+          effectiveEnabledTools = { ...effectiveEnabledTools, ...parsed };
+        }
+      } catch (e) {}
+    }
+
     return {
       activeProfileName: activeProfileName,
       apiUrl: effectiveApiUrl,
@@ -435,10 +456,7 @@
       modelReasoningConfig: parsedReasoningConfig,
       theme: effectiveTheme,
       language: effectiveLanguage,
-      enableAgentJs: parseBool(enableAgentJs, activeProfile.enableAgentJs !== undefined ? activeProfile.enableAgentJs : DEFAULT_CONFIG.enableAgentJs),
-      enableAgentWeb: parseBool(enableAgentWeb, activeProfile.enableAgentWeb !== undefined ? activeProfile.enableAgentWeb : DEFAULT_CONFIG.enableAgentWeb),
-      enableAgentSearch: parseBool(enableAgentSearch, activeProfile.enableAgentSearch !== undefined ? activeProfile.enableAgentSearch : DEFAULT_CONFIG.enableAgentSearch),
-      enableAgentChart: parseBool(enableAgentChart, activeProfile.enableAgentChart !== undefined ? activeProfile.enableAgentChart : DEFAULT_CONFIG.enableAgentChart),
+      enabledTools: effectiveEnabledTools,
       enableContextCache: parseBool(enableContextCache, activeProfile.enableContextCache !== undefined ? activeProfile.enableContextCache : DEFAULT_CONFIG.enableContextCache),
       enableRawLogs: parseBool(enableRawLogs, activeProfile.enableRawLogs !== undefined ? activeProfile.enableRawLogs : DEFAULT_CONFIG.enableRawLogs),
       enableDebugMessages: parseBool(enableDebugMessages, activeProfile.enableDebugMessages !== undefined ? activeProfile.enableDebugMessages : DEFAULT_CONFIG.enableDebugMessages),
@@ -472,10 +490,9 @@
     }
     if (config.theme !== undefined) setStorageItem('theme', config.theme);
     if (config.language !== undefined) setStorageItem('language', config.language);
-    if (config.enableAgentJs !== undefined) setStorageItem('enableAgentJs', String(config.enableAgentJs));
-    if (config.enableAgentWeb !== undefined) setStorageItem('enableAgentWeb', String(config.enableAgentWeb));
-    if (config.enableAgentSearch !== undefined) setStorageItem('enableAgentSearch', String(config.enableAgentSearch));
-    if (config.enableAgentChart !== undefined) setStorageItem('enableAgentChart', String(config.enableAgentChart));
+    if (config.enabledTools !== undefined) {
+      setStorageItem('enabledTools', JSON.stringify(config.enabledTools));
+    }
     if (config.enableContextCache !== undefined) setStorageItem('enableContextCache', String(config.enableContextCache));
     if (config.enableRawLogs !== undefined) setStorageItem('enableRawLogs', String(config.enableRawLogs));
     if (config.enableDebugMessages !== undefined) setStorageItem('enableDebugMessages', String(config.enableDebugMessages));

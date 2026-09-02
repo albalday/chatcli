@@ -480,65 +480,8 @@
             </label>
           </div>
 
-          <div class="setting-toggle-card">
-            <div class="toggle-card-info">
-              <div class="toggle-card-title">
-                <span data-i18n="agent_search_title">🔍 Búsqueda en DuckDuckGo en Tiempo Real</span>
-              </div>
-              <p class="toggle-card-desc" data-i18n="agent_search_desc">
-                Permite al modelo invocar <code>search_web</code> para buscar información actualizada, definiciones, noticias y enlaces web mediante la API de DuckDuckGo.
-              </p>
-            </div>
-            <label class="switch">
-              <input type="checkbox" id="setting-enable-agent-search" checked>
-              <span class="slider"></span>
-            </label>
-          </div>
-
-          <div class="setting-toggle-card">
-            <div class="toggle-card-info">
-              <div class="toggle-card-title">
-                <span data-i18n="agent_web_title">🌐 Navegación Web y Descarga de Documentos PDF</span>
-              </div>
-              <p class="toggle-card-desc" data-i18n="agent_web_desc">
-                Permite al modelo invocar <code>fetch_web_page</code> para consultar páginas web públicas y descargar documentos PDF en tiempo real extrayendo su texto al contexto.
-              </p>
-            </div>
-            <label class="switch">
-              <input type="checkbox" id="setting-enable-agent-web" checked>
-              <span class="slider"></span>
-            </label>
-          </div>
-
-          <div class="setting-toggle-card">
-            <div class="toggle-card-info">
-              <div class="toggle-card-title">
-                <span data-i18n="agent_js_title">⚡ Ejecución de JavaScript Local (Sandbox)</span>
-              </div>
-              <p class="toggle-card-desc" data-i18n="agent_js_desc">
-                Permite al modelo invocar <code>execute_javascript</code> para calcular, procesar datos o validar algoritmos en un entorno seguro en el navegador.
-              </p>
-            </div>
-            <label class="switch">
-              <input type="checkbox" id="setting-enable-agent-js" checked>
-              <span class="slider"></span>
-            </label>
-          </div>
-
-          <div class="setting-toggle-card">
-            <div class="toggle-card-info">
-              <div class="toggle-card-title">
-                <span data-i18n="agent_chart_title">📊 Visualización de Datos y Gráficos Nativos (SVG)</span>
-              </div>
-              <p class="toggle-card-desc" data-i18n="agent_chart_desc">
-                Permite al modelo invocar <code>render_chart</code> para generar y mostrar gráficos interactivos de barras, líneas o sectores sin librerías externas.
-              </p>
-            </div>
-            <label class="switch">
-              <input type="checkbox" id="setting-enable-agent-chart" checked>
-              <span class="slider"></span>
-            </label>
-          </div>
+          <!-- Contenedor dinámico de herramientas agénticas registradas -->
+          <div id="agent-tools-container" class="agent-tools-container"></div>
 
           <div class="setting-toggle-card">
             <div class="toggle-card-info">

@@ -454,40 +454,12 @@
 
     // Inyectar herramientas agénticas activadas si están disponibles
     let toolsList = [];
-    const AgentCore = typeof window !== 'undefined' ? window.ChatAgentCore : (typeof require !== 'undefined' ? (() => { try { return require('./agent-core.js'); } catch(e){ return null; } })() : null);
-    const resolvedBranchId = activeRagBranchId ||
-      (typeof window !== 'undefined' && window.ChatTreeRagUI && window.ChatTreeRagUI.getActiveChatBranchId ? window.ChatTreeRagUI.getActiveChatBranchId() : '') ||
-      (typeof window !== 'undefined' && window.appConfig ? window.appConfig.activeRagBranchId : '') || '';
-    const isRagActive = Boolean(enableAgentRag || resolvedBranchId);
-
-    if (enableTools || toolChoice === 'none' || isRagActive) {
-      if (AgentCore && AgentCore.registry) {
-        toolsList = AgentCore.registry.getDefinitions({
-          enableAgentJs,
-          enableAgentWeb,
-          enableAgentSearch,
-          enableAgentChart,
-          enableAgentRag: isRagActive,
-          activeRagBranchId: isRagActive ? resolvedBranchId : ''
-        });
-      } else {
-        const jsTool = Sandbox.JAVASCRIPT_TOOL_DEFINITION || (typeof window !== 'undefined' && window.ChatSandbox && window.ChatSandbox.JAVASCRIPT_TOOL_DEFINITION);
-        const webTool = WebBrowser.WEB_TOOL_DEFINITION || (typeof window !== 'undefined' && window.ChatWebBrowser && window.ChatWebBrowser.WEB_TOOL_DEFINITION);
-        const pdfTool = WebBrowser.PDF_TOOL_DEFINITION || (typeof window !== 'undefined' && window.ChatWebBrowser && window.ChatWebBrowser.PDF_TOOL_DEFINITION);
-        const searchTool = WebSearch.SEARCH_TOOL_DEFINITION || (typeof window !== 'undefined' && window.ChatWebSearch && window.ChatWebSearch.SEARCH_TOOL_DEFINITION);
-        const chartTool = (typeof window !== 'undefined' && window.ChatCharts && window.ChatCharts.CHART_TOOL_DEFINITION) || (typeof require !== 'undefined' ? (() => { try { return require('./charts.js').CHART_TOOL_DEFINITION; } catch(e){ return null; } })() : null);
-
-        if (enableAgentJs && jsTool) toolsList.push(jsTool);
-        if (enableAgentWeb && webTool) toolsList.push(webTool);
-        if (enableAgentWeb && pdfTool) toolsList.push(pdfTool);
-        if (enableAgentSearch && searchTool) toolsList.push(searchTool);
-        if (enableAgentChart && chartTool) toolsList.push(chartTool);
-        if (isRagActive) {
-          const ragService = typeof window !== 'undefined' ? window.ChatTreeRagService : (typeof require !== 'undefined' ? (() => { try { return require('./chatService.js'); } catch(e){ return null; } })() : null);
-          if (ragService && ragService.READ_CHAPTER_TOOL_DEFINITION) {
-            toolsList.push(ragService.READ_CHAPTER_TOOL_DEFINITION);
-          }
-        }
+    if (Array.isArray(params.tools) && params.tools.length > 0) {
+      toolsList = params.tools;
+    } else if (enableTools || toolChoice === 'none' || Boolean(activeRagBranchId) || params.enableAgentRag) {
+      const AgentCore = typeof window !== 'undefined' ? window.ChatAgentCore : (typeof require !== 'undefined' ? (() => { try { return require('./agent-core.js'); } catch(e){ return null; } })() : null);
+      if (AgentCore && AgentCore.registry && typeof AgentCore.registry.getActiveDefinitions === 'function') {
+        toolsList = AgentCore.registry.getActiveDefinitions(params);
       }
     }
 

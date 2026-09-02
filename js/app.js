@@ -50,10 +50,13 @@
     reasoningEffort: 'none',
     theme: 'light',
     language: 'es',
-    enableAgentJs: true,
-    enableAgentWeb: true,
-    enableAgentSearch: true,
-    enableAgentChart: true,
+    enabledTools: {
+      execute_javascript: true,
+      search_web: true,
+      fetch_web_page: true,
+      download_pdf: true,
+      render_chart: true
+    },
     enableContextCache: true,
     enableRawLogs: false,
     enableDebugMessages: false,
@@ -199,10 +202,7 @@
       modalPanes: document.querySelectorAll('.modal-tab-pane'),
       btnRunInspector: document.getElementById('btn-run-inspector'),
       inspectorResults: document.getElementById('inspector-results'),
-      settingEnableAgentJs: document.getElementById('setting-enable-agent-js'),
-      settingEnableAgentWeb: document.getElementById('setting-enable-agent-web'),
-      settingEnableAgentSearch: document.getElementById('setting-enable-agent-search'),
-      settingEnableAgentChart: document.getElementById('setting-enable-agent-chart'),
+      agentToolsContainer: document.getElementById('agent-tools-container'),
       settingEnableContextCache: document.getElementById('setting-enable-context-cache'),
       settingEnableRawLogs: document.getElementById('setting-enable-raw-logs'),
       settingSendDateTime: document.getElementById('setting-send-datetime'),
@@ -1450,6 +1450,56 @@
   }
 
   /**
+   * Renderiza dinámicamente las tarjetas de herramientas agénticas registradas en ToolRegistry.
+   */
+  function renderAgentToolsUI(container, currentEnabledTools = {}) {
+    if (!container) return;
+    const tools = (AgentCore.registry && typeof AgentCore.registry.listToolsForUI === 'function')
+      ? AgentCore.registry.listToolsForUI()
+      : [];
+
+    container.innerHTML = '';
+    tools.forEach(tool => {
+      const isChecked = currentEnabledTools[tool.id] !== undefined
+        ? currentEnabledTools[tool.id] !== false
+        : (currentEnabledTools[tool.name] !== undefined ? currentEnabledTools[tool.name] !== false : tool.defaultEnabled !== false);
+
+      const title = t(tool.titleKey) || tool.titleFallback || tool.name;
+      const desc = t(tool.descKey) || tool.descFallback || '';
+
+      const card = document.createElement('div');
+      card.className = 'setting-toggle-card';
+      card.innerHTML = `
+        <div class="toggle-card-info">
+          <div class="toggle-card-title">
+            <span data-i18n="${Markdown.escapeHtml ? Markdown.escapeHtml(tool.titleKey) : tool.titleKey}">${Markdown.escapeHtml ? Markdown.escapeHtml(title) : title}</span>
+          </div>
+          <p class="toggle-card-desc" data-i18n="${Markdown.escapeHtml ? Markdown.escapeHtml(tool.descKey) : tool.descKey}">${Markdown.escapeHtml ? Markdown.escapeHtml(desc) : desc}</p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" class="agent-tool-checkbox" data-tool-id="${Markdown.escapeHtml ? Markdown.escapeHtml(tool.id) : tool.id}" ${isChecked ? 'checked' : ''}>
+          <span class="slider"></span>
+        </label>
+      `;
+      container.appendChild(card);
+    });
+  }
+
+  /**
+   * Recoge el estado de activación de todas las herramientas desde la UI.
+   */
+  function gatherEnabledToolsFromUI() {
+    const map = {};
+    if (elements.agentToolsContainer) {
+      elements.agentToolsContainer.querySelectorAll('.agent-tool-checkbox').forEach(cb => {
+        const tid = cb.getAttribute('data-tool-id');
+        if (tid) map[tid] = cb.checked;
+      });
+    }
+    return map;
+  }
+
+  /**
    * Rellena todos los campos de todas las pestañas de configuración con los valores de un perfil.
    */
   function applyProfileToForm(profileData) {
@@ -1479,17 +1529,8 @@
         elements.temperatureVal.textContent = profileData.temperature;
       }
     }
-    if (elements.settingEnableAgentJs && profileData.enableAgentJs !== undefined) {
-      elements.settingEnableAgentJs.checked = profileData.enableAgentJs !== false;
-    }
-    if (elements.settingEnableAgentWeb && profileData.enableAgentWeb !== undefined) {
-      elements.settingEnableAgentWeb.checked = profileData.enableAgentWeb !== false;
-    }
-    if (elements.settingEnableAgentSearch && profileData.enableAgentSearch !== undefined) {
-      elements.settingEnableAgentSearch.checked = profileData.enableAgentSearch !== false;
-    }
-    if (elements.settingEnableAgentChart && profileData.enableAgentChart !== undefined) {
-      elements.settingEnableAgentChart.checked = profileData.enableAgentChart !== false;
+    if (elements.agentToolsContainer) {
+      renderAgentToolsUI(elements.agentToolsContainer, profileData.enabledTools || {});
     }
     if (elements.settingEnableContextCache && profileData.enableContextCache !== undefined) {
       elements.settingEnableContextCache.checked = profileData.enableContextCache !== false;
@@ -1521,10 +1562,7 @@
       modelReasoningConfig: appConfig.modelReasoningConfig || null,
       theme: appConfig.theme || 'light',
       language: appConfig.language || 'es',
-      enableAgentJs: elements.settingEnableAgentJs ? elements.settingEnableAgentJs.checked : true,
-      enableAgentWeb: elements.settingEnableAgentWeb ? elements.settingEnableAgentWeb.checked : true,
-      enableAgentSearch: elements.settingEnableAgentSearch ? elements.settingEnableAgentSearch.checked : true,
-      enableAgentChart: elements.settingEnableAgentChart ? elements.settingEnableAgentChart.checked : true,
+      enabledTools: gatherEnabledToolsFromUI(),
       enableContextCache: elements.settingEnableContextCache ? elements.settingEnableContextCache.checked : true,
       enableRawLogs: elements.settingEnableRawLogs ? elements.settingEnableRawLogs.checked : Boolean(appConfig.enableRawLogs),
       enableDebugMessages: Boolean(appConfig.enableDebugMessages),
@@ -1605,17 +1643,8 @@
 
     loadCachedModels();
 
-    if (elements.settingEnableAgentJs) {
-      elements.settingEnableAgentJs.checked = appConfig.enableAgentJs !== false;
-    }
-    if (elements.settingEnableAgentWeb) {
-      elements.settingEnableAgentWeb.checked = appConfig.enableAgentWeb !== false;
-    }
-    if (elements.settingEnableAgentSearch) {
-      elements.settingEnableAgentSearch.checked = appConfig.enableAgentSearch !== false;
-    }
-    if (elements.settingEnableAgentChart) {
-      elements.settingEnableAgentChart.checked = appConfig.enableAgentChart !== false;
+    if (elements.agentToolsContainer) {
+      renderAgentToolsUI(elements.agentToolsContainer, appConfig.enabledTools || {});
     }
     if (elements.settingEnableContextCache) {
       elements.settingEnableContextCache.checked = appConfig.enableContextCache !== false;
@@ -1679,17 +1708,8 @@
         elements.modelSelectHelper.value = defaults.model;
       }
 
-      if (elements.settingEnableAgentJs) {
-        elements.settingEnableAgentJs.checked = defaults.enableAgentJs !== false;
-      }
-      if (elements.settingEnableAgentWeb) {
-        elements.settingEnableAgentWeb.checked = defaults.enableAgentWeb !== false;
-      }
-      if (elements.settingEnableAgentSearch) {
-        elements.settingEnableAgentSearch.checked = defaults.enableAgentSearch !== false;
-      }
-      if (elements.settingEnableAgentChart) {
-        elements.settingEnableAgentChart.checked = defaults.enableAgentChart !== false;
+      if (elements.agentToolsContainer) {
+        renderAgentToolsUI(elements.agentToolsContainer, defaults.enabledTools || {});
       }
       if (elements.settingEnableContextCache) {
         elements.settingEnableContextCache.checked = defaults.enableContextCache !== false;

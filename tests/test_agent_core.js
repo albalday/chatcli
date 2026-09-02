@@ -155,3 +155,86 @@ test('AgentCore - Detección y detención de bucles infinitos en el agente', () 
   assert.notEqual(agent.getToolCallFingerprint(tc1), agent.getToolCallFingerprint(tcDiff));
 });
 
+test('AgentCore - Formal Tools Interface (listToolsForUI, getActiveDefinitions, getActivePromptGuide)', () => {
+  const registry = new AgentCoreModule.ToolRegistry();
+
+  // 1. listToolsForUI devuelve sólo las herramientas configurables en la UI
+  const uiTools = registry.listToolsForUI();
+  assert.ok(uiTools.length >= 5);
+  const ids = uiTools.map(t => t.id);
+  assert.ok(ids.includes('execute_javascript'));
+  assert.ok(ids.includes('search_web'));
+  assert.ok(ids.includes('fetch_web_page'));
+  assert.ok(ids.includes('download_pdf'));
+  assert.ok(ids.includes('render_chart'));
+  // get_current_datetime y herramientas RAG no deben aparecer en la UI de settings
+  assert.ok(!ids.includes('get_current_datetime'));
+  assert.ok(!ids.includes('list_documents'));
+
+  // 2. getActiveDefinitions filtra según appConfig.enabledTools
+  const allDefs = registry.getActiveDefinitions({
+    enabledTools: {
+      execute_javascript: true,
+      search_web: true,
+      fetch_web_page: true,
+      download_pdf: true,
+      render_chart: true
+    }
+  });
+  const allNames = allDefs.map(d => d.function.name);
+  assert.ok(allNames.includes('execute_javascript'));
+  assert.ok(allNames.includes('search_web'));
+  assert.ok(allNames.includes('fetch_web_page'));
+  assert.ok(allNames.includes('download_pdf'));
+  assert.ok(allNames.includes('render_chart'));
+  assert.ok(allNames.includes('get_current_datetime')); // Herramienta de sistema siempre disponible
+
+  // Desactivar search_web y download_pdf
+  const filteredDefs = registry.getActiveDefinitions({
+    enabledTools: {
+      execute_javascript: true,
+      search_web: false,
+      fetch_web_page: true,
+      download_pdf: false,
+      render_chart: true
+    }
+  });
+  const filteredNames = filteredDefs.map(d => d.function.name);
+  assert.ok(!filteredNames.includes('search_web'));
+  assert.ok(!filteredNames.includes('download_pdf'));
+  assert.ok(filteredNames.includes('execute_javascript'));
+  assert.ok(filteredNames.includes('fetch_web_page'));
+  assert.ok(filteredNames.includes('render_chart'));
+
+  // 3. getActivePromptGuide genera la guía textual dinámica en español e inglés
+  const guideEs = registry.getActivePromptGuide({
+    enabledTools: {
+      execute_javascript: true,
+      search_web: false,
+      fetch_web_page: true,
+      download_pdf: false,
+      render_chart: true
+    }
+  }, 'es');
+  assert.match(guideEs, /execute_javascript/);
+  assert.match(guideEs, /fetch_web_page/);
+  assert.doesNotMatch(guideEs, /search_web/);
+  assert.doesNotMatch(guideEs, /download_pdf/);
+  assert.match(guideEs, /HERRAMIENTAS Y FUNCIONES DISPONIBLES/);
+
+  const guideEn = registry.getActivePromptGuide({
+    enabledTools: {
+      execute_javascript: true,
+      search_web: true,
+      fetch_web_page: false,
+      download_pdf: false,
+      render_chart: false
+    }
+  }, 'en');
+  assert.match(guideEn, /AVAILABLE TOOLS AND FUNCTIONS/);
+  assert.match(guideEn, /execute_javascript/);
+  assert.match(guideEn, /search_web/);
+  assert.doesNotMatch(guideEn, /fetch_web_page/);
+});
+
+

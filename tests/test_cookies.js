@@ -59,10 +59,13 @@ test('Storage - Gestión completa de perfiles (crear, listar, conmutar, actualiz
     systemPrompt: 'Instrucciones para perfil local remoto',
     temperature: '0.4',
     reasoningEffort: 'low',
-    enableAgentJs: true,
-    enableAgentWeb: false,
-    enableAgentSearch: true,
-    enableAgentChart: true,
+    enabledTools: {
+      execute_javascript: true,
+      search_web: true,
+      fetch_web_page: false,
+      download_pdf: false,
+      render_chart: true
+    },
     enableContextCache: true,
     enableRawLogs: true,
     enableDebugMessages: false,
@@ -79,7 +82,7 @@ test('Storage - Gestión completa de perfiles (crear, listar, conmutar, actualiz
   const retrieved = Storage.getProfile('Servidor Oficina');
   assert.equal(retrieved.apiUrl, 'http://192.168.1.50:8000/v1');
   assert.equal(retrieved.model, 'qwen2.5-coder-32b');
-  assert.equal(retrieved.enableAgentWeb, false);
+  assert.equal(retrieved.enabledTools.fetch_web_page, false);
   assert.equal(retrieved.enableRawLogs, true);
   assert.equal(retrieved.ragContextLimitK, 128);
 
