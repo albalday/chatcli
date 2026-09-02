@@ -58,3 +58,12 @@ test('Markdown - Renderizado de reglas horizontales (---, ***, ___)', () => {
   assert.ok(html.includes('Sección 2'));
 });
 
+test('Markdown - Renderizado seguro de rag-image con data-rag-src y resolución por listeners', async () => {
+  const md = `![Revisión Placa](rag-image://doc_test_123:img_1)`;
+  const html = Markdown.parseMarkdown(md);
+  assert.ok(html.includes('data-rag-src="rag-image://doc_test_123:img_1"'), 'Debe incluir data-rag-src para resolución segura');
+  assert.ok(html.includes('src="data:image/svg+xml,'), 'Debe usar placeholder SVG para no romper el render en el navegador');
+  assert.ok(html.includes('<figcaption class="chat-image-caption">Revisión Placa</figcaption>'), 'Debe incluir pie de foto');
+});
+
+

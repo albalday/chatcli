@@ -17,6 +17,8 @@
 
   const Sandbox = typeof window !== 'undefined' ? (window.ChatSandbox || {}) : {};
   const I18n = typeof window !== 'undefined' ? (window.ChatI18n || {}) : {};
+  const resolvedRagImagesCache = new Map();
+  const RAG_IMG_PLACEHOLDER = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"%3E%3C/svg%3E';
 
   function tr(key, fallback, params) {
     if (typeof window !== 'undefined' && window.ChatI18n && window.ChatI18n.t) {
@@ -89,6 +91,12 @@
       const safeSrc = sanitizeImageUrl(url);
       if (!safeSrc) return altText || '';
       const cleanAlt = escapeHtml(altText ? altText.trim() : 'Imagen');
+      if (safeSrc.startsWith('rag-image://')) {
+        const cachedUrl = resolvedRagImagesCache.get(safeSrc);
+        const displaySrc = cachedUrl || RAG_IMG_PLACEHOLDER;
+        const resolvedClass = cachedUrl ? ' rag-resolved-image' : '';
+        return `<img class="chat-embedded-image inline-image${resolvedClass}" data-rag-src="${safeSrc}" src="${displaySrc}" alt="${cleanAlt}" loading="lazy" />`;
+      }
       return `<img class="chat-embedded-image inline-image" src="${safeSrc}" alt="${cleanAlt}" loading="lazy" />`;
     });
     // Enlaces: [texto](url)
@@ -293,6 +301,12 @@
       if (!safeSrc) return altText || '';
       const cleanAlt = altText ? escapeHtml(altText.trim()) : 'Imagen';
       const caption = cleanAlt && !cleanAlt.startsWith('#img') ? `<figcaption class="chat-image-caption">${cleanAlt}</figcaption>` : '';
+      if (safeSrc.startsWith('rag-image://')) {
+        const cachedUrl = resolvedRagImagesCache.get(safeSrc);
+        const displaySrc = cachedUrl || RAG_IMG_PLACEHOLDER;
+        const resolvedClass = cachedUrl ? ' rag-resolved-image' : '';
+        return `\n<figure class="chat-image-figure"><img class="chat-embedded-image${resolvedClass}" data-rag-src="${safeSrc}" src="${displaySrc}" alt="${cleanAlt}" loading="lazy" />${caption}</figure>\n`;
+      }
       return `\n<figure class="chat-image-figure"><img class="chat-embedded-image" src="${safeSrc}" alt="${cleanAlt}" loading="lazy" />${caption}</figure>\n`;
     });
 
@@ -522,11 +536,23 @@
     });
 
     // 4. Resolución de imágenes de la base de conocimiento (rag-image://docId:imgId)
-    container.querySelectorAll('img[src^="rag-image://"]').forEach(async function (img) {
-      if (img.dataset.ragResolved) return;
-      img.dataset.ragResolved = 'true';
-      const rawSrc = img.getAttribute('src') || '';
-      const cleanRef = rawSrc.replace(/^rag-image:\/\//i, '');
+    container.querySelectorAll('img[data-rag-src], img[src^="rag-image://"]').forEach(async function (img) {
+      const rawRef = img.getAttribute('data-rag-src') || img.getAttribute('src') || '';
+      if (!rawRef || !rawRef.startsWith('rag-image://')) return;
+
+      if (resolvedRagImagesCache.has(rawRef)) {
+        const cached = resolvedRagImagesCache.get(rawRef);
+        if (img.getAttribute('src') !== cached) {
+          img.setAttribute('src', cached);
+        }
+        img.classList.add('rag-resolved-image');
+        return;
+      }
+
+      if (img.dataset.ragResolving) return;
+      img.dataset.ragResolving = 'true';
+
+      const cleanRef = rawRef.replace(/^rag-image:\/\//i, '');
       const colonIdx = cleanRef.indexOf(':');
       if (colonIdx > 0) {
         const docId = cleanRef.substring(0, colonIdx);
@@ -539,20 +565,23 @@
             const imageRecord = await ragStorage.getDocumentImage(docId, imgId);
             if (imageRecord && imageRecord.dataUrl) {
               let finalUrl = imageRecord.dataUrl;
-              if (imageRecord.isCmyk) {
-                const fileParser = (typeof window !== 'undefined' && window.ChatFileParser)
-                  ? window.ChatFileParser
-                  : (typeof require !== 'undefined' ? (() => { try { return require('./file-parser.js'); } catch (e) { return null; } })() : null);
-                if (fileParser && typeof fileParser.convertCmykDataUrlToRgb === 'function') {
-                  finalUrl = fileParser.convertCmykDataUrlToRgb(finalUrl);
-                  imageRecord.dataUrl = finalUrl;
-                  imageRecord.isCmyk = false;
-                }
+              const fileParser = (typeof window !== 'undefined' && window.ChatFileParser)
+                ? window.ChatFileParser
+                : (typeof require !== 'undefined' ? (() => { try { return require('./file-parser.js'); } catch (e) { return null; } })() : null);
+              if (fileParser && typeof fileParser.convertCmykDataUrlToRgb === 'function') {
+                finalUrl = fileParser.convertCmykDataUrlToRgb(finalUrl);
+                imageRecord.dataUrl = finalUrl;
+                imageRecord.isCmyk = false;
               }
-              img.src = finalUrl;
+              resolvedRagImagesCache.set(rawRef, finalUrl);
+              img.setAttribute('src', finalUrl);
               img.classList.add('rag-resolved-image');
             }
-          } catch (e) {}
+          } catch (e) {
+            console.error('Error al resolver imagen RAG:', e);
+          } finally {
+            delete img.dataset.ragResolving;
+          }
         }
       }
     });
