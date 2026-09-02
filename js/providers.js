@@ -966,7 +966,7 @@
             try {
               JSON.parse(rawArgs);
             } catch (e) {
-              const matches = rawArgs.match(/\{[^{}]*("docId"|"chapterId"|[a-zA-Z0-9_]+)[^{}]*\}/g);
+              const matches = rawArgs.match(/\{[^{}]*"[a-zA-Z0-9_]+"[^{}]*\}/g);
               if (matches && matches.length > 0) {
                 try {
                   JSON.parse(matches[0]);

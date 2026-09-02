@@ -17,6 +17,8 @@
 
   const Sandbox = typeof window !== 'undefined' ? (window.ChatSandbox || {}) : {};
   const I18n = typeof window !== 'undefined' ? (window.ChatI18n || {}) : {};
+  const resolvedRagImagesCache = new Map();
+  const RAG_IMG_PLACEHOLDER = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"%3E%3C/svg%3E';
 
   function tr(key, fallback, params) {
     if (typeof window !== 'undefined' && window.ChatI18n && window.ChatI18n.t) {
@@ -69,7 +71,7 @@
     if (/^blob:[^\s"'<>]+/i.test(trimmed)) {
       return escapeHtml(trimmed);
     }
-    if (/^rag-image:\/\/[^\s"'<>]+/i.test(trimmed)) {
+    if (/^rag-image:\/\/[a-zA-Z0-9_\-:]+/i.test(trimmed)) {
       return escapeHtml(trimmed);
     }
     return '';
@@ -89,6 +91,12 @@
       const safeSrc = sanitizeImageUrl(url);
       if (!safeSrc) return altText || '';
       const cleanAlt = escapeHtml(altText ? altText.trim() : 'Imagen');
+      if (safeSrc.startsWith('rag-image://')) {
+        const cachedUrl = resolvedRagImagesCache.get(safeSrc);
+        const displaySrc = cachedUrl || RAG_IMG_PLACEHOLDER;
+        const resolvedClass = cachedUrl ? ' rag-resolved-image' : '';
+        return `<img class="chat-embedded-image inline-image${resolvedClass}" data-rag-src="${safeSrc}" src="${displaySrc}" alt="${cleanAlt}" loading="lazy" />`;
+      }
       return `<img class="chat-embedded-image inline-image" src="${safeSrc}" alt="${cleanAlt}" loading="lazy" />`;
     });
     // Enlaces: [texto](url)
@@ -222,6 +230,9 @@
 
     let p = escapeHtml(text);
 
+    // Reglas horizontales (---, ***, ___)
+    p = p.replace(/^[ \t]*(?:---|\*\*\*|___)[ \t]*$/gm, '<hr>');
+
     const thoughtTitle = tr('md_thought_title', '💭 Proceso de razonamiento');
     const thoughtReasoning = tr('md_thought_reasoning', '💭 Razonando...');
 
@@ -290,31 +301,13 @@
       if (!safeSrc) return altText || '';
       const cleanAlt = altText ? escapeHtml(altText.trim()) : 'Imagen';
       const caption = cleanAlt && !cleanAlt.startsWith('#img') ? `<figcaption class="chat-image-caption">${cleanAlt}</figcaption>` : '';
-      const ragSrcAttr = url.startsWith('rag-image://') ? ` data-rag-src="${url}"` : '';
-      return `\n<figure class="chat-image-figure"${ragSrcAttr}><img class="chat-embedded-image" src="${safeSrc}" alt="${cleanAlt}"${ragSrcAttr} loading="lazy" />${caption}</figure>\n`;
-    });
-
-    // 9. Referencias textuales a diagramas del RAG (ej: "Diagrama (Pág. 7) #img_7_12", "#img_87_79", "<code>#img_87_79</code>")
-    // A. Desempaquetar tags dentro de <code>
-    p = p.replace(/<code>#?(?:img_)?([0-9]+(?:_[0-9]+)?)<\/code>/gi, '#img_$1');
-
-    // B. Reemplazar líneas completas dedicadas o titulares breves
-    p = p.replace(/(?:^|\n)([ \t]*(?:(?:Diagrama|Esquema|Figura|Ilustración|Captura|Imagen)[^\n<]*?|#)[^\n<]*?#(?:img_)?([0-9]+(?:_[0-9]+)?)[^\n<]*)(?:\n|$)/gi, function (match, fullLine, imgNum) {
-      if (fullLine.includes('<img') || fullLine.includes('<figure') || fullLine.includes('![') || fullLine.includes('src=') || fullLine.length > 90) {
-        return match;
+      if (safeSrc.startsWith('rag-image://')) {
+        const cachedUrl = resolvedRagImagesCache.get(safeSrc);
+        const displaySrc = cachedUrl || RAG_IMG_PLACEHOLDER;
+        const resolvedClass = cachedUrl ? ' rag-resolved-image' : '';
+        return `\n<figure class="chat-image-figure"><img class="chat-embedded-image${resolvedClass}" data-rag-src="${safeSrc}" src="${displaySrc}" alt="${cleanAlt}" loading="lazy" />${caption}</figure>\n`;
       }
-      const cleanCaption = fullLine.trim().replace(/^#+\s*/, '');
-      const imgId = imgNum.startsWith('img_') ? imgNum : (`img_${imgNum}`);
-      const ragUrl = `rag-image://${imgId}`;
-      return `\n<figure class="chat-image-figure" data-rag-src="${ragUrl}"><img class="chat-embedded-image" src="${ragUrl}" alt="${escapeHtml(cleanCaption)}" data-rag-src="${ragUrl}" loading="lazy" /><figcaption class="chat-image-caption">${escapeHtml(cleanCaption)}</figcaption></figure>\n`;
-    });
-
-    // C. Reemplazar tags inline residuales en medio de prosa
-    p = p.replace(/(<figure[\s\S]*?<\/figure>)|(#(?:img_)?([0-9]+(?:_[0-9]+)?))/gi, function (match, figureBlock, tagMatch, imgNum) {
-      if (figureBlock) return figureBlock;
-      const imgId = imgNum.startsWith('img_') ? imgNum : (`img_${imgNum}`);
-      const ragUrl = `rag-image://${imgId}`;
-      return `<figure class="chat-image-figure" data-rag-src="${ragUrl}"><img class="chat-embedded-image" src="${ragUrl}" alt="Diagrama #${imgId.replace('img_', '')}" data-rag-src="${ragUrl}" loading="lazy" /></figure>`;
+      return `\n<figure class="chat-image-figure"><img class="chat-embedded-image" src="${safeSrc}" alt="${cleanAlt}" loading="lazy" />${caption}</figure>\n`;
     });
 
     // 10. Enlaces [texto](url)
@@ -341,6 +334,7 @@
         trimmed.startsWith('<blockquote') ||
         trimmed.startsWith('<details') ||
         trimmed.startsWith('<figure') ||
+        trimmed.startsWith('<hr') ||
         trimmed.startsWith('<div class="table-container"')
       ) {
         return trimmed;
@@ -541,35 +535,57 @@
       });
     });
 
-    // 4. Hidratación de imágenes dinámicas del RAG (rag-image://)
-    hydrateRagImages(container);
-  }
+    // 4. Resolución de imágenes de la base de conocimiento (rag-image://docId:imgId)
+    container.querySelectorAll('img[data-rag-src], img[src^="rag-image://"]').forEach(async function (img) {
+      const rawRef = img.getAttribute('data-rag-src') || img.getAttribute('src') || '';
+      if (!rawRef || !rawRef.startsWith('rag-image://')) return;
 
-  async function hydrateRagImages(container) {
-    if (!container || !container.querySelectorAll) return;
-    const RagStorage = typeof window !== 'undefined' ? (window.ChatRagStorage || {}) : {};
-    const TreeRagUI = typeof window !== 'undefined' ? (window.ChatTreeRagUI || {}) : {};
-    const activeBranchId = TreeRagUI.getActiveChatBranchId ? TreeRagUI.getActiveChatBranchId() : null;
-
-    const imgEls = container.querySelectorAll('img[data-rag-src], img[src^="rag-image://"], figure[data-rag-src]');
-    if (imgEls.length === 0) return;
-
-    for (const el of imgEls) {
-      const img = el.tagName === 'IMG' ? el : el.querySelector('img');
-      if (!img) continue;
-      const ragSrc = img.getAttribute('data-rag-src') || img.getAttribute('src');
-      if (!ragSrc || !ragSrc.startsWith('rag-image://')) continue;
-
-      if (RagStorage && typeof RagStorage.resolveImageSrc === 'function') {
-        try {
-          const dataUrl = await RagStorage.resolveImageSrc(ragSrc, activeBranchId);
-          if (dataUrl && (dataUrl.startsWith('data:image/') || dataUrl.startsWith('http') || dataUrl.startsWith('blob:'))) {
-            img.src = dataUrl;
-            img.removeAttribute('data-rag-src');
-          }
-        } catch (e) {}
+      if (resolvedRagImagesCache.has(rawRef)) {
+        const cached = resolvedRagImagesCache.get(rawRef);
+        if (img.getAttribute('src') !== cached) {
+          img.setAttribute('src', cached);
+        }
+        img.classList.add('rag-resolved-image');
+        return;
       }
-    }
+
+      if (img.dataset.ragResolving) return;
+      img.dataset.ragResolving = 'true';
+
+      const cleanRef = rawRef.replace(/^rag-image:\/\//i, '');
+      const colonIdx = cleanRef.indexOf(':');
+      if (colonIdx > 0) {
+        const docId = cleanRef.substring(0, colonIdx);
+        const imgId = cleanRef.substring(colonIdx + 1);
+        const ragStorage = (typeof window !== 'undefined' && window.ChatRagStorage)
+          ? window.ChatRagStorage
+          : (typeof require !== 'undefined' ? (() => { try { return require('./ragStorage.js'); } catch (e) { return null; } })() : null);
+        if (ragStorage && typeof ragStorage.getDocumentImage === 'function') {
+          try {
+            const imageRecord = await ragStorage.getDocumentImage(docId, imgId);
+            if (imageRecord && imageRecord.dataUrl) {
+              let finalUrl = imageRecord.dataUrl;
+              const fileParser = (typeof window !== 'undefined' && window.ChatFileParser)
+                ? window.ChatFileParser
+                : (typeof require !== 'undefined' ? (() => { try { return require('./file-parser.js'); } catch (e) { return null; } })() : null);
+              if (fileParser && typeof fileParser.convertCmykDataUrlToRgb === 'function') {
+                finalUrl = fileParser.convertCmykDataUrlToRgb(finalUrl);
+                imageRecord.dataUrl = finalUrl;
+                imageRecord.isCmyk = false;
+              }
+              resolvedRagImagesCache.set(rawRef, finalUrl);
+              img.setAttribute('src', finalUrl);
+              img.classList.add('rag-resolved-image');
+            }
+          } catch (e) {
+            console.error('Error al resolver imagen RAG:', e);
+          } finally {
+            delete img.dataset.ragResolving;
+          }
+        }
+      }
+    });
+
   }
 
   return {

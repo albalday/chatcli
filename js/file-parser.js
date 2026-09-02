@@ -50,21 +50,6 @@
     return str;
   }
 
-  function uint8ToBase64(uint8) {
-    if (!uint8 || uint8.length === 0) return '';
-    if (typeof Buffer !== 'undefined') {
-      return Buffer.from(uint8).toString('base64');
-    }
-    let binary = '';
-    const len = uint8.byteLength;
-    const chunk = 8192;
-    for (let i = 0; i < len; i += chunk) {
-      const sub = uint8.subarray(i, Math.min(i + chunk, len));
-      binary += String.fromCharCode.apply(null, sub);
-    }
-    return btoa(binary);
-  }
-
   function decodePdfEscapes(str) {
     if (!str) return '';
     return str.replace(/\\([0-7]{1,3})/g, (m, oct) => {
@@ -82,12 +67,108 @@
     });
   }
 
-  async function parseCMaps(fullText, bytes, objOffsets) {
+  function parseCMapData(text, cmap) {
+    if (!text || typeof text !== 'string') return;
+
+    // 1. Extraer bloques beginbfchar ... endbfchar
+    const bfcharBlockRegex = /beginbfchar([\s\S]*?)endbfchar/g;
+    let block;
+    while ((block = bfcharBlockRegex.exec(text)) !== null) {
+      const blockText = block[1];
+      const bfcharRegex = /<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>/g;
+      let cm;
+      while ((cm = bfcharRegex.exec(blockText)) !== null) {
+        const src = cm[1].toLowerCase();
+        const dstHex = cm[2];
+        let dstChar = '';
+        for (let k = 0; k < dstHex.length; k += 4) {
+          const code = parseInt(dstHex.substr(k, 4), 16);
+          if (!isNaN(code)) dstChar += String.fromCharCode(code);
+        }
+        if (dstChar) {
+          cmap.set(src, dstChar);
+          if (src.length === 2) cmap.set('00' + src, dstChar);
+        }
+      }
+    }
+
+    // 2. Extraer bloques beginbfrange ... endbfrange
+    const bfrangeBlockRegex = /beginbfrange([\s\S]*?)endbfrange/g;
+    while ((block = bfrangeBlockRegex.exec(text)) !== null) {
+      const blockText = block[1];
+
+      // 2a. beginbfrange con array de destinos: <start> <end> [ <dest1> <dest2> ... ]
+      const bfrangeArrayRegex = /<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>\s*\[([\s\S]*?)\]/g;
+      let cm;
+      while ((cm = bfrangeArrayRegex.exec(blockText)) !== null) {
+        const start = parseInt(cm[1], 16);
+        const end = parseInt(cm[2], 16);
+        const len = cm[1].length;
+        const destMatches = cm[3].match(/<([0-9a-fA-F]+)>/g) || [];
+        for (let s = start, idx = 0; s <= end && idx < destMatches.length; s++, idx++) {
+          const srcHex = s.toString(16).padStart(len, '0').toLowerCase();
+          const dstHex = destMatches[idx].replace(/[<>]/g, '');
+          let dstChar = '';
+          for (let k = 0; k < dstHex.length; k += 4) {
+            const code = parseInt(dstHex.substr(k, 4), 16);
+            if (!isNaN(code)) dstChar += String.fromCharCode(code);
+          }
+          if (dstChar) {
+            cmap.set(srcHex, dstChar);
+            if (srcHex.length === 2) cmap.set('00' + srcHex, dstChar);
+          }
+        }
+      }
+
+      // 2b. beginbfrange con destino simple: <start> <end> <destStart>
+      const cleanBlockText = blockText.replace(/<[0-9a-fA-F]+>\s*<[0-9a-fA-F]+>\s*\[[\s\S]*?\]/g, '');
+      const bfrangeSimpleRegex = /<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>/g;
+      while ((cm = bfrangeSimpleRegex.exec(cleanBlockText)) !== null) {
+        const start = parseInt(cm[1], 16);
+        const end = parseInt(cm[2], 16);
+        const destStart = parseInt(cm[3], 16);
+        const len = cm[1].length;
+        for (let s = start; s <= end; s++) {
+          const srcHex = s.toString(16).padStart(len, '0').toLowerCase();
+          const dstCode = destStart + (s - start);
+          const dstChar = String.fromCharCode(dstCode);
+          cmap.set(srcHex, dstChar);
+          if (srcHex.length === 2) cmap.set('00' + srcHex, dstChar);
+        }
+      }
+    }
+  }
+
+  async function parseCMaps(allObjects, fullText, bytes, objOffsets) {
     const cmap = new Map();
+    const toUnicodeObjNums = new Set();
+
+    // Buscar referencias /ToUnicode en fullText y en todos los objetos (incluidos los de ObjStm)
     const toUnicodeRegex = /\/ToUnicode\s+(\d+)\s+\d+\s+R/g;
     let m;
     while ((m = toUnicodeRegex.exec(fullText)) !== null) {
-      const objNum = m[1];
+      toUnicodeObjNums.add(m[1]);
+    }
+
+    for (const [num, body] of allObjects.entries()) {
+      let bm;
+      const bRegex = /\/ToUnicode\s+(\d+)\s+\d+\s+R/g;
+      while ((bm = bRegex.exec(body)) !== null) {
+        toUnicodeObjNums.add(bm[1]);
+      }
+      // Si el objeto ya contiene directamente CMap
+      if (body.includes('beginbfchar') || body.includes('beginbfrange')) {
+        parseCMapData(body, cmap);
+      }
+    }
+
+    for (const objNum of toUnicodeObjNums) {
+      const body = allObjects.get(String(objNum));
+      if (body && (body.includes('beginbfchar') || body.includes('beginbfrange'))) {
+        parseCMapData(body, cmap);
+        continue;
+      }
+
       const offset = objOffsets.get(String(objNum));
       if (offset !== undefined) {
         const streamIdx = fullText.indexOf('stream', offset);
@@ -96,48 +177,22 @@
           let dataStart = streamIdx + 6;
           if (fullText.charCodeAt(dataStart) === 13) dataStart++;
           if (fullText.charCodeAt(dataStart) === 10) dataStart++;
+          let dataEnd = endStreamIdx;
+          while (dataEnd > dataStart && (fullText.charCodeAt(dataEnd - 1) === 10 || fullText.charCodeAt(dataEnd - 1) === 13 || fullText.charCodeAt(dataEnd - 1) === 32)) {
+            dataEnd--;
+          }
           try {
-            const rawBytes = bytes.subarray(dataStart, endStreamIdx);
+            const rawBytes = bytes.subarray(dataStart, dataEnd);
             const decomp = await decompressDeflateData(rawBytes);
             if (decomp) {
               const text = new TextDecoder('latin1').decode(decomp);
-              
-              const bfcharRegex = /<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>/g;
-              let cm;
-              while ((cm = bfcharRegex.exec(text)) !== null) {
-                const src = cm[1].toLowerCase();
-                const dstHex = cm[2];
-                let dstChar = '';
-                for (let k = 0; k < dstHex.length; k += 4) {
-                  const code = parseInt(dstHex.substr(k, 4), 16);
-                  if (!isNaN(code)) dstChar += String.fromCharCode(code);
-                }
-                if (dstChar) {
-                  cmap.set(src, dstChar);
-                  if (src.length === 2) cmap.set('00' + src, dstChar);
-                  if (src.startsWith('00') && src.length === 4) cmap.set(src.substring(2), dstChar);
-                }
-              }
-
-              const bfrangeRegex = /<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>/g;
-              while ((cm = bfrangeRegex.exec(text)) !== null) {
-                const start = parseInt(cm[1], 16);
-                const end = parseInt(cm[2], 16);
-                const destStart = parseInt(cm[3], 16);
-                const len = cm[1].length;
-                for (let s = start; s <= end; s++) {
-                  const srcHex = s.toString(16).padStart(len, '0').toLowerCase();
-                  const dstCode = destStart + (s - start);
-                  cmap.set(srcHex, String.fromCharCode(dstCode));
-                  if (srcHex.length === 2) cmap.set('00' + srcHex, String.fromCharCode(dstCode));
-                  if (srcHex.startsWith('00') && srcHex.length === 4) cmap.set(srcHex.substring(2), String.fromCharCode(dstCode));
-                }
-              }
+              parseCMapData(text, cmap);
             }
           } catch (e) {}
         }
       }
     }
+
     return cmap;
   }
 
@@ -153,6 +208,54 @@
     const ratio = printable / str.length;
     if (/SF\d{6}|afii\d+|upblock|dnblock|triagup|dmacron/.test(str)) return false;
     return ratio >= 0.70;
+  }
+
+  function mapPdfLiteralString(lit, cmap) {
+    const raw = decodePdfEscapes(lit);
+    if (!cmap || cmap.size === 0 || !raw) return raw;
+
+    let decoded = '';
+    let hasMapping = false;
+    for (let k = 0; k < raw.length; k++) {
+      const c1 = raw.charCodeAt(k);
+      const hex1 = c1.toString(16).padStart(2, '0').toLowerCase();
+
+      // Probar secuencia de 2 bytes (UTF-16BE / 2-byte CID)
+      if (k + 1 < raw.length) {
+        const c2 = raw.charCodeAt(k + 1);
+        const hex2 = hex1 + c2.toString(16).padStart(2, '0').toLowerCase();
+        if (cmap.has(hex2)) {
+          decoded += cmap.get(hex2);
+          hasMapping = true;
+          k++;
+          continue;
+        }
+      }
+
+      // Probar byte nulo + carácter en UTF-16BE estándar
+      if (c1 === 0 && k + 1 < raw.length) {
+        const c2 = raw.charCodeAt(k + 1);
+        const hex2 = '00' + c2.toString(16).padStart(2, '0').toLowerCase();
+        if (cmap.has(hex2)) {
+          decoded += cmap.get(hex2);
+          hasMapping = true;
+        } else if (c2 >= 32 && c2 <= 126) {
+          decoded += raw.charAt(k + 1);
+        }
+        k++;
+        continue;
+      }
+
+      // Probar 1 byte mapeado en CMap
+      if (cmap.has(hex1)) {
+        decoded += cmap.get(hex1);
+        hasMapping = true;
+      } else if (c1 >= 32 && c1 <= 126) {
+        decoded += raw.charAt(k);
+      }
+    }
+
+    return (hasMapping || decoded.length >= raw.length * 0.5) ? decoded : raw;
   }
 
   function parsePdfStreamText(streamString, cmap = new Map()) {
@@ -214,7 +317,7 @@
           lit += streamString.charAt(j);
           j++;
         }
-        if (lit) out.push(decodePdfEscapes(lit));
+        if (lit) out.push(mapPdfLiteralString(lit, cmap));
         i = j;
         continue;
       }
@@ -278,7 +381,7 @@
               lit += streamString.charAt(k);
               k++;
             }
-            arrText += decodePdfEscapes(lit);
+            arrText += mapPdfLiteralString(lit, cmap);
             j = k;
             continue;
           } else if (ac === 60 /* < */) {
@@ -316,7 +419,7 @@
           j++;
         }
         if (j < len && streamString.charCodeAt(j) === 93) j++;
-        if (arrText) out.push(arrText + ' ');
+        if (arrText) out.push(arrText);
         i = j;
         continue;
       }
@@ -385,6 +488,18 @@
     return null;
   }
 
+  function bytesToBase64(uint8Array) {
+    if (!uint8Array || uint8Array.length === 0) return '';
+    if (typeof Buffer !== 'undefined') return Buffer.from(uint8Array).toString('base64');
+    let binary = '';
+    const len = uint8Array.byteLength;
+    const chunkSize = 0x8000;
+    for (let i = 0; i < len; i += chunkSize) {
+      binary += String.fromCharCode.apply(null, uint8Array.subarray(i, Math.min(i + chunkSize, len)));
+    }
+    return btoa(binary);
+  }
+
   /**
    * Decodifica y convierte JPEGs en espacio de color CMYK / Adobe YCCK a formato sRGB legible.
    */
@@ -438,9 +553,8 @@
             }
           }
 
-          if (!frame || frame.numComponents !== 4) return null; // Solo convertir 4 componentes (CMYK/YCCK)
+          if (!frame || frame.numComponents !== 4) return null;
 
-          // Decodificar scan
           let maxH = 1, maxV = 1;
           for (const comp of frame.components) {
             if (comp.hSample > maxH) maxH = comp.hSample;
@@ -623,7 +737,6 @@
             }
           }
 
-          // 1. Intentar compresión nativa ultrarrápida vía Canvas en navegador
           if (typeof document !== 'undefined' && typeof document.createElement === 'function') {
             try {
               const canvas = document.createElement('canvas');
@@ -646,14 +759,13 @@
             } catch (e) {}
           }
 
-          // 2. Codificador JPEG puro sRGB para entornos sin DOM (Node.js/Workers)
           return encodeRgbToJpegDataUrl(frame.width, frame.height, rgbBytes, 80);
         }
 
         const length = readUint16();
         const nextMarkerOffset = offset + length - 2;
 
-        if (marker === 0xDB) { // DQT
+        if (marker === 0xDB) {
           let p = offset;
           while (p < nextMarkerOffset) {
             const info = data[p++];
@@ -665,7 +777,7 @@
             }
             quantTables[tableId] = table;
           }
-        } else if (marker === 0xC0 || marker === 0xC2) { // SOF0 / SOF2
+        } else if (marker === 0xC0 || marker === 0xC2) {
           const precision = data[offset++];
           const height = readUint16();
           const width = readUint16();
@@ -678,7 +790,7 @@
             components.push({ id, hSample: (byte >> 4) & 0x0F, vSample: byte & 0x0F, quantId });
           }
           frame = { precision, height, width, numComponents, components };
-        } else if (marker === 0xC4) { // DHT
+        } else if (marker === 0xC4) {
           let p = offset;
           while (p < nextMarkerOffset) {
             const info = data[p++];
@@ -696,7 +808,7 @@
             if (isAC) huffmanTablesAC[tableId] = tree;
             else huffmanTablesDC[tableId] = tree;
           }
-        } else if (marker === 0xEE) { // APP14 (Adobe)
+        } else if (marker === 0xEE) {
           if (length >= 14 && data[offset] === 0x41 && data[offset+1] === 0x64 && data[offset+2] === 0x6F && data[offset+3] === 0x62 && data[offset+4] === 0x65) {
             adobeTransform = data[offset + 11];
           }
@@ -728,9 +840,6 @@
     return root;
   }
 
-  /**
-   * Codificador JPEG sRGB puro en JavaScript sin dependencias.
-   */
   function encodeRgbToJpegDataUrl(width, height, rgb, quality = 80) {
     try {
       const q = Math.max(1, Math.min(100, quality));
@@ -1084,12 +1193,81 @@
       writeWord(0xFFD9);
 
       const uint8 = new Uint8Array(byteStream);
-      return `data:image/jpeg;base64,${uint8ToBase64(uint8)}`;
+      return `data:image/jpeg;base64,${bytesToBase64(uint8)}`;
     } catch (e) {
       return null;
     }
   }
-  async function extractTextFromPdf(arrayBuffer) {
+
+  function extractImagesFromPdfObjects(allObjects, objOffsets, bytes) {
+    const imagesByObjNum = new Map();
+    let imgCounter = 1;
+
+    for (const [num, body] of allObjects.entries()) {
+      if (!/\/Subtype\s*\/Image\b/i.test(body)) continue;
+
+      const widthMatch = body.match(/\/Width\s+(\d+)/);
+      const heightMatch = body.match(/\/Height\s+(\d+)/);
+      const width = widthMatch ? parseInt(widthMatch[1], 10) : 0;
+      const height = heightMatch ? parseInt(heightMatch[1], 10) : 0;
+
+      // Filtrar elementos gráficos irrelevantes o viñetas diminutas
+      if (width < 30 || height < 30 || (width * height < 2500)) continue;
+
+      const sIdx = body.indexOf('stream');
+      const eIdx = body.indexOf('endstream', sIdx);
+      if (sIdx === -1 || eIdx === -1) continue;
+
+      let dStart = sIdx + 6;
+      if (body.charCodeAt(dStart) === 13) dStart++;
+      if (body.charCodeAt(dStart) === 10) dStart++;
+      let dEnd = eIdx;
+      while (dEnd > dStart && (body.charCodeAt(dEnd - 1) === 10 || body.charCodeAt(dEnd - 1) === 13 || body.charCodeAt(dEnd - 1) === 32)) {
+        dEnd--;
+      }
+
+      const offset = objOffsets.get(String(num)) || 0;
+      const rawBytes = bytes.subarray(offset + dStart, offset + dEnd);
+      if (!rawBytes || rawBytes.length < 50) continue;
+
+      const isDct = /\/Filter\s*(?:\/DCTDecode|\[\s*\/DCTDecode\s*\])/i.test(body);
+      const isJpx = /\/Filter\s*(?:\/JPXDecode|\[\s*\/JPXDecode\s*\])/i.test(body);
+
+      let mimeType = '';
+      let dataUrl = '';
+
+      const isCmyk = body.includes('DeviceCMYK') || body.includes('/ColorSpace/DeviceCMYK') || body.includes('/ColorSpace /DeviceCMYK');
+
+      if (isDct || (rawBytes[0] === 0xFF && rawBytes[1] === 0xD8)) {
+        mimeType = 'image/jpeg';
+        dataUrl = `data:image/jpeg;base64,${bytesToBase64(rawBytes)}`;
+      } else if (isJpx) {
+        mimeType = 'image/jp2';
+        dataUrl = `data:image/jp2;base64,${bytesToBase64(rawBytes)}`;
+      } else if (rawBytes[0] === 0x89 && rawBytes[1] === 0x50 && rawBytes[2] === 0x4E && rawBytes[3] === 0x47) {
+        mimeType = 'image/png';
+        dataUrl = `data:image/png;base64,${bytesToBase64(rawBytes)}`;
+      }
+
+      if (dataUrl) {
+        imagesByObjNum.set(String(num), {
+          id: `img_${imgCounter++}`,
+          objNum: String(num),
+          width,
+          height,
+          sizeBytes: rawBytes.length,
+          mimeType: mimeType || 'image/jpeg',
+          isCmyk: Boolean(isCmyk),
+          dataUrl
+        });
+      }
+    }
+
+    return imagesByObjNum;
+  }
+
+  /** Extrae texto y objetos de imagen de un PDF de forma interna. */
+  async function extractPdfInternal(arrayBuffer) {
     const bytes = new Uint8Array(arrayBuffer);
     const decoder = new TextDecoder('latin1');
     const fullText = decoder.decode(bytes);
@@ -1110,11 +1288,8 @@
       }
     }
 
-    // 2. Extracción de CMaps / ToUnicode
-    const cmap = await parseCMaps(fullText, bytes, objOffsets);
-
-    // 3. Descomprimir todos los flujos de objetos comprimidos (/Type /ObjStm)
-    for (const [num, body] of allObjects.entries()) {
+    // 2. Descomprimir todos los flujos de objetos comprimidos (/Type /ObjStm) antes de extraer CMaps
+    for (const [num, body] of Array.from(allObjects.entries())) {
       if (body.includes('/Type/ObjStm') || body.includes('/Type /ObjStm')) {
         const sIdx = body.indexOf('stream');
         const eIdx = body.indexOf('endstream', sIdx);
@@ -1150,6 +1325,14 @@
       }
     }
 
+    // 3. Extracción exhaustiva de CMaps / ToUnicode (incluyendo objetos dentro de ObjStm)
+    const cmap = await parseCMaps(allObjects, fullText, bytes, objOffsets);
+
+    // 3b. Extracción de imágenes XObject (/Subtype /Image)
+    const imagesByObjNum = extractImagesFromPdfObjects(allObjects, objOffsets, bytes);
+    const assignedImages = new Set();
+    const allExtractedImages = [];
+
     // 4. Resolución del catálogo y árbol jerárquico de páginas (Page Tree)
     let catalogObjNum = null;
     for (const [num, body] of allObjects.entries()) {
@@ -1183,8 +1366,6 @@
 
     let pages = [];
     let pageNum = 1;
-    let imgCounter = 0;
-    const extractedImages = [];
 
     // A. Extracción secuencial basada en el Page Tree
     if (pagesList.length > 0) {
@@ -1224,9 +1405,15 @@
               : new Uint8Array(Array.from(cBody.substring(dataStart, rawEnd), ch => ch.charCodeAt(0)));
 
             try {
+              let streamString = '';
               const decompressed = await decompressDeflateData(rawBytes);
               if (decompressed) {
-                const streamString = decoder.decode(decompressed);
+                streamString = decoder.decode(decompressed);
+              } else {
+                streamString = decoder.decode(rawBytes);
+              }
+
+              if (streamString) {
                 const parsed = parsePdfStreamText(streamString, cmap);
                 if (parsed && parsed.length > 0) {
                   pageItems.push(parsed);
@@ -1236,16 +1423,18 @@
           }
         }
 
-        // Extraer imágenes XObject referenciadas explícitamente en esta página
+        // Detectar recursos /XObject directos e indirectos de la página
+        const resMatch = body.match(/\/Resources\s*(?:<<([\s\S]*?)>>|(\d+)\s+\d+\s+R)/);
         let xobjDict = '';
-        const xobjMatch = body.match(/\/XObject\s*(?:<<([\s\S]*?)>>|(\d+)\s+\d+\s+R)/);
-        if (xobjMatch) {
-          if (xobjMatch[1]) xobjDict = xobjMatch[1];
-          else if (xobjMatch[2]) xobjDict = allObjects.get(xobjMatch[2]) || '';
-        } else {
-          const resMatch = body.match(/\/Resources\s+(\d+)\s+\d+\s+R/);
-          if (resMatch) {
-            const resBody = allObjects.get(resMatch[1]) || '';
+        if (resMatch) {
+          if (resMatch[1]) {
+            const xMatch = resMatch[1].match(/\/XObject\s*(?:<<([\s\S]*?)>>|(\d+)\s+\d+\s+R)/);
+            if (xMatch) {
+              if (xMatch[1]) xobjDict = xMatch[1];
+              else if (xMatch[2]) xobjDict = allObjects.get(xMatch[2]) || '';
+            }
+          } else if (resMatch[2]) {
+            const resBody = allObjects.get(resMatch[2]) || '';
             const subXobjMatch = resBody.match(/\/XObject\s*(?:<<([\s\S]*?)>>|(\d+)\s+\d+\s+R)/);
             if (subXobjMatch) {
               if (subXobjMatch[1]) xobjDict = subXobjMatch[1];
@@ -1254,53 +1443,29 @@
           }
         }
 
-        const imgRefs = xobjDict.match(/\/([A-Za-z0-9_]+)\s+(\d+)\s+\d+\s+R/g) || [];
-        for (const ir of imgRefs) {
-          const m2 = ir.match(/\/([A-Za-z0-9_]+)\s+(\d+)/);
-          if (m2) {
-            const imgObjNum = m2[2];
-            const imgBody = allObjects.get(imgObjNum) || '';
-            if ((imgBody.includes('/Subtype/Image') || imgBody.includes('/Subtype /Image')) && imgBody.includes('DCTDecode')) {
-              const streamIdx = imgBody.indexOf('stream');
-              const endStreamIdx = imgBody.indexOf('endstream', streamIdx);
-              if (streamIdx !== -1 && endStreamIdx !== -1) {
-                let dataStart = streamIdx + 6;
-                if (imgBody.charCodeAt(dataStart) === 13) dataStart++;
-                if (imgBody.charCodeAt(dataStart) === 10) dataStart++;
-                let rawEnd = endStreamIdx;
-                if (rawEnd > dataStart && (imgBody.charCodeAt(rawEnd - 1) === 10 || imgBody.charCodeAt(rawEnd - 1) === 13)) rawEnd--;
-                if (rawEnd > dataStart && (imgBody.charCodeAt(rawEnd - 1) === 10 || imgBody.charCodeAt(rawEnd - 1) === 13)) rawEnd--;
-
-                const offset = objOffsets.get(imgObjNum);
-                const byteOffset = offset !== undefined ? (offset + dataStart) : dataStart;
-                const byteLen = rawEnd - dataStart;
-                const rawStreamBytes = offset !== undefined
-                  ? bytes.subarray(byteOffset, byteOffset + byteLen)
-                  : new Uint8Array(Array.from(imgBody.substring(dataStart, rawEnd), ch => ch.charCodeAt(0)));
-
-                if (rawStreamBytes.length > 2048 && rawStreamBytes[0] === 0xFF && rawStreamBytes[1] === 0xD8) {
-                  imgCounter++;
-                  const isCmyk = imgBody.includes('DeviceCMYK') || imgBody.includes('/ColorSpace/DeviceCMYK') || imgBody.includes('/ColorSpace /DeviceCMYK');
-                  const imgId = `img_${pageNum}_${imgCounter}`;
-                  const caption = `Diagrama / Esquema (Pág. ${pageNum})`;
-
-                  extractedImages.push({
-                    id: imgId,
-                    caption: caption,
-                    page: pageNum,
-                    objNum: imgObjNum || 0,
-                    offset: byteOffset,
-                    length: byteLen,
-                    isCmyk: isCmyk,
-                    format: 'jpeg'
-                  });
-
-                  // Guardar referencia ligera de indexación en Markdown en lugar de cadena Base64
-                  pageItems.push(`\n![${caption} #${imgId}](rag-image://${imgId})\n`);
-                }
-              }
+        // Asociar imágenes de esta página
+        const pageImages = [];
+        let combinedRefs = null;
+        for (const [imgObjNum, imgData] of imagesByObjNum.entries()) {
+          if (assignedImages.has(imgObjNum)) continue;
+          if (combinedRefs === null) {
+            combinedRefs = body + ' ' + xobjDict;
+            for (const cNum of contentObjs) {
+              const cBody = allObjects.get(String(cNum));
+              if (cBody) combinedRefs += ' ' + cBody;
             }
           }
+          if (combinedRefs.includes(imgObjNum + ' 0 R')) {
+            assignedImages.add(imgObjNum);
+            imgData.page = pageNum;
+            imgData.label = `Diagrama / Esquema (Pág. ${pageNum})`;
+            pageImages.push(imgData);
+            allExtractedImages.push(imgData);
+          }
+        }
+
+        for (const img of pageImages) {
+          pageItems.push(`\n![${img.label}](rag-image://__DOC_ID__:${img.id})\n`);
         }
 
         const pageText = pageItems.join('\n\n').replace(/[ \t]+/g, ' ').trim();
@@ -1308,6 +1473,19 @@
           pages.push(`--- Página ${pageNum} ---\n${pageText}`);
         }
         pageNum++;
+      }
+    }
+
+    // Si quedaron imágenes no asociadas directamente al árbol de páginas, asignarlas
+    for (const [imgObjNum, imgData] of imagesByObjNum.entries()) {
+      if (!assignedImages.has(imgObjNum)) {
+        assignedImages.add(imgObjNum);
+        imgData.page = 1;
+        imgData.label = `Diagrama / Esquema (Pág. 1)`;
+        allExtractedImages.push(imgData);
+        if (pages.length > 0) {
+          pages[0] += `\n\n![${imgData.label}](rag-image://__DOC_ID__:${imgData.id})\n\n`;
+        }
       }
     }
 
@@ -1335,8 +1513,6 @@
             const isDCT = dictSlice.includes('DCTDecode');
             const isFlate = dictSlice.includes('FlateDecode');
             const isFontOrMeta = dictSlice.includes('/Font') || dictSlice.includes('/Metadata') || dictSlice.includes('/ICCBased');
-            const isCMYK = dictSlice.includes('DeviceCMYK') || dictSlice.includes('/ColorSpace/DeviceCMYK');
-
             let rawEnd = endStreamIdx;
             if (rawEnd > dataStart && (fullText.charCodeAt(rawEnd - 1) === 10 || fullText.charCodeAt(rawEnd - 1) === 13)) rawEnd--;
             if (rawEnd > dataStart && (fullText.charCodeAt(rawEnd - 1) === 10 || fullText.charCodeAt(rawEnd - 1) === 13)) rawEnd--;
@@ -1345,24 +1521,7 @@
             const byteLen = rawEnd - dataStart;
             const rawStreamBytes = bytes.subarray(byteOffset, byteOffset + byteLen);
 
-            if (isDCT && rawStreamBytes.length > 2048 && rawStreamBytes[0] === 0xFF && rawStreamBytes[1] === 0xD8) {
-              imgCounter++;
-              const imgId = `img_${pageNum}_${imgCounter}`;
-              const caption = `Diagrama / Esquema (Pág. ${pageNum})`;
-
-              extractedImages.push({
-                id: imgId,
-                caption: caption,
-                page: pageNum,
-                objNum: 0,
-                offset: byteOffset,
-                length: byteLen,
-                isCmyk: isCMYK,
-                format: 'jpeg'
-              });
-
-              currentPageItems.push(`\n![${caption} #${imgId}](rag-image://${imgId})\n`);
-            } else if (!isFontOrMeta) {
+            if (!isFontOrMeta && !isDCT) {
               let streamString = '';
               if (isFlate) {
                 const decompressed = await decompressDeflateData(rawStreamBytes);
@@ -1419,46 +1578,21 @@
       finalCleanText = `[Documento PDF adjunto: No se pudo extraer texto seleccionable. Es posible que el PDF contenga únicamente imágenes escaneadas o esté protegido por contraseña.]`;
     }
 
-    const resultObj = new String(finalCleanText);
-    resultObj.images = extractedImages;
-    return resultObj;
+    return {
+      text: finalCleanText,
+      images: allExtractedImages
+    };
   }
 
-  /**
-   * Extrae y transforma bajo demanda una imagen indexada a partir de los bytes originales del PDF.
-   * Aplica decodificación JPEG y conversión de espacio de color CMYK a RGB si es requerido.
-   *
-   * @param {Uint8Array|ArrayBuffer} pdfData - Bytes del archivo PDF original.
-   * @param {Object} imgIndex - Metadatos de la imagen ({ offset: number, length: number, isCmyk: boolean }).
-   * @returns {string|null} - Data URL resultante (data:image/jpeg;base64,...).
-   */
-  function extractImageFromPdfBytes(pdfData, imgIndex) {
-    if (!pdfData || !imgIndex || typeof imgIndex.offset !== 'number' || typeof imgIndex.length !== 'number') {
-      return null;
-    }
-    try {
-      const bytes = pdfData instanceof Uint8Array ? pdfData : new Uint8Array(pdfData);
-      const start = imgIndex.offset;
-      const end = start + imgIndex.length;
-      if (start < 0 || end > bytes.length || start >= end) {
-        return null;
-      }
-      const rawStreamBytes = bytes.subarray(start, end);
-      if (rawStreamBytes.length === 0) return null;
+  /** Extrae únicamente el texto plano de un PDF sin dependencias externas. */
+  async function extractTextFromPdf(arrayBuffer) {
+    const res = await extractPdfInternal(arrayBuffer);
+    return res.text;
+  }
 
-      // Transformación de espacio de color CMYK -> RGB bajo demanda si aplica
-      if (imgIndex.isCmyk || imgIndex.cmyk) {
-        const cmykDataUrl = convertCmykJpegToRgbDataUrl(rawStreamBytes);
-        if (cmykDataUrl) return cmykDataUrl;
-      }
-
-      // JPEG estándar
-      const b64 = uint8ToBase64(rawStreamBytes);
-      return b64 ? `data:image/jpeg;base64,${b64}` : null;
-    } catch (err) {
-      console.warn('[ChatFileParser] Error al extraer imagen bajo demanda del PDF:', err);
-      return null;
-    }
+  /** Extrae texto estructurado e imágenes incrustadas de un PDF. */
+  async function parsePdfDocument(arrayBuffer) {
+    return await extractPdfInternal(arrayBuffer);
   }
 
   /**
@@ -1476,7 +1610,6 @@
         size: file.size,
         type: 'pdf',
         content: String(extractedText),
-        images: extractedText.images || [],
         preview: `📕 ${file.name} (${formatBytes(file.size)})`
       };
     }
@@ -1524,13 +1657,38 @@
     });
   }
 
+  /**
+   * Convierte un Data URL JPEG en espacio de color CMYK / YCCK a un Data URL JPEG sRGB bajo demanda.
+   */
+  function convertCmykDataUrlToRgb(dataUrl) {
+    if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image/jpeg;base64,')) {
+      return dataUrl;
+    }
+    try {
+      const b64 = dataUrl.substring('data:image/jpeg;base64,'.length);
+      let bytes;
+      if (typeof Buffer !== 'undefined') {
+        bytes = new Uint8Array(Buffer.from(b64, 'base64'));
+      } else if (typeof atob === 'function') {
+        const bin = atob(b64);
+        bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      } else {
+        return dataUrl;
+      }
+      const converted = convertCmykJpegToRgbDataUrl(bytes);
+      return converted || dataUrl;
+    } catch (_) {
+      return dataUrl;
+    }
+  }
+
   return {
     formatBytes,
     parseFile,
     extractTextFromPdf,
-    extractImageFromPdfBytes,
+    parsePdfDocument,
     convertCmykJpegToRgbDataUrl,
-    uint8ToBase64
+    convertCmykDataUrlToRgb
   };
 });
-

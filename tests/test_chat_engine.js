@@ -19,14 +19,12 @@ const ChatAgentCore = require('../js/agent-core.js');
 
 test('ChatEngine - getDailyDateAnchor genera el ancla con fecha y zona horaria', (t) => {
   const anchorEs = ChatEngine.getDailyDateAnchor('es');
-  assert.ok(anchorEs.includes('Contexto del Sistema: La fecha real actual es'));
-  assert.ok(anchorEs.includes('Zona Horaria:'));
-  assert.ok(anchorEs.includes('Orden:'));
+  assert.ok(anchorEs.includes('Fecha actual:'));
+  assert.ok(anchorEs.includes('Zona:'));
 
   const anchorEn = ChatEngine.getDailyDateAnchor('en');
-  assert.ok(anchorEn.includes('System Context: Current real date is'));
+  assert.ok(anchorEn.includes('Current date:'));
   assert.ok(anchorEn.includes('Timezone:'));
-  assert.ok(anchorEn.includes('Command:'));
 });
 
 test('ChatEngine - getToolsSystemPromptGuide genera la lista de herramientas activas', (t) => {
@@ -79,7 +77,8 @@ test('ChatEngine - buildEffectiveMessages inyecta fecha, RAG y formatea mensajes
 
   assert.equal(messages[0].role, 'system');
   assert.ok(messages[0].content.includes('[BASE DE CONOCIMIENTO ACTIVA: Manual GA-Z77P-D3]'));
-  assert.ok(messages[0].content.includes('Contexto del Sistema: La fecha real actual es'));
+  assert.ok(messages[0].content.includes('Fecha actual:'));
+  assert.ok(messages[0].content.includes('Formato: Usa siempre Markdown estándar'));
   assert.ok(messages[0].content.includes('Eres un asistente experto.'));
   assert.ok(messages[0].content.includes('Base de Conocimiento activa'));
 
@@ -247,4 +246,55 @@ test('ChatEngine - executeAgentTurnLoop protege contra bucles infinitos repetido
   assert.ok(errorLogs.some(msg => msg.includes('[Protección Bucle Infinito]')));
 
   ChatAPI.streamChatCompletion = originalStream;
+});
+
+test('ChatEngine - executeAgentTurnLoop limpia el cursor inicial del contenedor en turnIndex 0', async (t) => {
+  const originalStream = ChatAPI.streamChatCompletion;
+
+  ChatAPI.streamChatCompletion = async (params) => {
+    if (params.onChunk) {
+      params.onChunk('Respuesta de prueba', 'Respuesta de prueba', { ttftSec: '0.1', tokensPerSec: '40', totalSec: '0.2', tokens: 5 });
+    }
+    if (params.onDone) {
+      params.onDone('Respuesta de prueba', null, null);
+    }
+    return { accumulatedText: 'Respuesta de prueba', toolCalls: null, stats: null };
+  };
+
+  const fakeContainer = {
+    innerHTML: '<span class="streaming-cursor initial-cursor"></span>',
+    querySelectorAll: () => [],
+    appendChild: (child) => {
+      fakeContainer.children = fakeContainer.children || [];
+      fakeContainer.children.push(child);
+    }
+  };
+
+  global.document = {
+    createElement: (tag) => ({
+      tagName: tag,
+      className: '',
+      style: {},
+      setAttribute: () => {},
+      appendChild: () => {},
+      querySelectorAll: () => [],
+      ownerDocument: global.document
+    })
+  };
+
+  const res = await ChatEngine.executeAgentTurnLoop({
+    apiUrl: 'http://localhost:1234/v1',
+    apiType: 'openai',
+    model: 'test-model',
+    chatHistory: [{ role: 'user', content: 'Hola' }],
+    appConfig: { apiUrl: 'http://localhost:1234/v1', model: 'test-model' },
+    container: fakeContainer
+  });
+
+  // El cursor inicial debe haberse limpiado antes de añadir el agentic-turn-block
+  assert.equal(res.success, true);
+  assert.equal(fakeContainer.innerHTML, '');
+
+  ChatAPI.streamChatCompletion = originalStream;
+  delete global.document;
 });

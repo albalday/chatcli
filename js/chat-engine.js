@@ -68,10 +68,10 @@
     const dayName = now.toLocaleDateString(lang === 'en' ? 'en-US' : 'es-ES', { weekday: 'long' });
 
     if (lang === 'en') {
-      return `[System Context: Current real date is ${isoDate} (${dayName}), Timezone: ${tz}. Command: This is the verified real-time system date; treat it as factual present and answer with total certainty.]`;
+      return `[Current date: ${isoDate} (${dayName}), Timezone: ${tz}. Treat as present.]`;
     }
 
-    return `[Contexto del Sistema: La fecha real actual es ${isoDate} (${dayName}), Zona Horaria: ${tz}. Orden: Esta es la fecha verificada del sistema en tiempo real; acéptala como presente factual y responde con total certeza.]`;
+    return `[Fecha actual: ${isoDate} (${dayName}), Zona: ${tz}. Trátala como presente.]`;
   }
 
   /**
@@ -184,7 +184,7 @@
       ? appConfig.systemPrompt.trim()
       : '';
 
-    // Inyección de Base de Conocimiento (RAG Jerárquico por Ramas) para Context-Caching
+    // Inyección de la instrucción compacta de conocimiento local.
     const ragContext = options.currentRagSystemContext || appConfig.currentRagSystemContext || '';
     if (ragContext) {
       activePrompt = activePrompt ? `${ragContext}\n\n${activePrompt}` : ragContext;
@@ -196,6 +196,11 @@
       const dateAnchor = getDailyDateAnchor(lang);
       activePrompt = activePrompt ? (dateAnchor + '\n\n' + activePrompt) : dateAnchor;
     }
+
+    const formatDirective = (lang === 'en')
+      ? '[Format: Always use standard Markdown and plain text. Never use LaTeX syntax or delimiters ($ or $$); write all math, formulas, and numbers directly using readable plain text with standard symbols (+, -, ×, /, =).]'
+      : '[Formato: Usa siempre Markdown estándar y texto plano. Nunca uses sintaxis ni delimitadores LaTeX ($ o $$); escribe las matemáticas, fórmulas y números directamente en texto legible con símbolos estándar (+, -, ×, /, =).]';
+    activePrompt = activePrompt ? (activePrompt + '\n\n' + formatDirective) : formatDirective;
 
     const isToolsEnabled = options.enableTools !== undefined
       ? Boolean(options.enableTools)
@@ -223,13 +228,13 @@
 
     // Directiva proactiva de Base de Conocimiento activa
     const activeBranchId = options.activeRagBranchId ||
-      (typeof window !== 'undefined' && window.ChatTreeRagUI && window.ChatTreeRagUI.getActiveChatBranchId ? window.ChatTreeRagUI.getActiveChatBranchId() : '') ||
+      (typeof window !== 'undefined' && window.ChatRagUI && window.ChatRagUI.getActiveBranchId ? window.ChatRagUI.getActiveBranchId() : '') ||
       (appConfig.activeRagBranchId || '');
 
     if (activeBranchId) {
       const ragInstruction = (lang === 'en')
-        ? `*Knowledge Base active:* You have access to the user's private local knowledge base via 'list_documents', 'search_knowledge_base', and 'read_chapter_content'. When the user asks about available manuals, documentation, guides, or technical information, proactively consult these tools before concluding.`
-        : `*Base de Conocimiento activa:* Tienes acceso a la base de conocimiento local y manuales privados del usuario mediante las herramientas 'list_documents', 'search_knowledge_base' y 'read_chapter_content'. Ante preguntas sobre documentación disponible, manuales, procedimientos técnicos o normativas, consulta proactivamente los documentos indexados utilizando estas herramientas antes de responder.`;
+        ? `*Knowledge Base active:* Use 'list_documents', 'search_knowledge_base', and 'read_knowledge_chunk' to consult the user's private local documents before answering related questions.`
+        : `*Base de Conocimiento activa:* Usa 'list_documents', 'search_knowledge_base' y 'read_knowledge_chunk' para consultar los documentos privados locales antes de responder preguntas relacionadas.`;
       toolsGuide = toolsGuide ? `${toolsGuide}\n\n${ragInstruction}` : ragInstruction;
     }
 
@@ -358,7 +363,7 @@
 
       let turnBlock = null;
       if (container && typeof document !== 'undefined') {
-        if (turnIndex === 0 && container.innerHTML.includes('tool-loading-placeholder')) {
+        if (turnIndex === 0) {
           container.innerHTML = '';
         }
         turnBlock = document.createElement('div');
@@ -490,46 +495,50 @@
               : 'A partir de toda la información obtenida por las herramientas anteriores, redacta ahora una respuesta final completa, detallada y bien estructurada para mi consulta inicial, organizando los hallazgos con claridad y citando las fuentes consultadas.'
           });
 
-          await API.streamChatCompletion({
-            apiUrl: apiUrl || appConfig.apiUrl,
-            apiType: apiType || appConfig.apiType,
-            apiKey: apiKey || appConfig.apiKey,
-            model: model || appConfig.model,
-            messages: synthMessages,
-            temperature: temperature !== undefined ? temperature : appConfig.temperature,
-            reasoningEffort: reasoningEffort || appConfig.reasoningEffort || 'none',
-            enableTools: true,
-            toolChoice: 'none',
-            enableAgentJs: appConfig.enableAgentJs !== false,
-            enableAgentWeb: appConfig.enableAgentWeb !== false,
-            enableAgentSearch: appConfig.enableAgentSearch !== false,
-            enableAgentChart: appConfig.enableAgentChart !== false,
-            enableAgentRag: Boolean(activeRagBranchId),
-            activeRagBranchId: activeRagBranchId || '',
-            enableContextCache: appConfig.enableContextCache !== false,
-            signal: signal,
+          try {
+            await API.streamChatCompletion({
+              apiUrl: apiUrl || appConfig.apiUrl,
+              apiType: apiType || appConfig.apiType,
+              apiKey: apiKey || appConfig.apiKey,
+              model: model || appConfig.model,
+              messages: synthMessages,
+              temperature: temperature !== undefined ? temperature : appConfig.temperature,
+              reasoningEffort: reasoningEffort || appConfig.reasoningEffort || 'none',
+              tools: [],
+              enableTools: false,
+              toolChoice: 'none',
+              enableAgentJs: false,
+              enableAgentWeb: false,
+              enableAgentSearch: false,
+              enableAgentChart: false,
+              activeRagBranchId: activeRagBranchId || '',
+              enableContextCache: appConfig.enableContextCache !== false,
+              signal: signal,
 
-            onReasoningChunk: function (chunk) {
-              if (typeof onReasoningChunk === 'function') onReasoningChunk(chunk);
-              if (typeof onLog === 'function') onLog('thinking', chunk);
-            },
-            onLog: function (logData) {
-              if (typeof onLog === 'function' && logData && logData.type !== 'thinking') onLog(logData.type, logData.text);
-            },
-            onChunk: function (fullTextSoFar, delta, stats) {
-              synthText = fullTextSoFar;
-              if (turnBlock) {
-                turnBlock.innerHTML = injectStreamingCursor(parseMd(synthText));
-                attachEvts(turnBlock);
+              onReasoningChunk: function (chunk) {
+                if (typeof onReasoningChunk === 'function') onReasoningChunk(chunk);
+                if (typeof onLog === 'function') onLog('thinking', chunk);
+              },
+              onLog: function (logData) {
+                if (typeof onLog === 'function' && logData && logData.type !== 'thinking') onLog(logData.type, logData.text);
+              },
+              onChunk: function (fullTextSoFar, delta, stats) {
+                synthText = fullTextSoFar;
+                if (turnBlock) {
+                  turnBlock.innerHTML = injectStreamingCursor(parseMd(synthText));
+                  attachEvts(turnBlock);
+                }
+                if (stats && typeof onStats === 'function') onStats(stats);
+                scrollFn();
+              },
+              onDone: function (finalText, stats) {
+                synthText = finalText || synthText;
+                synthStats = stats;
               }
-              if (stats && typeof onStats === 'function') onStats(stats);
-              scrollFn();
-            },
-            onDone: function (finalText, stats) {
-              synthText = finalText || synthText;
-              synthStats = stats;
-            }
-          });
+            });
+          } catch (intSynthErr) {
+            if (typeof onLog === 'function') onLog('warn', `Error en síntesis intermedia: ${intSynthErr.message}`);
+          }
 
           if (synthText && synthText.trim() !== '') {
             currentTurnText = synthText;
@@ -720,42 +729,46 @@
           : 'A partir de toda la información obtenida por las herramientas anteriores, redacta ahora una respuesta final completa, detallada y bien estructurada para mi consulta inicial, organizando los hallazgos con claridad y citando las fuentes consultadas.'
       });
 
-      await API.streamChatCompletion({
-        apiUrl: apiUrl || appConfig.apiUrl,
-        apiType: apiType || appConfig.apiType,
-        apiKey: apiKey || appConfig.apiKey,
-        model: model || appConfig.model,
-        messages: synthMessages,
-        temperature: temperature !== undefined ? temperature : appConfig.temperature,
-        reasoningEffort: reasoningEffort || appConfig.reasoningEffort || 'none',
-        tools: activeToolDefs,
-        enableTools: true,
-        toolChoice: 'none',
-        activeRagBranchId: activeRagBranchId || '',
-        enableContextCache: appConfig.enableContextCache !== false,
-        signal: signal,
+      try {
+        await API.streamChatCompletion({
+          apiUrl: apiUrl || appConfig.apiUrl,
+          apiType: apiType || appConfig.apiType,
+          apiKey: apiKey || appConfig.apiKey,
+          model: model || appConfig.model,
+          messages: synthMessages,
+          temperature: temperature !== undefined ? temperature : appConfig.temperature,
+          reasoningEffort: reasoningEffort || appConfig.reasoningEffort || 'none',
+          tools: [],
+          enableTools: false,
+          toolChoice: 'none',
+          activeRagBranchId: activeRagBranchId || '',
+          enableContextCache: appConfig.enableContextCache !== false,
+          signal: signal,
 
-        onReasoningChunk: function (chunk) {
-          if (typeof onReasoningChunk === 'function') onReasoningChunk(chunk);
-          if (typeof onLog === 'function') onLog('thinking', chunk);
-        },
-        onLog: function (logData) {
-          if (typeof onLog === 'function' && logData && logData.type !== 'thinking') onLog(logData.type, logData.text);
-        },
-        onChunk: function (fullTextSoFar, delta, stats) {
-          finalSynthText = fullTextSoFar;
-          if (finalSynthBlock) {
-            finalSynthBlock.innerHTML = injectStreamingCursor(parseMd(finalSynthText));
-            attachEvts(finalSynthBlock);
+          onReasoningChunk: function (chunk) {
+            if (typeof onReasoningChunk === 'function') onReasoningChunk(chunk);
+            if (typeof onLog === 'function') onLog('thinking', chunk);
+          },
+          onLog: function (logData) {
+            if (typeof onLog === 'function' && logData && logData.type !== 'thinking') onLog(logData.type, logData.text);
+          },
+          onChunk: function (fullTextSoFar, delta, stats) {
+            finalSynthText = fullTextSoFar;
+            if (finalSynthBlock) {
+              finalSynthBlock.innerHTML = injectStreamingCursor(parseMd(finalSynthText));
+              attachEvts(finalSynthBlock);
+            }
+            if (stats && typeof onStats === 'function') onStats(stats);
+            scrollFn();
+          },
+          onDone: function (finalText, stats) {
+            finalSynthText = finalText || finalSynthText;
+            finalSynthStats = stats;
           }
-          if (stats && typeof onStats === 'function') onStats(stats);
-          scrollFn();
-        },
-        onDone: function (finalText, stats) {
-          finalSynthText = finalText || finalSynthText;
-          finalSynthStats = stats;
-        }
-      });
+        });
+      } catch (synthErr) {
+        if (typeof onLog === 'function') onLog('warn', `Error en síntesis final: ${synthErr.message}`);
+      }
 
       if (!finalSynthText || finalSynthText.trim() === '') {
         const toolResults = chatHistory

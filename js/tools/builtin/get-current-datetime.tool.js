@@ -7,8 +7,8 @@
 
   const definition = {
     name: 'get_current_datetime',
-    description: 'Obtiene la fecha, hora, día de la semana y zona horaria actual en tiempo real en el cliente.',
-    parameters: { type: 'object', properties: { timezone: { type: 'string', description: 'Zona horaria opcional (ej: "Europe/Madrid", "America/New_York", "UTC").' } } }
+    description: 'Devuelve la hora exacta. Úsala solo si el usuario pide la hora actual.',
+    parameters: { type: 'object', properties: {} }
   };
 
   function createTool(Tool) {
@@ -21,23 +21,17 @@
       metadata: { icon: '⏱️', label: definition.name },
       settings: { showInSettings: false },
       promptGuide: (lang) => lang === 'en'
-        ? '- `get_current_datetime(timezone="...")`: Retrieves the current date, exact time, day of week and timezone in real-time.'
-        : '- `get_current_datetime(timezone="...")`: Obtiene la fecha, hora exacta, día de la semana y zona horaria actual en tiempo real.',
-      execute: async (args = {}) => {
-        const now = new Date();
-        const timezone = args.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+        ? '- `get_current_datetime()`: Returns exact current time.'
+        : '- `get_current_datetime()`: Devuelve la hora exacta actual.',
+      isAvailable: (appConfig = {}) => appConfig.sendDateTime !== false,
+      execute: async () => {
         return {
           success: true,
-          iso: now.toISOString(),
-          date: now.toLocaleDateString('es-ES', { timeZone: timezone, weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
-          time: now.toLocaleTimeString('es-ES', { timeZone: timezone, hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-          timestamp: now.getTime(),
-          timezone
+          iso: new Date().toISOString()
         };
       },
       result: {
-        toMarkdown: (_args, result) => '> ⚙️ **get_current_datetime**\n> ```\n> ' +
-          (typeof result === 'object' ? JSON.stringify(result) : String(result ?? '')).slice(0, 300) + '\n> ```'
+        toMarkdown: () => ''
       },
       view: { id: definition.name }
     });

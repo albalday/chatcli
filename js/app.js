@@ -1,5 +1,5 @@
 /**
- * Aplicación principal del cliente de chat Web (ZeroChat v5.3).
+ * Aplicación principal del cliente de chat Web (ZeroChat v5.4).
  * Incluye:
  * - Soporte Multi-idioma (Castellano / Inglés) con autodetección por navegador y persistencia.
  * - Selector de nivel de razonamiento (Thinking/CoT) con detección automática de capacidades del modelo.
@@ -33,6 +33,10 @@
   const ContextManager = window.ChatContextManager || {};
   const AgentCore = window.ChatAgentCore || {};
   const Engine = window.ChatEngine || {};
+  const UIReasoning = window.ChatUIReasoning || {};
+  const UIInspector = window.ChatUIInspector || {};
+  const UISidebar = window.ChatUISidebar || {};
+  const UISettings = window.ChatUISettings || {};
 
   function t(key, params) {
     if (I18n.t) return I18n.t(key, params);
@@ -111,6 +115,8 @@
       badgeProfile: document.getElementById('badge-profile'),
       currentProfileName: document.getElementById('current-profile-name'),
       activeProfileSelect: document.getElementById('active-profile-select'),
+      connectionTokensBadge: document.getElementById('connection-tokens-badge'),
+      connectionTokensText: document.getElementById('connection-tokens-text'),
       badgeServer: document.getElementById('badge-server'),
       currentServerUrl: document.getElementById('current-server-url'),
       badgeModel: document.getElementById('badge-model'),
@@ -247,74 +253,14 @@
   }
 
   function applyTheme(theme) {
-    const root = document.documentElement;
-    const effective = (theme === 'dark') ? 'dark' : 'light';
-    appConfig.theme = effective;
-
-    if (effective === 'dark') {
-      root.setAttribute('data-theme', 'dark');
-    } else {
-      root.removeAttribute('data-theme');
-    }
-
-    if (elements.themeButtons && elements.themeButtons.length > 0) {
-      elements.themeButtons.forEach(btn => {
-        if (btn.getAttribute('data-theme') === effective) {
-          btn.classList.add('active');
-        } else {
-          btn.classList.remove('active');
-        }
-      });
+    if (UISettings.applyTheme) {
+      UISettings.applyTheme(elements, appConfig, theme);
     }
   }
 
   function applyLanguage(lang) {
-    const target = (lang === 'en') ? 'en' : 'es';
-    appConfig.language = target;
-
-    if (I18n.setLanguage) {
-      I18n.setLanguage(target, true);
-    }
-    if (Storage.saveConfig) {
-      Storage.saveConfig({ language: target });
-    }
-
-    // Actualizar indicador en toolbar
-    if (elements.currentLangLabel) {
-      elements.currentLangLabel.textContent = target.toUpperCase();
-    }
-
-    // Actualizar botones de idioma en el modal
-    if (elements.langButtons && elements.langButtons.length > 0) {
-      elements.langButtons.forEach(btn => {
-        if (btn.getAttribute('data-lang') === target) {
-          btn.classList.add('active');
-        } else {
-          btn.classList.remove('active');
-        }
-      });
-    }
-
-    // Actualizar data-prompt en tarjetas de sugerencia
-    if (elements.sugCardExplain) elements.sugCardExplain.setAttribute('data-prompt', t('sug_explain_prompt'));
-    if (elements.sugCardCode) elements.sugCardCode.setAttribute('data-prompt', t('sug_code_prompt'));
-    if (elements.sugCardIdeas) elements.sugCardIdeas.setAttribute('data-prompt', t('sug_ideas_prompt'));
-
-    // Actualizar modelo y perfil en badges
-    if (elements.currentProfileName) {
-      const activeProf = (Storage.getActiveProfileName ? Storage.getActiveProfileName() : appConfig.activeProfileName) || appConfig.activeProfileName || 'Local chat';
-      elements.currentProfileName.textContent = activeProf;
-    }
-    if (elements.currentModelName) {
-      elements.currentModelName.textContent = appConfig.model ? appConfig.model : t('no_model');
-    }
-
-    // Actualizar UI de razonamiento
-    updateReasoningUI(appConfig.reasoningEffort);
-
-    // Actualizar placeholder de prompt del sistema si está vacío
-    if (elements.settingSystemPrompt) {
-      elements.settingSystemPrompt.setAttribute('placeholder', t('field_system_prompt_placeholder'));
+    if (UISettings.applyLanguage) {
+      UISettings.applyLanguage(elements, appConfig, lang, { updateReasoningUI });
     }
   }
 
@@ -363,141 +309,29 @@
   // Modelos y Consulta al Servidor (API Query & Combobox)
   // ==========================================================================
 
-  let discoveredModels = [];
-
   function loadCachedModels() {
-    try {
-      const cached = Storage.getStorageItem ? Storage.getStorageItem('cached_models') : null;
-      if (cached) {
-        discoveredModels = JSON.parse(cached);
-        if (Array.isArray(discoveredModels) && discoveredModels.length > 0) {
-          populateModelList(discoveredModels, false);
-        }
-      }
-    } catch (e) {
-      console.warn('No se pudieron cargar modelos de caché:', e);
+    if (UIInspector.loadCachedModels) {
+      return UIInspector.loadCachedModels(elements, appConfig);
     }
+    return [];
   }
 
   function saveCachedModels(models) {
-    discoveredModels = models || [];
-    try {
-      if (Storage.setStorageItem) {
-        Storage.setStorageItem('cached_models', JSON.stringify(discoveredModels));
-      }
-    } catch (e) {}
+    if (UIInspector.saveCachedModels) {
+      return UIInspector.saveCachedModels(models);
+    }
+    return [];
   }
 
   function populateModelList(models, selectFirstIfEmpty = false) {
-    if (!models || !Array.isArray(models) || models.length === 0) return;
-
-    if (elements.modelDatalist) {
-      elements.modelDatalist.innerHTML = '';
-      models.forEach(m => {
-        const id = (typeof m === 'string' ? m : (m.id || m.name || '')).trim();
-        if (id) {
-          const opt = document.createElement('option');
-          opt.value = id;
-          elements.modelDatalist.appendChild(opt);
-        }
-      });
-    }
-
-    if (elements.modelSelectHelper) {
-      elements.modelSelectHelper.innerHTML = '';
-      const defaultOpt = document.createElement('option');
-      defaultOpt.value = '';
-      defaultOpt.disabled = true;
-      defaultOpt.selected = true;
-      defaultOpt.textContent = t('model_select_count', { count: models.length });
-      elements.modelSelectHelper.appendChild(defaultOpt);
-
-      const currentVal = elements.settingModel ? elements.settingModel.value.trim() : (appConfig.model || '');
-
-      models.forEach(m => {
-        const id = (typeof m === 'string' ? m : (m.id || m.name || '')).trim();
-        if (id) {
-          const opt = document.createElement('option');
-          opt.value = id;
-          opt.textContent = id;
-          if (currentVal && currentVal === id) {
-            opt.selected = true;
-            defaultOpt.selected = false;
-          }
-          elements.modelSelectHelper.appendChild(opt);
-        }
-      });
-    }
-
-    if (selectFirstIfEmpty && elements.settingModel) {
-      const currentVal = elements.settingModel.value.trim();
-      const firstId = (typeof models[0] === 'string' ? models[0] : (models[0].id || models[0].name || '')).trim();
-      if (!currentVal && firstId) {
-        elements.settingModel.value = firstId;
-        if (elements.modelSelectHelper) elements.modelSelectHelper.value = firstId;
-      }
+    if (UIInspector.populateModelList) {
+      UIInspector.populateModelList(elements, appConfig, models, selectFirstIfEmpty);
     }
   }
 
   async function handleQueryServer() {
-    if (!elements.btnQueryServer) return;
-
-    const apiUrl = (elements.settingApiUrl ? elements.settingApiUrl.value : appConfig.apiUrl || '').trim();
-    const apiKey = (elements.settingApiKey ? elements.settingApiKey.value : appConfig.apiKey || '').trim();
-    const apiType = (elements.settingApiType ? elements.settingApiType.value : appConfig.apiType || 'openai').trim();
-
-    if (!apiUrl) {
-      if (elements.serverQueryStatus) {
-        elements.serverQueryStatus.style.display = 'block';
-        elements.serverQueryStatus.className = 'server-query-status status-error';
-        elements.serverQueryStatus.textContent = t('err_invalid_url');
-      }
-      return;
-    }
-
-    elements.btnQueryServer.disabled = true;
-    elements.btnQueryServer.classList.add('loading');
-    const queryText = elements.btnQueryServer.querySelector('.query-btn-text');
-    if (queryText) queryText.textContent = t('btn_querying_text');
-
-    if (elements.serverQueryStatus) {
-      elements.serverQueryStatus.style.display = 'block';
-      elements.serverQueryStatus.className = 'server-query-status status-loading';
-      elements.serverQueryStatus.textContent = t('err_connecting_models', { url: apiUrl });
-    }
-
-    try {
-      if (!API.fetchServerModels) {
-        throw new Error('API query function not available.');
-      }
-
-      addDebugLog('network', `Consultando modelos en ${apiUrl} [${apiType}]`);
-      addDebugLog('raw', `>>> OUTGOING GET/POST ${apiUrl} (fetchServerModels)`);
-      const res = await API.fetchServerModels(apiUrl, apiKey, apiType);
-      addDebugLog('raw', `<<< INCOMING (fetchServerModels):\n${JSON.stringify(res, null, 2)}`);
-
-      if (res.success && res.models && res.models.length > 0) {
-        saveCachedModels(res.models);
-        populateModelList(res.models, true);
-
-        if (elements.serverQueryStatus) {
-          elements.serverQueryStatus.className = 'server-query-status status-success';
-          elements.serverQueryStatus.innerHTML = t('msg_models_success', { count: res.count, endpoint: res.endpoint });
-        }
-      } else {
-        throw new Error(res.error || 'Server did not return a valid models list.');
-      }
-    } catch (err) {
-      console.error('Error querying server models:', err);
-      if (elements.serverQueryStatus) {
-        const esc = Markdown.escapeHtml || function(s) { return s; };
-        elements.serverQueryStatus.className = 'server-query-status status-error';
-        elements.serverQueryStatus.innerHTML = t('err_api_connect', { err: esc(err.message || String(err)) });
-      }
-    } finally {
-      elements.btnQueryServer.disabled = false;
-      elements.btnQueryServer.classList.remove('loading');
-      if (queryText) queryText.textContent = t('btn_query_text');
+    if (UIInspector.handleQueryServer) {
+      await UIInspector.handleQueryServer(elements, appConfig);
     }
   }
 
@@ -506,149 +340,15 @@
   // ==========================================================================
 
   async function handleRunInspector() {
-    if (!elements.btnRunInspector || !elements.inspectorResults) return;
-
-    const apiUrl = elements.settingApiUrl ? elements.settingApiUrl.value.trim() : appConfig.apiUrl;
-    const apiType = elements.settingApiType ? elements.settingApiType.value : appConfig.apiType;
-    const apiKey = elements.settingApiKey ? elements.settingApiKey.value.trim() : appConfig.apiKey;
-    const model = elements.settingModel ? elements.settingModel.value.trim() : appConfig.model;
-
-    if (!apiUrl) {
-      alert(t('err_api_connect', { err: 'Por favor, introduce una URL de servidor válida.' }));
-      return;
-    }
-
-    elements.btnRunInspector.disabled = true;
-    const btnText = elements.btnRunInspector.querySelector('.inspector-btn-text');
-    const originalText = btnText ? btnText.textContent : '';
-    if (btnText) btnText.textContent = t('btn_running_inspector');
-
-    elements.inspectorResults.style.display = 'block';
-    elements.inspectorResults.innerHTML = `
-      <div style="padding: 1.5rem; text-align: center; color: var(--text-muted);">
-        <span class="query-icon" style="display:inline-block; font-size: 1.5rem; animation: spin 1s linear infinite;">⏳</span>
-        <p style="margin-top: 0.5rem; font-size: 0.85rem;">${t('btn_running_inspector')}</p>
-      </div>
-    `;
-
-    try {
-      if (!API.inspectProvider) {
-        throw new Error('Módulo de inspección no disponible.');
-      }
-
-      addDebugLog('network', `Ejecutando Provider Inspector en ${apiUrl} [${apiType}]`);
-      const report = await API.inspectProvider({ apiUrl, apiType, apiKey, model });
-
-      renderInspectorReport(report);
-    } catch (err) {
-      console.error('Error in Provider Inspector:', err);
-      elements.inspectorResults.innerHTML = `
-        <div class="server-query-status status-error" style="display: block;">
-          ${Markdown.escapeHtml ? Markdown.escapeHtml(err.message || String(err)) : String(err)}
-        </div>
-      `;
-    } finally {
-      elements.btnRunInspector.disabled = false;
-      if (btnText) btnText.textContent = originalText;
+    if (UIInspector.handleRunInspector) {
+      await UIInspector.handleRunInspector(elements, appConfig);
     }
   }
 
   function renderInspectorReport(report) {
-    if (!elements.inspectorResults || !report) return;
-
-    const esc = (Markdown && Markdown.escapeHtml) ? Markdown.escapeHtml : function(s) { return String(s || '').replace(/[&<>"']/g, ''); };
-    const p = report.provider || {};
-    const ep = report.endpoint || {};
-    const m = report.model || {};
-    const caps = report.capabilities || {};
-
-    function getBadgeClass(status) {
-      switch (status) {
-        case 'confirmed': return 'cap-badge cap-badge-confirmed';
-        case 'inferred': return 'cap-badge cap-badge-inferred';
-        case 'declared': return 'cap-badge cap-badge-declared';
-        case 'unsupported': return 'cap-badge cap-badge-unsupported';
-        default: return 'cap-badge cap-badge-unknown';
-      }
+    if (UIInspector.renderInspectorReport) {
+      UIInspector.renderInspectorReport(elements, report);
     }
-
-    function getBadgeIcon(status) {
-      switch (status) {
-        case 'confirmed': return '✓';
-        case 'inferred': return '✦';
-        case 'declared': return 'ℹ';
-        case 'unsupported': return '✕';
-        default: return '?';
-      }
-    }
-
-    function getStatusLabel(status) {
-      switch (status) {
-        case 'confirmed': return t('inspector_status_confirmed');
-        case 'inferred': return t('inspector_status_inferred');
-        case 'declared': return t('inspector_status_declared');
-        case 'unsupported': return t('inspector_status_unsupported');
-        default: return t('inspector_status_unknown');
-      }
-    }
-
-    const capKeys = [
-      { key: 'streaming', title: t('inspector_cap_streaming'), icon: '📡' },
-      { key: 'tools', title: t('inspector_cap_tools'), icon: '⚙️' },
-      { key: 'vision', title: t('inspector_cap_vision'), icon: '👁️' },
-      { key: 'reasoning', title: t('inspector_cap_reasoning'), icon: '🧠' },
-      { key: 'jsonMode', title: t('inspector_cap_jsonMode'), icon: '📋' },
-      { key: 'promptCaching', title: t('inspector_cap_promptCaching'), icon: '💾' },
-      { key: 'embeddings', title: t('inspector_cap_embeddings'), icon: '🔢' },
-      { key: 'modelListing', title: t('inspector_cap_modelListing'), icon: '🤖' }
-    ];
-
-    let cardsHtml = '';
-    capKeys.forEach(item => {
-      const c = caps[item.key] || { status: 'unknown', detail: '' };
-      const badgeCls = getBadgeClass(c.status);
-      const badgeIcon = getBadgeIcon(c.status);
-      const statusLabel = getStatusLabel(c.status);
-
-      cardsHtml += `
-        <div class="inspector-cap-card">
-          <div class="cap-card-header">
-            <span class="cap-card-title">${item.icon} ${item.title}</span>
-            <span class="${badgeCls}">${badgeIcon} ${statusLabel}</span>
-          </div>
-          <div class="cap-card-detail">${esc(c.detail || '')}</div>
-        </div>
-      `;
-    });
-
-    const modelInfoText = m.totalDiscovered > 0
-      ? `${m.totalDiscovered} modelo(s) descubierto(s)`
-      : (m.selected ? `Modelo: ${esc(m.selected)}` : 'Sin modelos listados');
-
-    elements.inspectorResults.innerHTML = `
-      <div class="inspector-header-meta">
-        <div class="inspector-meta-item">
-          <span class="meta-label">Proveedor</span>
-          <span class="meta-value">${esc(p.label || p.id || 'Desconocido')}</span>
-        </div>
-        <div class="inspector-meta-item">
-          <span class="meta-label">Endpoint Chat</span>
-          <span class="meta-value" style="font-family: monospace; font-size: 0.775rem;">${esc(ep.normalized || ep.raw || '')}</span>
-        </div>
-        <div class="inspector-meta-item">
-          <span class="meta-label">Modelos</span>
-          <span class="meta-value">${esc(modelInfoText)}</span>
-        </div>
-        <div class="inspector-meta-item">
-          <span class="meta-label">Latencia Diagnóstico</span>
-          <span class="meta-value">${report.inspectionTimeMs || 0} ms</span>
-        </div>
-      </div>
-
-      <div class="inspector-cap-grid">
-        ${cardsHtml}
-      </div>
-    `;
   }
 
   // ==========================================================================
@@ -656,179 +356,49 @@
   // ==========================================================================
 
   function getReasoningLevelLabel(lvl) {
-    const lower = String(lvl).toLowerCase().trim();
-    switch (lower) {
-      case 'off':
-      case 'none':
-        return { icon: '⚪', label: t('reasoning_level_none'), desc: t('reasoning_desc_none') };
-      case 'on':
-        return { icon: '🧠', label: t('reasoning_level_on'), desc: t('reasoning_desc_on') };
-      case 'minimal':
-        return { icon: '🟢', label: t('reasoning_level_minimal'), desc: t('reasoning_desc_minimal') };
-      case 'low':
-        return { icon: '🟢', label: t('reasoning_level_low'), desc: t('reasoning_desc_low') };
-      case 'medium':
-        return { icon: '🟡', label: t('reasoning_level_medium'), desc: t('reasoning_desc_medium') };
-      case 'high':
-        return { icon: '🔴', label: t('reasoning_level_high'), desc: t('reasoning_desc_high') };
-      case 'xhigh':
-        return { icon: '🔥', label: t('reasoning_level_xhigh'), desc: t('reasoning_desc_xhigh') };
-      default:
-        return { icon: '⚙️', label: lvl.charAt(0).toUpperCase() + lvl.slice(1), desc: '' };
-    }
+    if (UIReasoning.getReasoningLevelLabel) return UIReasoning.getReasoningLevelLabel(lvl);
+    return { icon: '⚙️', label: lvl, desc: '' };
   }
 
   function renderReasoningMenuOptions(reasoningInfo, activeLevel) {
-    if (!elements.reasoningOptionsContainer) return;
-
-    elements.reasoningOptionsContainer.innerHTML = '';
-    const levels = (reasoningInfo && Array.isArray(reasoningInfo.levels)) ? reasoningInfo.levels : ['off', 'low', 'medium', 'high'];
-
-    levels.forEach(lvl => {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'reasoning-option';
-      btn.setAttribute('data-level', lvl);
-
-      const info = getReasoningLevelLabel(lvl);
-      const lower = String(lvl).toLowerCase().trim();
-      const activeLower = String(activeLevel || 'off').toLowerCase().trim();
-
-      if (lower === activeLower || (activeLower === 'off' && lower === 'none') || (activeLower === 'none' && lower === 'off')) {
-        btn.classList.add('active');
-      }
-
-      btn.innerHTML = `
-        <span class="option-icon">${info.icon}</span>
-        <div class="option-text">
-          <strong>${info.label}</strong>
-          ${info.desc ? `<small>${info.desc}</small>` : ''}
-        </div>
-      `;
-
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        selectReasoningLevel(lvl);
-      });
-
-      elements.reasoningOptionsContainer.appendChild(btn);
-    });
+    if (UIReasoning.renderReasoningMenuOptions) {
+      UIReasoning.renderReasoningMenuOptions(elements, reasoningInfo, activeLevel, selectReasoningLevel);
+    }
   }
 
   function positionReasoningMenu() {
-    if (!elements.reasoningMenu || !elements.btnReasoning) return;
-    if (elements.reasoningMenu.style.display === 'none') return;
-
-    const btnRect = elements.btnReasoning.getBoundingClientRect();
-    const viewportHeight = window.visualViewport ? window.visualViewport.height : window.innerHeight;
-    const viewportWidth = window.innerWidth;
-
-    const spaceAbove = btnRect.top;
-    const menuWidth = Math.min(290, viewportWidth - 16);
-
-    let leftPos = btnRect.left;
-    if (leftPos + menuWidth > viewportWidth - 8) {
-      leftPos = viewportWidth - menuWidth - 8;
+    if (UIReasoning.positionReasoningMenu) {
+      UIReasoning.positionReasoningMenu(elements);
     }
-    if (leftPos < 8) {
-      leftPos = 8;
-    }
-
-    elements.reasoningMenu.style.position = 'fixed';
-    elements.reasoningMenu.style.left = `${Math.round(leftPos)}px`;
-    elements.reasoningMenu.style.width = `${Math.round(menuWidth)}px`;
-
-    // Posicionamiento estricto por encima del botón
-    const bottomPos = Math.max(8, viewportHeight - btnRect.top + 8);
-    const maxHeight = Math.max(140, Math.min(380, spaceAbove - 16));
-
-    elements.reasoningMenu.style.bottom = `${Math.round(bottomPos)}px`;
-    elements.reasoningMenu.style.top = 'auto';
-    elements.reasoningMenu.style.maxHeight = `${Math.round(maxHeight)}px`;
   }
 
   function toggleReasoningMenu() {
-    if (!elements.reasoningMenu) return;
-    const isVisible = elements.reasoningMenu.style.display === 'flex' || elements.reasoningMenu.style.display === 'block';
-    if (isVisible) {
-      closeReasoningMenu();
-    } else {
-      openReasoningMenu();
+    if (UIReasoning.toggleReasoningMenu) {
+      UIReasoning.toggleReasoningMenu(elements, appConfig, selectReasoningLevel);
     }
   }
 
   function openReasoningMenu() {
-    if (!elements.reasoningMenu) return;
-    elements.reasoningMenu.style.display = 'flex';
-
-    const apiType = appConfig.apiType || (elements.settingApiType ? elements.settingApiType.value : 'openai');
-    const reasoningConfig = API.getStandardReasoningOptions
-      ? API.getStandardReasoningOptions(apiType, appConfig.apiUrl)
-      : { levels: ['off', 'low', 'medium', 'high'], label: 'OpenAI / LM Studio' };
-
-    if (elements.reasoningModelBadge) {
-      elements.reasoningModelBadge.textContent = reasoningConfig.label || apiType.toUpperCase();
-      elements.reasoningModelBadge.title = `Protocol: ${reasoningConfig.label || apiType}`;
+    if (UIReasoning.openReasoningMenu) {
+      UIReasoning.openReasoningMenu(elements, appConfig, selectReasoningLevel);
     }
-
-    renderReasoningMenuOptions(reasoningConfig, appConfig.reasoningEffort || 'off');
-    positionReasoningMenu();
   }
 
   function selectReasoningLevel(level) {
-    let norm = String(level).trim();
-    if (norm.toLowerCase() === 'off') norm = 'none';
-    appConfig.reasoningEffort = norm;
-    if (Storage.saveConfig) {
-      Storage.saveConfig({ reasoningEffort: norm });
+    if (UIReasoning.selectReasoningLevel) {
+      UIReasoning.selectReasoningLevel(elements, appConfig, level);
     }
-    updateReasoningUI(norm);
-    closeReasoningMenu();
   }
 
   function updateReasoningUI(level) {
-    const val = level || appConfig.reasoningEffort || 'none';
-    const lower = String(val).toLowerCase().trim();
-
-    if (elements.reasoningLabel) {
-      if (lower === 'off' || lower === 'none') {
-        elements.reasoningLabel.textContent = 'None';
-        elements.btnReasoning.classList.remove('active', 'active-on', 'active-low', 'active-medium', 'active-high', 'active-xhigh', 'level-low', 'level-medium', 'level-high', 'level-xhigh');
-      } else {
-        let displayTxt = lower.charAt(0).toUpperCase() + lower.slice(1);
-        if (lower === 'low') displayTxt = 'Low';
-        else if (lower === 'medium') displayTxt = 'Med';
-        else if (lower === 'high') displayTxt = 'High';
-        else if (lower === 'xhigh') displayTxt = 'XHigh';
-        else if (lower === 'on') displayTxt = 'On';
-
-        elements.reasoningLabel.textContent = displayTxt;
-        elements.btnReasoning.classList.add('active');
-        elements.btnReasoning.classList.remove('active-on', 'active-low', 'active-medium', 'active-high', 'active-xhigh', 'level-low', 'level-medium', 'level-high', 'level-xhigh');
-        if (['low', 'medium', 'high', 'xhigh', 'on'].includes(lower)) {
-          elements.btnReasoning.classList.add(`active-${lower}`);
-        }
-      }
-    }
-
-    if (elements.reasoningOptionsContainer) {
-      const options = elements.reasoningOptionsContainer.querySelectorAll('.reasoning-option');
-      options.forEach(opt => {
-        const optLower = String(opt.getAttribute('data-level') || '').toLowerCase().trim();
-        if (optLower === lower || (lower === 'off' && optLower === 'none') || (lower === 'none' && optLower === 'off')) {
-          opt.classList.add('active');
-        } else {
-          opt.classList.remove('active');
-        }
-      });
+    if (UIReasoning.updateReasoningUI) {
+      UIReasoning.updateReasoningUI(elements, level);
     }
   }
 
   function closeReasoningMenu() {
-    if (elements.reasoningMenu) {
-      elements.reasoningMenu.style.display = 'none';
-      elements.reasoningMenu.style.left = '0px';
-      elements.reasoningMenu.style.right = 'auto';
+    if (UIReasoning.closeReasoningMenu) {
+      UIReasoning.closeReasoningMenu(elements);
     }
   }
 
@@ -938,6 +508,45 @@
     }
 
     syncDebugMessagesState(appConfig.enableDebugMessages, false);
+    updateConnectionTokensBadge(null);
+  }
+
+  function formatTokenCount(num) {
+    if (!num || isNaN(num)) return '0';
+    if (num >= 1000000) return (num / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+    if (num >= 1000) return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+    return String(num);
+  }
+
+  function updateConnectionTokensBadge(stats) {
+    if (!elements.connectionTokensBadge) return;
+
+    const maxTokens = ContextManager.getModelContextLimit ? ContextManager.getModelContextLimit(appConfig.model, appConfig.apiType) : 128000;
+    const maxFormatted = formatTokenCount(maxTokens);
+
+    // Mostrar la insignia únicamente si el servidor devolvió explícitamente usage (promptTokens o totalTokens)
+    const promptTok = (stats && typeof stats === 'object') ? (stats.promptTokens || stats.totalTokens || 0) : 0;
+
+    if (!promptTok || promptTok <= 0) {
+      elements.connectionTokensBadge.style.display = 'none';
+      return;
+    }
+
+    const usedFormatted = formatTokenCount(promptTok);
+    const percentage = maxTokens > 0 ? ((promptTok / maxTokens) * 100).toFixed(1) : '0';
+
+    if (elements.connectionTokensText) {
+      elements.connectionTokensText.textContent = `${usedFormatted} / ${maxFormatted} tok`;
+    }
+
+    const titleText = t('tokens_badge_title', {
+      used: promptTok.toLocaleString(),
+      limit: maxTokens.toLocaleString(),
+      percent: percentage
+    }) || `Contexto de conversación: ${promptTok.toLocaleString()} / ${maxTokens.toLocaleString()} tokens (${percentage}% ocupado)`;
+
+    elements.connectionTokensBadge.setAttribute('title', titleText);
+    elements.connectionTokensBadge.style.display = 'inline-flex';
   }
 
   function autoResizeTextarea() {
@@ -1265,18 +874,19 @@
         <span>•</span>
         <span class="stat-item" title="${t('stat_tokens_title')}">${t('stat_tokens', { tokens: stats.tokens })}</span>${cacheHtml}
       `;
+      updateConnectionTokensBadge(stats);
     }
 
-    // Sincronizar dinámicamente la rama RAG activa desde ChatTreeRagUI o Storage
-    const activeRagBranchId = (typeof window !== 'undefined' && window.ChatTreeRagUI && window.ChatTreeRagUI.getActiveChatBranchId)
-      ? window.ChatTreeRagUI.getActiveChatBranchId()
+    // Sincronizar dinámicamente la rama local activa.
+    const activeRagBranchId = (typeof window !== 'undefined' && window.ChatRagUI && window.ChatRagUI.getActiveBranchId)
+      ? window.ChatRagUI.getActiveBranchId()
       : (appConfig.activeRagBranchId || (Storage.loadConfig ? Storage.loadConfig()?.activeRagBranchId : '') || '');
     appConfig.activeRagBranchId = activeRagBranchId;
 
-    // Cargar contexto jerárquico inicial de la rama RAG para Context-Caching en System Prompt
-    if (activeRagBranchId && window.ChatTreeRagService && window.ChatTreeRagService.buildTreeRagSystemContext) {
+    // Cargar únicamente la instrucción compacta de la rama activa.
+    if (activeRagBranchId && window.ChatRagService && window.ChatRagService.buildRagSystemContext) {
       try {
-        currentRagSystemContext = await window.ChatTreeRagService.buildTreeRagSystemContext(activeRagBranchId);
+        currentRagSystemContext = await window.ChatRagService.buildRagSystemContext(activeRagBranchId);
       } catch (err) {
         console.warn('Error al cargar contexto inicial de RAG:', err);
         currentRagSystemContext = '';
@@ -1454,226 +1064,64 @@
     }
   }
 
-  /**
-   * Renderiza dinámicamente las tarjetas de herramientas agénticas registradas en ToolRegistry.
-   */
   function renderAgentToolsUI(container, currentEnabledTools = {}) {
-    if (!container) return;
-    const tools = (AgentCore.registry && typeof AgentCore.registry.listToolsForUI === 'function')
-      ? AgentCore.registry.listToolsForUI()
-      : [];
-
-    container.innerHTML = '';
-    tools.forEach(tool => {
-      const isChecked = currentEnabledTools[tool.id] !== undefined
-        ? currentEnabledTools[tool.id] !== false
-        : (currentEnabledTools[tool.name] !== undefined ? currentEnabledTools[tool.name] !== false : tool.defaultEnabled !== false);
-
-      const title = t(tool.titleKey) || tool.titleFallback || tool.name;
-      const desc = t(tool.descKey) || tool.descFallback || '';
-
-      const card = document.createElement('div');
-      card.className = 'setting-toggle-card';
-      card.innerHTML = `
-        <div class="toggle-card-info">
-          <div class="toggle-card-title">
-            <span data-i18n="${Markdown.escapeHtml ? Markdown.escapeHtml(tool.titleKey) : tool.titleKey}">${Markdown.escapeHtml ? Markdown.escapeHtml(title) : title}</span>
-          </div>
-          <p class="toggle-card-desc" data-i18n="${Markdown.escapeHtml ? Markdown.escapeHtml(tool.descKey) : tool.descKey}">${Markdown.escapeHtml ? Markdown.escapeHtml(desc) : desc}</p>
-        </div>
-        <label class="switch">
-          <input type="checkbox" class="agent-tool-checkbox" data-tool-id="${Markdown.escapeHtml ? Markdown.escapeHtml(tool.id) : tool.id}" ${isChecked ? 'checked' : ''}>
-          <span class="slider"></span>
-        </label>
-      `;
-      container.appendChild(card);
-    });
+    if (UISettings.renderAgentToolsUI) {
+      UISettings.renderAgentToolsUI(container, currentEnabledTools);
+    }
   }
 
-  /**
-   * Recoge el estado de activación de todas las herramientas desde la UI.
-   */
   function gatherEnabledToolsFromUI() {
-    const map = {};
-    if (elements.agentToolsContainer) {
-      elements.agentToolsContainer.querySelectorAll('.agent-tool-checkbox').forEach(cb => {
-        const tid = cb.getAttribute('data-tool-id');
-        if (tid) map[tid] = cb.checked;
-      });
+    if (UISettings.gatherEnabledToolsFromUI) {
+      return UISettings.gatherEnabledToolsFromUI(elements.agentToolsContainer);
     }
-    return map;
+    return {};
   }
 
-  /**
-   * Rellena todos los campos de todas las pestañas de configuración con los valores de un perfil.
-   */
   function applyProfileToForm(profileData) {
-    if (!profileData) return;
-
-    if (elements.settingApiType && profileData.apiType !== undefined) {
-      elements.settingApiType.value = profileData.apiType;
-    }
-    if (elements.settingApiUrl && profileData.apiUrl !== undefined) {
-      elements.settingApiUrl.value = profileData.apiUrl;
-    }
-    if (elements.settingApiKey && profileData.apiKey !== undefined) {
-      elements.settingApiKey.value = profileData.apiKey;
-    }
-    if (elements.settingModel && profileData.model !== undefined) {
-      elements.settingModel.value = profileData.model;
-    }
-    if (elements.modelSelectHelper && profileData.model !== undefined) {
-      elements.modelSelectHelper.value = profileData.model;
-    }
-    if (elements.settingSystemPrompt && profileData.systemPrompt !== undefined) {
-      elements.settingSystemPrompt.value = profileData.systemPrompt;
-    }
-    if (elements.settingTemperature && profileData.temperature !== undefined) {
-      elements.settingTemperature.value = profileData.temperature;
-      if (elements.temperatureVal) {
-        elements.temperatureVal.textContent = profileData.temperature;
-      }
-    }
-    if (elements.agentToolsContainer) {
-      renderAgentToolsUI(elements.agentToolsContainer, profileData.enabledTools || {});
-    }
-    if (elements.settingEnableContextCache && profileData.enableContextCache !== undefined) {
-      elements.settingEnableContextCache.checked = profileData.enableContextCache !== false;
-    }
-    if (elements.settingEnableRawLogs && profileData.enableRawLogs !== undefined) {
-      elements.settingEnableRawLogs.checked = profileData.enableRawLogs === true;
-    }
-    if (elements.settingSendDateTime && profileData.sendDateTime !== undefined) {
-      elements.settingSendDateTime.checked = profileData.sendDateTime !== false;
+    if (UISettings.applyProfileToForm) {
+      UISettings.applyProfileToForm(elements, profileData);
     }
   }
 
-  /**
-   * Recoge la configuración completa de todos los campos actuales del formulario.
-   */
   function gatherCurrentFormConfig() {
-    const profileName = elements.settingProfileName ? elements.settingProfileName.value.trim() : (appConfig.activeProfileName || 'Local chat');
-    const selectedModel = elements.settingModel ? elements.settingModel.value.trim() : '';
-
-    return {
-      activeProfileName: profileName,
-      apiUrl: elements.settingApiUrl ? elements.settingApiUrl.value.trim() : (appConfig.apiUrl || 'http://localhost:1234/v1'),
-      apiType: elements.settingApiType ? elements.settingApiType.value : (appConfig.apiType || 'openai'),
-      apiKey: elements.settingApiKey ? elements.settingApiKey.value.trim() : '',
-      model: selectedModel,
-      systemPrompt: elements.settingSystemPrompt ? elements.settingSystemPrompt.value.trim() : '',
-      temperature: elements.settingTemperature ? elements.settingTemperature.value : '0.7',
-      reasoningEffort: appConfig.reasoningEffort || 'none',
-      modelReasoningConfig: appConfig.modelReasoningConfig || null,
-      theme: appConfig.theme || 'light',
-      language: appConfig.language || 'es',
-      enabledTools: gatherEnabledToolsFromUI(),
-      enableContextCache: elements.settingEnableContextCache ? elements.settingEnableContextCache.checked : true,
-      enableRawLogs: elements.settingEnableRawLogs ? elements.settingEnableRawLogs.checked : Boolean(appConfig.enableRawLogs),
-      enableDebugMessages: Boolean(appConfig.enableDebugMessages),
-      sendDateTime: elements.settingSendDateTime ? elements.settingSendDateTime.checked : true,
-      activeRagBranchId: appConfig.activeRagBranchId || '',
-      ragContextLimitK: appConfig.ragContextLimitK || 128
-    };
+    if (UISettings.gatherCurrentFormConfig) {
+      return UISettings.gatherCurrentFormConfig(elements, appConfig);
+    }
+    return appConfig;
   }
 
   function showProfileFeedback(msg, type = 'success') {
-    if (!elements.profileActionFeedback) return;
-    elements.profileActionFeedback.style.display = 'block';
-    elements.profileActionFeedback.className = `server-query-status status-${type}`;
-    elements.profileActionFeedback.textContent = msg;
-    setTimeout(() => {
-      if (elements.profileActionFeedback) {
-        elements.profileActionFeedback.style.display = 'none';
-      }
-    }, 4000);
+    if (UISettings.showProfileFeedback) {
+      UISettings.showProfileFeedback(elements, msg, type);
+    }
   }
 
   function handleSaveProfile() {
-    const name = elements.settingProfileName ? elements.settingProfileName.value.trim() : '';
-    if (!name) {
-      showProfileFeedback(t('err_profile_name_empty') || 'Por favor, escribe un nombre para el perfil.', 'error');
-      return;
-    }
-
-    const currentConfig = gatherCurrentFormConfig();
-    if (Storage.saveProfile) {
-      Storage.saveProfile(name, currentConfig);
-      populateProfileSelector(name);
-      showProfileFeedback(t('msg_profile_saved', { name: name }) || `Perfil "${name}" guardado con éxito.`, 'success');
+    if (UISettings.handleSaveProfile) {
+      UISettings.handleSaveProfile(elements, appConfig, populateProfileSelector);
     }
   }
 
   function handleDeleteProfile() {
-    const name = elements.settingProfileName ? elements.settingProfileName.value.trim() : '';
-    if (!name) return;
-
-    const confirmMsg = t('confirm_delete_profile', { name: name }) || `¿Estás seguro de que deseas eliminar el perfil "${name}"?`;
-    if (!confirm(confirmMsg)) return;
-
-    if (Storage.deleteProfile) {
-      Storage.deleteProfile(name);
-      const newActive = Storage.getActiveProfileName ? Storage.getActiveProfileName() : 'Local chat';
-      populateProfileSelector(newActive);
-      const newProfileData = Storage.getProfile ? Storage.getProfile(newActive) : null;
-      if (newProfileData) {
-        applyProfileToForm(newProfileData);
-      }
-      showProfileFeedback(t('msg_profile_deleted', { name: name }) || `Perfil "${name}" eliminado.`, 'success');
+    if (UISettings.handleDeleteProfile) {
+      UISettings.handleDeleteProfile(elements, populateProfileSelector, applyProfileToForm);
     }
   }
 
   function openSettingsModal() {
-    const activeProfileName = (Storage.getActiveProfileName ? Storage.getActiveProfileName() : appConfig.activeProfileName) || 'Local chat';
-    populateProfileSelector(activeProfileName);
-
-    if (elements.settingApiType) {
-      elements.settingApiType.value = appConfig.apiType || 'openai';
+    if (UISettings.openSettingsModal) {
+      UISettings.openSettingsModal(elements, appConfig, {
+        populateProfileSelector,
+        loadCachedModels,
+        updateReasoningUI
+      });
     }
-    elements.settingApiUrl.value = appConfig.apiUrl || 'http://localhost:1234/v1';
-    elements.settingApiKey.value = appConfig.apiKey || '';
-    elements.settingModel.value = appConfig.model || '';
-    elements.settingSystemPrompt.value = appConfig.systemPrompt || '';
-    elements.settingTemperature.value = appConfig.temperature || '0.7';
-    elements.temperatureVal.textContent = appConfig.temperature || '0.7';
-    applyTheme(appConfig.theme || 'light');
-    applyLanguage(appConfig.language || 'es');
-
-    if (elements.serverQueryStatus) {
-      elements.serverQueryStatus.style.display = 'none';
-    }
-    if (elements.profileActionFeedback) {
-      elements.profileActionFeedback.style.display = 'none';
-    }
-
-    loadCachedModels();
-
-    if (elements.agentToolsContainer) {
-      renderAgentToolsUI(elements.agentToolsContainer, appConfig.enabledTools || {});
-    }
-    if (elements.settingEnableContextCache) {
-      elements.settingEnableContextCache.checked = appConfig.enableContextCache !== false;
-    }
-    if (elements.settingEnableRawLogs) {
-      elements.settingEnableRawLogs.checked = appConfig.enableRawLogs === true;
-    }
-    if (elements.settingSendDateTime) {
-      elements.settingSendDateTime.checked = appConfig.sendDateTime !== false;
-    }
-
-    if (elements.modalTabs && elements.modalTabs.length > 0) {
-      elements.modalTabs.forEach(b => b.classList.remove('active'));
-      elements.modalPanes.forEach(p => p.classList.remove('active'));
-      elements.modalTabs[0].classList.add('active');
-      const firstPane = document.getElementById(elements.modalTabs[0].getAttribute('data-tab'));
-      if (firstPane) firstPane.classList.add('active');
-    }
-
-    elements.settingsDialog.showModal();
   }
 
   function closeSettingsModal() {
-    elements.settingsDialog.close();
+    if (UISettings.closeSettingsModal) {
+      UISettings.closeSettingsModal(elements);
+    }
   }
 
   function handleSaveSettings(e) {
@@ -1695,51 +1143,15 @@
   }
 
   function handleResetSettings() {
-    if (Storage.getDefaultConfig) {
-      const defaults = Storage.getDefaultConfig();
-      if (elements.settingApiType) {
-        elements.settingApiType.value = defaults.apiType || 'openai';
-      }
-      elements.settingApiUrl.value = defaults.apiUrl;
-      elements.settingApiKey.value = defaults.apiKey;
-      elements.settingModel.value = defaults.model;
-      elements.settingSystemPrompt.value = '';
-      elements.settingTemperature.value = defaults.temperature;
-      elements.temperatureVal.textContent = defaults.temperature;
-      applyTheme(defaults.theme || 'light');
-      applyLanguage(defaults.language || 'es');
-
-      if (elements.modelSelectHelper) {
-        elements.modelSelectHelper.value = defaults.model;
-      }
-
-      if (elements.agentToolsContainer) {
-        renderAgentToolsUI(elements.agentToolsContainer, defaults.enabledTools || {});
-      }
-      if (elements.settingEnableContextCache) {
-        elements.settingEnableContextCache.checked = defaults.enableContextCache !== false;
-      }
-      if (elements.settingEnableRawLogs) {
-        elements.settingEnableRawLogs.checked = defaults.enableRawLogs === true;
-      }
-      if (elements.settingSendDateTime) {
-        elements.settingSendDateTime.checked = defaults.sendDateTime !== false;
-      }
+    if (UISettings.handleResetSettings) {
+      UISettings.handleResetSettings(elements);
     }
   }
 
   function handleClearAllData() {
-    if (!confirm(t('confirm_clear_all_data'))) return;
-
-    if (Storage.clearAllStorage) {
-      Storage.clearAllStorage();
-    } else {
-      try { localStorage.clear(); } catch (e) {}
-      try { sessionStorage.clear(); } catch (e) {}
+    if (UISettings.handleClearAllData) {
+      UISettings.handleClearAllData();
     }
-
-    // Recargar la aplicación para iniciar completamente desde cero
-    window.location.reload();
   }
 
   // ==========================================================================
@@ -1748,15 +1160,8 @@
 
   async function loadSessionsFromStorage() {
     try {
-      if (Storage.initDB) {
-        await Storage.initDB();
-      }
-      if (Storage.getConversationsList) {
-        savedSessions = await Storage.getConversationsList();
-      } else {
-        const raw = Storage.getStorageItem ? Storage.getStorageItem('chat_sessions') : localStorage.getItem('chat_sessions');
-        savedSessions = raw ? JSON.parse(raw) : [];
-      }
+      await Storage.initDB();
+      savedSessions = await Storage.getConversationsList();
     } catch (e) {
       console.warn('Error al cargar sesiones de chat:', e);
       savedSessions = [];
@@ -1785,15 +1190,7 @@
     if (!hasRealUserMessages) {
       if (Array.isArray(savedSessions)) {
         savedSessions = savedSessions.filter(s => s.id !== currentSessionId);
-        if (Storage.deleteConversation) {
-          await Storage.deleteConversation(currentSessionId);
-        } else {
-          try {
-            const serialized = JSON.stringify(savedSessions);
-            if (Storage.setStorageItem) Storage.setStorageItem('chat_sessions', serialized);
-            else localStorage.setItem('chat_sessions', serialized);
-          } catch (e) {}
-        }
+        await Storage.deleteConversation(currentSessionId);
       }
       renderSidebarChats();
       return;
@@ -1832,75 +1229,19 @@
       }
     }
 
-    if (Storage.saveConversation) {
-      await Storage.saveConversation(sess, chatHistory);
-    } else {
-      try {
-        const serialized = JSON.stringify(savedSessions);
-        if (Storage.setStorageItem) Storage.setStorageItem('chat_sessions', serialized);
-        else localStorage.setItem('chat_sessions', serialized);
-      } catch (e) {}
-    }
+    await Storage.saveConversation(sess, chatHistory);
 
     renderSidebarChats();
   }
 
   function renderSidebarChats(filterText = '') {
-    if (!elements.sidebarChatsList) return;
-    elements.sidebarChatsList.innerHTML = '';
-
-    const filter = filterText.toLowerCase().trim();
-    const matching = savedSessions.filter(s => {
-      if (!filter) return true;
-      if (s.title && s.title.toLowerCase().includes(filter)) return true;
-      return false;
-    });
-
-    if (matching.length === 0) {
-      const emptyDiv = document.createElement('div');
-      emptyDiv.className = 'sidebar-no-chats';
-      emptyDiv.style.cssText = 'padding: 1rem; text-align: center; color: var(--text-muted); font-size: 0.8rem;';
-      emptyDiv.textContent = t('sidebar_no_chats');
-      elements.sidebarChatsList.appendChild(emptyDiv);
-      return;
-    }
-
-    matching.forEach(s => {
-      const item = document.createElement('div');
-      item.className = 'sidebar-chat-item' + (s.id === currentSessionId ? ' active' : '');
-      item.setAttribute('data-session-id', s.id);
-
-      const d = new Date(s.updatedAt || s.createdAt || Date.now());
-      const timeStr = d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-      item.innerHTML = `
-        <div class="sidebar-chat-info">
-          <span class="sidebar-chat-title" title="${Markdown.escapeHtml(s.title || t('chat_untitled'))}">${Markdown.escapeHtml(s.title || t('chat_untitled'))}</span>
-          <span class="sidebar-chat-time">${timeStr}</span>
-        </div>
-        <div class="sidebar-chat-actions">
-          <button type="button" class="btn-chat-action btn-rename" title="Renombrar chat">✏️</button>
-          <button type="button" class="btn-chat-action btn-delete" title="Eliminar chat">🗑️</button>
-        </div>
-      `;
-
-      item.addEventListener('click', (e) => {
-        if (e.target.closest('.sidebar-chat-actions')) return;
-        switchToSession(s.id);
+    if (UISidebar.renderSidebarChats) {
+      UISidebar.renderSidebarChats(elements, savedSessions, currentSessionId, {
+        onSwitchSession: switchToSession,
+        onRenameSession: renameSession,
+        onDeleteSession: deleteSession
       });
-
-      const btnRename = item.querySelector('.btn-rename');
-      if (btnRename) {
-        btnRename.addEventListener('click', (e) => renameSession(s.id, e));
-      }
-
-      const btnDelete = item.querySelector('.btn-delete');
-      if (btnDelete) {
-        btnDelete.addEventListener('click', (e) => deleteSession(s.id, e));
-      }
-
-      elements.sidebarChatsList.appendChild(item);
-    });
+    }
   }
 
   async function switchToSession(sessionId) {
@@ -1961,15 +1302,7 @@
 
     savedSessions.splice(idx, 1);
 
-    if (Storage.deleteConversation) {
-      await Storage.deleteConversation(sessionId);
-    } else {
-      try {
-        const serialized = JSON.stringify(savedSessions);
-        if (Storage.setStorageItem) Storage.setStorageItem('chat_sessions', serialized);
-        else localStorage.setItem('chat_sessions', serialized);
-      } catch (e) {}
-    }
+    await Storage.deleteConversation(sessionId);
 
     if (savedSessions.length === 0) {
       await createNewSession({ saveCurrent: false });
@@ -1986,22 +1319,10 @@
     if (!confirm(t('chat_delete_all_confirm'))) return;
 
     savedSessions = [];
-    if (Storage.deleteAllConversations) {
-      const deleted = await Storage.deleteAllConversations();
-      if (!deleted) {
-        alert('No se pudo borrar el historial persistente. Revisa la consola para más detalles.');
-        return;
-      }
-      // Evita que la migración de arranque reimporte sesiones legacy tras F5.
-      if (Storage.deleteStorageItem) Storage.deleteStorageItem('chat_sessions');
-      else {
-        try { localStorage.removeItem('chat_sessions'); } catch (e) {}
-      }
-    } else {
-      try {
-        if (Storage.setStorageItem) Storage.setStorageItem('chat_sessions', JSON.stringify([]));
-        else localStorage.setItem('chat_sessions', JSON.stringify([]));
-      } catch (e) {}
+    const deleted = await Storage.deleteAllConversations();
+    if (!deleted) {
+      alert('No se pudo borrar el historial persistente. Revisa la consola para más detalles.');
+      return;
     }
 
     await createNewSession({ saveCurrent: false });
@@ -2023,20 +1344,14 @@
   }
 
   function toggleSidebar() {
-    if (!elements.chatSidebar) return;
-    const isHidden = elements.chatSidebar.style.display === 'none' || !elements.chatSidebar.style.display;
-    elements.chatSidebar.style.display = isHidden ? 'flex' : 'none';
-    if (elements.btnToggleSidebar) {
-      elements.btnToggleSidebar.style.display = isHidden ? 'none' : 'inline-flex';
+    if (UISidebar.toggleSidebar) {
+      UISidebar.toggleSidebar(elements);
     }
   }
 
   function closeSidebar() {
-    if (elements.chatSidebar) {
-      elements.chatSidebar.style.display = 'none';
-    }
-    if (elements.btnToggleSidebar) {
-      elements.btnToggleSidebar.style.display = 'inline-flex';
+    if (UISidebar.closeSidebar) {
+      UISidebar.closeSidebar(elements);
     }
   }
 
@@ -2191,6 +1506,7 @@
     }
 
     scrollToBottom();
+    updateConnectionTokensBadge(null);
   }
 
   // ==========================================================================
@@ -2748,18 +2064,6 @@
         closeSettingsModal();
       }
     });
-
-    // Sugerencias iniciales
-    document.querySelectorAll('.suggestion-card').forEach(function (card) {
-      card.addEventListener('click', function () {
-        const prompt = card.getAttribute('data-prompt');
-        if (prompt) {
-          elements.userInput.value = prompt;
-          autoResizeTextarea();
-          handleSendMessage();
-        }
-      });
-    });
   }
 
   function init() {
@@ -2787,8 +2091,8 @@
     loadSessionsFromStorage();
     setupEventListeners();
 
-    if (window.ChatTreeRagUI && window.ChatTreeRagUI.initTreeRagUI) {
-      window.ChatTreeRagUI.initTreeRagUI();
+    if (window.ChatRagUI && window.ChatRagUI.initRagUI) {
+      window.ChatRagUI.initRagUI();
     }
 
     window.ChatApp = {
@@ -2808,7 +2112,7 @@
       exportConversationAsPrint
     };
 
-    console.log('💬 ZeroChat v5.3 initialized successfully with Autonomous Agentic Engine, Traffic Debug Logs and Tree-RAG.');
+    console.log('💬 ZeroChat v5.4 initialized with autonomous tools and local Orama knowledge.');
   }
 
   if (document.readyState === 'loading') {

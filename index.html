@@ -2,10 +2,10 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src http: https: ws: wss: data: blob:; font-src 'self' data:; object-src 'none'; base-uri 'self';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: rag-image:; connect-src http: https: ws: wss: data: blob:; font-src 'self' data:; object-src 'none'; base-uri 'self';">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
   <meta name="description" content="ZeroChat - Cliente web universal, agente IA autónomo y RAG local en un solo archivo con cero instalación">
-  <title>ZeroChat v5.3 - Cliente Web Universal de Chat & Agente IA</title>
+  <title>ZeroChat v5.4 - Cliente Web Universal de Chat & Agente IA</title>
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
@@ -63,28 +63,18 @@
       <!-- Estado de Bienvenida inicial -->
       <div id="welcome-banner" class="welcome-banner">
         <div class="welcome-icon">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="4 17 10 11 4 5"></polyline>
+            <line x1="12" y1="19" x2="20" y2="19"></line>
           </svg>
         </div>
-        <h2 data-i18n="welcome_heading">¿En qué puedo ayudarte hoy?</h2>
+        <h2 data-i18n="welcome_heading">ZeroChat</h2>
         <p class="welcome-desc" data-i18n="welcome_desc">
-          Cliente de chat conectado a tu API. Puedes configurar el servidor, modelo, API Key y prompt en el botón de configuración junto a la caja de chat.
+          Entorno conversacional y agente autónomo local.
         </p>
-
-        <div class="suggestion-cards">
-          <button class="suggestion-card" id="sug-card-explain" data-prompt="Explícame cómo funciona una API REST con un ejemplo sencillo en JavaScript.">
-            <span class="suggestion-title" data-i18n="sug_explain_title">💡 Explicar conceptos</span>
-            <span class="suggestion-text" data-i18n="sug_explain_text">¿Cómo funciona una API REST con JavaScript?</span>
-          </button>
-          <button class="suggestion-card" id="sug-card-code" data-prompt="Escribe una función en JavaScript para ordenar un array de objetos por una clave específica.">
-            <span class="suggestion-title" data-i18n="sug_code_title">💻 Escribir código</span>
-            <span class="suggestion-text" data-i18n="sug_code_text">Función JS para ordenar un array de objetos</span>
-          </button>
-          <button class="suggestion-card" id="sug-card-ideas" data-prompt="Dame 3 ideas de proyectos web interesantes que utilicen HTML5 y JavaScript Vanilla.">
-            <span class="suggestion-title" data-i18n="sug_ideas_title">🚀 Ideas de proyectos</span>
-            <span class="suggestion-text" data-i18n="sug_ideas_text">3 ideas de proyectos web en JavaScript Vanilla</span>
-          </button>
+        <div class="welcome-status-badge">
+          <span class="status-dot"></span>
+          <span data-i18n="welcome_status">Chat vacío · A la espera de un comando</span>
         </div>
       </div>
     </div>
@@ -101,11 +91,15 @@
             <span class="profile-icon">⚡</span>
             <select id="active-profile-select" aria-label="Perfil de conexión activo"></select>
           </label>
+          <div id="connection-tokens-badge" class="badge-pill badge-tokens" style="display: none;" title="Uso de tokens en la conversación actual y límite de contexto">
+            <span class="tokens-icon">📊</span>
+            <span id="connection-tokens-text" class="tokens-text">0 / 128k tok</span>
+          </div>
         </div>
         <div class="toolbar-right">
-          <button type="button" id="btn-open-tree-rag" class="btn-tool-mini btn-rag-mini" data-i18n-title="btn_tree_rag_title" title="Gestionar Base de Conocimiento por Ramas (RAG Jerárquico)">
+          <button type="button" id="btn-open-rag" class="btn-tool-mini btn-rag-mini" data-i18n-title="btn_rag_title" title="Gestionar conocimiento local">
             <span>🌿</span>
-            <span data-i18n="btn_tree_rag">Conocimiento</span>
+            <span data-i18n="btn_rag">Conocimiento</span>
           </button>
           <button type="button" id="btn-quick-export" class="btn-tool-mini" data-i18n-title="btn_export_chat_title" title="Exportar conversación (Markdown, JSON, PDF)">
             <span>📤</span>
@@ -468,10 +462,10 @@
           <div class="setting-toggle-card">
             <div class="toggle-card-info">
               <div class="toggle-card-title">
-                <span data-i18n="agent_datetime_title">🕒 Informar Fecha y Hora al Iniciar Chat</span>
+                <span data-i18n="agent_datetime_title">🕒 Fecha y Hora Actual</span>
               </div>
               <p class="toggle-card-desc" data-i18n="agent_datetime_desc">
-                Inserta automáticamente la fecha y hora actual como primer mensaje de la conversación (con respuesta 'OK') para informar al modelo sin invalidar la caché de contexto en las siguientes peticiones.
+                Incluye la fecha en el sistema y permite al modelo consultar la hora exacta.
               </p>
             </div>
             <label class="switch">
@@ -661,289 +655,78 @@
     </div>
   </dialog>
 
-  <!-- Modal de Autorización de Carpeta Local para RAG -->
-  <dialog id="rag-fs-auth-dialog" class="settings-modal rag-fs-auth-dialog" style="max-width: 520px;">
+  <!-- Base de conocimiento local: IndexedDB + Orama -->
+  <dialog id="rag-modal" class="settings-modal rag-modal">
     <div class="modal-header">
-      <div class="modal-title">
-        <span class="rag-header-icon">📁</span>
-        <h3>Almacenamiento Local de Conocimiento (RAG)</h3>
-      </div>
-      <button type="button" id="btn-close-rag-fs-auth" class="btn-close" aria-label="Cerrar modal">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="18" y1="6" x2="6" y2="18"></line>
-          <line x1="6" y1="6" x2="18" y2="18"></line>
-        </svg>
+      <div class="modal-title"><span class="rag-header-icon">🔎</span><h3 data-i18n="rag_modal_title">Conocimiento local</h3></div>
+      <button type="button" id="btn-close-rag" class="btn-close" aria-label="Cerrar">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
       </button>
     </div>
-    <div class="modal-body" style="padding: 1.5rem;">
-      <div style="text-align: center; margin-bottom: 1.25rem;">
-        <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">📂</div>
-        <p style="font-size: 0.95rem; line-height: 1.5; color: var(--text-color, #333); margin-bottom: 0.75rem;">
-          Para almacenar y consultar tus documentos y ramas de forma local y privada, ZeroChat requiere acceso al directorio <code>zerochat/</code> en tu carpeta de usuario.
-        </p>
-        <div style="background: var(--surface-bg-secondary, rgba(0,0,0,0.05)); border: 1px dashed var(--border-color, #ccc); border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 1rem; text-align: left; font-size: 0.85rem;">
-          <div><strong>📁 Directorio local:</strong> <code>zerochat/</code></div>
-          <div style="color: var(--text-muted, #666); margin-top: 0.25rem;">Se gestionará automáticamente la estructura <code>zerochat/RAG/</code> con tus ramas, resúmenes y documentos indexados.</div>
-        </div>
-      </div>
-      <div style="display: flex; flex-direction: column; gap: 0.75rem;">
-        <button type="button" id="btn-rag-authorize-fs" class="btn-primary" style="padding: 0.75rem; font-weight: 600; font-size: 0.95rem;">
-          📁 Autorizar Carpeta ZeroChat
-        </button>
-        <button type="button" id="btn-rag-cancel-fs" class="btn-secondary" style="padding: 0.5rem;">
-          Cancelar
-        </button>
-      </div>
-    </div>
-  </dialog>
-
-  <!-- Modal de Gestión de Ramas y Base de Conocimiento (RAG) -->
-  <dialog id="tree-rag-modal" class="settings-modal tree-rag-modal">
-    <div class="modal-header">
-      <div class="modal-title">
-        <span class="rag-header-icon">🌿</span>
-        <h3 data-i18n="rag_modal_title">Base de Conocimiento (RAG)</h3>
-      </div>
-      <button type="button" id="btn-close-tree-rag" class="btn-close" data-i18n-aria="modal_close_aria" aria-label="Cerrar modal">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="18" y1="6" x2="6" y2="18"></line>
-          <line x1="6" y1="6" x2="18" y2="18"></line>
-        </svg>
-      </button>
-    </div>
-
-    <!-- Navegación por pestañas unificadas -->
     <div class="modal-tabs-nav rag-tabs-nav" id="rag-modal-tabs-nav">
-      <button type="button" class="modal-tab-btn active" data-rag-tab="tab-rag-active">
-        <span data-i18n="rag_tab_active">Activar RAG</span>
-      </button>
-      <button type="button" class="modal-tab-btn" data-rag-tab="tab-rag-manage">
-        <span data-i18n="rag_tab_manage">📁 Gestión de Ramas y Documentos</span>
-      </button>
-      <button type="button" class="modal-tab-btn" data-rag-tab="tab-rag-help">
-        <span data-i18n="rag_tab_help">❓ Ayuda</span>
-      </button>
+      <button type="button" class="modal-tab-btn active" data-rag-tab="tab-rag-active" data-i18n="rag_tab_active">Activar</button>
+      <button type="button" class="modal-tab-btn" data-rag-tab="tab-rag-manage" data-i18n="rag_tab_documents">Documentos</button>
+      <button type="button" class="modal-tab-btn" data-rag-tab="tab-rag-help" data-i18n="rag_tab_help">Ayuda</button>
     </div>
-
     <div class="modal-body rag-modal-body-tabbed">
-      <!-- PESTAÑA 1: Activar RAG, Perfil de Resumen y Selección de Rama -->
       <div id="tab-rag-active" class="modal-tab-pane active">
-        <!-- Banner de Estado de Carpeta Local -->
-        <div id="rag-fs-banner-active" class="rag-fs-banner-container"></div>
-
-        <!-- Tarjeta de Control Principal de Estado RAG -->
         <div class="setting-toggle-card rag-master-toggle-card">
           <div class="toggle-card-info">
-            <div class="toggle-card-title">
-              <span id="rag-active-status-title">🌿 Contexto de Conocimiento Activo</span>
-            </div>
-            <p class="toggle-card-desc" id="rag-active-status-desc">
-              Inyecta resúmenes jerárquicos de la rama seleccionada en el System Prompt y permite al modelo leer capítulos bajo demanda con <code>read_chapter_content</code>.
-            </p>
+            <div class="toggle-card-title"><span id="rag-active-status-title" data-i18n="rag_status_disabled">Conocimiento desactivado</span></div>
+            <p class="toggle-card-desc" id="rag-active-status-desc" data-i18n="rag_status_disabled_desc">Selecciona una rama para que el agente pueda buscar en tus documentos.</p>
           </div>
-          <button type="button" id="btn-rag-toggle-master" class="btn-secondary">
-            Desactivar RAG
-          </button>
+          <button type="button" id="btn-rag-toggle-master" class="btn-secondary" data-i18n="rag_disable">Desactivar</button>
         </div>
-
-        <!-- Selección del Perfil de Conexión para Resumen de Documentos (RAG) -->
-        <div class="form-field" style="margin-top: 0.5rem;">
-          <label for="setting-rag-summary-profile">
-            <strong data-i18n="rag_summary_profile_title">Perfil de Conexión para Resumen de Documentos</strong>
-            <span class="label-hint" data-i18n="rag_summary_profile_hint">Selecciona el perfil de conexión que procesará el análisis e ingesta de documentos:</span>
-          </label>
-          <div class="combobox-wrapper">
-            <select id="setting-rag-summary-profile" class="combobox-select-helper" style="width: 100%; max-width: 100%; font-weight: 500;">
-              <!-- Se puebla dinámicamente con los perfiles existentes -->
-            </select>
-          </div>
-          <div class="setting-toggle-card" style="margin-top: 0.45rem; background: var(--bg-app); border-style: dashed;">
-            <div class="toggle-card-info">
-              <div class="toggle-card-title" style="font-size: 0.78rem;">
-                <span data-i18n="rag_summary_profile_warning_title">💡 Elección recomendada del modelo para ingesta y resumen:</span>
-              </div>
-              <p class="toggle-card-desc" style="font-size: 0.72rem; line-height: 1.4;" data-i18n-html="rag_summary_profile_warning_desc">
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div class="form-field" style="margin-top: 0.5rem;">
-          <label>
-            <strong data-i18n="rag_select_branch_chat">Ramas de Conocimiento Disponibles</strong>
-            <span class="label-hint" data-i18n="rag_select_branch_chat_hint">Activa el interruptor de la rama que desees utilizar como contexto en el chat:</span>
-          </label>
-          <div id="rag-active-branch-list" class="rag-active-branch-list">
-            <!-- Renderiza cajas tipo setting-toggle-card con switch para activar rama -->
-          </div>
+        <div class="form-field">
+          <label><strong data-i18n="rag_available_branches">Ramas disponibles</strong><span class="label-hint" data-i18n="rag_available_branches_hint">Solo una rama puede estar activa en el chat.</span></label>
+          <div id="rag-active-branch-list" class="rag-active-branch-list"></div>
         </div>
       </div>
-
-      <!-- PESTAÑA 2: Gestión de Ramas, Dropzone y Documentos -->
       <div id="tab-rag-manage" class="modal-tab-pane">
-        <!-- Banner de Estado de Carpeta Local -->
-        <div id="rag-fs-banner-manage" class="rag-fs-banner-container"></div>
-
         <div class="rag-manage-toolbar">
           <div class="form-field rag-manage-branch-field">
-            <label for="rag-manage-branch-select">
-              <strong data-i18n="rag_editing_branch">Rama en edición:</strong>
-            </label>
-            <select id="rag-manage-branch-select" class="combobox-select-helper">
-              <!-- Lista de ramas para editar -->
-            </select>
+            <label for="rag-manage-branch-select"><strong data-i18n="rag_branch_label">Rama:</strong></label>
+            <select id="rag-manage-branch-select" class="combobox-select-helper"></select>
           </div>
           <div class="rag-manage-toolbar-actions">
-            <button type="button" id="btn-rag-new-branch" class="btn-primary" data-i18n="rag_btn_new_branch">+ Nueva Rama</button>
-            <button type="button" id="btn-rag-edit-branch" class="btn-secondary" title="Renombrar o editar descripción">✏️ Editar</button>
-            <button type="button" id="btn-rag-export-branch" class="btn-secondary" title="Exportar rama a paquete comprimido (.rag.gz)">📤 Exportar</button>
-            <input type="file" id="rag-import-file-input" accept=".rag.gz,.json" style="display: none;">
-            <button type="button" id="btn-rag-import-branch" class="btn-secondary" title="Importar rama (.rag.gz o .json)">📥 Importar</button>
-            <button type="button" id="btn-rag-delete-branch" class="btn-secondary btn-danger-hover" title="Eliminar rama">🗑️</button>
+            <button type="button" id="btn-rag-new-branch" class="btn-primary" data-i18n="rag_new_branch">+ Nueva rama</button>
+            <button type="button" id="btn-rag-edit-branch" class="btn-secondary" data-i18n="rag_edit_branch">✏️ Editar</button>
+            <button type="button" id="btn-rag-delete-branch" class="btn-secondary btn-danger-hover" data-i18n="rag_delete_branch">🗑️ Eliminar</button>
+            <button type="button" id="btn-rag-export-branch" class="btn-secondary" data-i18n="rag_export_branch">⬇️ Respaldo</button>
+            <button type="button" id="btn-rag-import-branch" class="btn-secondary" data-i18n="rag_import_branch">⬆️ Restaurar</button>
+            <input id="rag-import-input" type="file" accept="application/json,.json" hidden>
           </div>
         </div>
-
-        <!-- Selector de Contexto K por Capítulo / Ingesta -->
-        <div class="setting-toggle-card rag-chunk-config-card" style="margin-bottom: 1rem;">
-          <div class="toggle-card-info">
-            <div class="toggle-card-title">
-              <strong data-i18n="rag_context_limit_title">📦 Tamaño de Contexto por Capítulo (Tokens)</strong>
-            </div>
-            <p class="toggle-card-desc" data-i18n="rag_context_limit_desc">
-              Define la capacidad máxima de tokens por capítulo (16K a 1M tokens) para segmentar documentos y realizar síntesis con el modelo. Protege imágenes y tablas completas.
-            </p>
-          </div>
-          <div class="rag-chunk-select-wrapper" style="min-width: 250px;">
-            <select id="setting-rag-context-limit-k" class="combobox-select-helper" style="width: 100%;">
-              <option value="32">32K tokens (~128 KB texto) - Mínimo</option>
-              <option value="64">64K tokens (~256 KB texto)</option>
-              <option value="128" selected>128K tokens (~512 KB texto) - Estándar</option>
-              <option value="256">256K tokens (~1 MB texto) - Modelos 256K</option>
-              <option value="512">512K tokens (~2 MB texto)</option>
-              <option value="1024">1M tokens (~4 MB texto) - Máximo</option>
-            </select>
-          </div>
-        </div>
-
-        <div id="rag-manage-workspace" class="rag-manage-workspace">
-          <!-- Dropzone, cola de ingesta y tarjetas de documentos -->
-        </div>
+        <div id="rag-manage-workspace" class="rag-manage-workspace"></div>
       </div>
-
-      <!-- PESTAÑA 3: Ayuda y Guía del RAG Agéntico -->
       <div id="tab-rag-help" class="modal-tab-pane">
-        <div class="rag-help-container" style="display: flex; flex-direction: column; gap: 1rem; padding: 0.25rem 0;">
+        <div class="rag-help-container">
           <div class="setting-card">
-            <div class="setting-card-title" style="display: flex; align-items: center; gap: 0.5rem;">
-              <span style="font-size: 1.25rem;">🌿</span>
-              <strong data-i18n="rag_help_intro_title">¿Qué es el RAG Agéntico Local?</strong>
-            </div>
-            <p class="setting-card-desc" style="margin-top: 0.5rem; line-height: 1.5;">
-              ZeroChat incorpora un sistema de <strong>RAG Jerárquico y Agéntico (Tree-RAG)</strong> 100% privado y local. Toda la información se almacena directamente en el sistema de ficheros de tu ordenador (<code>./zerochat/RAG/</code> en Chrome/Chromium o almacenamiento privado OPFS en Firefox/Safari), sin bases de datos vectoriales pesadas ni dependencias externas.
-            </p>
+            <div class="setting-card-title"><strong>IndexedDB + Orama</strong></div>
+            <p class="setting-card-desc" data-i18n="rag_help_storage_desc">Los archivos, metadatos y fragmentos se guardan en IndexedDB. Orama construye en memoria un índice de búsqueda local para la rama activa.</p>
           </div>
-
           <div class="setting-card">
-            <div class="setting-card-title" style="display: flex; align-items: center; gap: 0.5rem;">
-              <span style="font-size: 1.25rem;">⚙️</span>
-              <strong data-i18n="rag_help_how_it_works_title">¿Cómo funciona la indexación y recuperación?</strong>
-            </div>
-            <div class="setting-card-desc" style="margin-top: 0.5rem; line-height: 1.5;">
-              <ul style="margin-left: 1.25rem; display: flex; flex-direction: column; gap: 0.4rem;">
-                <li><strong>Indexación por Capítulos:</strong> Al subir archivos (PDF, Markdown o Texto), el sistema los particiona en capítulos protegidos y genera micro-resúmenes densos junto con un resumen global.</li>
-                <li><strong>Contexto Ligero en Prompt:</strong> Solo se inyectan en el <em>System Prompt</em> los títulos y micro-resúmenes de la rama activa, ahorrando miles de tokens de contexto.</li>
-                <li><strong>Lectura Agéntica Bajo Demanda:</strong> Cuando el usuario realiza una pregunta que requiere datos específicos o citas textuales, el modelo invoca automáticamente la herramienta nativa <code>read_chapter_content(docId, chapterId)</code> para inspeccionar únicamente la sección necesaria.</li>
-                <li><strong>Imágenes y Esquemas sin Sobrecarga:</strong> Las imágenes y diagramas técnicos no se incrustan en Base64 pesado dentro de los resúmenes; en su lugar, se indexan sus posiciones en el PDF original y se extraen/transforman a sRGB al vuelo en el momento de visualizarlas en el chat.</li>
-              </ul>
-            </div>
-          </div>
-
-          <div class="setting-card">
-            <div class="setting-card-title" style="display: flex; align-items: center; gap: 0.5rem;">
-              <span style="font-size: 1.25rem;">🤖</span>
-              <strong data-i18n="rag_help_model_rec_title">Modelo para Ingesta y Carga de Archivos</strong>
-            </div>
-            <div class="setting-card-desc" style="margin-top: 0.5rem; line-height: 1.5;">
-              <p>
-                Para procesar, particionar y resumir los documentos durante la subida, <strong>se utiliza el modelo que esté seleccionado y configurado en ese momento en el chat</strong>.
-              </p>
-              <div style="background-color: var(--primary-light, rgba(37,99,235,0.08)); border-left: 3px solid var(--primary, #2563eb); padding: 0.6rem 0.85rem; margin-top: 0.5rem; border-radius: 0 4px 4px 0;">
-                💡 <strong>Recomendación de modelo local:</strong> Se recomienda encarecidamente utilizar un modelo local rápido y ligero. Las pruebas de desarrollo y validación se han realizado satisfactoriamente con <strong>LM Studio</strong> y el modelo <strong>Gemma 4 A4B</strong> (con una ventana de contexto de <strong>128K</strong>).
-              </div>
-            </div>
-          </div>
-
-          <div class="setting-card">
-            <div class="setting-card-title" style="display: flex; align-items: center; gap: 0.5rem;">
-              <span style="font-size: 1.25rem;">📁</span>
-              <strong data-i18n="rag_help_storage_title">Ubicación de Archivos, Exportación e Importación</strong>
-            </div>
-            <div class="setting-card-desc" style="margin-top: 0.5rem; line-height: 1.5;">
-              <ul style="margin-left: 1.25rem; display: flex; flex-direction: column; gap: 0.4rem;">
-                <li><strong>Ubicación de Archivos:</strong> En Chrome/Chromium se guardan en la carpeta local <code>./zerochat/RAG/</code> (con un fichero <code>rama.md</code> por rama y subdirectorios <code>0001/</code>, <code>0002/</code> que paginan cada 100 archivos). En Firefox/Safari se guardan en el sistema privado OPFS.</li>
-                <li><strong>Exportar Rama Completa:</strong> En la pestaña <em>Gestión de Ramas y Documentos</em>, selecciona la rama deseada y haz clic en <strong>📤 Exportar</strong> para descargar un paquete comprimido <code>.rag.gz</code> conteniendo la estructura completa del directorio (documentos originales, resúmenes, capítulos e índices).</li>
-                <li><strong>Importar Rama:</strong> Haz clic en <strong>📥 Importar</strong> y selecciona un paquete <code>.rag.gz</code> (o un archivo JSON legado) para restaurar la rama de conocimiento completa inmediatamente con todos sus archivos y configuraciones.</li>
-              </ul>
-            </div>
+            <div class="setting-card-title"><strong data-i18n="rag_help_private_title">Sin permisos ni costes de ingesta</strong></div>
+            <p class="setting-card-desc" data-i18n="rag_help_private_desc">Seleccionar un archivo solo permite leer esa carga. No se solicitan permisos sobre carpetas y no se llama a ningún LLM para resumir o indexar.</p>
           </div>
         </div>
       </div>
     </div>
-
     <div class="modal-footer">
-      <div class="modal-footer-info">
-        <div id="rag-storage-quota-info" class="rag-storage-quota-info">
-          <span>💾 Almacenamiento local: Calculando...</span>
-        </div>
-      </div>
-      <div class="modal-footer-actions">
-        <button type="button" id="btn-close-tree-rag-footer" class="btn-secondary" data-i18n="btn_close">Cerrar</button>
-      </div>
-    </div>
-  </dialog>
-
-  <!-- Modal / Visor de Estructura de Documento (Árbol de Conocimiento) -->
-  <dialog id="rag-structure-dialog" class="settings-modal rag-structure-modal">
-    <div class="modal-header">
-      <div class="modal-title">
-        <span>📑</span>
-        <h3 id="rag-structure-title" data-i18n="rag_structure_title">Estructura del Documento</h3>
-      </div>
-      <button type="button" id="btn-close-rag-structure" class="btn-close" aria-label="Cerrar visor">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="18" y1="6" x2="6" y2="18"></line>
-          <line x1="6" y1="6" x2="18" y2="18"></line>
-        </svg>
-      </button>
-    </div>
-
-    <div class="rag-structure-body">
-      <div class="rag-structure-doc-toolbar">
-        <div id="rag-structure-doc-meta" class="rag-structure-doc-meta"></div>
-        <button type="button" id="btn-rag-structure-delete-doc" class="btn-secondary btn-danger-hover" style="font-size: 0.8rem; padding: 0.3rem 0.75rem;">
-          🗑️ <span data-i18n="rag_btn_delete_doc">Eliminar Documento</span>
-        </button>
-      </div>
-
-      <div class="rag-structure-summary-card">
-        <h4 data-i18n="rag_global_summary_label">📌 Resumen Global del Documento</h4>
-        <div id="rag-structure-global-summary" class="rag-structure-summary-content"></div>
-      </div>
-
-      <div class="rag-structure-chapters-section">
-        <h4 data-i18n="rag_chapters_label">📑 Capítulos Detectados</h4>
-        <div id="rag-structure-chapters-list" class="rag-structure-chapters-list"></div>
-      </div>
+      <div class="modal-footer-info"><div id="rag-storage-quota-info" class="rag-storage-quota-info">💾 IndexedDB</div></div>
+      <div class="modal-footer-actions"><button type="button" id="btn-close-rag-footer" class="btn-secondary">Cerrar</button></div>
     </div>
   </dialog>
 
   <!-- Scripts de la aplicación (compatibles con file:// y http://) -->
+  <script src="js/vendor/orama.browser.js"></script>
+  <script src="js/storage-db.js"></script>
   <script src="js/cookies.js"></script>
   <script src="js/ragStorage.js"></script>
-  <script src="js/file-system.js"></script>
+  <script src="js/rag-index.js"></script>
   <script src="js/ingestionEngine.js"></script>
-  <script src="js/chatService.js"></script>
-  <script src="js/treeRagUI.js"></script>
+  <script src="js/rag-service.js"></script>
+  <script src="js/rag-ui.js"></script>
   <script src="js/i18n.js"></script>
   <script src="js/sandbox.js"></script>
   <script src="js/charts.js"></script>
@@ -963,7 +746,7 @@
   <script src="js/tools/builtin/get-current-datetime.tool.js"></script>
   <script src="js/tools/builtin/list-documents.tool.js"></script>
   <script src="js/tools/builtin/search-knowledge-base.tool.js"></script>
-  <script src="js/tools/builtin/read-chapter-content.tool.js"></script>
+  <script src="js/tools/builtin/read-knowledge-chunk.tool.js"></script>
   <script src="js/agent-core.js"></script>
   <script src="js/mcp.js"></script>
   <script src="js/debug.js"></script>
@@ -973,6 +756,10 @@
   <script src="js/state.js"></script>
   <script src="js/context-manager.js"></script>
   <script src="js/chat-engine.js"></script>
+  <script src="js/ui-reasoning.js"></script>
+  <script src="js/ui-inspector.js"></script>
+  <script src="js/ui-sidebar.js"></script>
+  <script src="js/ui-settings.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

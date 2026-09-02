@@ -50,23 +50,20 @@ Referencia: Manual Gigabyte.`;
   assert.ok(html.includes('<figcaption class="chat-image-caption">Diagrama Placa Base GA-Z77P-D3</figcaption>'), 'Debe generar el pie de foto figcaption');
 });
 
-test('Markdown - Renderizado de protocolo rag-image:// y etiquetas sueltas #img_X_Y', () => {
-  // 1. Sintaxis explícita ![alt](rag-image://doc/cap/img_7_12)
-  const explicitMd = `Esquema de componentes:
-![Distribución GA-Z77P-D3](rag-image://doc_123/6/img_7_12)`;
-  const explicitHtml = Markdown.parseMarkdown(explicitMd);
-  assert.ok(explicitHtml.includes('data-rag-src="rag-image://doc_123/6/img_7_12"'), 'Debe incluir atributo data-rag-src');
-  assert.ok(explicitHtml.includes('src="rag-image://doc_123/6/img_7_12"'));
+test('Markdown - Renderizado de reglas horizontales (---, ***, ___)', () => {
+  const md = `Sección 1\n\n---\n\nSección 2`;
+  const html = Markdown.parseMarkdown(md);
+  assert.ok(html.includes('<hr>'), 'Debe convertir --- a <hr>');
+  assert.ok(html.includes('Sección 1'));
+  assert.ok(html.includes('Sección 2'));
+});
 
-  // 2. Referencia textual suelta generada por el LLM: "Diagrama / Esquema (Pág. 7) #img_7_12"
-  const looseMd = `1. Esquema de Distribución de la Placa Base
-Diagrama / Esquema (Pág. 7) #img_7_12
-
-#### Distribución física:
-- Socket LGA1155`;
-  const looseHtml = Markdown.parseMarkdown(looseMd);
-  assert.ok(looseHtml.includes('data-rag-src="rag-image://img_7_12"'), 'Debe detectar automáticamente el tag suelto #img_7_12');
-  assert.ok(looseHtml.includes('<figcaption class="chat-image-caption">Diagrama / Esquema (Pág. 7) #img_7_12</figcaption>'));
+test('Markdown - Renderizado seguro de rag-image con data-rag-src y resolución por listeners', async () => {
+  const md = `![Revisión Placa](rag-image://doc_test_123:img_1)`;
+  const html = Markdown.parseMarkdown(md);
+  assert.ok(html.includes('data-rag-src="rag-image://doc_test_123:img_1"'), 'Debe incluir data-rag-src para resolución segura');
+  assert.ok(html.includes('src="data:image/svg+xml,'), 'Debe usar placeholder SVG para no romper el render en el navegador');
+  assert.ok(html.includes('<figcaption class="chat-image-caption">Revisión Placa</figcaption>'), 'Debe incluir pie de foto');
 });
 
 

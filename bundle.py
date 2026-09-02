@@ -28,12 +28,14 @@ import time
 from typing import Dict, List, Optional, Tuple
 
 JS_MODULE_FILES = [
+    "vendor/orama.browser.js",
+    "storage-db.js",
     "cookies.js",
     "ragStorage.js",
-    "file-system.js",
+    "rag-index.js",
     "ingestionEngine.js",
-    "chatService.js",
-    "treeRagUI.js",
+    "rag-service.js",
+    "rag-ui.js",
     "i18n.js",
     "sandbox.js",
     "charts.js",
@@ -53,7 +55,7 @@ JS_MODULE_FILES = [
     "tools/builtin/get-current-datetime.tool.js",
     "tools/builtin/list-documents.tool.js",
     "tools/builtin/search-knowledge-base.tool.js",
-    "tools/builtin/read-chapter-content.tool.js",
+    "tools/builtin/read-knowledge-chunk.tool.js",
     "agent-core.js",
     "mcp.js",
     "debug.js",
@@ -63,16 +65,22 @@ JS_MODULE_FILES = [
     "state.js",
     "context-manager.js",
     "chat-engine.js",
+    "ui-reasoning.js",
+    "ui-inspector.js",
+    "ui-sidebar.js",
+    "ui-settings.js",
     "app.js"
 ]
 
 CORE_EXPORT_SYMBOLS = [
+    "ZeroChatOrama",
+    "ZeroChatDB",
     "ChatStorage",
     "ChatRagStorage",
-    "ChatFileSystem",
+    "ChatRagIndex",
     "ChatIngestionEngine",
-    "ChatTreeRagService",
-    "ChatTreeRagUI",
+    "ChatRagService",
+    "ChatRagUI",
     "ChatI18n",
     "ChatSandbox",
     "ChatCharts",
@@ -96,7 +104,11 @@ CORE_EXPORT_SYMBOLS = [
     "ChatExport",
     "ChatState",
     "ChatContextManager",
-    "ChatEngine"
+    "ChatEngine",
+    "ChatUIReasoning",
+    "ChatUIInspector",
+    "ChatUISidebar",
+    "ChatUISettings"
 ]
 
 BOOTSTRAP_LOADER_SCRIPT = """<script>

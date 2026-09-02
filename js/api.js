@@ -118,20 +118,12 @@
       return 'render_chart';
     }
 
-    // 6. Base de Conocimiento RAG (read_chapter_content)
+    // 6. Base de Conocimiento RAG (read_knowledge_chunk)
     if (
-      clean === 'read_chapter_content' ||
-      clean === 'read_chapter' ||
-      clean === 'get_chapter' ||
-      clean === 'get_chapter_content' ||
-      clean === 'read_doc_chapter' ||
-      noUnderscore === 'readchaptercontent' ||
-      noUnderscore === 'readchapter' ||
-      noUnderscore === 'getchapter' ||
-      noUnderscore === 'getchaptercontent' ||
-      noUnderscore === 'readdocchapter'
+      clean === 'read_knowledge_chunk' ||
+      noUnderscore === 'readknowledgechunk'
     ) {
-      return 'read_chapter_content';
+      return 'read_knowledge_chunk';
     }
 
     return clean;
@@ -432,7 +424,6 @@
       enableAgentWeb = false,
       enableAgentSearch = false,
       enableAgentChart = false,
-      enableAgentRag = false,
       activeRagBranchId = '',
       enableContextCache = true,
       cacheInvalidated = false,
@@ -456,7 +447,7 @@
     let toolsList = [];
     if (Array.isArray(params.tools) && params.tools.length > 0) {
       toolsList = params.tools;
-    } else if (enableTools || toolChoice === 'none' || Boolean(activeRagBranchId) || params.enableAgentRag) {
+    } else if (enableTools || toolChoice === 'none' || Boolean(activeRagBranchId)) {
       const AgentCore = typeof window !== 'undefined' ? window.ChatAgentCore : (typeof require !== 'undefined' ? (() => { try { return require('./agent-core.js'); } catch(e){ return null; } })() : null);
       if (AgentCore && AgentCore.registry && typeof AgentCore.registry.getActiveDefinitions === 'function') {
         toolsList = AgentCore.registry.getActiveDefinitions(params);
@@ -535,6 +526,9 @@
     let activeReasoningTag = null;
     let serverCachedTokens = 0;
     let serverCacheCreationTokens = 0;
+    let serverPromptTokens = 0;
+    let serverCompletionTokens = 0;
+    let serverTotalTokens = 0;
     const requestStartTime = performance.now();
     let firstTokenTime = null;
 
@@ -556,7 +550,10 @@
           tokens: tokens,
           tokensPerSec: tokensPerSec,
           cachedTokens: serverCachedTokens,
-          cacheCreationTokens: serverCacheCreationTokens
+          cacheCreationTokens: serverCacheCreationTokens,
+          promptTokens: serverPromptTokens,
+          completionTokens: serverCompletionTokens,
+          totalTokens: serverTotalTokens
         };
       } else {
         return {
@@ -566,7 +563,10 @@
           tokens: 0,
           tokensPerSec: '0.0',
           cachedTokens: serverCachedTokens,
-          cacheCreationTokens: serverCacheCreationTokens
+          cacheCreationTokens: serverCacheCreationTokens,
+          promptTokens: serverPromptTokens,
+          completionTokens: serverCompletionTokens,
+          totalTokens: serverTotalTokens
         };
       }
     }
@@ -786,14 +786,20 @@
               }
 
               // Usage logging si viene en el chunk
-              if (chunkData.usage && onLog) {
-                const streamUsage = chunkData.usage;
-                const rTokens = streamUsage.completion_tokens_details?.reasoning_tokens;
-                const cTokens = serverCachedTokens > 0 ? ` (⚡ Cache: ${serverCachedTokens} tok)` : '';
-                onLog({
-                  type: 'stats',
-                  text: `Uso de tokens: Prompt=${streamUsage.prompt_tokens || 0}, Respuesta=${streamUsage.completion_tokens || 0}, Total=${streamUsage.total_tokens || 0}${rTokens ? ` (Razonamiento: ${rTokens})` : ''}${cTokens}`
-                });
+              const streamUsage = chunkData.usage || parsed.usage;
+              if (streamUsage) {
+                if (streamUsage.prompt_tokens) serverPromptTokens = streamUsage.prompt_tokens;
+                if (streamUsage.completion_tokens) serverCompletionTokens = streamUsage.completion_tokens;
+                if (streamUsage.total_tokens) serverTotalTokens = streamUsage.total_tokens;
+
+                if (onLog) {
+                  const rTokens = streamUsage.completion_tokens_details?.reasoning_tokens;
+                  const cTokens = serverCachedTokens > 0 ? ` (⚡ Cache: ${serverCachedTokens} tok)` : '';
+                  onLog({
+                    type: 'stats',
+                    text: `Uso de tokens: Prompt=${streamUsage.prompt_tokens || 0}, Respuesta=${streamUsage.completion_tokens || 0}, Total=${streamUsage.total_tokens || 0}${rTokens ? ` (Razonamiento: ${rTokens})` : ''}${cTokens}`
+                  });
+                }
               }
 
             } catch (jsonErr) {}

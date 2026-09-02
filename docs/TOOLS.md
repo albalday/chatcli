@@ -12,4 +12,4 @@ El contrato obligatorio es:
 
 No usar `ui` ni `handler`: fueron eliminados. Para una dependencia nueva, declárala en `js/tools/tool-runtime.js`, inyéctala en pruebas y evita acceder a globals desde `agent-core.js`.
 
-Las constantes de esquema expuestas por servicios web/RAG se mantienen temporalmente como API pública de esos servicios; el registro y la ejecución del agente usan exclusivamente las definiciones canónicas de los módulos de tools.
+Las herramientas de conocimiento local usan tres operaciones canónicas: `list_documents`, `search_knowledge_base` y `read_knowledge_chunk`. El registro y la ejecución del agente usan exclusivamente las definiciones declaradas por estos módulos.

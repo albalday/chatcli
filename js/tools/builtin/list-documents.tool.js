@@ -7,7 +7,7 @@
 
   const definition = {
     name: 'list_documents',
-    description: 'Lista todos los documentos, manuales, resúmenes temáticos y la lista completa de capítulos indexados en la base de conocimiento local del usuario. Úsala para descubrir qué información existe o ante preguntas sobre el catálogo documental disponible.',
+    description: 'Lista los documentos disponibles en la rama activa de la base de conocimiento local.',
     parameters: { type: 'object', properties: {}, required: [] }
   };
 
@@ -15,13 +15,11 @@
     return context.activeRagBranchId || context.branchId || context.config?.activeRagBranchId || '';
   }
 
-  function getTreeRagService(context = {}) {
-    if (context.services?.treeRagService) return context.services.treeRagService;
-    if (typeof window !== 'undefined' && (window.ChatTreeRagService || window.ChatService)) {
-      return window.ChatTreeRagService || window.ChatService;
-    }
+  function getRagService(context = {}) {
+    if (context.services?.ragService) return context.services.ragService;
+    if (typeof window !== 'undefined' && window.ChatRagService) return window.ChatRagService;
     if (typeof require !== 'undefined') {
-      try { return require('../../chatService.js'); } catch (e) {}
+      try { return require('../../rag-service.js'); } catch (e) {}
     }
     return null;
   }
@@ -29,7 +27,7 @@
   function createCardWrapper(ui) { const doc = ui?.document || (typeof document !== 'undefined' ? document : null); if (!doc) return null; const card = doc.createElement('div'); card.className = 'tool-card-wrapper'; return card; }
   function createLiveCard(_args, ui) {
     const card = createCardWrapper(ui); if (!card) return null; const t = ui?.t || ((key) => key);
-    card.innerHTML = `<div class="tool-execution-card rag-execution-card collapsed"><div class="tool-card-header"><div class="tool-card-title"><span>📖</span><span>Base de Conocimiento (Índice de Documentos)</span></div><div class="tool-card-header-actions"><span class="tool-card-badge status-loading">⏳ Consultando documentos indexados...</span><button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Expandir'}"><span>▸</span></button></div></div><div class="tool-card-collapsible-body"><div class="tool-card-result"><div class="tool-loading-placeholder">⏳ Recuperando índice y resúmenes desde IndexedDB...</div></div></div></div>`; return card;
+    card.innerHTML = `<div class="tool-execution-card rag-execution-card collapsed"><div class="tool-card-header"><div class="tool-card-title"><span>📖</span><span>Base de Conocimiento (Índice de Documentos)</span></div><div class="tool-card-header-actions"><span class="tool-card-badge status-loading">⏳ Consultando documentos indexados...</span><button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Expandir'}"><span>▸</span></button></div></div><div class="tool-card-collapsible-body"><div class="tool-card-result"><div class="tool-loading-placeholder">⏳ Recuperando documentos desde IndexedDB...</div></div></div></div>`; return card;
   }
   function updateLiveCard(card, _args, result = {}, elapsedMs = 0, ui) {
     if (!card) return; const Markdown = ui?.markdown || { escapeHtml: (v) => String(v || '') }; const success = result?.success !== false && !result?.error; const count = result?.count ?? 0; const text = result?.text || (typeof result === 'object' ? JSON.stringify(result, null, 2) : String(result || ''));
@@ -47,11 +45,11 @@
       category: 'rag',
       metadata: { icon: '📖', label: definition.name },
       settings: { showInSettings: false },
-      isAvailable: (config = {}) => Boolean(config.activeRagBranchId || config.enableAgentRag),
+      isAvailable: (config = {}) => Boolean(config.activeRagBranchId),
       execute: async (_args, context = {}) => {
-        const TreeRagService = getTreeRagService(context);
-        if (!TreeRagService?.resolveListDocumentsToolCall) return { success: false, error: 'Servicio de RAG no disponible.' };
-        return TreeRagService.resolveListDocumentsToolCall(getBranchId(context));
+        const RagService = getRagService(context);
+        if (!RagService?.listDocuments) return { success: false, error: 'Servicio de RAG no disponible.' };
+        return RagService.listDocuments(getBranchId(context));
       },
       result: {
         toModel: (_args, result) => result?.text || JSON.stringify(result || {}),
@@ -63,7 +61,7 @@
     });
   }
 
-  const toolModule = { id: definition.name, definition, createTool, getBranchId, getTreeRagService, view: { id: definition.name, createLiveCard, updateLiveCard, renderHistoricalCard } };
+  const toolModule = { id: definition.name, definition, createTool, getBranchId, getRagService, view: { id: definition.name, createLiveCard, updateLiveCard, renderHistoricalCard } };
   let manifestApi = null;
   if (typeof window !== 'undefined' && window.ChatToolManifest) manifestApi = window.ChatToolManifest;
   else if (typeof require !== 'undefined') { try { manifestApi = require('../tool-manifest.js'); } catch (e) {} }
