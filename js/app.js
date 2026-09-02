@@ -36,6 +36,7 @@
   const UIReasoning = window.ChatUIReasoning || {};
   const UIInspector = window.ChatUIInspector || {};
   const UISidebar = window.ChatUISidebar || {};
+  const UISettings = window.ChatUISettings || {};
 
   function t(key, params) {
     if (I18n.t) return I18n.t(key, params);
@@ -250,74 +251,14 @@
   }
 
   function applyTheme(theme) {
-    const root = document.documentElement;
-    const effective = (theme === 'dark') ? 'dark' : 'light';
-    appConfig.theme = effective;
-
-    if (effective === 'dark') {
-      root.setAttribute('data-theme', 'dark');
-    } else {
-      root.removeAttribute('data-theme');
-    }
-
-    if (elements.themeButtons && elements.themeButtons.length > 0) {
-      elements.themeButtons.forEach(btn => {
-        if (btn.getAttribute('data-theme') === effective) {
-          btn.classList.add('active');
-        } else {
-          btn.classList.remove('active');
-        }
-      });
+    if (UISettings.applyTheme) {
+      UISettings.applyTheme(elements, appConfig, theme);
     }
   }
 
   function applyLanguage(lang) {
-    const target = (lang === 'en') ? 'en' : 'es';
-    appConfig.language = target;
-
-    if (I18n.setLanguage) {
-      I18n.setLanguage(target, true);
-    }
-    if (Storage.saveConfig) {
-      Storage.saveConfig({ language: target });
-    }
-
-    // Actualizar indicador en toolbar
-    if (elements.currentLangLabel) {
-      elements.currentLangLabel.textContent = target.toUpperCase();
-    }
-
-    // Actualizar botones de idioma en el modal
-    if (elements.langButtons && elements.langButtons.length > 0) {
-      elements.langButtons.forEach(btn => {
-        if (btn.getAttribute('data-lang') === target) {
-          btn.classList.add('active');
-        } else {
-          btn.classList.remove('active');
-        }
-      });
-    }
-
-    // Actualizar data-prompt en tarjetas de sugerencia
-    if (elements.sugCardExplain) elements.sugCardExplain.setAttribute('data-prompt', t('sug_explain_prompt'));
-    if (elements.sugCardCode) elements.sugCardCode.setAttribute('data-prompt', t('sug_code_prompt'));
-    if (elements.sugCardIdeas) elements.sugCardIdeas.setAttribute('data-prompt', t('sug_ideas_prompt'));
-
-    // Actualizar modelo y perfil en badges
-    if (elements.currentProfileName) {
-      const activeProf = (Storage.getActiveProfileName ? Storage.getActiveProfileName() : appConfig.activeProfileName) || appConfig.activeProfileName || 'Local chat';
-      elements.currentProfileName.textContent = activeProf;
-    }
-    if (elements.currentModelName) {
-      elements.currentModelName.textContent = appConfig.model ? appConfig.model : t('no_model');
-    }
-
-    // Actualizar UI de razonamiento
-    updateReasoningUI(appConfig.reasoningEffort);
-
-    // Actualizar placeholder de prompt del sistema si está vacío
-    if (elements.settingSystemPrompt) {
-      elements.settingSystemPrompt.setAttribute('placeholder', t('field_system_prompt_placeholder'));
+    if (UISettings.applyLanguage) {
+      UISettings.applyLanguage(elements, appConfig, lang, { updateReasoningUI });
     }
   }
 
@@ -1081,226 +1022,64 @@
     }
   }
 
-  /**
-   * Renderiza dinámicamente las tarjetas de herramientas agénticas registradas en ToolRegistry.
-   */
   function renderAgentToolsUI(container, currentEnabledTools = {}) {
-    if (!container) return;
-    const tools = (AgentCore.registry && typeof AgentCore.registry.listToolsForUI === 'function')
-      ? AgentCore.registry.listToolsForUI()
-      : [];
-
-    container.innerHTML = '';
-    tools.forEach(tool => {
-      const isChecked = currentEnabledTools[tool.id] !== undefined
-        ? currentEnabledTools[tool.id] !== false
-        : (currentEnabledTools[tool.name] !== undefined ? currentEnabledTools[tool.name] !== false : tool.defaultEnabled !== false);
-
-      const title = t(tool.titleKey) || tool.titleFallback || tool.name;
-      const desc = t(tool.descKey) || tool.descFallback || '';
-
-      const card = document.createElement('div');
-      card.className = 'setting-toggle-card';
-      card.innerHTML = `
-        <div class="toggle-card-info">
-          <div class="toggle-card-title">
-            <span data-i18n="${Markdown.escapeHtml ? Markdown.escapeHtml(tool.titleKey) : tool.titleKey}">${Markdown.escapeHtml ? Markdown.escapeHtml(title) : title}</span>
-          </div>
-          <p class="toggle-card-desc" data-i18n="${Markdown.escapeHtml ? Markdown.escapeHtml(tool.descKey) : tool.descKey}">${Markdown.escapeHtml ? Markdown.escapeHtml(desc) : desc}</p>
-        </div>
-        <label class="switch">
-          <input type="checkbox" class="agent-tool-checkbox" data-tool-id="${Markdown.escapeHtml ? Markdown.escapeHtml(tool.id) : tool.id}" ${isChecked ? 'checked' : ''}>
-          <span class="slider"></span>
-        </label>
-      `;
-      container.appendChild(card);
-    });
+    if (UISettings.renderAgentToolsUI) {
+      UISettings.renderAgentToolsUI(container, currentEnabledTools);
+    }
   }
 
-  /**
-   * Recoge el estado de activación de todas las herramientas desde la UI.
-   */
   function gatherEnabledToolsFromUI() {
-    const map = {};
-    if (elements.agentToolsContainer) {
-      elements.agentToolsContainer.querySelectorAll('.agent-tool-checkbox').forEach(cb => {
-        const tid = cb.getAttribute('data-tool-id');
-        if (tid) map[tid] = cb.checked;
-      });
+    if (UISettings.gatherEnabledToolsFromUI) {
+      return UISettings.gatherEnabledToolsFromUI(elements.agentToolsContainer);
     }
-    return map;
+    return {};
   }
 
-  /**
-   * Rellena todos los campos de todas las pestañas de configuración con los valores de un perfil.
-   */
   function applyProfileToForm(profileData) {
-    if (!profileData) return;
-
-    if (elements.settingApiType && profileData.apiType !== undefined) {
-      elements.settingApiType.value = profileData.apiType;
-    }
-    if (elements.settingApiUrl && profileData.apiUrl !== undefined) {
-      elements.settingApiUrl.value = profileData.apiUrl;
-    }
-    if (elements.settingApiKey && profileData.apiKey !== undefined) {
-      elements.settingApiKey.value = profileData.apiKey;
-    }
-    if (elements.settingModel && profileData.model !== undefined) {
-      elements.settingModel.value = profileData.model;
-    }
-    if (elements.modelSelectHelper && profileData.model !== undefined) {
-      elements.modelSelectHelper.value = profileData.model;
-    }
-    if (elements.settingSystemPrompt && profileData.systemPrompt !== undefined) {
-      elements.settingSystemPrompt.value = profileData.systemPrompt;
-    }
-    if (elements.settingTemperature && profileData.temperature !== undefined) {
-      elements.settingTemperature.value = profileData.temperature;
-      if (elements.temperatureVal) {
-        elements.temperatureVal.textContent = profileData.temperature;
-      }
-    }
-    if (elements.agentToolsContainer) {
-      renderAgentToolsUI(elements.agentToolsContainer, profileData.enabledTools || {});
-    }
-    if (elements.settingEnableContextCache && profileData.enableContextCache !== undefined) {
-      elements.settingEnableContextCache.checked = profileData.enableContextCache !== false;
-    }
-    if (elements.settingEnableRawLogs && profileData.enableRawLogs !== undefined) {
-      elements.settingEnableRawLogs.checked = profileData.enableRawLogs === true;
-    }
-    if (elements.settingSendDateTime && profileData.sendDateTime !== undefined) {
-      elements.settingSendDateTime.checked = profileData.sendDateTime !== false;
+    if (UISettings.applyProfileToForm) {
+      UISettings.applyProfileToForm(elements, profileData);
     }
   }
 
-  /**
-   * Recoge la configuración completa de todos los campos actuales del formulario.
-   */
   function gatherCurrentFormConfig() {
-    const profileName = elements.settingProfileName ? elements.settingProfileName.value.trim() : (appConfig.activeProfileName || 'Local chat');
-    const selectedModel = elements.settingModel ? elements.settingModel.value.trim() : '';
-
-    return {
-      activeProfileName: profileName,
-      apiUrl: elements.settingApiUrl ? elements.settingApiUrl.value.trim() : (appConfig.apiUrl || 'http://localhost:1234/v1'),
-      apiType: elements.settingApiType ? elements.settingApiType.value : (appConfig.apiType || 'openai'),
-      apiKey: elements.settingApiKey ? elements.settingApiKey.value.trim() : '',
-      model: selectedModel,
-      systemPrompt: elements.settingSystemPrompt ? elements.settingSystemPrompt.value.trim() : '',
-      temperature: elements.settingTemperature ? elements.settingTemperature.value : '0.7',
-      reasoningEffort: appConfig.reasoningEffort || 'none',
-      modelReasoningConfig: appConfig.modelReasoningConfig || null,
-      theme: appConfig.theme || 'light',
-      language: appConfig.language || 'es',
-      enabledTools: gatherEnabledToolsFromUI(),
-      enableContextCache: elements.settingEnableContextCache ? elements.settingEnableContextCache.checked : true,
-      enableRawLogs: elements.settingEnableRawLogs ? elements.settingEnableRawLogs.checked : Boolean(appConfig.enableRawLogs),
-      enableDebugMessages: Boolean(appConfig.enableDebugMessages),
-      sendDateTime: elements.settingSendDateTime ? elements.settingSendDateTime.checked : true,
-      activeRagBranchId: appConfig.activeRagBranchId || '',
-      ragContextLimitK: appConfig.ragContextLimitK || 128
-    };
+    if (UISettings.gatherCurrentFormConfig) {
+      return UISettings.gatherCurrentFormConfig(elements, appConfig);
+    }
+    return appConfig;
   }
 
   function showProfileFeedback(msg, type = 'success') {
-    if (!elements.profileActionFeedback) return;
-    elements.profileActionFeedback.style.display = 'block';
-    elements.profileActionFeedback.className = `server-query-status status-${type}`;
-    elements.profileActionFeedback.textContent = msg;
-    setTimeout(() => {
-      if (elements.profileActionFeedback) {
-        elements.profileActionFeedback.style.display = 'none';
-      }
-    }, 4000);
+    if (UISettings.showProfileFeedback) {
+      UISettings.showProfileFeedback(elements, msg, type);
+    }
   }
 
   function handleSaveProfile() {
-    const name = elements.settingProfileName ? elements.settingProfileName.value.trim() : '';
-    if (!name) {
-      showProfileFeedback(t('err_profile_name_empty') || 'Por favor, escribe un nombre para el perfil.', 'error');
-      return;
-    }
-
-    const currentConfig = gatherCurrentFormConfig();
-    if (Storage.saveProfile) {
-      Storage.saveProfile(name, currentConfig);
-      populateProfileSelector(name);
-      showProfileFeedback(t('msg_profile_saved', { name: name }) || `Perfil "${name}" guardado con éxito.`, 'success');
+    if (UISettings.handleSaveProfile) {
+      UISettings.handleSaveProfile(elements, appConfig, populateProfileSelector);
     }
   }
 
   function handleDeleteProfile() {
-    const name = elements.settingProfileName ? elements.settingProfileName.value.trim() : '';
-    if (!name) return;
-
-    const confirmMsg = t('confirm_delete_profile', { name: name }) || `¿Estás seguro de que deseas eliminar el perfil "${name}"?`;
-    if (!confirm(confirmMsg)) return;
-
-    if (Storage.deleteProfile) {
-      Storage.deleteProfile(name);
-      const newActive = Storage.getActiveProfileName ? Storage.getActiveProfileName() : 'Local chat';
-      populateProfileSelector(newActive);
-      const newProfileData = Storage.getProfile ? Storage.getProfile(newActive) : null;
-      if (newProfileData) {
-        applyProfileToForm(newProfileData);
-      }
-      showProfileFeedback(t('msg_profile_deleted', { name: name }) || `Perfil "${name}" eliminado.`, 'success');
+    if (UISettings.handleDeleteProfile) {
+      UISettings.handleDeleteProfile(elements, populateProfileSelector, applyProfileToForm);
     }
   }
 
   function openSettingsModal() {
-    const activeProfileName = (Storage.getActiveProfileName ? Storage.getActiveProfileName() : appConfig.activeProfileName) || 'Local chat';
-    populateProfileSelector(activeProfileName);
-
-    if (elements.settingApiType) {
-      elements.settingApiType.value = appConfig.apiType || 'openai';
+    if (UISettings.openSettingsModal) {
+      UISettings.openSettingsModal(elements, appConfig, {
+        populateProfileSelector,
+        loadCachedModels,
+        updateReasoningUI
+      });
     }
-    elements.settingApiUrl.value = appConfig.apiUrl || 'http://localhost:1234/v1';
-    elements.settingApiKey.value = appConfig.apiKey || '';
-    elements.settingModel.value = appConfig.model || '';
-    elements.settingSystemPrompt.value = appConfig.systemPrompt || '';
-    elements.settingTemperature.value = appConfig.temperature || '0.7';
-    elements.temperatureVal.textContent = appConfig.temperature || '0.7';
-    applyTheme(appConfig.theme || 'light');
-    applyLanguage(appConfig.language || 'es');
-
-    if (elements.serverQueryStatus) {
-      elements.serverQueryStatus.style.display = 'none';
-    }
-    if (elements.profileActionFeedback) {
-      elements.profileActionFeedback.style.display = 'none';
-    }
-
-    loadCachedModels();
-
-    if (elements.agentToolsContainer) {
-      renderAgentToolsUI(elements.agentToolsContainer, appConfig.enabledTools || {});
-    }
-    if (elements.settingEnableContextCache) {
-      elements.settingEnableContextCache.checked = appConfig.enableContextCache !== false;
-    }
-    if (elements.settingEnableRawLogs) {
-      elements.settingEnableRawLogs.checked = appConfig.enableRawLogs === true;
-    }
-    if (elements.settingSendDateTime) {
-      elements.settingSendDateTime.checked = appConfig.sendDateTime !== false;
-    }
-
-    if (elements.modalTabs && elements.modalTabs.length > 0) {
-      elements.modalTabs.forEach(b => b.classList.remove('active'));
-      elements.modalPanes.forEach(p => p.classList.remove('active'));
-      elements.modalTabs[0].classList.add('active');
-      const firstPane = document.getElementById(elements.modalTabs[0].getAttribute('data-tab'));
-      if (firstPane) firstPane.classList.add('active');
-    }
-
-    elements.settingsDialog.showModal();
   }
 
   function closeSettingsModal() {
-    elements.settingsDialog.close();
+    if (UISettings.closeSettingsModal) {
+      UISettings.closeSettingsModal(elements);
+    }
   }
 
   function handleSaveSettings(e) {
@@ -1322,51 +1101,15 @@
   }
 
   function handleResetSettings() {
-    if (Storage.getDefaultConfig) {
-      const defaults = Storage.getDefaultConfig();
-      if (elements.settingApiType) {
-        elements.settingApiType.value = defaults.apiType || 'openai';
-      }
-      elements.settingApiUrl.value = defaults.apiUrl;
-      elements.settingApiKey.value = defaults.apiKey;
-      elements.settingModel.value = defaults.model;
-      elements.settingSystemPrompt.value = '';
-      elements.settingTemperature.value = defaults.temperature;
-      elements.temperatureVal.textContent = defaults.temperature;
-      applyTheme(defaults.theme || 'light');
-      applyLanguage(defaults.language || 'es');
-
-      if (elements.modelSelectHelper) {
-        elements.modelSelectHelper.value = defaults.model;
-      }
-
-      if (elements.agentToolsContainer) {
-        renderAgentToolsUI(elements.agentToolsContainer, defaults.enabledTools || {});
-      }
-      if (elements.settingEnableContextCache) {
-        elements.settingEnableContextCache.checked = defaults.enableContextCache !== false;
-      }
-      if (elements.settingEnableRawLogs) {
-        elements.settingEnableRawLogs.checked = defaults.enableRawLogs === true;
-      }
-      if (elements.settingSendDateTime) {
-        elements.settingSendDateTime.checked = defaults.sendDateTime !== false;
-      }
+    if (UISettings.handleResetSettings) {
+      UISettings.handleResetSettings(elements);
     }
   }
 
   function handleClearAllData() {
-    if (!confirm(t('confirm_clear_all_data'))) return;
-
-    if (Storage.clearAllStorage) {
-      Storage.clearAllStorage();
-    } else {
-      try { localStorage.clear(); } catch (e) {}
-      try { sessionStorage.clear(); } catch (e) {}
+    if (UISettings.handleClearAllData) {
+      UISettings.handleClearAllData();
     }
-
-    // Recargar la aplicación para iniciar completamente desde cero
-    window.location.reload();
   }
 
   // ==========================================================================
