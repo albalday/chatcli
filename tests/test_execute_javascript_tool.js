@@ -14,6 +14,9 @@ test('ExecuteJavascriptTool - módulo autocontenido cumple el contrato y conserv
   assert.equal(tool.getDefinition().function.name, 'execute_javascript');
   assert.ok(tool.aliases.includes('executejs'));
   assert.equal(tool.view.id, 'execute_javascript');
+  assert.equal(typeof tool.view.createLiveCard, 'function');
+  assert.equal(typeof tool.view.updateLiveCard, 'function');
+  assert.equal(typeof tool.view.renderHistoricalCard, 'function');
   assert.equal(ToolManifest.builtin.get('execute_javascript'), ExecuteJavascriptTool);
 });
 

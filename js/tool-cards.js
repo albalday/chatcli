@@ -46,6 +46,24 @@
     return String(rawName || '').trim().toLowerCase().replace(/_/g, '');
   }
 
+  function getAgentCore() {
+    return (typeof window !== 'undefined' && window.ChatAgentCore) ? window.ChatAgentCore : null;
+  }
+
+  function createToolViewContext() {
+    return {
+      document: typeof document !== 'undefined' ? document : null,
+      markdown: getMarkdown(),
+      t
+    };
+  }
+
+  function resolveToolView(rawName) {
+    const AgentCore = getAgentCore();
+    const tool = AgentCore?.registry?.getTool ? AgentCore.registry.getTool(rawName) : null;
+    return tool?.view || null;
+  }
+
   /**
    * Crea el elemento DOM inicial de la tarjeta con estado de carga para el turno en vivo.
    */
@@ -53,36 +71,14 @@
     if (typeof document === 'undefined') return null;
     const Markdown = getMarkdown();
     const norm = normalizeName(rawName);
+    const toolView = resolveToolView(rawName);
+    if (typeof toolView?.createLiveCard === 'function') {
+      return toolView.createLiveCard(toolArgs, createToolViewContext());
+    }
     const cardDiv = document.createElement('div');
     cardDiv.className = 'tool-card-wrapper';
 
-    // 1. JavaScript Execution
-    if (norm === 'executejavascript') {
-      const codeToRun = toolArgs.code || toolArgs.javascript || toolArgs.js || toolArgs.script || toolArgs.input || '';
-      cardDiv.innerHTML = `
-        <div class="tool-execution-card">
-          <div class="tool-card-header">
-            <div class="tool-card-title">
-              <span>⚡</span>
-              <span>${t('tool_js_title_running') || 'execute_javascript'}</span>
-            </div>
-            <div class="tool-card-header-actions">
-              <span class="tool-card-badge status-loading">⏳ ${t('tool_badge_executing') || 'Ejecutando...'}</span>
-              <button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Minimizar'}"><span>▾</span></button>
-            </div>
-          </div>
-          <div class="tool-card-collapsible-body">
-            <pre class="tool-card-code"><code>${Markdown.escapeHtml(codeToRun)}</code></pre>
-            <div class="tool-card-result">
-              <div class="tool-loading-placeholder">⏳ ${t('tool_loading_js') || 'Ejecutando código en sandbox local...'}</div>
-            </div>
-          </div>
-        </div>
-      `;
-      return cardDiv;
-    }
-
-    // 2. Web Page / PDF Fetch
+    // 1. Web Page / PDF Fetch
     if (norm === 'fetchwebpage' || norm === 'downloadpdf') {
       const isPdfCall = norm === 'downloadpdf';
       const urlToFetch = toolArgs.url || toolArgs.URL || toolArgs.uri || toolArgs.link || toolArgs.href || toolArgs.path || toolArgs.input || '';
@@ -240,6 +236,11 @@
       toolArgs = { input: tc.function.arguments || '' };
     }
 
+    const toolView = resolveToolView(rawFuncName);
+    if (typeof toolView?.renderHistoricalCard === 'function') {
+      return toolView.renderHistoricalCard(toolArgs, toolMsg, createToolViewContext());
+    }
+
     const cardDiv = document.createElement('div');
     cardDiv.className = 'tool-card-wrapper';
 
@@ -254,44 +255,7 @@
       return cardDiv;
     }
 
-    // 2. Ejecución de JavaScript
-    if (norm === 'executejavascript') {
-      const codeToRun = toolArgs.code || toolArgs.javascript || toolArgs.js || toolArgs.script || toolArgs.input || '';
-      let outText = '';
-      if (toolMsg && toolMsg.content) {
-        try {
-          const parsedRes = JSON.parse(toolMsg.content);
-          outText = parsedRes.result || (parsedRes.logs && parsedRes.logs.length > 0 ? parsedRes.logs.join('\n') : (parsedRes.error ? `Error: ${parsedRes.error}` : toolMsg.content));
-        } catch (e) {
-          outText = toolMsg.content;
-        }
-      }
-
-      cardDiv.innerHTML = `
-        <div class="tool-execution-card">
-          <div class="tool-card-header">
-            <div class="tool-card-title">
-              <span>⚡</span>
-              <span>${t('tool_js_title_running') || 'execute_javascript'}</span>
-            </div>
-            <div class="tool-card-header-actions">
-              <span class="tool-card-badge status-success">✅ ${t('tool_status_success') || 'Completado'}</span>
-              <button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Minimizar'}"><span>▾</span></button>
-            </div>
-          </div>
-          <div class="tool-card-collapsible-body">
-            <pre class="tool-card-code"><code>${Markdown.escapeHtml(codeToRun)}</code></pre>
-            <div class="tool-card-result">
-              <div class="tool-result-label">${t('tool_sandbox_output') || 'Salida del Sandbox:'}</div>
-              <pre class="tool-result-pre"><code>${Markdown.escapeHtml(outText)}</code></pre>
-            </div>
-          </div>
-        </div>
-      `;
-      return cardDiv;
-    }
-
-    // 3. Búsqueda Web
+    // 2. Búsqueda Web
     if (norm === 'searchweb') {
       const queryToSearch = toolArgs.query || toolArgs.q || toolArgs.search || toolArgs.keyword || toolArgs.text || '';
       let resultsHtml = '';
@@ -495,29 +459,13 @@
     if (!cardDiv || typeof document === 'undefined') return;
     const Markdown = getMarkdown();
     const norm = normalizeName(rawName);
-
-    // 1. JavaScript Execution
-    if (norm === 'executejavascript') {
-      const badgeEl = cardDiv.querySelector('.tool-card-badge');
-      const isSuccess = result?.success !== false && !result?.error;
-      if (badgeEl) {
-        badgeEl.className = `tool-card-badge ${isSuccess ? 'status-success' : 'status-error'}`;
-        badgeEl.textContent = isSuccess ? `✅ ${t('tool_status_success') || 'Completado'} (${elapsedMs || 0}ms)` : `❌ Error (${elapsedMs || 0}ms)`;
-      }
-      const resContainer = cardDiv.querySelector('.tool-card-result');
-      if (resContainer) {
-        const outText = isSuccess
-          ? (result.result || (result.logs && result.logs.length > 0 ? result.logs.join('\n') : 'undefined'))
-          : `Error: ${result.error || 'Error de ejecución'}`;
-        resContainer.innerHTML = `
-          <div class="tool-result-label">${t('tool_sandbox_output') || 'Salida del Sandbox:'}</div>
-          <pre class="tool-result-pre"><code>${Markdown.escapeHtml(outText)}</code></pre>
-        `;
-      }
+    const toolView = resolveToolView(rawName);
+    if (typeof toolView?.updateLiveCard === 'function') {
+      toolView.updateLiveCard(cardDiv, toolArgs, result, elapsedMs, createToolViewContext());
       return;
     }
 
-    // 2. Web Page / PDF Fetch
+    // 1. Web Page / PDF Fetch
     if (norm === 'fetchwebpage' || norm === 'downloadpdf') {
       const isPdfCall = norm === 'downloadpdf';
       const isSuccess = result?.success !== false && !result?.error;
@@ -654,6 +602,7 @@
 
   return {
     normalizeName,
+    resolveToolView,
     createLiveToolCard,
     updateLiveToolCard,
     renderHistoricalToolCard

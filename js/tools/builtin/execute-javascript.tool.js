@@ -41,6 +41,108 @@
     return `> ⚡ **execute_javascript**\n> \`\`\`javascript\n> ${code.split('\n').join('\n> ')}\n> \`\`\`\n> \`\`\`\n> ${String(output).split('\n').join('\n> ')}\n> \`\`\``;
   }
 
+  function createCardWrapper(ui) {
+    const doc = ui?.document || (typeof document !== 'undefined' ? document : null);
+    if (!doc) return null;
+    const cardDiv = doc.createElement('div');
+    cardDiv.className = 'tool-card-wrapper';
+    return cardDiv;
+  }
+
+  function getUiHelpers(ui) {
+    return {
+      Markdown: ui?.markdown || { escapeHtml: (value) => String(value || '') },
+      t: ui?.t || ((key) => key)
+    };
+  }
+
+  function createLiveCard(args, ui) {
+    const cardDiv = createCardWrapper(ui);
+    if (!cardDiv) return null;
+    const { Markdown, t } = getUiHelpers(ui);
+    const code = getCode(args);
+    cardDiv.innerHTML = `
+      <div class="tool-execution-card">
+        <div class="tool-card-header">
+          <div class="tool-card-title">
+            <span>⚡</span>
+            <span>${t('tool_js_title_running') || 'execute_javascript'}</span>
+          </div>
+          <div class="tool-card-header-actions">
+            <span class="tool-card-badge status-loading">⏳ ${t('tool_badge_executing') || 'Ejecutando...'}</span>
+            <button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Minimizar'}"><span>▾</span></button>
+          </div>
+        </div>
+        <div class="tool-card-collapsible-body">
+          <pre class="tool-card-code"><code>${Markdown.escapeHtml(code)}</code></pre>
+          <div class="tool-card-result">
+            <div class="tool-loading-placeholder">⏳ ${t('tool_loading_js') || 'Ejecutando código en sandbox local...'}</div>
+          </div>
+        </div>
+      </div>
+    `;
+    return cardDiv;
+  }
+
+  function updateLiveCard(cardDiv, _args, result = {}, elapsedMs = 0, ui) {
+    if (!cardDiv) return;
+    const { Markdown, t } = getUiHelpers(ui);
+    const isSuccess = result?.success !== false && !result?.error;
+    const badgeEl = cardDiv.querySelector('.tool-card-badge');
+    if (badgeEl) {
+      badgeEl.className = `tool-card-badge ${isSuccess ? 'status-success' : 'status-error'}`;
+      badgeEl.textContent = isSuccess
+        ? `✅ ${t('tool_status_success') || 'Completado'} (${elapsedMs || 0}ms)`
+        : `❌ Error (${elapsedMs || 0}ms)`;
+    }
+    const resContainer = cardDiv.querySelector('.tool-card-result');
+    if (resContainer) {
+      const output = isSuccess
+        ? (result.result || (result.logs && result.logs.length > 0 ? result.logs.join('\n') : 'undefined'))
+        : `Error: ${result.error || 'Error de ejecución'}`;
+      resContainer.innerHTML = `
+        <div class="tool-result-label">${t('tool_sandbox_output') || 'Salida del Sandbox:'}</div>
+        <pre class="tool-result-pre"><code>${Markdown.escapeHtml(output)}</code></pre>
+      `;
+    }
+  }
+
+  function renderHistoricalCard(args, toolMessage, ui) {
+    const cardDiv = createCardWrapper(ui);
+    if (!cardDiv) return null;
+    const { Markdown, t } = getUiHelpers(ui);
+    let output = '';
+    if (toolMessage?.content) {
+      try {
+        const parsed = JSON.parse(toolMessage.content);
+        output = parsed.result || (parsed.logs && parsed.logs.length > 0
+          ? parsed.logs.join('\n')
+          : (parsed.error ? `Error: ${parsed.error}` : toolMessage.content));
+      } catch (e) {
+        output = toolMessage.content;
+      }
+    }
+    cardDiv.innerHTML = `
+      <div class="tool-execution-card">
+        <div class="tool-card-header">
+          <div class="tool-card-title"><span>⚡</span><span>${t('tool_js_title_running') || 'execute_javascript'}</span></div>
+          <div class="tool-card-header-actions">
+            <span class="tool-card-badge status-success">✅ ${t('tool_status_success') || 'Completado'}</span>
+            <button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Minimizar'}"><span>▾</span></button>
+          </div>
+        </div>
+        <div class="tool-card-collapsible-body">
+          <pre class="tool-card-code"><code>${Markdown.escapeHtml(getCode(args))}</code></pre>
+          <div class="tool-card-result">
+            <div class="tool-result-label">${t('tool_sandbox_output') || 'Salida del Sandbox:'}</div>
+            <pre class="tool-result-pre"><code>${Markdown.escapeHtml(output)}</code></pre>
+          </div>
+        </div>
+      </div>
+    `;
+    return cardDiv;
+  }
+
   function createTool(Tool) {
     if (typeof Tool !== 'function') {
       throw new Error('La clase Tool es necesaria para crear execute_javascript.');
@@ -75,8 +177,7 @@
         return Sandbox.execute(getCode(args), timeoutMs);
       },
       result: { toModel, toMarkdown },
-      // La vista se conectará al renderer genérico en el paso 5.
-      view: { id: 'execute_javascript' }
+      view: { id: 'execute_javascript', createLiveCard, updateLiveCard, renderHistoricalCard }
     });
   }
 
@@ -86,7 +187,8 @@
     createTool,
     getCode,
     toModel,
-    toMarkdown
+    toMarkdown,
+    view: { id: 'execute_javascript', createLiveCard, updateLiveCard, renderHistoricalCard }
   };
 
   function registerWithBuiltinManifest() {
