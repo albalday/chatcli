@@ -35,6 +35,7 @@
   const Engine = window.ChatEngine || {};
   const UIReasoning = window.ChatUIReasoning || {};
   const UIInspector = window.ChatUIInspector || {};
+  const UISidebar = window.ChatUISidebar || {};
 
   function t(key, params) {
     if (I18n.t) return I18n.t(key, params);
@@ -1472,61 +1473,13 @@
   }
 
   function renderSidebarChats(filterText = '') {
-    if (!elements.sidebarChatsList) return;
-    elements.sidebarChatsList.innerHTML = '';
-
-    const filter = filterText.toLowerCase().trim();
-    const matching = savedSessions.filter(s => {
-      if (!filter) return true;
-      if (s.title && s.title.toLowerCase().includes(filter)) return true;
-      return false;
-    });
-
-    if (matching.length === 0) {
-      const emptyDiv = document.createElement('div');
-      emptyDiv.className = 'sidebar-no-chats';
-      emptyDiv.style.cssText = 'padding: 1rem; text-align: center; color: var(--text-muted); font-size: 0.8rem;';
-      emptyDiv.textContent = t('sidebar_no_chats');
-      elements.sidebarChatsList.appendChild(emptyDiv);
-      return;
-    }
-
-    matching.forEach(s => {
-      const item = document.createElement('div');
-      item.className = 'sidebar-chat-item' + (s.id === currentSessionId ? ' active' : '');
-      item.setAttribute('data-session-id', s.id);
-
-      const d = new Date(s.updatedAt || s.createdAt || Date.now());
-      const timeStr = d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-      item.innerHTML = `
-        <div class="sidebar-chat-info">
-          <span class="sidebar-chat-title" title="${Markdown.escapeHtml(s.title || t('chat_untitled'))}">${Markdown.escapeHtml(s.title || t('chat_untitled'))}</span>
-          <span class="sidebar-chat-time">${timeStr}</span>
-        </div>
-        <div class="sidebar-chat-actions">
-          <button type="button" class="btn-chat-action btn-rename" title="Renombrar chat">✏️</button>
-          <button type="button" class="btn-chat-action btn-delete" title="Eliminar chat">🗑️</button>
-        </div>
-      `;
-
-      item.addEventListener('click', (e) => {
-        if (e.target.closest('.sidebar-chat-actions')) return;
-        switchToSession(s.id);
+    if (UISidebar.renderSidebarChats) {
+      UISidebar.renderSidebarChats(elements, savedSessions, currentSessionId, {
+        onSwitchSession: switchToSession,
+        onRenameSession: renameSession,
+        onDeleteSession: deleteSession
       });
-
-      const btnRename = item.querySelector('.btn-rename');
-      if (btnRename) {
-        btnRename.addEventListener('click', (e) => renameSession(s.id, e));
-      }
-
-      const btnDelete = item.querySelector('.btn-delete');
-      if (btnDelete) {
-        btnDelete.addEventListener('click', (e) => deleteSession(s.id, e));
-      }
-
-      elements.sidebarChatsList.appendChild(item);
-    });
+    }
   }
 
   async function switchToSession(sessionId) {
@@ -1649,20 +1602,14 @@
   }
 
   function toggleSidebar() {
-    if (!elements.chatSidebar) return;
-    const isHidden = elements.chatSidebar.style.display === 'none' || !elements.chatSidebar.style.display;
-    elements.chatSidebar.style.display = isHidden ? 'flex' : 'none';
-    if (elements.btnToggleSidebar) {
-      elements.btnToggleSidebar.style.display = isHidden ? 'none' : 'inline-flex';
+    if (UISidebar.toggleSidebar) {
+      UISidebar.toggleSidebar(elements);
     }
   }
 
   function closeSidebar() {
-    if (elements.chatSidebar) {
-      elements.chatSidebar.style.display = 'none';
-    }
-    if (elements.btnToggleSidebar) {
-      elements.btnToggleSidebar.style.display = 'inline-flex';
+    if (UISidebar.closeSidebar) {
+      UISidebar.closeSidebar(elements);
     }
   }
 

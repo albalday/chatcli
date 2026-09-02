@@ -65,6 +65,7 @@ JS_MODULE_FILES = [
     "chat-engine.js",
     "ui-reasoning.js",
     "ui-inspector.js",
+    "ui-sidebar.js",
     "app.js"
 ]
 
@@ -100,7 +101,8 @@ CORE_EXPORT_SYMBOLS = [
     "ChatContextManager",
     "ChatEngine",
     "ChatUIReasoning",
-    "ChatUIInspector"
+    "ChatUIInspector",
+    "ChatUISidebar"
 ]
 
 BOOTSTRAP_LOADER_SCRIPT = """<script>
