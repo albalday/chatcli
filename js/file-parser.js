@@ -67,12 +67,98 @@
     });
   }
 
-  async function parseCMaps(fullText, bytes, objOffsets) {
+  function parseCMapData(text, cmap) {
+    if (!text || typeof text !== 'string') return;
+
+    // 1. beginbfchar
+    const bfcharRegex = /<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>/g;
+    let cm;
+    while ((cm = bfcharRegex.exec(text)) !== null) {
+      const src = cm[1].toLowerCase();
+      const dstHex = cm[2];
+      let dstChar = '';
+      for (let k = 0; k < dstHex.length; k += 4) {
+        const code = parseInt(dstHex.substr(k, 4), 16);
+        if (!isNaN(code)) dstChar += String.fromCharCode(code);
+      }
+      if (dstChar) {
+        cmap.set(src, dstChar);
+        if (src.length === 2) cmap.set('00' + src, dstChar);
+        if (src.startsWith('00') && src.length === 4) cmap.set(src.substring(2), dstChar);
+      }
+    }
+
+    // 2. beginbfrange con destino simple: <start> <end> <destStart>
+    const bfrangeSimpleRegex = /<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>/g;
+    while ((cm = bfrangeSimpleRegex.exec(text)) !== null) {
+      const start = parseInt(cm[1], 16);
+      const end = parseInt(cm[2], 16);
+      const destStart = parseInt(cm[3], 16);
+      const len = cm[1].length;
+      for (let s = start; s <= end; s++) {
+        const srcHex = s.toString(16).padStart(len, '0').toLowerCase();
+        const dstCode = destStart + (s - start);
+        const dstChar = String.fromCharCode(dstCode);
+        cmap.set(srcHex, dstChar);
+        if (srcHex.length === 2) cmap.set('00' + srcHex, dstChar);
+        if (srcHex.startsWith('00') && srcHex.length === 4) cmap.set(srcHex.substring(2), dstChar);
+      }
+    }
+
+    // 3. beginbfrange con array de destinos: <start> <end> [ <dest1> <dest2> ... ]
+    const bfrangeArrayRegex = /<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>\s*\[([\s\S]*?)\]/g;
+    while ((cm = bfrangeArrayRegex.exec(text)) !== null) {
+      const start = parseInt(cm[1], 16);
+      const end = parseInt(cm[2], 16);
+      const len = cm[1].length;
+      const destMatches = cm[3].match(/<([0-9a-fA-F]+)>/g) || [];
+      for (let s = start, idx = 0; s <= end && idx < destMatches.length; s++, idx++) {
+        const srcHex = s.toString(16).padStart(len, '0').toLowerCase();
+        const dstHex = destMatches[idx].replace(/[<>]/g, '');
+        let dstChar = '';
+        for (let k = 0; k < dstHex.length; k += 4) {
+          const code = parseInt(dstHex.substr(k, 4), 16);
+          if (!isNaN(code)) dstChar += String.fromCharCode(code);
+        }
+        if (dstChar) {
+          cmap.set(srcHex, dstChar);
+          if (srcHex.length === 2) cmap.set('00' + srcHex, dstChar);
+          if (srcHex.startsWith('00') && srcHex.length === 4) cmap.set(srcHex.substring(2), dstChar);
+        }
+      }
+    }
+  }
+
+  async function parseCMaps(allObjects, fullText, bytes, objOffsets) {
     const cmap = new Map();
+    const toUnicodeObjNums = new Set();
+
+    // Buscar referencias /ToUnicode en fullText y en todos los objetos (incluidos los de ObjStm)
     const toUnicodeRegex = /\/ToUnicode\s+(\d+)\s+\d+\s+R/g;
     let m;
     while ((m = toUnicodeRegex.exec(fullText)) !== null) {
-      const objNum = m[1];
+      toUnicodeObjNums.add(m[1]);
+    }
+
+    for (const [num, body] of allObjects.entries()) {
+      let bm;
+      const bRegex = /\/ToUnicode\s+(\d+)\s+\d+\s+R/g;
+      while ((bm = bRegex.exec(body)) !== null) {
+        toUnicodeObjNums.add(bm[1]);
+      }
+      // Si el objeto ya contiene directamente CMap
+      if (body.includes('beginbfchar') || body.includes('beginbfrange')) {
+        parseCMapData(body, cmap);
+      }
+    }
+
+    for (const objNum of toUnicodeObjNums) {
+      const body = allObjects.get(String(objNum));
+      if (body && (body.includes('beginbfchar') || body.includes('beginbfrange'))) {
+        parseCMapData(body, cmap);
+        continue;
+      }
+
       const offset = objOffsets.get(String(objNum));
       if (offset !== undefined) {
         const streamIdx = fullText.indexOf('stream', offset);
@@ -86,43 +172,13 @@
             const decomp = await decompressDeflateData(rawBytes);
             if (decomp) {
               const text = new TextDecoder('latin1').decode(decomp);
-              
-              const bfcharRegex = /<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>/g;
-              let cm;
-              while ((cm = bfcharRegex.exec(text)) !== null) {
-                const src = cm[1].toLowerCase();
-                const dstHex = cm[2];
-                let dstChar = '';
-                for (let k = 0; k < dstHex.length; k += 4) {
-                  const code = parseInt(dstHex.substr(k, 4), 16);
-                  if (!isNaN(code)) dstChar += String.fromCharCode(code);
-                }
-                if (dstChar) {
-                  cmap.set(src, dstChar);
-                  if (src.length === 2) cmap.set('00' + src, dstChar);
-                  if (src.startsWith('00') && src.length === 4) cmap.set(src.substring(2), dstChar);
-                }
-              }
-
-              const bfrangeRegex = /<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>/g;
-              while ((cm = bfrangeRegex.exec(text)) !== null) {
-                const start = parseInt(cm[1], 16);
-                const end = parseInt(cm[2], 16);
-                const destStart = parseInt(cm[3], 16);
-                const len = cm[1].length;
-                for (let s = start; s <= end; s++) {
-                  const srcHex = s.toString(16).padStart(len, '0').toLowerCase();
-                  const dstCode = destStart + (s - start);
-                  cmap.set(srcHex, String.fromCharCode(dstCode));
-                  if (srcHex.length === 2) cmap.set('00' + srcHex, String.fromCharCode(dstCode));
-                  if (srcHex.startsWith('00') && srcHex.length === 4) cmap.set(srcHex.substring(2), String.fromCharCode(dstCode));
-                }
-              }
+              parseCMapData(text, cmap);
             }
           } catch (e) {}
         }
       }
     }
+
     return cmap;
   }
 
@@ -138,6 +194,46 @@
     const ratio = printable / str.length;
     if (/SF\d{6}|afii\d+|upblock|dnblock|triagup|dmacron/.test(str)) return false;
     return ratio >= 0.70;
+  }
+
+  function mapPdfLiteralString(lit, cmap) {
+    const raw = decodePdfEscapes(lit);
+    if (!cmap || cmap.size === 0) return raw;
+
+    // Intentar decodificar como pares de 2 bytes (UTF-16BE / CID) o bytes simples mapeados en CMap
+    let decoded = '';
+    let hasMapping = false;
+    for (let k = 0; k < raw.length; k++) {
+      const c1 = raw.charCodeAt(k);
+      const hex1 = c1.toString(16).padStart(2, '0').toLowerCase();
+      
+      if (k + 1 < raw.length) {
+        const c2 = raw.charCodeAt(k + 1);
+        const hex2 = hex1 + c2.toString(16).padStart(2, '0').toLowerCase();
+        if (cmap.has(hex2)) {
+          decoded += cmap.get(hex2);
+          hasMapping = true;
+          k++;
+          continue;
+        }
+      }
+
+      if (cmap.has(hex1)) {
+        decoded += cmap.get(hex1);
+        hasMapping = true;
+      } else if (cmap.has('00' + hex1)) {
+        decoded += cmap.get('00' + hex1);
+        hasMapping = true;
+      } else if (c1 >= 32 && c1 <= 126) {
+        decoded += raw.charAt(k);
+      } else if (c1 === 0 && k + 1 < raw.length && raw.charCodeAt(k + 1) >= 32 && raw.charCodeAt(k + 1) <= 126) {
+        // Ignorar byte nulo en UTF-16BE de ASCII estándar
+        decoded += raw.charAt(k + 1);
+        k++;
+      }
+    }
+
+    return (hasMapping || decoded.length >= raw.length * 0.5) ? decoded : raw;
   }
 
   function parsePdfStreamText(streamString, cmap = new Map()) {
@@ -199,7 +295,7 @@
           lit += streamString.charAt(j);
           j++;
         }
-        if (lit) out.push(decodePdfEscapes(lit));
+        if (lit) out.push(mapPdfLiteralString(lit, cmap));
         i = j;
         continue;
       }
@@ -263,7 +359,7 @@
               lit += streamString.charAt(k);
               k++;
             }
-            arrText += decodePdfEscapes(lit);
+            arrText += mapPdfLiteralString(lit, cmap);
             j = k;
             continue;
           } else if (ac === 60 /* < */) {
@@ -392,11 +488,8 @@
       }
     }
 
-    // 2. Extracción de CMaps / ToUnicode
-    const cmap = await parseCMaps(fullText, bytes, objOffsets);
-
-    // 3. Descomprimir todos los flujos de objetos comprimidos (/Type /ObjStm)
-    for (const [num, body] of allObjects.entries()) {
+    // 2. Descomprimir todos los flujos de objetos comprimidos (/Type /ObjStm) antes de extraer CMaps
+    for (const [num, body] of Array.from(allObjects.entries())) {
       if (body.includes('/Type/ObjStm') || body.includes('/Type /ObjStm')) {
         const sIdx = body.indexOf('stream');
         const eIdx = body.indexOf('endstream', sIdx);
@@ -431,6 +524,9 @@
         }
       }
     }
+
+    // 3. Extracción exhaustiva de CMaps / ToUnicode (incluyendo objetos dentro de ObjStm)
+    const cmap = await parseCMaps(allObjects, fullText, bytes, objOffsets);
 
     // 4. Resolución del catálogo y árbol jerárquico de páginas (Page Tree)
     let catalogObjNum = null;
@@ -504,9 +600,15 @@
               : new Uint8Array(Array.from(cBody.substring(dataStart, rawEnd), ch => ch.charCodeAt(0)));
 
             try {
+              let streamString = '';
               const decompressed = await decompressDeflateData(rawBytes);
               if (decompressed) {
-                const streamString = decoder.decode(decompressed);
+                streamString = decoder.decode(decompressed);
+              } else {
+                streamString = decoder.decode(rawBytes);
+              }
+
+              if (streamString) {
                 const parsed = parsePdfStreamText(streamString, cmap);
                 if (parsed && parsed.length > 0) {
                   pageItems.push(parsed);

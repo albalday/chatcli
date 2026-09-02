@@ -50,3 +50,56 @@ test('IngestionEngine - procesa cola, persiste e indexa sin cliente LLM', async 
   const found = await RagIndex.searchBranch(branch.id, 'BGP', { tolerance: 0 });
   assert.equal(found.hits[0].documentTitle, 'uno.md');
 });
+
+test('IngestionEngine & FileParser - extrae texto decodificando CMap ToUnicode y rangos', async () => {
+  const FileParser = require('../js/file-parser.js');
+  const pdfContent = `%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type0 /ToUnicode 6 0 R >>
+endobj
+6 0 obj
+<< /Length 200 >>
+stream
+/CIDInit /ProcSet findresource begin
+12 dict begin
+begincmap
+1 begincodespacerange
+<0000> <FFFF>
+endcodespacerange
+1 beginbfrange
+<0001> <0002> [ <0041> <0042> ]
+endbfrange
+1 beginbfchar
+<0003> <0043>
+endbfchar
+endcmap
+end
+endstream
+endobj
+5 0 obj
+<< /Length 60 >>
+stream
+BT
+/F1 12 Tf
+<000100020003> Tj
+ET
+endstream
+endobj
+trailer
+<< /Size 7 /Root 1 0 R >>
+%%EOF`;
+
+  const buffer = Buffer.from(pdfContent, 'latin1');
+  const text = await FileParser.extractTextFromPdf(buffer);
+  assert.ok(text.includes('ABC'), `El texto extraído debería contener 'ABC', obtenido: '${text}'`);
+});
+
