@@ -1172,6 +1172,17 @@
 
     // Pestañas del modal
     const tabBtns = document.querySelectorAll('#rag-modal-tabs-nav .modal-tab-btn');
+    const activateInitialRagTab = () => {
+      const firstTab = tabBtns[0];
+      if (!firstTab || !modalDialog) return;
+      const targetTabId = firstTab.getAttribute('data-rag-tab');
+      tabBtns.forEach(btn => btn.classList.toggle('active', btn === firstTab));
+      modalDialog.querySelectorAll('.modal-tab-pane').forEach(pane => {
+        pane.classList.toggle('active', pane.id === targetTabId);
+      });
+    };
+    // Garantiza un estado válido incluso antes de abrir el diálogo por primera vez.
+    activateInitialRagTab();
     tabBtns.forEach((btn) => {
       btn.addEventListener('click', () => {
         const targetTabId = btn.getAttribute('data-rag-tab');
@@ -1199,6 +1210,7 @@
       const fs = getFS();
       if (fs) {
         if (typeof fs.isFirefoxOrOpfsOnly === 'function' && fs.isFirefoxOrOpfsOnly()) {
+          activateInitialRagTab();
           await renderActiveBranchTab();
           await renderManageTab();
           if (modalDialog) modalDialog.showModal();
@@ -1219,15 +1231,7 @@
       }
 
       // Restablecer navegación por pestañas para que inicie por defecto en la primera pestaña ("Activar RAG")
-      if (tabBtns && tabBtns.length > 0) {
-        tabBtns.forEach(b => b.classList.toggle('active', b.getAttribute('data-rag-tab') === 'tab-rag-active'));
-      }
-      if (modalDialog) {
-        const panes = modalDialog.querySelectorAll('.modal-tab-pane');
-        panes.forEach(pane => {
-          pane.classList.toggle('active', pane.id === 'tab-rag-active');
-        });
-      }
+      activateInitialRagTab();
 
       await renderActiveBranchTab();
       await renderManageTab();
