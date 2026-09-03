@@ -71,7 +71,6 @@
       download_pdf: true,
       render_chart: true
     },
-    enableContextCache: true,
     enableRawLogs: false,
     enableDebugMessages: false,
     sendDateTime: true,
@@ -91,10 +90,6 @@
   // Estado de sesiones múltiples (Sidebar)
   let currentSessionId = 'session_' + Date.now();
   let savedSessions = [];
-
-  // Estado y control de Context Caching (Prompt Caching)
-  let sessionCacheInvalidated = false;
-  let sessionCacheRevision = Date.now();
 
   // Referencias al DOM
   let elements = {};
@@ -220,7 +215,6 @@
       btnRunInspector: document.getElementById('btn-run-inspector'),
       inspectorResults: document.getElementById('inspector-results'),
       agentToolsContainer: document.getElementById('agent-tools-container'),
-      settingEnableContextCache: document.getElementById('setting-enable-context-cache'),
       settingEnableRawLogs: document.getElementById('setting-enable-raw-logs'),
       settingSendDateTime: document.getElementById('setting-send-datetime'),
     };
@@ -648,13 +642,6 @@
       }
     }
 
-    // Invalidar y anular la caché de contexto del servidor tras la eliminación de mensajes
-    sessionCacheInvalidated = true;
-    sessionCacheRevision = Date.now();
-    if (typeof addDebugLog === 'function') {
-      addDebugLog('system', t('cache_invalidated_log'));
-    }
-
     const remainingMessages = elements.messagesList.querySelectorAll('.message-wrapper');
     if (remainingMessages.length === 0 && elements.welcomeBanner) {
       elements.messagesList.appendChild(elements.welcomeBanner);
@@ -924,8 +911,6 @@
       activeRagBranchId: activeRagBranchId,
       activeRagBranchIds: activeRagBranchIds,
       currentRagSystemContext: currentRagSystemContext,
-      sessionCacheInvalidated: sessionCacheInvalidated,
-      sessionCacheRevision: sessionCacheRevision,
       signal: currentAbortController.signal,
       container: content,
 
@@ -954,10 +939,6 @@
       scrollToBottom: () => scrollToBottom(),
       attachListeners: (el) => attachListeners(el)
     });
-
-    if (sessionCacheInvalidated) {
-      sessionCacheInvalidated = false;
-    }
 
     if (loopResult && loopResult.cancelled) {
       if (wrapper && !wrapper.querySelector('.agentic-turn-block') && wrapper.parentNode) {

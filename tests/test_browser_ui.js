@@ -562,6 +562,15 @@ test('Browser UI - Fase 6: Modales <dialog> Modernos con Blur y Tarjetas de Herr
     assert.ok(dialogMetrics.borderRadius >= 16, `El radio de curvatura (${dialogMetrics.borderRadius}px) debe ser moderno (>= 16px / 1.25rem)`);
     assert.notEqual(dialogMetrics.boxShadow, 'none', 'El modal debe tener elevación con sombra');
 
+    const contextCachePlacement = await page.evaluate(() => ({
+      automaticNotice: !!document.querySelector('#tab-model [data-i18n="model_cache_title"]'),
+      legacyToggle: !!document.getElementById('setting-enable-context-cache'),
+      agentCacheText: document.querySelector('#tab-agent')?.textContent.includes('Caché de Contexto') || false
+    }));
+    assert.ok(contextCachePlacement.automaticNotice, 'La caché automática debe explicarse en la pestaña Modelo');
+    assert.equal(contextCachePlacement.legacyToggle, false, 'La caché no debe exponerse como un interruptor de Agente');
+    assert.equal(contextCachePlacement.agentCacheText, false, 'La pestaña Agente no debe presentar la caché como herramienta');
+
     // 2. Navegar entre pestañas del modal (Ej. pestaña Proveedores / Herramientas)
     const tabButtons = await page.$$('.modal-tab-btn');
     assert.ok(tabButtons.length >= 2, 'Debe haber múltiples pestañas en el modal de configuración');
@@ -759,18 +768,31 @@ test('Browser UI - Iconos Fase 2: Iconos Vectoriales SVG en Header Superior y Co
     await page.waitForFunction(() => document.getElementById('reasoning-menu')?.style.display !== 'none');
 
     const menuHeaderInfo = await page.evaluate(() => {
+      const menu = document.getElementById('reasoning-menu');
       const header = document.querySelector('.reasoning-menu-header');
+      const options = document.querySelector('.reasoning-options');
+      const lowOption = document.querySelector('.reasoning-option[data-level="low"]');
+      const lowIcon = lowOption?.querySelector('.option-icon');
+      const lowText = lowOption?.querySelector('.option-text');
       const svg = header?.querySelector('svg');
       const text = header?.textContent || '';
       return {
         hasSvg: !!svg,
         hasEmoji: text.includes('🧠'),
-        text: text.trim()
+        text: text.trim(),
+        flexDirection: menu ? getComputedStyle(menu).flexDirection : '',
+        headerBottom: header?.getBoundingClientRect().bottom || 0,
+        optionsTop: options?.getBoundingClientRect().top || 0,
+        lowIconRight: lowIcon?.getBoundingClientRect().right || 0,
+        lowTextLeft: lowText?.getBoundingClientRect().left || 0
       };
     });
 
     assert.ok(menuHeaderInfo.hasSvg, 'La cabecera del menú de razonamiento debe contener un SVG (brain)');
     assert.equal(menuHeaderInfo.hasEmoji, false, 'La cabecera del menú no debe contener el emoji 🧠');
+    assert.equal(menuHeaderInfo.flexDirection, 'column', 'El menú de razonamiento debe apilar cabecera y opciones verticalmente');
+    assert.ok(menuHeaderInfo.optionsTop >= menuHeaderInfo.headerBottom, 'Las opciones deben mostrarse debajo de la cabecera, no a su lado');
+    assert.ok(menuHeaderInfo.lowTextLeft - menuHeaderInfo.lowIconRight <= 10, 'El texto del nivel bajo debe quedar junto a su indicador');
   } finally {
     await browser.close();
   }

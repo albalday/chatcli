@@ -62,7 +62,6 @@ test('UISettings - applyProfileToForm rellena los inputs de configuración', () 
     settingSystemPrompt: { value: '' },
     settingTemperature: { value: '' },
     temperatureVal: { textContent: '' },
-    settingEnableContextCache: { checked: false },
     settingEnableRawLogs: { checked: false },
     settingSendDateTime: { checked: false }
   };
@@ -74,7 +73,6 @@ test('UISettings - applyProfileToForm rellena los inputs de configuración', () 
     model: 'claude-3-7-sonnet',
     systemPrompt: 'Eres un asistente experto.',
     temperature: '0.2',
-    enableContextCache: true,
     enableRawLogs: true,
     sendDateTime: true
   };
@@ -88,7 +86,6 @@ test('UISettings - applyProfileToForm rellena los inputs de configuración', () 
   assert.equal(elements.settingSystemPrompt.value, 'Eres un asistente experto.');
   assert.equal(elements.settingTemperature.value, '0.2');
   assert.equal(elements.temperatureVal.textContent, '0.2');
-  assert.equal(elements.settingEnableContextCache.checked, true);
   assert.equal(elements.settingEnableRawLogs.checked, true);
   assert.equal(elements.settingSendDateTime.checked, true);
 });
@@ -111,7 +108,6 @@ test('UISettings - handleSaveProfile guarda el perfil y la configuración activa
     settingModel: { value: 'llama3.2:latest' },
     settingSystemPrompt: { value: 'Instrucciones locales' },
     settingTemperature: { value: '0.5' },
-    settingEnableContextCache: { checked: true },
     settingEnableRawLogs: { checked: false },
     settingSendDateTime: { checked: true },
     profileActionFeedback: { style: { display: 'none' }, className: '', textContent: '' }

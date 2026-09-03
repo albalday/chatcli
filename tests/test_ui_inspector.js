@@ -13,6 +13,13 @@ test('UIInspector - getBadgeClass, getBadgeIcon y getStatusLabel', () => {
   assert.ok(UIInspector.getStatusLabel('confirmed'));
 });
 
+test('UIInspector - identifica el bloqueo CORS de Ollama y muestra una solución breve', () => {
+  const help = UIInspector.getOllamaConnectionHelp('ollama', new Error('NetworkError when attempting to fetch resource.'));
+  assert.ok(help.includes('OLLAMA_ORIGINS=*'));
+  assert.equal(UIInspector.getOllamaConnectionHelp('openai', new Error('NetworkError when attempting to fetch resource.')), '');
+  assert.equal(UIInspector.getOllamaConnectionHelp('ollama', new Error('HTTP 404')), '');
+});
+
 test('UIInspector - populateModelList puebla datalist y selectHelper', () => {
   const datalistOptions = [];
   const selectOptions = [];
@@ -76,4 +83,22 @@ test('UIInspector - renderInspectorReport genera markup de metadatos y capacidad
   assert.ok(fakeResultsContainer.innerHTML.includes('https://api.openai.com/v1/chat/completions'));
   assert.ok(fakeResultsContainer.innerHTML.includes('145 ms'));
   assert.ok(fakeResultsContainer.innerHTML.includes('cap-badge-confirmed'));
+});
+
+test('UIInspector - renderInspectorReport muestra error y no genera badges si la conexión falló', () => {
+  const fakeResultsContainer = { innerHTML: '' };
+  const elements = { inspectorResults: fakeResultsContainer };
+
+  const failedReport = {
+    success: false,
+    connected: false,
+    error: 'Error de conexión: No se pudo conectar con http://localhost:9999/v1/chat/completions (ECONNREFUSED)'
+  };
+
+  UIInspector.renderInspectorReport(elements, failedReport);
+
+  assert.ok(fakeResultsContainer.innerHTML.includes('status-error'), 'Debe tener contenedor de error');
+  assert.ok(fakeResultsContainer.innerHTML.includes('ECONNREFUSED'), 'Debe mostrar el mensaje de error');
+  assert.equal(fakeResultsContainer.innerHTML.includes('cap-badge'), false, 'No debe renderizar badges de capacidades');
+  assert.equal(fakeResultsContainer.innerHTML.includes('inspector-cap-grid'), false, 'No debe renderizar la cuadrícula de capacidades');
 });

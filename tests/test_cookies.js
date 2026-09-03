@@ -9,7 +9,7 @@ test('Storage - Configuración por defecto', () => {
   assert.equal(defaults.systemPrompt, '');
   assert.equal(defaults.theme, 'light');
   assert.equal(defaults.language, 'es');
-  assert.equal(defaults.enableContextCache, true);
+  assert.equal(defaults.enableContextCache, undefined);
   assert.equal(defaults.enableRawLogs, false);
   assert.equal(defaults.enableDebugMessages, false);
 });
@@ -64,7 +64,6 @@ test('Storage - Gestión completa de perfiles (crear, listar, conmutar, actualiz
       download_pdf: false,
       render_chart: true
     },
-    enableContextCache: true,
     enableRawLogs: true,
     enableDebugMessages: false,
     sendDateTime: true,
@@ -80,6 +79,7 @@ test('Storage - Gestión completa de perfiles (crear, listar, conmutar, actualiz
   assert.equal(retrieved.apiUrl, 'http://192.168.1.50:8000/v1');
   assert.equal(retrieved.model, 'qwen2.5-coder-32b');
   assert.equal(retrieved.enabledTools.fetch_web_page, false);
+  assert.equal(retrieved.enableContextCache, undefined);
   assert.equal(retrieved.enableRawLogs, true);
 
   // 4. Cambiar de perfil activo

@@ -425,9 +425,6 @@
       enableAgentSearch = false,
       enableAgentChart = false,
       activeRagBranchId = '',
-      enableContextCache = true,
-      cacheInvalidated = false,
-      cacheRevision = null,
       signal,
       onBeforeRequest,
       onChunk,
@@ -461,8 +458,7 @@
       temperature,
       reasoningEffort,
       toolsList,
-      toolChoice: toolChoice || 'auto',
-      enableContextCache: enableContextCache && !cacheInvalidated
+      toolChoice: toolChoice || 'auto'
     }) : {
       model: (model || '').trim(),
       messages,
@@ -500,17 +496,10 @@
       }
     }
 
-    if (enableContextCache && cacheInvalidated && onLog) {
-      onLog({
-        type: 'info',
-        text: '🔄 Caché de contexto invalidada tras el borrado de mensajes. Se reconstruye un contexto limpio en el servidor.'
-      });
-    }
-
     if (onLog) {
       onLog({
         type: 'network',
-        text: `POST ${endpoint} [${detectedType.toUpperCase()}] | Modelo: ${model || '(no especificado)'} | Razonamiento: ${reasoningEffort || 'off'} | Temp: ${payload.temperature}${enableContextCache ? (cacheInvalidated ? ' | ContextCache: [INVALIDADA]' : ' | ContextCache: [ACTIVA]') : ''}`
+        text: `POST ${endpoint} [${detectedType.toUpperCase()}] | Modelo: ${model || '(no especificado)'} | Razonamiento: ${reasoningEffort || 'off'} | Temp: ${payload.temperature}`
       });
       onLog({
         type: 'raw',

@@ -209,3 +209,57 @@ test('ChatAPI.inspectProvider - Delegación e integración a través de ChatAPI'
   assert.equal(report.capabilities.jsonMode.status, 'unsupported');
 });
 
+test('ProviderInspector - Detección de fallo de conexión (servidor caído o error de red)', async () => {
+  const adapter = new Providers.BaseProviderAdapter({ id: 'openai' });
+
+  const originalFetch = global.fetch;
+  try {
+    global.fetch = async () => {
+      throw new TypeError('fetch failed: connect ECONNREFUSED 127.0.0.1:9999');
+    };
+
+    const report = await adapter.inspect({
+      apiUrl: 'http://localhost:9999/v1',
+      model: 'my-model',
+      runProbes: true
+    });
+
+    assert.equal(report.success, false, 'El informe debe indicar success: false si no se pudo conectar');
+    assert.equal(report.connected, false, 'El informe debe indicar connected: false');
+    assert.ok(report.error, 'Debe incluir un mensaje de error descriptivo');
+    assert.ok(report.error.includes('Error de conexión'), 'El mensaje debe indicar fallo de conexión');
+    assert.equal(report.capabilities.streaming.status, 'unknown', 'Las capacidades no deben aparecer como declaradas si la conexión falló');
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test('ProviderInspector - Detección de fallo de conexión por error de autenticación HTTP 401', async () => {
+  const adapter = new Providers.BaseProviderAdapter({ id: 'openai' });
+
+  const originalFetch = global.fetch;
+  try {
+    global.fetch = async () => {
+      return {
+        ok: false,
+        status: 401,
+        statusText: 'Unauthorized',
+        text: async () => 'Incorrect API key provided'
+      };
+    };
+
+    const report = await adapter.inspect({
+      apiUrl: 'https://api.openai.com/v1',
+      apiKey: 'sk-invalid-key',
+      model: 'gpt-4o',
+      runProbes: true
+    });
+
+    assert.equal(report.success, false);
+    assert.equal(report.connected, false);
+    assert.ok(report.error.includes('autenticación') || report.error.includes('401'));
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+

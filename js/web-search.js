@@ -99,10 +99,6 @@
         md += `   - *${isEn ? 'Link' : 'Enlace'}:* ${item.url}\n\n`;
       });
 
-      md += isEn
-        ? `> *Assistant Note:* Use these search results to synthesize and answer the user's request, citing relevant sources. Only call \`fetch_web_page\` if you strictly need to deep-dive into the complete full text of a specific URL.`
-        : `> *Nota para el asistente:* Utiliza estos resultados de búsqueda para responder y sintetizar la información solicitada por el usuario, citando las fuentes. Solo invoca \`fetch_web_page\` si es estrictamente necesario profundizar en el texto íntegro de una URL concreta.`;
-
       return md;
     }
   }

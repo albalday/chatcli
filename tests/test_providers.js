@@ -32,7 +32,7 @@ test('OpenAIAdapter - Normalización de endpoint y payload', () => {
     model: 'gpt-4o',
     messages: [{ role: 'user', content: 'Hola' }],
     reasoningEffort: 'medium',
-    enableContextCache: true
+    enableContextCache: false
   });
 
   assert.equal(payload.model, 'gpt-4o');
@@ -113,7 +113,7 @@ test('ClaudeAdapter - Formato de mensajes, presupuesto de thinking y caché efí
     ],
     reasoningEffort: 'medium',
     toolsList: [{ name: 'test_tool' }],
-    enableContextCache: true
+    enableContextCache: false
   });
 
   assert.deepEqual(payload.thinking, { type: 'enabled', budget_tokens: 2048 });

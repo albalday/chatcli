@@ -137,7 +137,6 @@
         reasoningEffort = 'none',
         toolsList = [],
         toolChoice = 'auto',
-        enableContextCache = true,
         jsonMode = false,
         stream = true
       } = params;
@@ -163,7 +162,7 @@
         this.applyTools(payload, toolsList, toolChoice);
       }
 
-      if (capabilities.promptCaching && enableContextCache) {
+      if (capabilities.promptCaching) {
         this.applyContextCache(payload, { toolsList, messages: formattedMessages });
       }
 
@@ -379,6 +378,11 @@
 
       let discoveredModels = [];
       let modelListSuccess = false;
+      let connectionAttempted = false;
+      let connectionSuccess = false;
+      let authError = null;
+      let lastNetworkError = null;
+      let lastHttpStatus = null;
 
       // 2. Comprobar listado de modelos y realizar inferencias
       const modelEndpoints = this.getModelEndpoints(cleanBase);
@@ -386,6 +390,7 @@
 
       if (typeof fetch === 'function') {
         for (const endpoint of modelEndpoints) {
+          if (runProbes) connectionAttempted = true;
           try {
             const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
             const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
@@ -396,7 +401,9 @@
             });
             if (timer) clearTimeout(timer);
 
+            lastHttpStatus = res.status;
             if (res.ok) {
+              connectionSuccess = true;
               const data = await res.json();
               const parsed = this.parseModelsResponse(data);
               if (Array.isArray(parsed) && parsed.length > 0) {
@@ -409,9 +416,11 @@
                 };
                 break;
               }
+            } else if (res.status === 401 || res.status === 403) {
+              authError = `Error de autenticación (HTTP ${res.status}): Clave de API no válida o acceso denegado.`;
             }
           } catch (e) {
-            // Ignorar y probar el siguiente endpoint candidato
+            lastNetworkError = e;
           }
         }
       }
@@ -466,6 +475,7 @@
         probesRun = true;
 
         // Micro-sonda A: Streaming & Chat básico
+        connectionAttempted = true;
         try {
           const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
           const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
@@ -475,8 +485,7 @@
             messages: [{ role: 'user', content: 'hi' }],
             stream: true,
             temperature: 0.1,
-            reasoningEffort: 'none',
-            enableContextCache: false
+            reasoningEffort: 'none'
           });
           probePayload.max_tokens = 1;
 
@@ -488,7 +497,9 @@
           });
           if (timer) clearTimeout(timer);
 
+          lastHttpStatus = res.status;
           if (res.ok) {
+            connectionSuccess = true;
             const contentType = res.headers && res.headers.get ? (res.headers.get('content-type') || '') : '';
             if (contentType.includes('event-stream') || res.body) {
               capabilities.streaming = {
@@ -497,7 +508,10 @@
                 source: 'probe'
               };
             }
-          } else if (res.status === 400 || res.status === 404) {
+          } else if (res.status === 401 || res.status === 403) {
+            authError = `Error de autenticación (HTTP ${res.status}): Clave de API no válida o acceso denegado.`;
+          } else if (res.status === 400 || res.status === 422) {
+            connectionSuccess = true;
             const errText = await res.text().catch(() => '');
             if (errText.toLowerCase().includes('stream')) {
               capabilities.streaming = {
@@ -508,10 +522,11 @@
             }
           }
         } catch (probeErr) {
-          // Si timeout o error de red, mantener el estado previo
+          lastNetworkError = probeErr;
         }
 
         // Micro-sonda B: Tools / Function Calling
+        connectionAttempted = true;
         try {
           const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
           const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
@@ -540,13 +555,18 @@
           });
           if (timer) clearTimeout(timer);
 
+          lastHttpStatus = res.status;
           if (res.ok) {
+            connectionSuccess = true;
             capabilities.tools = {
               status: 'confirmed',
               detail: 'El servidor aceptó el esquema de tools/functions (HTTP 200)',
               source: 'probe'
             };
-          } else if (res.status === 400) {
+          } else if (res.status === 401 || res.status === 403) {
+            authError = `Error de autenticación (HTTP ${res.status}): Clave de API no válida o acceso denegado.`;
+          } else if (res.status === 400 || res.status === 422) {
+            connectionSuccess = true;
             const errText = await res.text().catch(() => '');
             if (errText.toLowerCase().includes('tool') || errText.toLowerCase().includes('function') || errText.toLowerCase().includes('schema')) {
               capabilities.tools = {
@@ -556,9 +576,12 @@
               };
             }
           }
-        } catch (e) {}
+        } catch (e) {
+          lastNetworkError = e;
+        }
 
         // Micro-sonda C: JSON Mode
+        connectionAttempted = true;
         try {
           const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
           const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
@@ -579,13 +602,18 @@
           });
           if (timer) clearTimeout(timer);
 
+          lastHttpStatus = res.status;
           if (res.ok) {
+            connectionSuccess = true;
             capabilities.jsonMode = {
               status: 'confirmed',
               detail: 'El servidor aceptó response_format: json_object (HTTP 200)',
               source: 'probe'
             };
-          } else if (res.status === 400) {
+          } else if (res.status === 401 || res.status === 403) {
+            authError = `Error de autenticación (HTTP ${res.status}): Clave de API no válida o acceso denegado.`;
+          } else if (res.status === 400 || res.status === 422) {
+            connectionSuccess = true;
             const errText = await res.text().catch(() => '');
             if (errText.toLowerCase().includes('response_format') || errText.toLowerCase().includes('json')) {
               capabilities.jsonMode = {
@@ -595,7 +623,9 @@
               };
             }
           }
-        } catch (e) {}
+        } catch (e) {
+          lastNetworkError = e;
+        }
 
         // Micro-sonda D: Embeddings endpoint check
         try {
@@ -612,6 +642,7 @@
           if (timer) clearTimeout(timer);
 
           if (res.ok) {
+            connectionSuccess = true;
             capabilities.embeddings = {
               status: 'confirmed',
               detail: `Endpoint ${embUrl} responde correctamente (HTTP 200)`,
@@ -623,14 +654,67 @@
               detail: `Endpoint ${embUrl} no encontrado (404)`,
               source: 'probe'
             };
+          } else if (res.status === 401 || res.status === 403) {
+            authError = `Error de autenticación (HTTP ${res.status}): Clave de API no válida o acceso denegado.`;
+          } else if (res.status === 400 || res.status === 422) {
+            connectionSuccess = true;
           }
         } catch (e) {}
       }
 
       const endTime = typeof performance !== 'undefined' ? performance.now() : Date.now();
 
+      // Si se intentó conectar mediante sondas y ninguna tuvo éxito, informar fallo de conexión
+      if (runProbes && connectionAttempted && !connectionSuccess) {
+        let errorMsg;
+        if (authError) {
+          errorMsg = authError;
+        } else if (lastNetworkError) {
+          const netMsg = lastNetworkError.message || String(lastNetworkError);
+          errorMsg = `Error de conexión: No se pudo conectar con el servidor en ${normalizedEndpoint} (${netMsg}). Verifica que el servidor esté activo y la URL sea correcta.`;
+        } else if (lastHttpStatus) {
+          errorMsg = `Error de conexión: El servidor respondió con error HTTP ${lastHttpStatus} en ${normalizedEndpoint}. Verifica el endpoint y la configuración.`;
+        } else {
+          errorMsg = `Error de conexión: No se pudo establecer comunicación con el servidor en ${normalizedEndpoint}.`;
+        }
+
+        Object.keys(capabilities).forEach(k => {
+          capabilities[k] = {
+            status: 'unknown',
+            detail: 'No comprobada: fallo de conexión con el servidor',
+            source: 'probe'
+          };
+        });
+
+        return {
+          success: false,
+          connected: false,
+          error: errorMsg,
+          provider: {
+            id: this.id,
+            label: this.label,
+            description: this.description
+          },
+          endpoint: {
+            raw: apiUrl,
+            normalized: normalizedEndpoint,
+            base: cleanBase
+          },
+          model: {
+            selected: probeModel,
+            totalDiscovered: 0,
+            discovered: []
+          },
+          capabilities: capabilities,
+          probesRun: true,
+          inspectionTimeMs: Math.round(endTime - startTime)
+        };
+      }
+
       // Devolver resultado estructurado de la inspección SIN apiKey
       return {
+        success: true,
+        connected: runProbes ? true : null,
         provider: {
           id: this.id,
           label: this.label,
@@ -718,7 +802,6 @@
         reasoningEffort = 'none',
         toolsList = [],
         toolChoice = 'auto',
-        enableContextCache = true,
         stream = true
       } = params;
 
@@ -742,7 +825,7 @@
       };
 
       if (systemContent) {
-        if (enableContextCache && capabilities.promptCaching) {
+        if (capabilities.promptCaching) {
           payload.system = [{ type: 'text', text: systemContent, cache_control: { type: 'ephemeral' } }];
         } else {
           payload.system = systemContent;
@@ -768,12 +851,12 @@
           }
           return t;
         });
-        if (enableContextCache && capabilities.promptCaching && payload.tools.length > 0) {
+        if (capabilities.promptCaching && payload.tools.length > 0) {
           payload.tools[payload.tools.length - 1].cache_control = { type: 'ephemeral' };
         }
       }
 
-      if (capabilities.promptCaching && enableContextCache) {
+      if (capabilities.promptCaching) {
         this.applyContextCache(payload, { toolsList, messages: nonSystemMessages });
       }
 

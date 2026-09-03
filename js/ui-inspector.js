@@ -73,6 +73,13 @@
     }
   }
 
+  function getOllamaConnectionHelp(apiType, error) {
+    const type = String(apiType || '').trim().toLowerCase();
+    const message = String(error?.message || error || '');
+    const isBrowserNetworkError = /networkerror|failed to fetch|load failed|network request failed/i.test(message);
+    return type === 'ollama' && isBrowserNetworkError ? t('err_ollama_origins') : '';
+  }
+
   function loadCachedModels(elements, appConfig) {
     try {
       const Storage = getStorage();
@@ -211,7 +218,8 @@
       console.error('Error querying server models:', err);
       if (elements.serverQueryStatus) {
         elements.serverQueryStatus.className = 'server-query-status status-error';
-        elements.serverQueryStatus.innerHTML = t('err_api_connect', { err: escapeHtml(err.message || String(err)) });
+        const ollamaHelp = getOllamaConnectionHelp(apiType, err);
+        elements.serverQueryStatus.innerHTML = ollamaHelp || t('err_api_connect', { err: escapeHtml(err.message || String(err)) });
       }
     } finally {
       elements.btnQueryServer.disabled = false;
@@ -252,6 +260,15 @@
 
   function renderInspectorReport(elements, report) {
     if (!elements || !elements.inspectorResults || !report) return;
+
+    if (report.success === false || report.connected === false) {
+      elements.inspectorResults.innerHTML = `
+        <div class="server-query-status status-error" style="display: block;">
+          ${escapeHtml(report.error || 'Fallo de conexión: No se pudo conectar con el servidor.')}
+        </div>
+      `;
+      return;
+    }
 
     const p = report.provider || {};
     const ep = report.endpoint || {};
@@ -337,7 +354,14 @@
     const model = elements.settingModel ? elements.settingModel.value.trim() : (appConfig?.model || '');
 
     if (!apiUrl) {
-      alert(t('err_api_connect', { err: 'Por favor, introduce una URL de servidor válida.' }));
+      if (elements.inspectorResults) {
+        elements.inspectorResults.style.display = 'block';
+        elements.inspectorResults.innerHTML = `
+          <div class="server-query-status status-error" style="display: block;">
+            Por favor, introduce una URL de servidor válida.
+          </div>
+        `;
+      }
       return;
     }
 
@@ -363,12 +387,17 @@
       addDebugLog('network', `Ejecutando Provider Inspector en ${apiUrl} [${apiType}]`);
       const report = await API.inspectProvider({ apiUrl, apiType, apiKey, model });
 
+      if (report && (report.success === false || report.connected === false)) {
+        throw new Error(report.error || 'Fallo de conexión con el servidor.');
+      }
+
       renderInspectorReport(elements, report);
     } catch (err) {
       console.error('Error in Provider Inspector:', err);
+      const ollamaHelp = getOllamaConnectionHelp(apiType, err);
       elements.inspectorResults.innerHTML = `
         <div class="server-query-status status-error" style="display: block;">
-          ${escapeHtml(err.message || String(err))}
+          ${ollamaHelp || escapeHtml(err.message || String(err))}
         </div>
       `;
     } finally {
@@ -385,6 +414,7 @@
     handleQueryServer,
     handleRunInspector,
     renderInspectorReport,
+    getOllamaConnectionHelp,
     getBadgeClass,
     getBadgeIcon,
     getStatusLabel

@@ -38,7 +38,6 @@
       download_pdf: true,
       render_chart: true
     },
-    enableContextCache: true,
     enableRawLogs: false,
     enableDebugMessages: false,
     sendDateTime: true,
@@ -151,7 +150,6 @@
       reasoningEffort: 'none',
       modelReasoningConfig: null,
       enabledTools: { ...DEFAULT_CONFIG.enabledTools },
-      enableContextCache: true,
       enableRawLogs: false,
       enableDebugMessages: false,
       sendDateTime: true
@@ -166,7 +164,6 @@
       reasoningEffort: 'none',
       modelReasoningConfig: null,
       enabledTools: { ...DEFAULT_CONFIG.enabledTools },
-      enableContextCache: true,
       enableRawLogs: false,
       enableDebugMessages: false,
       sendDateTime: true
@@ -181,7 +178,6 @@
       reasoningEffort: 'none',
       modelReasoningConfig: null,
       enabledTools: { ...DEFAULT_CONFIG.enabledTools },
-      enableContextCache: true,
       enableRawLogs: false,
       enableDebugMessages: false,
       sendDateTime: true
@@ -264,7 +260,6 @@
       enabledTools: (profileData.enabledTools && typeof profileData.enabledTools === 'object')
         ? { ...profileData.enabledTools }
         : { ...DEFAULT_CONFIG.enabledTools },
-      enableContextCache: profileData.enableContextCache !== false,
       enableRawLogs: profileData.enableRawLogs === true,
       enableDebugMessages: profileData.enableDebugMessages === true,
       sendDateTime: profileData.sendDateTime !== false
@@ -317,7 +312,6 @@
     const theme = getStorageItem('theme');
     const language = getStorageItem('language');
     const enabledToolsRaw = getStorageItem('enabledTools');
-    const enableContextCache = getStorageItem('enableContextCache');
     const enableRawLogs = getStorageItem('enableRawLogs');
     const enableDebugMessages = getStorageItem('enableDebugMessages');
     const sendDateTime = getStorageItem('sendDateTime');
@@ -397,7 +391,6 @@
       theme: effectiveTheme,
       language: effectiveLanguage,
       enabledTools: effectiveEnabledTools,
-      enableContextCache: parseBool(enableContextCache, activeProfile.enableContextCache !== undefined ? activeProfile.enableContextCache : DEFAULT_CONFIG.enableContextCache),
       enableRawLogs: parseBool(enableRawLogs, activeProfile.enableRawLogs !== undefined ? activeProfile.enableRawLogs : DEFAULT_CONFIG.enableRawLogs),
       enableDebugMessages: parseBool(enableDebugMessages, activeProfile.enableDebugMessages !== undefined ? activeProfile.enableDebugMessages : DEFAULT_CONFIG.enableDebugMessages),
       sendDateTime: parseBool(sendDateTime, activeProfile.sendDateTime !== undefined ? activeProfile.sendDateTime : DEFAULT_CONFIG.sendDateTime),
@@ -427,7 +420,6 @@
     if (config.enabledTools !== undefined) {
       setStorageItem('enabledTools', JSON.stringify(config.enabledTools));
     }
-    if (config.enableContextCache !== undefined) setStorageItem('enableContextCache', String(config.enableContextCache));
     if (config.enableRawLogs !== undefined) setStorageItem('enableRawLogs', String(config.enableRawLogs));
     if (config.enableDebugMessages !== undefined) setStorageItem('enableDebugMessages', String(config.enableDebugMessages));
     if (config.sendDateTime !== undefined) setStorageItem('sendDateTime', String(config.sendDateTime));
