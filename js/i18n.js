@@ -1,5 +1,5 @@
 /**
- * Módulo de Internacionalización y Multi-idioma (ChatI18n) para ZeroChat v6.0.
+ * Módulo de Internacionalización y Multi-idioma (ChatI18n) para ZeroChat.
  * Gestiona diccionarios en Español e Inglés, formateo de fechas y reactividad de UI.
  */
 
@@ -13,11 +13,12 @@
   'use strict';
 
   const Storage = typeof window !== 'undefined' ? (window.ChatStorage || {}) : {};
+  const APP_VERSION = (typeof globalThis !== 'undefined' && globalThis.__ZEROCHAT_VERSION__) || 'dev';
 
   const TRANSLATIONS = {
     es: {
       // Metadatos y Encabezados
-      app_title: 'ZeroChat v6.0 - Cliente Web Universal de Chat & Agente IA',
+      app_title: `ZeroChat v${APP_VERSION} - Cliente Web Universal de Chat & Agente IA`,
       app_description: 'Cliente web universal, agente IA autónomo y RAG local en un solo archivo con cero instalación',
       
       // Estado de Bienvenida inicial
@@ -346,7 +347,7 @@
 
     en: {
       // Metadata & Headers
-      app_title: 'ZeroChat v6.0 - Universal AI Chat & Agent Web Client',
+      app_title: `ZeroChat v${APP_VERSION} - Universal AI Chat & Agent Web Client`,
       app_description: 'Universal, zero-install, standalone web chat client, autonomous AI agent and local RAG in a single file',
       
       // Welcome state
@@ -691,6 +692,12 @@
         }
       }
     } catch (e) {}
+
+    // Node.js expone un navigator global, pero no representa el idioma de una
+    // interfaz web. Solo detectamos el idioma del navegador en un contexto DOM.
+    if (typeof window === 'undefined' || typeof navigator === 'undefined') {
+      return 'es';
+    }
 
     try {
       const browserLang = (

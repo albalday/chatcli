@@ -20,6 +20,7 @@ Características principales:
 import argparse
 import base64
 import gzip
+import json
 import os
 import re
 import subprocess
@@ -159,6 +160,19 @@ BOOTSTRAP_LOADER_SCRIPT = """<script>
   }
 })();
 </script>"""
+
+
+def read_project_version(base_dir: str) -> str:
+    """Lee la única versión declarada del proyecto (package.json)."""
+    package_path = os.path.join(base_dir, "package.json")
+    try:
+        with open(package_path, "r", encoding="utf-8") as f:
+            version = json.load(f).get("version")
+        if isinstance(version, str) and version.strip():
+            return version.strip()
+    except (OSError, json.JSONDecodeError, AttributeError):
+        pass
+    return "dev"
 
 
 def minify_html(html: str, mode: str = "prod") -> str:
@@ -543,6 +557,7 @@ def build_standalone_html(mode: str = "prod", force_fallback: bool = False, verb
     css_path = os.path.join(base_dir, "css", "styles.css")
     js_dir = os.path.join(base_dir, "js")
     output_path = os.path.abspath(output_file) if output_file else os.path.join(base_dir, "zerochat.html")
+    project_version = read_project_version(base_dir)
 
     if not os.path.exists(index_path):
         print(f"❌ Error: Archivo base no encontrado: {index_path}", file=sys.stderr)
@@ -601,7 +616,10 @@ def build_standalone_html(mode: str = "prod", force_fallback: bool = False, verb
         return False
 
     # Concatenar todos los ficheros JS antes de la compresión para el mejor ratio de diccionario
-    concatenated_js = ";\n".join(raw_js_parts)
+    version_bootstrap = (
+        f"globalThis.__ZEROCHAT_VERSION__ = {json.dumps(project_version)};\n"
+    )
+    concatenated_js = version_bootstrap + ";\n".join(raw_js_parts)
     raw_js_size = len(concatenated_js.encode("utf-8"))
 
     # 4. Eliminar comentarios de forma segura
