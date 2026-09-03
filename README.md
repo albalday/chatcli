@@ -1,4 +1,4 @@
-# ZeroChat v5.4
+# ZeroChat v5.5
 
 ZeroChat es un cliente web universal de chat, agente IA y conocimiento local. La distribución final se entrega como un único archivo autónomo, `zerochat.html`, que puede abrirse directamente mediante `file://` y no requiere backend propio.
 
@@ -18,8 +18,8 @@ La ingesta y la recuperación se realizan completamente en el navegador:
 1. El texto se extrae de PDF, Markdown o TXT.
 2. Se divide de forma determinista en bloques principales de hasta 6.000 caracteres, con 400 caracteres de solapamiento y preferencia por límites naturales.
 3. El archivo original, sus metadatos y sus fragmentos se guardan por separado en `ZeroChatDB` (IndexedDB).
-4. Orama construye bajo demanda un índice derivado en memoria para la rama activa.
-5. El agente consulta el contenido mediante `list_documents`, `search_knowledge_base` y `read_knowledge_chunk`.
+4. Orama construye bajo demanda índices derivados en memoria por rama o por documento, según el alcance de la consulta.
+5. El agente consulta el contenido mediante `search_knowledge_base`, que puede focalizar una fuente identificable o diversificar resultados entre varias fuentes, y amplía fragmentos concretos con `read_knowledge_chunk`. `list_documents` queda disponible para inventarios completos.
 
 La ingesta no llama a ningún LLM, no genera resúmenes y no solicita acceso persistente a carpetas. Por tanto, no tiene costes de modelo ni depende de la File System Access API. Los PDF basados únicamente en imágenes necesitan OCR previo.
 
@@ -85,4 +85,3 @@ Este proyecto ha sido desarrollado y evolucionado como un experimento real de **
 - **Colaboración Codex & Antigravity**: La arquitectura modular dual, el motor RAG local, el pipeline de pruebas unitarias, la optimización de rendimiento y la resolución iterativa de incidencias complejas fueron guiados e implementados colaborativamente por los asistentes de IA Codex y Antigravity.
 - **Librería externa para RAG local**: Se integró [Orama](https://orama.com/orama-js) como única librería externa especializada, empaquetada como vendor local autónomo dentro del bundle, posibilitando un índice de búsqueda en memoria ultrarrápido y 100% privado en el cliente sobre IndexedDB.
 - **Flujo sin código manual**: Demuestra la viabilidad práctica de diseñar, depurar, perfilar y desplegar software web de alta complejidad técnica iterando mediante especificación conversacional de alto nivel.
-

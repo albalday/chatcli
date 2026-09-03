@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!--
-  ZeroChat v5.4 — Cliente Web Universal de Chat, Agente IA Autónomo y RAG Local
+  ZeroChat v5.5 — Cliente Web Universal de Chat, Agente IA Autónomo y RAG Local
   Desarrollo experimental 100% asistido por IA (programación sin tocar una sola línea de código manual)
   fruto de la colaboración entre Codex y Antigravity, incorporando la librería Orama como vendor local.
 -->
@@ -10,7 +10,7 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: rag-image:; connect-src http: https: ws: wss: data: blob:; font-src 'self' data:; object-src 'none'; base-uri 'self';">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
   <meta name="description" content="ZeroChat - Cliente web universal, agente IA autónomo y RAG local en un solo archivo con cero instalación">
-  <title>ZeroChat v5.4 - Cliente Web Universal de Chat & Agente IA</title>
+  <title>ZeroChat v5.5 - Cliente Web Universal de Chat & Agente IA</title>
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
@@ -678,12 +678,15 @@
         <div class="setting-toggle-card rag-master-toggle-card">
           <div class="toggle-card-info">
             <div class="toggle-card-title"><span id="rag-active-status-title" data-i18n="rag_status_disabled">Conocimiento desactivado</span></div>
-            <p class="toggle-card-desc" id="rag-active-status-desc" data-i18n="rag_status_disabled_desc">Selecciona una rama para que el agente pueda buscar en tus documentos.</p>
+            <p class="toggle-card-desc" id="rag-active-status-desc" data-i18n="rag_status_disabled_desc">Selecciona una o varias ramas para que el agente pueda buscar en tus documentos.</p>
           </div>
-          <button type="button" id="btn-rag-toggle-master" class="btn-secondary" data-i18n="rag_disable">Desactivar</button>
+          <div class="rag-master-toggle-actions" style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <button type="button" id="btn-rag-activate-all" class="btn-secondary" data-i18n="rag_activate_all">Activar todas</button>
+            <button type="button" id="btn-rag-toggle-master" class="btn-secondary" data-i18n="rag_disable_all">Desactivar todas</button>
+          </div>
         </div>
         <div class="form-field">
-          <label><strong data-i18n="rag_available_branches">Ramas disponibles</strong><span class="label-hint" data-i18n="rag_available_branches_hint">Solo una rama puede estar activa en el chat.</span></label>
+          <label><strong data-i18n="rag_available_branches">Ramas disponibles</strong><span class="label-hint" data-i18n="rag_available_branches_hint">Puedes activar una o varias ramas simultáneamente para búsquedas cruzadas.</span></label>
           <div id="rag-active-branch-list" class="rag-active-branch-list"></div>
         </div>
       </div>
@@ -699,7 +702,7 @@
             <button type="button" id="btn-rag-delete-branch" class="btn-secondary btn-danger-hover" data-i18n="rag_delete_branch">🗑️ Eliminar</button>
             <button type="button" id="btn-rag-export-branch" class="btn-secondary" data-i18n="rag_export_branch">⬇️ Respaldo</button>
             <button type="button" id="btn-rag-import-branch" class="btn-secondary" data-i18n="rag_import_branch">⬆️ Restaurar</button>
-            <input id="rag-import-input" type="file" accept="application/json,.json" hidden>
+            <input id="rag-import-input" type="file" accept="application/json,.json,.gz,.json.gz,application/gzip" hidden>
           </div>
         </div>
         <div id="rag-manage-workspace" class="rag-manage-workspace"></div>
@@ -713,6 +716,10 @@
           <div class="setting-card">
             <div class="setting-card-title"><strong data-i18n="rag_help_private_title">Sin permisos ni costes de ingesta</strong></div>
             <p class="setting-card-desc" data-i18n="rag_help_private_desc">Seleccionar un archivo solo permite leer esa carga. No se solicitan permisos sobre carpetas y no se llama a ningún LLM para resumir o indexar.</p>
+          </div>
+          <div class="setting-card">
+            <div class="setting-card-title"><strong data-i18n="rag_help_llm_title">Configurar el modelo para responder sobre documentos</strong></div>
+            <p class="setting-card-desc" data-i18n="rag_help_llm_desc">Para preguntas factuales sobre documentos, usa una temperatura baja (0 a 0,2): reduce variaciones y hace más probable que el modelo se atenga a los fragmentos recuperados. Una temperatura de 0,7 o superior conviene para redacción creativa, no para extraer cifras o hechos. El modelo también debe admitir llamadas a herramientas; si no las admite, no podrá consultar esta base documental.</p>
           </div>
         </div>
       </div>

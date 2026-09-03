@@ -1,5 +1,5 @@
 /**
- * Aplicación principal del cliente de chat Web (ZeroChat v5.4).
+ * Aplicación principal del cliente de chat Web (ZeroChat v5.5).
  * Desarrollo 100% asistido por IA: colaboración entre Codex y Antigravity para implementar
  * un motor RAG local funcional utilizando la librería externa Orama como vendor autónomo,
  * iterando e implementando sin tocar una sola línea de código manual por parte del usuario.
@@ -880,16 +880,18 @@
       updateConnectionTokensBadge(stats);
     }
 
-    // Sincronizar dinámicamente la rama local activa.
-    const activeRagBranchId = (typeof window !== 'undefined' && window.ChatRagUI && window.ChatRagUI.getActiveBranchId)
-      ? window.ChatRagUI.getActiveBranchId()
-      : (appConfig.activeRagBranchId || (Storage.loadConfig ? Storage.loadConfig()?.activeRagBranchId : '') || '');
+    // Sincronizar dinámicamente las ramas locales activas.
+    const activeRagBranchIds = (typeof window !== 'undefined' && window.ChatRagUI && window.ChatRagUI.getActiveBranchIds)
+      ? window.ChatRagUI.getActiveBranchIds()
+      : (appConfig.activeRagBranchIds || (Storage.loadConfig ? Storage.loadConfig()?.activeRagBranchIds : []) || (appConfig.activeRagBranchId ? [appConfig.activeRagBranchId] : []));
+    appConfig.activeRagBranchIds = activeRagBranchIds;
+    const activeRagBranchId = activeRagBranchIds[0] || (typeof window !== 'undefined' && window.ChatRagUI && window.ChatRagUI.getActiveBranchId ? window.ChatRagUI.getActiveBranchId() : (appConfig.activeRagBranchId || ''));
     appConfig.activeRagBranchId = activeRagBranchId;
 
-    // Cargar únicamente la instrucción compacta de la rama activa.
-    if (activeRagBranchId && window.ChatRagService && window.ChatRagService.buildRagSystemContext) {
+    // Cargar únicamente la instrucción compacta de las ramas activas.
+    if (activeRagBranchIds.length > 0 && window.ChatRagService && window.ChatRagService.buildRagSystemContext) {
       try {
-        currentRagSystemContext = await window.ChatRagService.buildRagSystemContext(activeRagBranchId);
+        currentRagSystemContext = await window.ChatRagService.buildRagSystemContext(activeRagBranchIds);
       } catch (err) {
         console.warn('Error al cargar contexto inicial de RAG:', err);
         currentRagSystemContext = '';
@@ -910,6 +912,7 @@
       appConfig: appConfig,
       assistantMsgId: assistantMsgId,
       activeRagBranchId: activeRagBranchId,
+      activeRagBranchIds: activeRagBranchIds,
       currentRagSystemContext: currentRagSystemContext,
       sessionCacheInvalidated: sessionCacheInvalidated,
       sessionCacheRevision: sessionCacheRevision,
@@ -2115,7 +2118,7 @@
       exportConversationAsPrint
     };
 
-    console.log('💬 ZeroChat v5.4 initialized with autonomous tools and local Orama knowledge.');
+    console.log('💬 ZeroChat v5.5 initialized with autonomous tools and local Orama knowledge.');
   }
 
   if (document.readyState === 'loading') {

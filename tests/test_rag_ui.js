@@ -10,14 +10,30 @@ test('RagUI - exporta la superficie mínima', () => {
   assert.equal(typeof RagUI.renderManageTab, 'function');
   assert.equal(typeof RagUI.getActiveBranchId, 'function');
   assert.equal(typeof RagUI.setActiveBranchId, 'function');
+  assert.equal(typeof RagUI.getActiveBranchIds, 'function');
+  assert.equal(typeof RagUI.setActiveBranchIds, 'function');
+  assert.equal(typeof RagUI.toggleBranchActive, 'function');
+  assert.equal(typeof RagUI.isBranchActive, 'function');
   assert.equal(typeof RagUI.exportBranch, 'function');
   assert.equal(typeof RagUI.importBranchFile, 'function');
 });
 
-test('RagUI - gestiona la rama activa', () => {
+test('RagUI - gestiona la rama activa y multi-ramas', () => {
   RagUI.setActiveBranchId('branch_test_123');
   assert.equal(RagUI.getActiveBranchId(), 'branch_test_123');
+  assert.deepEqual(RagUI.getActiveBranchIds(), ['branch_test_123']);
+
+  RagUI.setActiveBranchIds(['b1', 'b2']);
+  assert.deepEqual(RagUI.getActiveBranchIds(), ['b1', 'b2']);
+  assert.equal(RagUI.isBranchActive('b1'), true);
+  assert.equal(RagUI.isBranchActive('b3'), false);
+
+  RagUI.toggleBranchActive('b3');
+  assert.equal(RagUI.isBranchActive('b3'), true);
+  RagUI.toggleBranchActive('b1');
+  assert.equal(RagUI.isBranchActive('b1'), false);
 
   RagUI.setActiveBranchId('');
   assert.equal(RagUI.getActiveBranchId(), '');
+  assert.deepEqual(RagUI.getActiveBranchIds(), []);
 });

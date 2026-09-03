@@ -13,7 +13,7 @@
   'use strict';
 
   const DB_NAME = 'ZeroChatDB';
-  const DB_VERSION = 2;
+  const DB_VERSION = 3;
   const STORES = Object.freeze({
     conversations: 'conversations',
     messages: 'messages',
@@ -100,6 +100,7 @@
     if (!db.objectStoreNames.contains(STORES.ragMeta)) {
       db.createObjectStore(STORES.ragMeta, { keyPath: 'key' });
     }
+
   }
 
   function openDatabase() {

@@ -42,7 +42,8 @@
     enableRawLogs: false,
     enableDebugMessages: false,
     sendDateTime: true,
-    activeRagBranchId: ''
+    activeRagBranchId: '',
+    activeRagBranchIds: []
   };
 
   const STORAGE_PREFIX = 'zerochat_';
@@ -321,6 +322,20 @@
     const enableDebugMessages = getStorageItem('enableDebugMessages');
     const sendDateTime = getStorageItem('sendDateTime');
     const activeRagBranchId = getStorageItem('activeRagBranchId');
+    const activeRagBranchIdsRaw = getStorageItem('activeRagBranchIds');
+    let parsedActiveBranchIds = [];
+    if (activeRagBranchIdsRaw) {
+      try {
+        const parsed = JSON.parse(activeRagBranchIdsRaw);
+        if (Array.isArray(parsed)) parsedActiveBranchIds = parsed.map(String).filter(Boolean);
+      } catch (_) {
+        parsedActiveBranchIds = activeRagBranchIdsRaw.split(',').map(s => s.trim()).filter(Boolean);
+      }
+    }
+    if (parsedActiveBranchIds.length === 0 && activeRagBranchId) {
+      parsedActiveBranchIds = [activeRagBranchId];
+    }
+    const effectiveActiveBranchId = parsedActiveBranchIds[0] || (activeRagBranchId !== null ? activeRagBranchId : DEFAULT_CONFIG.activeRagBranchId);
     const modelReasoningConfigRaw = getStorageItem('modelReasoningConfig');
 
     let effectiveApiUrl = apiUrl !== null ? apiUrl : (activeProfile.apiUrl || DEFAULT_CONFIG.apiUrl);
@@ -386,7 +401,8 @@
       enableRawLogs: parseBool(enableRawLogs, activeProfile.enableRawLogs !== undefined ? activeProfile.enableRawLogs : DEFAULT_CONFIG.enableRawLogs),
       enableDebugMessages: parseBool(enableDebugMessages, activeProfile.enableDebugMessages !== undefined ? activeProfile.enableDebugMessages : DEFAULT_CONFIG.enableDebugMessages),
       sendDateTime: parseBool(sendDateTime, activeProfile.sendDateTime !== undefined ? activeProfile.sendDateTime : DEFAULT_CONFIG.sendDateTime),
-      activeRagBranchId: activeRagBranchId !== null ? activeRagBranchId : DEFAULT_CONFIG.activeRagBranchId
+      activeRagBranchId: effectiveActiveBranchId,
+      activeRagBranchIds: parsedActiveBranchIds
     };
   }
 
@@ -415,7 +431,17 @@
     if (config.enableRawLogs !== undefined) setStorageItem('enableRawLogs', String(config.enableRawLogs));
     if (config.enableDebugMessages !== undefined) setStorageItem('enableDebugMessages', String(config.enableDebugMessages));
     if (config.sendDateTime !== undefined) setStorageItem('sendDateTime', String(config.sendDateTime));
-    if (config.activeRagBranchId !== undefined) setStorageItem('activeRagBranchId', String(config.activeRagBranchId));
+    if (config.activeRagBranchIds !== undefined) {
+      const ids = Array.isArray(config.activeRagBranchIds)
+        ? config.activeRagBranchIds.map(String).filter(Boolean)
+        : (config.activeRagBranchIds ? [String(config.activeRagBranchIds).trim()].filter(Boolean) : []);
+      setStorageItem('activeRagBranchIds', JSON.stringify(ids));
+      setStorageItem('activeRagBranchId', ids[0] || '');
+    } else if (config.activeRagBranchId !== undefined) {
+      const single = String(config.activeRagBranchId || '').trim();
+      setStorageItem('activeRagBranchId', single);
+      setStorageItem('activeRagBranchIds', JSON.stringify(single ? [single] : []));
+    }
   }
 
   function resetConfigToDefaults() {

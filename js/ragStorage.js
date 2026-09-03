@@ -165,6 +165,7 @@
       mimeType: String(data.mimeType || ''),
       fileSize: Number(data.fileSize) || 0,
       chunkCount: 0,
+      imageCount: Math.max(0, Math.floor(Number(data.imageCount) || 0)),
       createdAt: Number(data.createdAt) || now,
       updatedAt: Number(data.updatedAt) || now
     };
@@ -178,7 +179,40 @@
     const db = await openDatabase();
     if (!db) return null;
     const tx = db.transaction(storeName, 'readonly');
-    return requestResult(tx.objectStore(storeName).index(indexName).getAll(value));
+    const index = tx.objectStore(storeName).index(indexName);
+    // Usar openCursor en streaming para evitar el límite de IPC de Chromium
+    // ("The serialized value is too large: max=257949696 bytes") en ramas con cientos de documentos
+    if (typeof index.openCursor === 'function') {
+      return new Promise((resolve, reject) => {
+        const results = [];
+        try {
+          const keyRange = (typeof IDBKeyRange !== 'undefined' && IDBKeyRange && typeof IDBKeyRange.only === 'function')
+            ? IDBKeyRange.only(value)
+            : value;
+          const request = index.openCursor(keyRange);
+          request.onsuccess = (event) => {
+            const cursor = event.target.result;
+            if (cursor) {
+              results.push(cursor.value);
+              cursor.continue();
+            } else {
+              resolve(results);
+            }
+          };
+          request.onerror = () => reject(request.error || new Error(`Error en cursor de ${storeName}.${indexName}`));
+        } catch (err) {
+          if (typeof index.getAll === 'function') {
+            requestResult(index.getAll(value)).then(resolve, reject);
+          } else {
+            reject(err);
+          }
+        }
+      });
+    }
+    if (typeof index.getAll === 'function') {
+      return requestResult(index.getAll(value));
+    }
+    return [];
   }
 
   async function createBranch(nameOrData, description = '') {
@@ -260,9 +294,9 @@
   }
 
   async function saveDocument(data, sourceFile = null, images = []) {
-    const { document, chunks } = validateDocument(data);
-    if (!(await getBranchById(document.branchId))) throw new NotFoundError(`No existe la rama ${document.branchId}.`);
     const docImages = Array.isArray(images) ? images : [];
+    const { document, chunks } = validateDocument({ ...data, imageCount: docImages.length });
+    if (!(await getBranchById(document.branchId))) throw new NotFoundError(`No existe la rama ${document.branchId}.`);
     const db = await openDatabase();
     if (!db) {
       memory.documents.set(document.id, document);
@@ -341,12 +375,57 @@
     return values.sort((a, b) => a.order - b.order);
   }
 
+  function resolveChunkIdAlias(id) {
+    if (!id || typeof id !== 'string') return null;
+    const m = id.match(/^([a-zA-Z0-9_-]+)[#:/](?:chunk:?)?(\d+)$/i);
+    if (m) {
+      return { docId: m[1], order: parseInt(m[2], 10), canonicalId: `${m[1]}:chunk:${m[2]}` };
+    }
+    return null;
+  }
+
   async function getChunkById(id) {
     if (!id) return null;
+    const strId = String(id).trim();
     const db = await openDatabase();
-    if (!db) return memory.chunks.has(id) ? { ...memory.chunks.get(id) } : null;
+    if (!db) {
+      if (memory.chunks.has(strId)) return { ...memory.chunks.get(strId) };
+      const alias = resolveChunkIdAlias(strId);
+      if (alias && memory.chunks.has(alias.canonicalId)) return { ...memory.chunks.get(alias.canonicalId) };
+      if (alias) {
+        for (const chunk of memory.chunks.values()) {
+          if (chunk.documentId === alias.docId && chunk.order === alias.order) return { ...chunk };
+        }
+      }
+      for (const chunk of memory.chunks.values()) {
+        if (chunk.documentId === strId && chunk.order === 0) return { ...chunk };
+      }
+      return null;
+    }
+
     const tx = db.transaction(STORES.ragChunks, 'readonly');
-    return (await requestResult(tx.objectStore(STORES.ragChunks).get(String(id)))) || null;
+    const store = tx.objectStore(STORES.ragChunks);
+    let record = (await requestResult(store.get(strId))) || null;
+    if (record) return record;
+
+    const alias = resolveChunkIdAlias(strId);
+    if (alias) {
+      record = (await requestResult(store.get(alias.canonicalId))) || null;
+      if (record) return record;
+
+      const docChunks = await getChunksByDocument(alias.docId);
+      if (docChunks && docChunks.length > 0) {
+        const found = docChunks.find(c => c.order === alias.order) || docChunks[alias.order];
+        if (found) return found;
+      }
+    } else {
+      const docChunks = await getChunksByDocument(strId);
+      if (docChunks && docChunks.length > 0) {
+        return docChunks[0];
+      }
+    }
+
+    return null;
   }
 
   async function getSourceFile(documentId) {
@@ -399,20 +478,30 @@
     return true;
   }
 
-  async function exportBranch(branchId) {
+  async function exportBranch(branchId, options = {}) {
     const branch = await getBranchById(branchId);
     if (!branch) throw new NotFoundError(`No existe la rama ${branchId}.`);
     const documents = await getDocumentsByBranch(branchId);
+    const includeSources = options.includeSources !== false;
+    const onProgress = typeof options.onProgress === 'function' ? options.onProgress : null;
+    const total = documents.length;
+    let current = 0;
     const exportedDocuments = [];
     for (const document of documents) {
       const chunks = await getChunksByDocument(document.id);
-      const source = await serializeSource(await getSourceFile(document.id), document.mimeType);
+      const images = await getDocumentImages(document.id);
+      const source = includeSources
+        ? await serializeSource(await getSourceFile(document.id), document.mimeType)
+        : null;
       exportedDocuments.push({
+        id: document.id,
         title: document.title,
         fileType: document.fileType,
         mimeType: document.mimeType,
         fileSize: document.fileSize,
+        imageCount: document.imageCount || (images ? images.length : 0),
         source,
+        images: (images && images.length > 0) ? images : undefined,
         chunks: chunks.map(chunk => ({
           order: chunk.order,
           title: chunk.title,
@@ -421,6 +510,13 @@
           pageEnd: chunk.pageEnd
         }))
       });
+      current++;
+      if (onProgress) {
+        onProgress({ current, total, percent: Math.round((current / total) * 100), docTitle: document.title });
+        if (current % 10 === 0) {
+          await new Promise(resolve => setTimeout(resolve, 0));
+        }
+      }
     }
     return {
       schema: 'zerochat-knowledge',
@@ -431,7 +527,94 @@
     };
   }
 
-  async function importBranch(backup) {
+  async function exportBranchBlob(branchId, options = {}) {
+    const branch = await getBranchById(branchId);
+    if (!branch) throw new NotFoundError(`No existe la rama ${branchId}.`);
+    const documents = await getDocumentsByBranch(branchId);
+    const safeName = String(branch.name || 'conocimiento').normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'conocimiento';
+
+    const compress = options.compress !== false && typeof CompressionStream !== 'undefined';
+    const includeSources = Boolean(options.includeSources);
+    const onProgress = typeof options.onProgress === 'function' ? options.onProgress : null;
+    const total = documents.length;
+    let current = 0;
+
+    if (typeof TransformStream !== 'undefined' && compress) {
+      const ts = new TransformStream();
+      const writer = ts.writable.getWriter();
+      const cs = new CompressionStream('gzip');
+      const compressedStream = ts.readable.pipeThrough(cs);
+      const responsePromise = new Response(compressedStream).blob();
+      const encoder = new TextEncoder();
+
+      const headerObj = {
+        schema: 'zerochat-knowledge',
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        branch: { name: branch.name, description: branch.description, language: branch.language }
+      };
+      const headerStr = JSON.stringify(headerObj);
+      await writer.write(encoder.encode(headerStr.slice(0, -1) + ',"documents":[\n'));
+
+      let first = true;
+      for (const document of documents) {
+        const chunks = await getChunksByDocument(document.id);
+        const images = await getDocumentImages(document.id);
+        const source = includeSources
+          ? await serializeSource(await getSourceFile(document.id), document.mimeType)
+          : null;
+        const docRecord = {
+          id: document.id,
+          title: document.title,
+          fileType: document.fileType,
+          mimeType: document.mimeType,
+          fileSize: document.fileSize,
+          imageCount: document.imageCount || (images ? images.length : 0),
+          source,
+          images: (images && images.length > 0) ? images : undefined,
+          chunks: chunks.map(chunk => ({
+            order: chunk.order,
+            title: chunk.title,
+            content: chunk.content,
+            pageStart: chunk.pageStart,
+            pageEnd: chunk.pageEnd
+          }))
+        };
+        const chunkJson = (first ? '' : ',\n') + JSON.stringify(docRecord);
+        first = false;
+        await writer.write(encoder.encode(chunkJson));
+
+        current++;
+        if (onProgress) {
+          onProgress({ current, total, percent: Math.round((current / total) * 100), docTitle: document.title });
+          if (current % 10 === 0) {
+            await new Promise(resolve => setTimeout(resolve, 0));
+          }
+        }
+      }
+
+      await writer.write(encoder.encode('\n]}'));
+      await writer.close();
+      const blob = await responsePromise;
+      return {
+        blob,
+        compressed: true,
+        filename: `${safeName}.zerochat-knowledge.json.gz`
+      };
+    }
+
+    const backup = await exportBranch(branchId, { includeSources, onProgress });
+    const jsonStr = JSON.stringify(backup);
+    const plainBlob = new Blob([jsonStr], { type: 'application/json' });
+    return {
+      blob: plainBlob,
+      compressed: false,
+      filename: `${safeName}.zerochat-knowledge.json`
+    };
+  }
+
+  async function importBranch(backup, onProgress) {
     let data = backup;
     if (typeof data === 'string') {
       try { data = JSON.parse(data); }
@@ -442,15 +625,44 @@
     }
     const branch = await createBranch(data.branch);
     try {
+      const total = data.documents.length;
+      let current = 0;
       for (const document of data.documents) {
+        const oldDocId = document.id;
+        let targetDocId = oldDocId;
+        if (!targetDocId || (await getDocumentById(targetDocId))) {
+          targetDocId = generateId('doc');
+        }
+
+        // Si cambia el ID del documento, actualizar las referencias a imágenes en los chunks
+        const sourceChunks = Array.isArray(document.chunks) ? document.chunks : [];
+        const remappedChunks = sourceChunks.map(chunk => {
+          if (oldDocId && oldDocId !== targetDocId && chunk.content && chunk.content.includes(`rag-image://${oldDocId}:`)) {
+            return {
+              ...chunk,
+              content: chunk.content.split(`rag-image://${oldDocId}:`).join(`rag-image://${targetDocId}:`)
+            };
+          }
+          return chunk;
+        });
+
         await saveDocument({
+          id: targetDocId,
           branchId: branch.id,
           title: document.title,
           fileType: document.fileType,
           mimeType: document.mimeType,
           fileSize: document.fileSize,
-          chunks: document.chunks
-        }, deserializeSource(document.source));
+          imageCount: document.imageCount || (document.images ? document.images.length : 0),
+          chunks: remappedChunks
+        }, deserializeSource(document.source), document.images || []);
+        current++;
+        if (typeof onProgress === 'function') {
+          onProgress({ current, total, percent: Math.round((current / total) * 100), docTitle: document.title });
+          if (current % 10 === 0) {
+            await new Promise(resolve => setTimeout(resolve, 0));
+          }
+        }
       }
       return branch;
     } catch (error) {
@@ -464,7 +676,7 @@
     saveDocument, getDocumentsByBranch, getDocumentById,
     getChunksByBranch, getChunksByDocument, getChunkById, getSourceFile, deleteDocument,
     getDocumentImages, getDocumentImage,
-    getStorageEstimate, requestPersistentStorage, clearAllData, exportBranch, importBranch, openDatabase,
+    getStorageEstimate, requestPersistentStorage, clearAllData, exportBranch, exportBranchBlob, importBranch, openDatabase,
     RagStorageError, ValidationError, QuotaExceededError, NotFoundError,
     DB_NAME: Database?.DB_NAME || 'ZeroChatDB', DB_VERSION: Database?.DB_VERSION || 2,
     STORE_BRANCHES: STORES.ragBranches, STORE_DOCUMENTS: STORES.ragDocuments,

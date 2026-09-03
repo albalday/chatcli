@@ -1,5 +1,5 @@
 /**
- * Módulo de Internacionalización y Multi-idioma (ChatI18n) para ZeroChat v5.4.
+ * Módulo de Internacionalización y Multi-idioma (ChatI18n) para ZeroChat v5.5.
  * Gestiona diccionarios en Español e Inglés, formateo de fechas y reactividad de UI.
  */
 
@@ -17,7 +17,7 @@
   const TRANSLATIONS = {
     es: {
       // Metadatos y Encabezados
-      app_title: 'ZeroChat v5.4 - Cliente Web Universal de Chat & Agente IA',
+      app_title: 'ZeroChat v5.5 - Cliente Web Universal de Chat & Agente IA',
       app_description: 'Cliente web universal, agente IA autónomo y RAG local en un solo archivo con cero instalación',
       
       // Estado de Bienvenida inicial
@@ -44,10 +44,12 @@
       rag_tab_documents: 'Documentos',
       rag_tab_help: 'Ayuda',
       rag_status_disabled: 'Conocimiento desactivado',
-      rag_status_disabled_desc: 'Selecciona una rama para que el agente pueda buscar en tus documentos.',
+      rag_status_disabled_desc: 'Selecciona una o varias ramas para que el agente pueda buscar en tus documentos.',
       rag_disable: 'Desactivar',
+      rag_disable_all: 'Desactivar todas',
+      rag_activate_all: 'Activar todas',
       rag_available_branches: 'Ramas disponibles',
-      rag_available_branches_hint: 'Solo una rama puede estar activa en el chat.',
+      rag_available_branches_hint: 'Puedes activar una o varias ramas simultáneamente para búsquedas cruzadas.',
       rag_branch_label: 'Rama:',
       rag_new_branch: '+ Nueva rama',
       rag_edit_branch: '✏️ Editar',
@@ -57,6 +59,8 @@
       rag_help_storage_desc: 'Los archivos, metadatos y fragmentos se guardan en IndexedDB. Orama construye en memoria un índice de búsqueda local para la rama activa.',
       rag_help_private_title: 'Sin permisos ni costes de ingesta',
       rag_help_private_desc: 'Seleccionar un archivo solo permite leer esa carga. No se solicitan permisos sobre carpetas y no se llama a ningún LLM para resumir o indexar.',
+      rag_help_llm_title: 'Configurar el modelo para responder sobre documentos',
+      rag_help_llm_desc: 'Para preguntas factuales sobre documentos, usa una temperatura baja (0 a 0,2): reduce variaciones y hace más probable que el modelo se atenga a los fragmentos recuperados. Una temperatura de 0,7 o superior conviene para redacción creativa, no para extraer cifras o hechos. El modelo también debe admitir llamadas a herramientas; si no las admite, no podrá consultar esta base documental.',
       lang_switcher_title: 'Cambiar idioma / Switch language',
 
       // Barra de entrada y formulario
@@ -337,7 +341,7 @@
 
     en: {
       // Metadata & Headers
-      app_title: 'ZeroChat v5.4 - Universal AI Chat & Agent Web Client',
+      app_title: 'ZeroChat v5.5 - Universal AI Chat & Agent Web Client',
       app_description: 'Universal, zero-install, standalone web chat client, autonomous AI agent and local RAG in a single file',
       
       // Welcome state
@@ -364,10 +368,12 @@
       rag_tab_documents: 'Documents',
       rag_tab_help: 'Help',
       rag_status_disabled: 'Knowledge disabled',
-      rag_status_disabled_desc: 'Select a branch so the agent can search your documents.',
+      rag_status_disabled_desc: 'Select one or more branches so the agent can search your documents.',
       rag_disable: 'Disable',
+      rag_disable_all: 'Disable all',
+      rag_activate_all: 'Activate all',
       rag_available_branches: 'Available branches',
-      rag_available_branches_hint: 'Only one branch can be active in the chat.',
+      rag_available_branches_hint: 'You can activate one or more branches simultaneously for cross-branch searches.',
       rag_branch_label: 'Branch:',
       rag_new_branch: '+ New branch',
       rag_edit_branch: '✏️ Edit',
@@ -377,6 +383,8 @@
       rag_help_storage_desc: 'Files, metadata, and chunks are stored in IndexedDB. Orama builds an in-memory local search index for the active branch.',
       rag_help_private_title: 'No permissions or ingestion costs',
       rag_help_private_desc: 'Selecting a file only grants access to that upload. No folder permissions are requested and no LLM is called to summarize or index it.',
+      rag_help_llm_title: 'Configure the model for document answers',
+      rag_help_llm_desc: 'For factual questions about documents, use a low temperature (0 to 0.2): it reduces variation and makes the model more likely to follow retrieved excerpts. A temperature of 0.7 or above is better for creative writing, not extracting figures or facts. The model must also support tool calls; otherwise it cannot query this knowledge base.',
       lang_switcher_title: 'Switch language / Cambiar idioma',
 
       // Barra de entrada y formulario

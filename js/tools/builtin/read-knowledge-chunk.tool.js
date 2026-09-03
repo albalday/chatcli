@@ -22,9 +22,10 @@
     return null;
   }
 
-  function getBranchId(context = {}) {
-    return context.activeRagBranchId || context.branchId || context.config?.activeRagBranchId || '';
+  function getBranchIds(context = {}) {
+    return context.activeRagBranchIds || context.activeRagBranchId || context.branchId || context.config?.activeRagBranchIds || context.config?.activeRagBranchId || '';
   }
+  const getBranchId = getBranchIds;
 
   function createCardWrapper(ui) {
     const doc = ui?.document || (typeof document !== 'undefined' ? document : null);
@@ -63,10 +64,10 @@
       category: 'rag',
       metadata: { icon: '📄', label: definition.name },
       settings: { showInSettings: false },
-      isAvailable: config => Boolean(config.activeRagBranchId),
+      isAvailable: config => Boolean(config.activeRagBranchId || (config.activeRagBranchIds && config.activeRagBranchIds.length > 0)),
       execute: async (args, context = {}) => {
         const service = getRagService(context);
-        return service?.readKnowledgeChunk ? service.readKnowledgeChunk(getBranchId(context), args) : { success: false, error: 'Servicio de RAG no disponible.' };
+        return service?.readKnowledgeChunk ? service.readKnowledgeChunk(getBranchIds(context), args) : { success: false, error: 'Servicio de RAG no disponible.' };
       },
       result: {
         toModel: (_args, result) => result?.content || JSON.stringify(result || {}),

@@ -7,13 +7,14 @@
 
   const definition = {
     name: 'list_documents',
-    description: 'Lista los documentos disponibles en la rama activa de la base de conocimiento local.',
+    description: 'Lista los documentos disponibles en las ramas activas de la base de conocimiento local.',
     parameters: { type: 'object', properties: {}, required: [] }
   };
 
-  function getBranchId(context = {}) {
-    return context.activeRagBranchId || context.branchId || context.config?.activeRagBranchId || '';
+  function getBranchIds(context = {}) {
+    return context.activeRagBranchIds || context.activeRagBranchId || context.branchId || context.config?.activeRagBranchIds || context.config?.activeRagBranchId || '';
   }
+  const getBranchId = getBranchIds;
 
   function getRagService(context = {}) {
     if (context.services?.ragService) return context.services.ragService;
@@ -45,11 +46,11 @@
       category: 'rag',
       metadata: { icon: '📖', label: definition.name },
       settings: { showInSettings: false },
-      isAvailable: (config = {}) => Boolean(config.activeRagBranchId),
+      isAvailable: (config = {}) => Boolean(config.activeRagBranchId || (config.activeRagBranchIds && config.activeRagBranchIds.length > 0)),
       execute: async (_args, context = {}) => {
         const RagService = getRagService(context);
         if (!RagService?.listDocuments) return { success: false, error: 'Servicio de RAG no disponible.' };
-        return RagService.listDocuments(getBranchId(context));
+        return RagService.listDocuments(getBranchIds(context));
       },
       result: {
         toModel: (_args, result) => result?.text || JSON.stringify(result || {}),

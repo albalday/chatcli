@@ -165,7 +165,8 @@ test('Builtin Tools - RAG tools consumen el servicio inyectado y propagan rama a
   const context = { config: { activeRagBranchId: 'branch-1' }, services: { ragService } };
 
   const listResult = await ListDocumentsTool.createTool(AgentCore.Tool).execute({}, context);
-  const searchResult = await SearchKnowledgeBaseTool.createTool(AgentCore.Tool).execute({ query: 'seguridad' }, context);
+  const searchArgs = { query: 'seguridad', scope: 'document', documentHint: 'manual interno', limit: 3 };
+  const searchResult = await SearchKnowledgeBaseTool.createTool(AgentCore.Tool).execute(searchArgs, context);
   const readResult = await ReadKnowledgeChunkTool.createTool(AgentCore.Tool).execute({ chunkId: 'doc-1:chunk:2' }, context);
 
   assert.equal(listResult.text, 'Documento');
@@ -173,7 +174,15 @@ test('Builtin Tools - RAG tools consumen el servicio inyectado y propagan rama a
   assert.equal(readResult.content, 'Contenido');
   assert.deepEqual(calls, [
     { name: 'list', branchId: 'branch-1' },
-    { name: 'search', branchId: 'branch-1', args: { query: 'seguridad' } },
+    { name: 'search', branchId: 'branch-1', args: searchArgs },
     { name: 'read', branchId: 'branch-1', args: { chunkId: 'doc-1:chunk:2' } }
   ]);
+});
+
+test('Builtin Tools - search_knowledge_base declara los alcances de recuperación', () => {
+  const properties = SearchKnowledgeBaseTool.definition.parameters.properties;
+  assert.deepEqual(properties.scope.enum, ['auto', 'document', 'corpus']);
+  assert.equal(properties.documentHint.type, 'string');
+  assert.match(SearchKnowledgeBaseTool.definition.description, /scope="document"/);
+  assert.match(SearchKnowledgeBaseTool.definition.description, /scope="corpus"/);
 });

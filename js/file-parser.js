@@ -142,6 +142,7 @@
   async function parseCMaps(allObjects, fullText, bytes, objOffsets) {
     const cmap = new Map();
     const toUnicodeObjNums = new Set();
+    const cmapByObject = new Map();
 
     // Buscar referencias /ToUnicode en fullText y en todos los objetos (incluidos los de ObjStm)
     const toUnicodeRegex = /\/ToUnicode\s+(\d+)\s+\d+\s+R/g;
@@ -163,9 +164,12 @@
     }
 
     for (const objNum of toUnicodeObjNums) {
+      const localCmap = new Map();
       const body = allObjects.get(String(objNum));
       if (body && (body.includes('beginbfchar') || body.includes('beginbfrange'))) {
+        parseCMapData(body, localCmap);
         parseCMapData(body, cmap);
+        cmapByObject.set(String(objNum), localCmap);
         continue;
       }
 
@@ -186,12 +190,38 @@
             const decomp = await decompressDeflateData(rawBytes);
             if (decomp) {
               const text = new TextDecoder('latin1').decode(decomp);
+              parseCMapData(text, localCmap);
               parseCMapData(text, cmap);
             }
           } catch (e) {}
         }
       }
+      if (localCmap.size > 0) cmapByObject.set(String(objNum), localCmap);
     }
+
+    // Los códigos CID solo son únicos dentro de una fuente. Mantener también
+    // los mapas por nombre de recurso (/F1, /F2...) evita que el último CMap
+    // leído corrompa texto y cifras pertenecientes a otra fuente.
+    const cmapByFontObject = new Map();
+    for (const [objNum, body] of allObjects.entries()) {
+      const match = body.match(/\/ToUnicode\s+(\d+)\s+\d+\s+R/);
+      if (!match) continue;
+      const localCmap = cmapByObject.get(String(match[1]));
+      if (localCmap) cmapByFontObject.set(String(objNum), localCmap);
+    }
+
+    const byFontName = new Map();
+    for (const body of allObjects.values()) {
+      const resourceRegex = /\/([^\s/<>\[\]()]+)\s+(\d+)\s+\d+\s+R/g;
+      let resourceMatch;
+      while ((resourceMatch = resourceRegex.exec(body)) !== null) {
+        const localCmap = cmapByFontObject.get(String(resourceMatch[2]));
+        if (localCmap && !byFontName.has(resourceMatch[1])) {
+          byFontName.set(resourceMatch[1], localCmap);
+        }
+      }
+    }
+    cmap.byFontName = byFontName;
 
     return cmap;
   }
@@ -263,6 +293,7 @@
 
     let out = [];
     let inTextObject = false;
+    let activeCmap = cmap;
     const len = streamString.length;
     let i = 0;
 
@@ -297,6 +328,15 @@
         continue;
       }
 
+      // Seleccionar el ToUnicode de la fuente activa indicada por el operador
+      // PDF "/Fname size Tf". El mapa agregado queda como fallback.
+      if (c === 47 /* / */ && cmap && cmap.byFontName) {
+        const fontMatch = streamString.substring(i).match(/^\/([^\s/<>\[\]()]+)\s+[-+]?(?:\d+\.?\d*|\.\d+)\s+Tf\b/);
+        if (fontMatch) {
+          activeCmap = cmap.byFontName.get(fontMatch[1]) || cmap;
+        }
+      }
+
       // Literal string: (texto)
       if (c === 40 /* ( */) {
         let depth = 1;
@@ -317,7 +357,7 @@
           lit += streamString.charAt(j);
           j++;
         }
-        if (lit) out.push(mapPdfLiteralString(lit, cmap));
+        if (lit) out.push(mapPdfLiteralString(lit, activeCmap));
         i = j;
         continue;
       }
@@ -341,10 +381,10 @@
         let decoded = '';
         for (let k = 0; k < hex.length; k += 4) {
           const chunk = hex.substr(k, 4).toLowerCase();
-          if (cmap.has(chunk)) decoded += cmap.get(chunk);
+          if (activeCmap.has(chunk)) decoded += activeCmap.get(chunk);
           else {
             const sub2 = hex.substr(k, 2).toLowerCase();
-            if (cmap.has(sub2)) { decoded += cmap.get(sub2); k -= 2; }
+            if (activeCmap.has(sub2)) { decoded += activeCmap.get(sub2); k -= 2; }
             else {
               const code = parseInt(chunk, 16);
               if (!isNaN(code) && code >= 32 && code < 127) decoded += String.fromCharCode(code);
@@ -381,7 +421,7 @@
               lit += streamString.charAt(k);
               k++;
             }
-            arrText += mapPdfLiteralString(lit, cmap);
+            arrText += mapPdfLiteralString(lit, activeCmap);
             j = k;
             continue;
           } else if (ac === 60 /* < */) {
@@ -398,10 +438,10 @@
             if (k < len && streamString.charCodeAt(k) === 62) k++;
             for (let m = 0; m < hex.length; m += 4) {
               const chunk = hex.substr(m, 4).toLowerCase();
-              if (cmap.has(chunk)) arrText += cmap.get(chunk);
+              if (activeCmap.has(chunk)) arrText += activeCmap.get(chunk);
               else {
                 const sub2 = hex.substr(m, 2).toLowerCase();
-                if (cmap.has(sub2)) { arrText += cmap.get(sub2); m -= 2; }
+                if (activeCmap.has(sub2)) { arrText += activeCmap.get(sub2); m -= 2; }
               }
             }
             j = k;
@@ -441,7 +481,155 @@
     }
 
     const res = out.join('').replace(/[ \t]+/g, ' ').replace(/\n\s*\n+/g, '\n\n').trim();
+    return decodePdfShiftedText(res);
+  }
+
+  const KNOWN_PDF_ANCHORS = new Set([
+    // English
+    'LIQUIDITY', 'COAL', 'MINED', 'ASSET', 'ASSETS', 'LIABILITY', 'LIABILITIES',
+    'EQUITY', 'REVENUE', 'REVENUES', 'PROFIT', 'PROFITS', 'INCOME', 'EXPENSE', 'EXPENSES',
+    'CASH', 'FLOW', 'FLOWS', 'BALANCE', 'SHEET', 'TOTAL', 'MARGIN', 'MARGINS',
+    'DIVIDEND', 'DIVIDENDS', 'EARNING', 'EARNINGS', 'SHARE', 'SHARES', 'DEBT',
+    'SALES', 'COST', 'COSTS', 'OPERATING', 'FINANCIAL', 'REPORT', 'REPORTS',
+    'TAX', 'TAXES', 'NET', 'GROSS', 'CAPITAL', 'EXPENDITURE', 'EXPENDITURES', 'INTEREST', 'PERIOD', 'QUARTER',
+    'ANNUAL', 'CURRENT', 'INVESTMENT', 'INVESTMENTS', 'DEPRECIATION', 'AMORTIZATION',
+    'PRODUCTION', 'TONNES', 'TONS', 'PRICE', 'PRICES', 'VOLUME', 'SEGMENT', 'RESULTS',
+    'AUDIT', 'AUDITED', 'COMPANY', 'CORPORATION', 'GROUP', 'CONSOLIDATED', 'MILLION', 'THOUSAND',
+    // Spanish
+    'LIQUIDEZ', 'ACTIVO', 'ACTIVOS', 'PASIVO', 'PASIVOS', 'PATRIMONIO', 'NETO',
+    'INGRESO', 'INGRESOS', 'GASTO', 'GASTOS', 'BENEFICIO', 'BENEFICIOS',
+    'RESULTADO', 'RESULTADOS', 'BALANCE', 'TOTAL', 'MARGEN', 'MARGENES',
+    'DIVIDENDO', 'DIVIDENDOS', 'CUENTA', 'CUENTAS', 'PERIODO', 'PERIODOS',
+    'EJERCICIO', 'EJERCICIOS', 'VENTA', 'VENTAS', 'COSTE', 'COSTES',
+    'FINANCIERO', 'FINANCIEROS', 'FINANCIERA', 'FINANCIERAS', 'INFORME', 'INFORMES',
+    'IMPUESTO', 'IMPUESTOS', 'EXPLOTACION', 'CONSOLIDADO', 'CONSOLIDADA',
+    'AUDITORIA', 'MEMORIA', 'CAPITAL', 'INTERES', 'INTERESES', 'INVERSION',
+    'INVERSIONES', 'DEPRECIACION', 'AMORTIZACION', 'PRODUCCION', 'TONELADAS',
+    'PRECIO', 'PRECIOS', 'VOLUMEN', 'EMPRESA', 'SOCIEDAD', 'GRUPO', 'MILLONES', 'MILES'
+  ]);
+
+  function unshiftAsciiString(str, offset = 3) {
+    if (!str) return '';
+    let res = '';
+    for (let i = 0; i < str.length; i++) {
+      const code = str.charCodeAt(i);
+      if (code >= 33 && code <= 126) {
+        const unshifted = code - offset;
+        res += (unshifted >= 32 && unshifted <= 126) ? String.fromCharCode(unshifted) : str.charAt(i);
+      } else {
+        res += str.charAt(i);
+      }
+    }
     return res;
+  }
+
+  function splitKnownConcatenatedWords(str) {
+    for (const kw of KNOWN_PDF_ANCHORS) {
+      if (str.startsWith(kw) && str.length > kw.length) {
+        const rest = str.slice(kw.length);
+        if (KNOWN_PDF_ANCHORS.has(rest)) {
+          return `${kw} ${rest}`;
+        }
+      }
+    }
+    return str;
+  }
+
+  function collapseSpacedLettersAndNumbers(text) {
+    if (!text || text.length < 3) return text;
+    let out = text.replace(/((?:[A-Za-z]\s+){2,}[A-Za-z])/g, (match) => {
+      const parts = match.split(/\s{2,}/);
+      return parts.map(p => {
+        const joined = p.replace(/\s+/g, '');
+        return splitKnownConcatenatedWords(joined.toUpperCase());
+      }).join(' ');
+    });
+
+    out = out.replace(/((?:[\d.,\-+()\/]\s+){2,}[\d.,\-+()\/])/g, (match) => {
+      return match.replace(/\s+/g, '');
+    });
+
+    return out;
+  }
+
+  /**
+   * Algunos generadores PDF emiten cada glifo como una operación de texto
+   * independiente. El extractor conserva esas operaciones como líneas, por lo
+   * que una página termina siendo "C\na\ns\nh\n\nF\nl\no\nw". Solo normalizamos
+   * páginas donde este patrón es dominante para no alterar documentos que
+   * realmente contienen listas de una letra o tablas verticales.
+   */
+  function collapseVerticallySplitGlyphs(text) {
+    if (!text || typeof text !== 'string') return text;
+
+    return text.split(/(?=--- Página \d+ ---\n)/).map(section => {
+      const firstNewline = section.indexOf('\n');
+      if (firstNewline < 0) return section;
+
+      const heading = section.slice(0, firstNewline + 1);
+      const body = section.slice(firstNewline + 1);
+      const nonEmptyLines = body.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+      if (nonEmptyLines.length < 20) return section;
+
+      const singleGlyphLines = nonEmptyLines.filter(line => Array.from(line).length === 1).length;
+      if (singleGlyphLines / nonEmptyLines.length < 0.65) return section;
+
+      const blocks = body.split(/\r?\n\s*\r?\n+/).map(block => {
+        const lines = block.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+        if (lines.length >= 2 && lines.every(line => Array.from(line).length === 1)) {
+          return lines.join('');
+        }
+        return lines.join(' ');
+      }).filter(Boolean);
+
+      return heading + blocks.join(' ') + '\n\n';
+    }).join('');
+  }
+
+  function decodePdfShiftedText(text, offset = 3) {
+    if (!text || typeof text !== 'string' || text.length < 3) return text;
+    const lines = text.split(/\r?\n/);
+    let anyDecoded = false;
+    let anySpacingNormalized = false;
+    let tableContextActive = false;
+
+    const decodedLines = lines.map(line => {
+      const trimmed = line.trim();
+      if (!trimmed) {
+        tableContextActive = false;
+        return line;
+      }
+
+      // Mantener la ruta original para fuentes con desplazamiento +3. En los
+      // PDF normales, además, compactamos glifos separados para que una línea
+      // como "C a s h F l o w" sea indexable.
+      const candidate = unshiftAsciiString(trimmed, offset);
+      const collapsed = collapseSpacedLettersAndNumbers(candidate);
+      const rawCollapsed = collapseSpacedLettersAndNumbers(trimmed);
+      if (rawCollapsed !== trimmed) anySpacingNormalized = true;
+
+      const candidateUpper = collapsed.toUpperCase();
+      const tokens = candidateUpper.split(/[^A-Z]+/);
+      let keywordHits = 0;
+      for (const tok of tokens) {
+        if (tok.length >= 3 && KNOWN_PDF_ANCHORS.has(tok)) {
+          keywordHits++;
+        }
+      }
+
+      const hasBackslashGlitch = /\b[A-Za-z0-9\s]{2,}\\[\s\d]*/.test(trimmed) || /\\(?:\s+|$)/.test(trimmed);
+      const hasShiftedNumberFormat = /[0-9:<;]\s*[\/1]\s*[0-9:<;]/.test(trimmed);
+
+      if (keywordHits > 0 || hasBackslashGlitch || (tableContextActive && hasShiftedNumberFormat)) {
+        anyDecoded = true;
+        tableContextActive = true;
+        return collapsed.replace(/[ \t]+/g, ' ').trim();
+      }
+
+      return rawCollapsed;
+    });
+
+    return (anyDecoded || anySpacingNormalized) ? decodedLines.join('\n') : text;
   }
 
   async function decompressDeflateData(uint8Array) {
@@ -1199,7 +1387,172 @@
     }
   }
 
-  function extractImagesFromPdfObjects(allObjects, objOffsets, bytes) {
+  const PDF_PASSWORD_PADDING = new Uint8Array([
+    0x28, 0xBF, 0x4E, 0x5E, 0x4E, 0x75, 0x8A, 0x41,
+    0x64, 0x00, 0x4E, 0x56, 0xFF, 0xFA, 0x01, 0x08,
+    0x2E, 0x2E, 0x00, 0xB6, 0xD0, 0x68, 0x3E, 0x80,
+    0x2F, 0x0C, 0xA9, 0xFE, 0x64, 0x53, 0x69, 0x7A
+  ]);
+
+  function concatByteArrays(...arrays) {
+    const result = new Uint8Array(arrays.reduce((total, value) => total + value.length, 0));
+    let offset = 0;
+    for (const value of arrays) {
+      result.set(value, offset);
+      offset += value.length;
+    }
+    return result;
+  }
+
+  function hexToBytes(hex) {
+    const clean = String(hex || '').replace(/\s+/g, '');
+    if (!clean || clean.length % 2 !== 0 || !/^[0-9a-f]+$/i.test(clean)) return null;
+    const bytes = new Uint8Array(clean.length / 2);
+    for (let index = 0; index < bytes.length; index++) bytes[index] = parseInt(clean.slice(index * 2, index * 2 + 2), 16);
+    return bytes;
+  }
+
+  function md5Bytes(input) {
+    const source = input instanceof Uint8Array ? input : new Uint8Array(input || []);
+    const paddedLength = Math.ceil((source.length + 9) / 64) * 64;
+    const padded = new Uint8Array(paddedLength);
+    padded.set(source);
+    padded[source.length] = 0x80;
+    const view = new DataView(padded.buffer);
+    const bitLength = source.length * 8;
+    view.setUint32(paddedLength - 8, bitLength >>> 0, true);
+    view.setUint32(paddedLength - 4, Math.floor(bitLength / 0x100000000), true);
+
+    const shifts = [
+      7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22,
+      5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20,
+      4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23,
+      6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21
+    ];
+    const constants = Array.from({ length: 64 }, (_, index) => Math.floor(Math.abs(Math.sin(index + 1)) * 0x100000000) >>> 0);
+    let a0 = 0x67452301;
+    let b0 = 0xEFCDAB89;
+    let c0 = 0x98BADCFE;
+    let d0 = 0x10325476;
+
+    for (let offset = 0; offset < paddedLength; offset += 64) {
+      const words = Array.from({ length: 16 }, (_, index) => view.getUint32(offset + index * 4, true));
+      let a = a0, b = b0, c = c0, d = d0;
+      for (let index = 0; index < 64; index++) {
+        let f, wordIndex;
+        if (index < 16) {
+          f = (b & c) | (~b & d);
+          wordIndex = index;
+        } else if (index < 32) {
+          f = (d & b) | (~d & c);
+          wordIndex = (5 * index + 1) % 16;
+        } else if (index < 48) {
+          f = b ^ c ^ d;
+          wordIndex = (3 * index + 5) % 16;
+        } else {
+          f = c ^ (b | ~d);
+          wordIndex = (7 * index) % 16;
+        }
+        const sum = (a + f + constants[index] + words[wordIndex]) >>> 0;
+        const rotated = ((sum << shifts[index]) | (sum >>> (32 - shifts[index]))) >>> 0;
+        const previousD = d;
+        d = c;
+        c = b;
+        b = (b + rotated) >>> 0;
+        a = previousD;
+      }
+      a0 = (a0 + a) >>> 0;
+      b0 = (b0 + b) >>> 0;
+      c0 = (c0 + c) >>> 0;
+      d0 = (d0 + d) >>> 0;
+    }
+
+    const digest = new Uint8Array(16);
+    const digestView = new DataView(digest.buffer);
+    digestView.setUint32(0, a0, true);
+    digestView.setUint32(4, b0, true);
+    digestView.setUint32(8, c0, true);
+    digestView.setUint32(12, d0, true);
+    return digest;
+  }
+
+  function rc4Bytes(key, input) {
+    const state = new Uint8Array(256);
+    for (let index = 0; index < 256; index++) state[index] = index;
+    let j = 0;
+    for (let index = 0; index < 256; index++) {
+      j = (j + state[index] + key[index % key.length]) & 0xFF;
+      const swap = state[index]; state[index] = state[j]; state[j] = swap;
+    }
+    const output = new Uint8Array(input.length);
+    let i = 0;
+    j = 0;
+    for (let index = 0; index < input.length; index++) {
+      i = (i + 1) & 0xFF;
+      j = (j + state[i]) & 0xFF;
+      const swap = state[i]; state[i] = state[j]; state[j] = swap;
+      output[index] = input[index] ^ state[(state[i] + state[j]) & 0xFF];
+    }
+    return output;
+  }
+
+  function bytesEqual(left, right, length = Math.min(left?.length || 0, right?.length || 0)) {
+    if (!left || !right || left.length < length || right.length < length) return false;
+    for (let index = 0; index < length; index++) if (left[index] !== right[index]) return false;
+    return true;
+  }
+
+  function createPdfSecurityContext(allObjects, fullText) {
+    const encryptRef = String(fullText || '').match(/\/Encrypt\s+(\d+)\s+(\d+)\s+R/i);
+    if (!encryptRef) return null;
+    const encryptionBody = allObjects.get(encryptRef[1]);
+    if (!encryptionBody) return { encrypted: true, supported: false };
+    const filter = encryptionBody.match(/\/Filter\s*\/([A-Za-z0-9]+)/)?.[1] || '';
+    const version = Number(encryptionBody.match(/\/V\s+(\d+)/)?.[1] || 0);
+    const revision = Number(encryptionBody.match(/\/R\s+(\d+)/)?.[1] || 0);
+    const ownerKey = hexToBytes(encryptionBody.match(/\/O\s*<([0-9A-Fa-f\s]+)>/)?.[1]);
+    const userKey = hexToBytes(encryptionBody.match(/\/U\s*<([0-9A-Fa-f\s]+)>/)?.[1]);
+    const fileId = hexToBytes(String(fullText || '').match(/\/ID\s*\[\s*<([0-9A-Fa-f\s]+)>/)?.[1]);
+    const permissions = Number(encryptionBody.match(/\/P\s+(-?\d+)/)?.[1]);
+    if (filter !== 'Standard' || ![1, 2].includes(version) || ![2, 3].includes(revision) || !ownerKey || !userKey || !fileId || !Number.isFinite(permissions)) {
+      return { encrypted: true, supported: false };
+    }
+
+    const keyLength = revision === 2 ? 5 : Math.min(16, Math.max(5, Number(encryptionBody.match(/\/Length\s+(\d+)/)?.[1] || 40) / 8));
+    const permissionBytes = new Uint8Array(4);
+    new DataView(permissionBytes.buffer).setInt32(0, permissions, true);
+    let digest = md5Bytes(concatByteArrays(PDF_PASSWORD_PADDING, ownerKey, permissionBytes, fileId));
+    if (revision >= 3) {
+      for (let round = 0; round < 50; round++) digest = md5Bytes(digest.slice(0, keyLength));
+    }
+    const fileKey = digest.slice(0, keyLength);
+    let expectedUserKey;
+    if (revision === 2) {
+      expectedUserKey = rc4Bytes(fileKey, PDF_PASSWORD_PADDING);
+    } else {
+      expectedUserKey = md5Bytes(concatByteArrays(PDF_PASSWORD_PADDING, fileId));
+      expectedUserKey = rc4Bytes(fileKey, expectedUserKey);
+      for (let round = 1; round <= 19; round++) {
+        const roundKey = fileKey.map(value => value ^ round);
+        expectedUserKey = rc4Bytes(roundKey, expectedUserKey);
+      }
+    }
+    const valid = bytesEqual(expectedUserKey, userKey, revision === 2 ? 32 : 16);
+    return { encrypted: true, supported: valid, fileKey };
+  }
+
+  function decryptPdfObjectBytes(input, security, objectNumber, generationNumber = 0) {
+    if (!security?.supported || !security.fileKey) return null;
+    const suffix = new Uint8Array([
+      objectNumber & 0xFF, (objectNumber >>> 8) & 0xFF, (objectNumber >>> 16) & 0xFF,
+      generationNumber & 0xFF, (generationNumber >>> 8) & 0xFF
+    ]);
+    const digest = md5Bytes(concatByteArrays(security.fileKey, suffix));
+    const objectKey = digest.slice(0, Math.min(security.fileKey.length + 5, 16));
+    return rc4Bytes(objectKey, input);
+  }
+
+  function extractImagesFromPdfObjects(allObjects, objOffsets, bytes, security = null) {
     const imagesByObjNum = new Map();
     let imgCounter = 1;
 
@@ -1230,6 +1583,12 @@
       const rawBytes = bytes.subarray(offset + dStart, offset + dEnd);
       if (!rawBytes || rawBytes.length < 50) continue;
 
+      const generation = Number(body.match(/^\s*\d+\s+(\d+)\s+obj/)?.[1] || 0);
+      const imageBytes = security?.encrypted
+        ? decryptPdfObjectBytes(rawBytes, security, Number(num), generation)
+        : rawBytes;
+      if (!imageBytes || imageBytes.length < 50) continue;
+
       const isDct = /\/Filter\s*(?:\/DCTDecode|\[\s*\/DCTDecode\s*\])/i.test(body);
       const isJpx = /\/Filter\s*(?:\/JPXDecode|\[\s*\/JPXDecode\s*\])/i.test(body);
 
@@ -1238,15 +1597,15 @@
 
       const isCmyk = body.includes('DeviceCMYK') || body.includes('/ColorSpace/DeviceCMYK') || body.includes('/ColorSpace /DeviceCMYK');
 
-      if (isDct || (rawBytes[0] === 0xFF && rawBytes[1] === 0xD8)) {
+      if ((isDct || (imageBytes[0] === 0xFF && imageBytes[1] === 0xD8)) && imageBytes[0] === 0xFF && imageBytes[1] === 0xD8) {
         mimeType = 'image/jpeg';
-        dataUrl = `data:image/jpeg;base64,${bytesToBase64(rawBytes)}`;
-      } else if (isJpx) {
+        dataUrl = `data:image/jpeg;base64,${bytesToBase64(imageBytes)}`;
+      } else if (isJpx && imageBytes.length >= 12 && imageBytes[4] === 0x6A && imageBytes[5] === 0x50) {
         mimeType = 'image/jp2';
-        dataUrl = `data:image/jp2;base64,${bytesToBase64(rawBytes)}`;
-      } else if (rawBytes[0] === 0x89 && rawBytes[1] === 0x50 && rawBytes[2] === 0x4E && rawBytes[3] === 0x47) {
+        dataUrl = `data:image/jp2;base64,${bytesToBase64(imageBytes)}`;
+      } else if (imageBytes[0] === 0x89 && imageBytes[1] === 0x50 && imageBytes[2] === 0x4E && imageBytes[3] === 0x47) {
         mimeType = 'image/png';
-        dataUrl = `data:image/png;base64,${bytesToBase64(rawBytes)}`;
+        dataUrl = `data:image/png;base64,${bytesToBase64(imageBytes)}`;
       }
 
       if (dataUrl) {
@@ -1255,7 +1614,7 @@
           objNum: String(num),
           width,
           height,
-          sizeBytes: rawBytes.length,
+          sizeBytes: imageBytes.length,
           mimeType: mimeType || 'image/jpeg',
           isCmyk: Boolean(isCmyk),
           dataUrl
@@ -1329,7 +1688,8 @@
     const cmap = await parseCMaps(allObjects, fullText, bytes, objOffsets);
 
     // 3b. Extracción de imágenes XObject (/Subtype /Image)
-    const imagesByObjNum = extractImagesFromPdfObjects(allObjects, objOffsets, bytes);
+    const security = createPdfSecurityContext(allObjects, fullText);
+    const imagesByObjNum = extractImagesFromPdfObjects(allObjects, objOffsets, bytes, security);
     const assignedImages = new Set();
     const allExtractedImages = [];
 
@@ -1574,8 +1934,21 @@
 
     let finalCleanText = pages.join('\n\n').trim();
 
+    if (finalCleanText) {
+      finalCleanText = collapseVerticallySplitGlyphs(finalCleanText);
+      finalCleanText = decodePdfShiftedText(finalCleanText);
+    }
+
     if (!finalCleanText) {
-      finalCleanText = `[Documento PDF adjunto: No se pudo extraer texto seleccionable. Es posible que el PDF contenga únicamente imágenes escaneadas o esté protegido por contraseña.]`;
+      const extractionWarning = '[Documento PDF adjunto: No se pudo extraer texto seleccionable. Es posible que el PDF contenga únicamente imágenes escaneadas o esté protegido por contraseña.]';
+      if (allExtractedImages.length > 0) {
+        const imageReferences = allExtractedImages
+          .map(image => `![${image.label || `Imagen extraída (Pág. ${image.page || 1})`}](rag-image://__DOC_ID__:${image.id})`)
+          .join('\n\n');
+        finalCleanText = `--- Página 1 ---\n${extractionWarning}\n\n[Se recuperaron ${allExtractedImages.length} imagen${allExtractedImages.length === 1 ? '' : 'es'} incrustada${allExtractedImages.length === 1 ? '' : 's'} del PDF.]\n\n${imageReferences}`;
+      } else {
+        finalCleanText = extractionWarning;
+      }
     }
 
     return {
@@ -1689,6 +2062,11 @@
     extractTextFromPdf,
     parsePdfDocument,
     convertCmykJpegToRgbDataUrl,
-    convertCmykDataUrlToRgb
+    convertCmykDataUrlToRgb,
+    decodePdfShiftedText,
+    unshiftAsciiString,
+    collapseSpacedLettersAndNumbers,
+    collapseVerticallySplitGlyphs,
+    parsePdfStreamText
   };
 });

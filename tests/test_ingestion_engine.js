@@ -47,6 +47,10 @@ test('IngestionEngine - procesa cola, persiste e indexa sin cliente LLM', async 
   assert.equal((await RagStorage.getDocumentsByBranch(branch.id)).length, 1);
   assert.ok(progress.some(event => event.status === 'chunking'));
   assert.ok(progress.every(event => event.percent >= 0 && event.percent <= 100));
+  assert.ok(progress.every(event => event.totalFiles === 3 && event.finishedFiles >= 0));
+  const finalProgress = progress[progress.length - 1];
+  assert.equal(finalProgress.finishedFiles, 3);
+  assert.equal(finalProgress.overallPercent, 100);
   const found = await RagIndex.searchBranch(branch.id, 'BGP', { tolerance: 0 });
   assert.equal(found.hits[0].documentTitle, 'uno.md');
 });
@@ -220,6 +224,7 @@ trailer
 
   const imagesFromStorage = await RagStorage.getDocumentImages(savedDoc.id);
   assert.strictEqual(imagesFromStorage.length, 1);
+  assert.strictEqual(savedDoc.imageCount, 1);
   const singleImage = await RagStorage.getDocumentImage(savedDoc.id, 'img_1');
   assert.ok(singleImage, 'Debe recuperar la imagen por ID');
   assert.strictEqual(singleImage.width, 800);
@@ -229,6 +234,30 @@ trailer
   assert.strictEqual(safeRagUrl, `rag-image://${savedDoc.id}:img_1`);
 
   await RagStorage.deleteBranch(branch.id);
+});
+
+test('IngestionEngine & FileParser - conserva referencias de imagen si el PDF no contiene texto', async () => {
+  const FileParser = require('../js/file-parser.js');
+  const fakeJpegBytes = Buffer.from([0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0xFF, 0xDB, 0x00, 0x43, ...new Array(65).fill(0), 0xFF, 0xD9]);
+  const jpegString = fakeJpegBytes.toString('latin1');
+  // Imagen XObject sin árbol de páginas ni streams de texto: simula un PDF del
+  // que solo se puede recuperar una imagen incrustada.
+  const pdfContent = `%PDF-1.4
+4 0 obj
+<< /Type /XObject /Subtype /Image /Width 800 /Height 600 /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${fakeJpegBytes.length} >>
+stream
+${jpegString}
+endstream
+endobj
+trailer
+<< /Size 5 >>
+%%EOF`;
+
+  const result = await FileParser.parsePdfDocument(Buffer.from(pdfContent, 'latin1'));
+  assert.equal(result.images.length, 1);
+  assert.match(result.text, /No se pudo extraer texto seleccionable/);
+  assert.match(result.text, /Se recuperaron 1 imagen incrustada/);
+  assert.match(result.text, /rag-image:\/\/__DOC_ID__:img_1/);
 });
 
 test('IngestionEngine & FileParser - no corrompe texto plano ASCII por CIDs de 16 bits en ToUnicode', async () => {
