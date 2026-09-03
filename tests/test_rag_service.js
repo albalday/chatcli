@@ -23,6 +23,8 @@ test('RagService - inyecta solo instrucciones compactas', async () => {
   const context = await RagService.buildRagSystemContext(branch.id);
   assert.match(context, /Operaciones/);
   assert.match(context, /search_knowledge_base/);
+  assert.match(context, /Trata cada resultado como una pista/);
+  assert.match(context, /antes de repetir una búsqueda similar/);
   assert.doesNotMatch(context, /Kubernetes|PostgreSQL/);
   assert.match(await RagService.injectRagContext('Responde brevemente.', branch.id), /Responde brevemente/);
 });
