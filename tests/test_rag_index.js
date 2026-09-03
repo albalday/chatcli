@@ -79,3 +79,24 @@ test('RagIndex - evita falsos positivos en tokens cortos (3M no coincide con TM)
   assert.equal(resComplex.hits[0].documentTitle, '3M_2018_10K.pdf');
 });
 
+test('RagIndex - construye un índice perezoso limitado a un documento', async () => {
+  const branch = await RagStorage.createBranch('Catálogo');
+  const alpha = await RagStorage.saveDocument({
+    branchId: branch.id,
+    title: 'Product_Alpha_datasheet.pdf',
+    chunks: [
+      { title: 'Battery', content: 'Battery runtime is twelve hours.' },
+      { title: 'Charging', content: 'Battery charging uses USB-C.' }
+    ]
+  });
+  await RagStorage.saveDocument({
+    branchId: branch.id,
+    title: 'Product_Beta_datasheet.pdf',
+    chunks: [{ title: 'Battery', content: 'Battery runtime is eight hours.' }]
+  });
+
+  const result = await RagIndex.searchDocuments(branch.id, [alpha.id], 'battery runtime', { tolerance: 0, limit: 10 });
+  assert.ok(result.hits.length >= 1);
+  assert.ok(result.hits.every(hit => hit.documentId === alpha.id));
+  assert.ok(result.hits.every(hit => hit.documentTitle === 'Product_Alpha_datasheet.pdf'));
+});
