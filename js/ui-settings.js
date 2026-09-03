@@ -220,7 +220,11 @@
   }
 
   function gatherCurrentFormConfig(elements, appConfig) {
-    const profileName = elements?.settingProfileName ? elements.settingProfileName.value.trim() : (appConfig?.activeProfileName || 'Local chat');
+    const profileName = (elements?.settingProfileName && elements.settingProfileName.value.trim())
+      ? elements.settingProfileName.value.trim()
+      : ((elements?.profileSelectHelper && elements.profileSelectHelper.value)
+        ? elements.profileSelectHelper.value
+        : (appConfig?.activeProfileName || 'Local chat'));
     const selectedModel = elements?.settingModel ? elements.settingModel.value.trim() : '';
 
     return {
@@ -258,14 +262,8 @@
   }
 
   function handleSaveProfile(elements, appConfig, populateProfileSelector) {
-    const name = elements?.settingProfileName ? elements.settingProfileName.value.trim() : '';
-    if (!name) {
-      showProfileFeedback(elements, t('err_profile_name_empty') || 'Por favor, escribe un nombre para el perfil.', 'error');
-      return null;
-    }
-
     const currentConfig = gatherCurrentFormConfig(elements, appConfig);
-    currentConfig.activeProfileName = name;
+    const name = currentConfig.activeProfileName || 'Local chat';
     const Storage = getStorage();
     if (Storage?.saveProfile) {
       Storage.saveProfile(name, currentConfig);
@@ -281,7 +279,11 @@
   }
 
   function handleDeleteProfile(elements, populateProfileSelector, applyProfile) {
-    const name = elements?.settingProfileName ? elements.settingProfileName.value.trim() : '';
+    const name = (elements?.settingProfileName && elements.settingProfileName.value.trim())
+      ? elements.settingProfileName.value.trim()
+      : ((elements?.profileSelectHelper && elements.profileSelectHelper.value)
+        ? elements.profileSelectHelper.value
+        : '');
     if (!name) return;
 
     const confirmMsg = t('confirm_delete_profile', { name }) || `¿Estás seguro de que deseas eliminar el perfil "${name}"?`;

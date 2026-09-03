@@ -1112,20 +1112,33 @@
     }
   }
 
-  function handleSaveProfile() {
-    if (UISettings.handleSaveProfile) {
-      const savedConfig = UISettings.handleSaveProfile(elements, appConfig, populateProfileSelector);
-      if (savedConfig) {
-        if (Storage.saveConfig) {
-          Storage.saveConfig(savedConfig);
-        }
-        appConfig = savedConfig;
-        if (chatHistory.length > 0 && chatHistory[0].role === 'system') {
-          chatHistory[0].content = appConfig.systemPrompt || '';
-        }
-        updateUIFromConfig();
-      }
+  function saveCurrentSettings(closeModal = true) {
+    const newConfig = gatherCurrentFormConfig();
+
+    if (Storage.saveConfig) {
+      Storage.saveConfig(newConfig);
     }
+    appConfig = newConfig;
+
+    if (chatHistory.length > 0 && chatHistory[0].role === 'system') {
+      chatHistory[0].content = appConfig.systemPrompt || '';
+    }
+
+    updateUIFromConfig();
+
+    if (typeof populateProfileSelector === 'function') {
+      populateProfileSelector(newConfig.activeProfileName);
+    }
+
+    if (closeModal) {
+      closeSettingsModal();
+    } else {
+      showProfileFeedback(t('msg_profile_saved', { name: newConfig.activeProfileName }) || `Perfil "${newConfig.activeProfileName}" guardado con éxito.`, 'success');
+    }
+  }
+
+  function handleSaveProfile() {
+    saveCurrentSettings(false);
   }
 
   function handleDeleteProfile() {
@@ -1151,21 +1164,8 @@
   }
 
   function handleSaveSettings(e) {
-    e.preventDefault();
-
-    const newConfig = gatherCurrentFormConfig();
-
-    if (Storage.saveConfig) {
-      Storage.saveConfig(newConfig);
-    }
-    appConfig = newConfig;
-
-    if (chatHistory.length > 0 && chatHistory[0].role === 'system') {
-      chatHistory[0].content = appConfig.systemPrompt || '';
-    }
-
-    updateUIFromConfig();
-    closeSettingsModal();
+    if (e && e.preventDefault) e.preventDefault();
+    saveCurrentSettings(true);
   }
 
   function handleResetSettings() {
