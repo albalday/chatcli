@@ -18,16 +18,16 @@
   <aside id="chat-sidebar" class="chat-sidebar" style="display: none;">
     <div class="sidebar-header">
       <button type="button" id="btn-sidebar-new-chat" class="btn-sidebar-new-chat" data-i18n-title="btn_new_chat_sidebar_title" title="Crear nueva conversación">
-        <span class="btn-new-chat-icon">➕</span>
+        <svg class="ui-icon btn-new-chat-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
         <span data-i18n="chat_untitled">Nueva conversación</span>
       </button>
       <button type="button" id="btn-close-sidebar" class="btn-sidebar-icon btn-sidebar-close" data-i18n-title="btn_close_sidebar_title" title="Cerrar barra lateral" aria-label="Cerrar">
-        ✕
+        <svg class="ui-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
       </button>
     </div>
 
     <div class="sidebar-search-box">
-      <span class="sidebar-search-icon">🔍</span>
+      <svg class="ui-icon sidebar-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
       <input type="text" id="sidebar-search-input" class="sidebar-search-input" data-i18n-placeholder="sidebar_search_placeholder" placeholder="Buscar en historial...">
     </div>
 
@@ -37,16 +37,16 @@
 
     <div class="sidebar-footer">
       <button type="button" id="btn-import-chat-file" class="btn-sidebar-footer" data-i18n-title="btn_import_chat_title" title="Importar conversación desde archivo JSON">
-        <span>📥</span>
+        <svg class="ui-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
         <span data-i18n="btn_import_chat">Importar</span>
       </button>
       <input type="file" id="import-json-input" accept=".json" style="display: none;">
       <button type="button" id="btn-open-export-modal" class="btn-sidebar-footer" data-i18n-title="btn_export_chat_title" title="Exportar conversación (Markdown, JSON, PDF)">
-        <span>📤</span>
+        <svg class="ui-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
         <span data-i18n="btn_export_all">Exportar</span>
       </button>
       <button type="button" id="btn-delete-all-chats" class="btn-sidebar-footer btn-sidebar-danger" data-i18n-title="btn_delete_all_chats_title" title="Eliminar todas las conversaciones guardadas">
-        <span>🗑️</span>
+        <svg class="ui-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
         <span data-i18n="btn_delete_all_chats">Borrar todos</span>
       </button>
     </div>

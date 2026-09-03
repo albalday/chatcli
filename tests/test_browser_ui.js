@@ -720,3 +720,75 @@ test('Browser UI - Iconos Fase 2: Iconos Vectoriales SVG en Header Superior y Co
     await browser.close();
   }
 });
+
+test('Browser UI - Iconos Fase 3: Iconos Vectoriales SVG en Barra Lateral e Historial', async () => {
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+    const filePath = 'file://' + path.resolve(__dirname, '../zerochat.html');
+    await page.goto(filePath, { waitUntil: 'load' });
+    await page.waitForSelector('#welcome-banner');
+
+    // 1. Abrir barra lateral
+    await page.click('#btn-toggle-sidebar');
+    await page.waitForFunction(() => document.getElementById('chat-sidebar')?.style.display !== 'none');
+
+    // 2. Verificar iconos vectoriales de cabecera, buscador y footer de sidebar
+    const sidebarIcons = await page.evaluate(() => {
+      const newChatSvg = document.querySelector('#btn-sidebar-new-chat svg');
+      const closeSvg = document.querySelector('#btn-close-sidebar svg');
+      const searchSvg = document.querySelector('.sidebar-search-box svg');
+      const importSvg = document.querySelector('#btn-import-chat-file svg');
+      const exportSvg = document.querySelector('#btn-open-export-modal svg');
+      const deleteAllSvg = document.querySelector('#btn-delete-all-chats svg');
+
+      return {
+        hasNewChatSvg: !!newChatSvg,
+        hasCloseSvg: !!closeSvg,
+        hasSearchSvg: !!searchSvg,
+        hasImportSvg: !!importSvg,
+        hasExportSvg: !!exportSvg,
+        hasDeleteAllSvg: !!deleteAllSvg,
+        newChatWidth: newChatSvg ? parseFloat(getComputedStyle(newChatSvg).width) : 0,
+        searchWidth: searchSvg ? parseFloat(getComputedStyle(searchSvg).width) : 0
+      };
+    });
+
+    assert.ok(sidebarIcons.hasNewChatSvg, 'El botón "+ Nueva conversación" debe tener icono SVG');
+    assert.ok(sidebarIcons.hasCloseSvg, 'El botón de cerrar barra lateral debe tener icono SVG');
+    assert.ok(sidebarIcons.hasSearchSvg, 'El buscador debe tener icono SVG de lupa');
+    assert.ok(sidebarIcons.hasImportSvg, 'El botón de importar debe tener icono SVG');
+    assert.ok(sidebarIcons.hasExportSvg, 'El botón de exportar debe tener icono SVG');
+    assert.ok(sidebarIcons.hasDeleteAllSvg, 'El botón de borrar todo debe tener icono SVG');
+    assert.ok(sidebarIcons.newChatWidth >= 14, 'El icono de nuevo chat debe tener tamaño >= 14px');
+
+    // 3. Renderizar una sesión simulada en el historial y verificar iconos de acciones en hover
+    const chatItemActionIcons = await page.evaluate(() => {
+      const list = document.getElementById('sidebar-chats-list');
+      if (typeof ChatUISidebar !== 'undefined' && typeof ChatUISidebar.renderSidebarChats === 'function') {
+        ChatUISidebar.renderSidebarChats({ sidebarChatsList: list }, [
+          { id: 'sess_test_1', title: 'Conversación de prueba', updatedAt: Date.now() }
+        ], 'sess_test_1', {});
+      }
+      const item = list.querySelector('.sidebar-chat-item');
+      const renameSvg = item?.querySelector('.btn-rename svg');
+      const deleteSvg = item?.querySelector('.btn-delete svg');
+
+      return {
+        hasItem: !!item,
+        hasRenameSvg: !!renameSvg,
+        hasDeleteSvg: !!deleteSvg,
+        renameWidth: renameSvg ? parseFloat(getComputedStyle(renameSvg).width) : 0,
+        deleteWidth: deleteSvg ? parseFloat(getComputedStyle(deleteSvg).width) : 0
+      };
+    });
+
+    assert.ok(chatItemActionIcons.hasItem, 'El item de conversación debe renderizarse');
+    assert.ok(chatItemActionIcons.hasRenameSvg, 'La acción de renombrar debe contener icono SVG (edit)');
+    assert.ok(chatItemActionIcons.hasDeleteSvg, 'La acción de eliminar debe contener icono SVG (trash)');
+    assert.ok(chatItemActionIcons.renameWidth >= 10, 'El icono de renombrar debe tener dimensiones válidas');
+    assert.ok(chatItemActionIcons.deleteWidth >= 10, 'El icono de eliminar debe tener dimensiones válidas');
+  } finally {
+    await browser.close();
+  }
+});
