@@ -25,7 +25,6 @@
     'el', 'en', 'file', 'for', 'form', 'in', 'informe', 'la', 'las', 'los',
     'of', 'para', 'por', 'report', 'the', 'un', 'una', 'y', '10k', '10q'
   ]);
-
   function normalizeDocumentReference(value) {
     return String(value || '')
       .normalize('NFD').replace(/[\u0300-\u036f]/g, '')

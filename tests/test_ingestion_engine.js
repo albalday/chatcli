@@ -231,6 +231,30 @@ trailer
   await RagStorage.deleteBranch(branch.id);
 });
 
+test('IngestionEngine & FileParser - conserva referencias de imagen si el PDF no contiene texto', async () => {
+  const FileParser = require('../js/file-parser.js');
+  const fakeJpegBytes = Buffer.from([0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0xFF, 0xDB, 0x00, 0x43, ...new Array(65).fill(0), 0xFF, 0xD9]);
+  const jpegString = fakeJpegBytes.toString('latin1');
+  // Imagen XObject sin árbol de páginas ni streams de texto: simula un PDF del
+  // que solo se puede recuperar una imagen incrustada.
+  const pdfContent = `%PDF-1.4
+4 0 obj
+<< /Type /XObject /Subtype /Image /Width 800 /Height 600 /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${fakeJpegBytes.length} >>
+stream
+${jpegString}
+endstream
+endobj
+trailer
+<< /Size 5 >>
+%%EOF`;
+
+  const result = await FileParser.parsePdfDocument(Buffer.from(pdfContent, 'latin1'));
+  assert.equal(result.images.length, 1);
+  assert.match(result.text, /No se pudo extraer texto seleccionable/);
+  assert.match(result.text, /Se recuperaron 1 imagen incrustada/);
+  assert.match(result.text, /rag-image:\/\/__DOC_ID__:img_1/);
+});
+
 test('IngestionEngine & FileParser - no corrompe texto plano ASCII por CIDs de 16 bits en ToUnicode', async () => {
   const FileParser = require('../js/file-parser.js');
 

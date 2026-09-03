@@ -1687,7 +1687,15 @@
     }
 
     if (!finalCleanText) {
-      finalCleanText = `[Documento PDF adjunto: No se pudo extraer texto seleccionable. Es posible que el PDF contenga únicamente imágenes escaneadas o esté protegido por contraseña.]`;
+      const extractionWarning = '[Documento PDF adjunto: No se pudo extraer texto seleccionable. Es posible que el PDF contenga únicamente imágenes escaneadas o esté protegido por contraseña.]';
+      if (allExtractedImages.length > 0) {
+        const imageReferences = allExtractedImages
+          .map(image => `![${image.label || `Imagen extraída (Pág. ${image.page || 1})`}](rag-image://__DOC_ID__:${image.id})`)
+          .join('\n\n');
+        finalCleanText = `--- Página 1 ---\n${extractionWarning}\n\n[Se recuperaron ${allExtractedImages.length} imagen${allExtractedImages.length === 1 ? '' : 'es'} incrustada${allExtractedImages.length === 1 ? '' : 's'} del PDF.]\n\n${imageReferences}`;
+      } else {
+        finalCleanText = extractionWarning;
+      }
     }
 
     return {
