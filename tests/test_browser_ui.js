@@ -892,3 +892,109 @@ test('Browser UI - Iconos Fase 4: Iconos Vectoriales SVG en Tarjetas Agénticas 
     await browser.close();
   }
 });
+
+test('Browser UI - Iconos Fase 5: Iconos Vectoriales SVG en Modales, Pestañas, Exportación y RAG', async () => {
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+    const filePath = 'file://' + path.resolve(__dirname, '../zerochat.html');
+    await page.goto(filePath, { waitUntil: 'load' });
+    await page.waitForSelector('#welcome-banner');
+
+    // 1. Abrir modal de Ajustes
+    await page.click('#btn-open-settings');
+    await page.waitForSelector('#settings-dialog[open]');
+
+    const settingsIcons = await page.evaluate(() => {
+      const tabs = Array.from(document.querySelectorAll('#settings-dialog .modal-tab-btn'));
+      const tabsHaveSvg = tabs.every(t => !!t.querySelector('svg'));
+      const tabsText = tabs.map(t => t.textContent).join(' ');
+      const hasTabEmojis = /🌐|⚙️|🤖|🎨|🔍/.test(tabsText);
+
+      const toggleKeySvg = !!document.querySelector('#btn-toggle-key svg');
+      const clearAllSvg = !!document.querySelector('#btn-clear-all-data svg');
+      const themeButtons = Array.from(document.querySelectorAll('.btn-theme-toggle'));
+      const themeHaveSvg = themeButtons.every(b => !!b.querySelector('svg'));
+
+      return {
+        tabsHaveSvg,
+        hasTabEmojis,
+        toggleKeySvg,
+        clearAllSvg,
+        themeHaveSvg
+      };
+    });
+
+    assert.ok(settingsIcons.tabsHaveSvg, 'Todas las pestañas de configuración deben contener un icono SVG');
+    assert.equal(settingsIcons.hasTabEmojis, false, 'Las pestañas no deben contener emojis residuales');
+    assert.ok(settingsIcons.toggleKeySvg, 'El botón de visibilidad de clave debe contener icono SVG');
+    assert.ok(settingsIcons.clearAllSvg, 'El botón de borrar todo debe contener icono SVG');
+    assert.ok(settingsIcons.themeHaveSvg, 'Los botones de modo claro/oscuro deben contener iconos SVG');
+
+    await page.click('#btn-close-settings');
+    await page.waitForFunction(() => !document.getElementById('settings-dialog').open);
+
+    // 2. Abrir modal de Exportación
+    await page.evaluate(() => document.getElementById('export-modal').showModal());
+    await page.waitForSelector('#export-modal[open]');
+
+    const exportIcons = await page.evaluate(() => {
+      const headerIcon = document.querySelector('#export-modal .modal-icon svg');
+      const closeBtn = document.querySelector('#btn-close-export svg');
+      const cards = Array.from(document.querySelectorAll('#export-modal .export-card-btn'));
+      const cardsHaveSvg = cards.every(c => !!c.querySelector('.export-card-icon svg'));
+      const cardsText = cards.map(c => c.textContent).join(' ');
+      const hasExportEmojis = /📄|📦|🖨️/.test(cardsText);
+
+      return {
+        hasHeaderSvg: !!headerIcon,
+        hasCloseSvg: !!closeBtn,
+        cardsHaveSvg,
+        hasExportEmojis
+      };
+    });
+
+    assert.ok(exportIcons.hasHeaderSvg, 'La cabecera de exportación debe tener icono SVG');
+    assert.ok(exportIcons.hasCloseSvg, 'El botón de cierre de exportación debe tener icono SVG');
+    assert.ok(exportIcons.cardsHaveSvg, 'Todas las tarjetas de exportación deben tener icono SVG');
+    assert.equal(exportIcons.hasExportEmojis, false, 'Las tarjetas de exportación no deben contener emojis');
+
+    await page.evaluate(() => document.getElementById('export-modal').close());
+
+    // 3. Abrir modal de RAG
+    await page.click('#btn-open-rag');
+    await page.waitForSelector('#rag-modal[open]');
+
+    const ragIcons = await page.evaluate(() => {
+      const headerSvg = document.querySelector('#rag-modal .rag-header-icon svg');
+      const newBranchSvg = document.querySelector('#btn-rag-new-branch svg');
+      const editBranchSvg = document.querySelector('#btn-rag-edit-branch svg');
+      const deleteBranchSvg = document.querySelector('#btn-rag-delete-branch svg');
+      const exportBranchSvg = document.querySelector('#btn-rag-export-branch svg');
+      const importBranchSvg = document.querySelector('#btn-rag-import-branch svg');
+      const quotaSvg = document.querySelector('#rag-storage-quota-info svg');
+
+      return {
+        hasHeaderSvg: !!headerSvg,
+        hasNewBranchSvg: !!newBranchSvg,
+        hasEditBranchSvg: !!editBranchSvg,
+        hasDeleteBranchSvg: !!deleteBranchSvg,
+        hasExportBranchSvg: !!exportBranchSvg,
+        hasImportBranchSvg: !!importBranchSvg,
+        hasQuotaSvg: !!quotaSvg
+      };
+    });
+
+    assert.ok(ragIcons.hasHeaderSvg, 'La cabecera de RAG debe tener icono SVG');
+    assert.ok(ragIcons.hasNewBranchSvg, 'El botón de nueva rama debe tener icono SVG');
+    assert.ok(ragIcons.hasEditBranchSvg, 'El botón de editar rama debe tener icono SVG');
+    assert.ok(ragIcons.hasDeleteBranchSvg, 'El botón de eliminar rama debe tener icono SVG');
+    assert.ok(ragIcons.hasExportBranchSvg, 'El botón de respaldar rama debe tener icono SVG');
+    assert.ok(ragIcons.hasImportBranchSvg, 'El botón de importar rama debe tener icono SVG');
+    assert.ok(ragIcons.hasQuotaSvg, 'El indicador de cuota debe tener icono SVG');
+
+    await page.click('#btn-close-rag');
+  } finally {
+    await browser.close();
+  }
+});

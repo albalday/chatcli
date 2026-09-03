@@ -196,7 +196,7 @@
       <div class="rag-documents-list">${documents.length ? documents.map(document => `
         <div class="rag-document-card" data-document-id="${escapeHtml(document.id)}">
           <div><strong>${escapeHtml(document.title)}</strong><div class="toggle-card-desc">${formatDocumentMetrics(document)}</div></div>
-          <button type="button" class="btn-secondary btn-danger-hover" data-delete-document="${escapeHtml(document.id)}">🗑️</button>
+          <button type="button" class="btn-secondary btn-danger-hover" data-delete-document="${escapeHtml(document.id)}" title="Eliminar documento"><svg class="ui-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>
         </div>`).join('') : '<div class="rag-empty-state">La rama todavía no contiene documentos.</div>'}</div>`;
 
     const input = document.getElementById('rag-file-input');
@@ -384,7 +384,8 @@
     if (typeof document === 'undefined') return;
     const node = document.getElementById('rag-storage-quota-info');
     const estimate = await storage().getStorageEstimate();
-    if (node) node.textContent = estimate.quota ? `💾 IndexedDB: ${formatBytes(estimate.usage)} de ${formatBytes(estimate.quota)}` : '💾 IndexedDB local';
+    const dbIcon = '<svg class="ui-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>';
+    if (node) node.innerHTML = estimate.quota ? `${dbIcon} <span>IndexedDB: ${formatBytes(estimate.usage)} de ${formatBytes(estimate.quota)}</span>` : `${dbIcon} <span>IndexedDB local</span>`;
   }
 
   async function refresh() {
