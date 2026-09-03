@@ -1114,7 +1114,17 @@
 
   function handleSaveProfile() {
     if (UISettings.handleSaveProfile) {
-      UISettings.handleSaveProfile(elements, appConfig, populateProfileSelector);
+      const savedConfig = UISettings.handleSaveProfile(elements, appConfig, populateProfileSelector);
+      if (savedConfig) {
+        if (Storage.saveConfig) {
+          Storage.saveConfig(savedConfig);
+        }
+        appConfig = savedConfig;
+        if (chatHistory.length > 0 && chatHistory[0].role === 'system') {
+          chatHistory[0].content = appConfig.systemPrompt || '';
+        }
+        updateUIFromConfig();
+      }
     }
   }
 

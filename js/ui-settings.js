@@ -20,7 +20,9 @@
   function getStorage() {
     return (typeof window !== 'undefined' && window.ChatStorage)
       ? window.ChatStorage
-      : (typeof require !== 'undefined' ? (function () { try { return require('./cookies.js'); } catch (e) { return null; } })() : null);
+      : (typeof globalThis !== 'undefined' && (globalThis.ChatStorage || globalThis.Storage))
+        ? (globalThis.ChatStorage || globalThis.Storage)
+        : (typeof require !== 'undefined' ? (function () { try { return require('./cookies.js'); } catch (e) { return null; } })() : null);
   }
 
   function getAgentCore() {
@@ -238,7 +240,8 @@
       enableRawLogs: elements?.settingEnableRawLogs ? elements.settingEnableRawLogs.checked : Boolean(appConfig?.enableRawLogs),
       enableDebugMessages: Boolean(appConfig?.enableDebugMessages),
       sendDateTime: elements?.settingSendDateTime ? elements.settingSendDateTime.checked : true,
-      activeRagBranchId: appConfig?.activeRagBranchId || ''
+      activeRagBranchId: appConfig?.activeRagBranchId || '',
+      activeRagBranchIds: Array.isArray(appConfig?.activeRagBranchIds) ? [...appConfig.activeRagBranchIds] : []
     };
   }
 
@@ -258,18 +261,23 @@
     const name = elements?.settingProfileName ? elements.settingProfileName.value.trim() : '';
     if (!name) {
       showProfileFeedback(elements, t('err_profile_name_empty') || 'Por favor, escribe un nombre para el perfil.', 'error');
-      return;
+      return null;
     }
 
     const currentConfig = gatherCurrentFormConfig(elements, appConfig);
+    currentConfig.activeProfileName = name;
     const Storage = getStorage();
     if (Storage?.saveProfile) {
       Storage.saveProfile(name, currentConfig);
-      if (typeof populateProfileSelector === 'function') {
-        populateProfileSelector(name);
-      }
-      showProfileFeedback(elements, t('msg_profile_saved', { name }) || `Perfil "${name}" guardado con éxito.`, 'success');
     }
+    if (Storage?.saveConfig) {
+      Storage.saveConfig(currentConfig);
+    }
+    if (typeof populateProfileSelector === 'function') {
+      populateProfileSelector(name);
+    }
+    showProfileFeedback(elements, t('msg_profile_saved', { name }) || `Perfil "${name}" guardado con éxito.`, 'success');
+    return currentConfig;
   }
 
   function handleDeleteProfile(elements, populateProfileSelector, applyProfile) {

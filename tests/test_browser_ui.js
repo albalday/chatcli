@@ -571,7 +571,30 @@ test('Browser UI - Fase 6: Modales <dialog> Modernos con Blur y Tarjetas de Herr
     const isSecondTabActive = await tabButtons[1].evaluate(el => el.classList.contains('active'));
     assert.ok(isSecondTabActive, 'Hacer click en la pestaña debe marcarla como .active');
 
-    // 3. Cerrar el modal con el botón de cerrar
+    // 2b. Validar que Guardar Perfil (#btn-save-profile) persiste la configuración activa sin cerrar el modal
+    await tabButtons[0].click();
+    await page.fill('#setting-profile-name', 'Perfil Temporal Playwright');
+    await page.fill('#setting-api-url', 'http://playwright-test:1234/v1');
+    await page.click('#btn-save-profile');
+
+    const profileSaveResult = await page.evaluate(() => {
+      const dialog = document.getElementById('settings-dialog');
+      const feedback = document.getElementById('profile-action-feedback');
+      const loadedCfg = window.ChatStorage?.loadConfig ? window.ChatStorage.loadConfig() : null;
+      return {
+        isOpen: dialog.open,
+        feedbackVisible: feedback && feedback.style.display !== 'none',
+        savedUrl: loadedCfg?.apiUrl,
+        savedProfile: loadedCfg?.activeProfileName
+      };
+    });
+
+    assert.ok(profileSaveResult.isOpen, 'Guardar el perfil NO debe cerrar el diálogo modal');
+    assert.ok(profileSaveResult.feedbackVisible, 'Debe mostrar retroalimentación de guardado de perfil');
+    assert.equal(profileSaveResult.savedUrl, 'http://playwright-test:1234/v1', 'Debe persistir inmediatamente apiUrl en Storage');
+    assert.equal(profileSaveResult.savedProfile, 'Perfil Temporal Playwright', 'Debe persistir el perfil activo en Storage');
+
+    // 3. Cerrar el modal con el botón de cerrar (sin dar a Guardar general)
     await page.click('#btn-close-settings');
     await page.waitForFunction(() => !document.getElementById('settings-dialog')?.open);
     const isClosed = await page.$eval('#settings-dialog', el => !el.open);
