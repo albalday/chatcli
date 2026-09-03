@@ -524,9 +524,6 @@
   function updateConnectionTokensBadge(stats) {
     if (!elements.connectionTokensBadge) return;
 
-    const maxTokens = ContextManager.getModelContextLimit ? ContextManager.getModelContextLimit(appConfig.model, appConfig.apiType) : 128000;
-    const maxFormatted = formatTokenCount(maxTokens);
-
     // Mostrar la insignia únicamente si el servidor devolvió explícitamente usage (promptTokens o totalTokens)
     const promptTok = (stats && typeof stats === 'object') ? (stats.promptTokens || stats.totalTokens || 0) : 0;
 
@@ -536,17 +533,14 @@
     }
 
     const usedFormatted = formatTokenCount(promptTok);
-    const percentage = maxTokens > 0 ? ((promptTok / maxTokens) * 100).toFixed(1) : '0';
 
     if (elements.connectionTokensText) {
-      elements.connectionTokensText.textContent = `${usedFormatted} / ${maxFormatted} tok`;
+      elements.connectionTokensText.textContent = `${usedFormatted} tok`;
     }
 
     const titleText = t('tokens_badge_title', {
-      used: promptTok.toLocaleString(),
-      limit: maxTokens.toLocaleString(),
-      percent: percentage
-    }) || `Contexto de conversación: ${promptTok.toLocaleString()} / ${maxTokens.toLocaleString()} tokens (${percentage}% ocupado)`;
+      used: promptTok.toLocaleString()
+    }) || `Tokens de contexto: ${promptTok.toLocaleString()} tokens`;
 
     elements.connectionTokensBadge.setAttribute('title', titleText);
     elements.connectionTokensBadge.style.display = 'inline-flex';
