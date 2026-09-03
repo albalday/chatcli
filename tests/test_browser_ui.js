@@ -503,3 +503,100 @@ test('Browser UI - Fase 5: Barra Lateral de Conversaciones Moderna, Grupos y Dra
     await browser.close();
   }
 });
+
+test('Browser UI - Fase 6: Modales <dialog> Modernos con Blur y Tarjetas de Herramientas', async () => {
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+    const filePath = 'file://' + path.resolve(__dirname, '../zerochat.html');
+    await page.goto(filePath, { waitUntil: 'load' });
+    await page.waitForSelector('#welcome-banner');
+
+    // 1. Abrir diálogo de Configuración y validar propiedades de modal moderno
+    await page.click('#btn-open-settings');
+    await page.waitForFunction(() => document.getElementById('settings-dialog')?.open);
+
+    const dialogMetrics = await page.evaluate(() => {
+      const dialog = document.getElementById('settings-dialog');
+      const style = getComputedStyle(dialog);
+      return {
+        borderRadius: parseFloat(style.borderRadius),
+        boxShadow: style.boxShadow,
+        display: style.display
+      };
+    });
+
+    assert.equal(dialogMetrics.display, 'flex', 'El diálogo abierto debe tener display: flex');
+    assert.ok(dialogMetrics.borderRadius >= 16, `El radio de curvatura (${dialogMetrics.borderRadius}px) debe ser moderno (>= 16px / 1.25rem)`);
+    assert.notEqual(dialogMetrics.boxShadow, 'none', 'El modal debe tener elevación con sombra');
+
+    // 2. Navegar entre pestañas del modal (Ej. pestaña Proveedores / Herramientas)
+    const tabButtons = await page.$$('.modal-tab-btn');
+    assert.ok(tabButtons.length >= 2, 'Debe haber múltiples pestañas en el modal de configuración');
+
+    // Hacer click en la segunda pestaña
+    await tabButtons[1].click();
+    const isSecondTabActive = await tabButtons[1].evaluate(el => el.classList.contains('active'));
+    assert.ok(isSecondTabActive, 'Hacer click en la pestaña debe marcarla como .active');
+
+    // 3. Cerrar el modal con el botón de cerrar
+    await page.click('#btn-close-settings');
+    await page.waitForFunction(() => !document.getElementById('settings-dialog')?.open);
+    const isClosed = await page.$eval('#settings-dialog', el => !el.open);
+    assert.ok(isClosed, 'El diálogo debe cerrarse correctamente');
+
+    // 4. Validar renderizado de Tarjetas de Herramientas (Tool Cards) en el chat
+    await page.evaluate(() => {
+      const messagesList = document.getElementById('messages-list');
+      const wrapper = document.createElement('div');
+      wrapper.className = 'message-wrapper assistant';
+      wrapper.innerHTML = `
+        <div class="message-row assistant">
+          <div class="message-content-wrapper">
+            <div class="tool-card-wrapper">
+              <div class="tool-execution-card">
+                <div class="tool-card-header">
+                  <div class="tool-card-title">
+                    <span>⚡</span>
+                    <span>execute_javascript</span>
+                  </div>
+                  <div class="tool-card-header-actions">
+                    <span class="tool-card-badge status-success">✅ Completado (42ms)</span>
+                    <button type="button" class="btn-tool-collapse">▾</button>
+                  </div>
+                </div>
+                <div class="tool-card-collapsible-body">
+                  <div class="tool-card-result">
+                    <pre class="tool-card-code"><code>console.log("Prueba Fase 6");</code></pre>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+      messagesList.appendChild(wrapper);
+    });
+
+    // Validar estilos de la tarjeta de herramienta
+    const cardInfo = await page.evaluate(() => {
+      const card = document.querySelector('.tool-execution-card');
+      const badge = document.querySelector('.tool-card-badge');
+      const header = document.querySelector('.tool-card-header');
+      const cardStyle = getComputedStyle(card);
+      const badgeStyle = getComputedStyle(badge);
+      const headerStyle = getComputedStyle(header);
+      return {
+        cardRadius: parseFloat(cardStyle.borderRadius),
+        badgeRadius: parseFloat(badgeStyle.borderRadius),
+        headerBg: headerStyle.backgroundColor
+      };
+    });
+
+    assert.ok(cardInfo.cardRadius >= 8, 'La tarjeta de herramienta debe tener bordes redondeados (>= 8px)');
+    assert.ok(cardInfo.badgeRadius >= 12, 'El badge de estado de la tarjeta debe tener estilo píldora');
+    assert.ok(cardInfo.headerBg, 'La cabecera de la herramienta debe tener un fondo de superficie asignado');
+  } finally {
+    await browser.close();
+  }
+});

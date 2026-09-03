@@ -1,33 +1,38 @@
 /* ==========================================================================
    Modal de Configuración (<dialog>) con Pestañas y Footer Fijo
    ========================================================================== */
-.settings-modal {
+.settings-modal,
+.debug-interceptor-modal {
   margin: auto;
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-xl, 1.25rem);
   padding: 0;
   background-color: var(--bg-surface);
   color: var(--text-main);
-  max-width: 660px;
+  max-width: 680px;
   width: 94vw;
   max-height: calc(var(--app-height, 100dvh) * 0.88);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-xl);
   animation: modalScale 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.settings-modal:not([open]) {
+.settings-modal:not([open]),
+.debug-interceptor-modal:not([open]) {
   display: none !important;
 }
 
-.settings-modal[open] {
+.settings-modal[open],
+.debug-interceptor-modal[open] {
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
 
-.settings-modal::backdrop {
-  background: rgba(15, 23, 42, 0.5);
-  backdrop-filter: blur(4px);
+.settings-modal::backdrop,
+.debug-interceptor-modal::backdrop {
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 .modal-header {
@@ -35,7 +40,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.8rem 1.2rem;
+  padding: 0.85rem 1.25rem;
   border-bottom: 1px solid var(--border-color);
   background-color: var(--bg-surface);
 }
@@ -50,24 +55,28 @@
 .modal-title h3 {
   font-size: 1.05rem;
   font-weight: 600;
+  margin: 0;
 }
 
 .btn-close {
   background: transparent;
-  border: none;
+  border: 1px solid transparent;
   color: var(--text-muted);
   cursor: pointer;
-  padding: 0.25rem;
-  border-radius: var(--radius-sm);
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background-color 0.15s, color 0.15s;
+  transition: all 0.15s ease;
+  font-size: 1rem;
 }
 
 .btn-close:hover {
-  background-color: #f1f5f9;
+  background-color: var(--bg-hover);
   color: var(--text-main);
+  border-color: var(--border-color);
 }
 
 /* Navegación por pestañas */
