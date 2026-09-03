@@ -86,7 +86,7 @@
       category: 'web',
       metadata: { icon: '🔍', label: definition.name },
       settings: {
-        titleKey: 'agent_search_title', titleFallback: '🔍 Búsqueda en DuckDuckGo en Tiempo Real',
+        titleKey: 'agent_search_title', titleFallback: 'Búsqueda en DuckDuckGo en Tiempo Real',
         descKey: 'agent_search_desc', descFallback: 'Permite al modelo invocar search_web para buscar información actualizada, definiciones, noticias y enlaces web mediante la API de DuckDuckGo.',
         icon: '🔍', defaultEnabled: true, showInSettings: true
       },

@@ -77,7 +77,7 @@
       category: 'web',
       metadata: { icon: '🌐', label: definition.name },
       settings: {
-        titleKey: 'agent_web_title', titleFallback: '🌐 Navegación Web en Tiempo Real',
+        titleKey: 'agent_web_title', titleFallback: 'Navegación Web en Tiempo Real',
         descKey: 'agent_web_desc', descFallback: 'Permite al modelo invocar fetch_web_page para consultar páginas web públicas y extraer su contenido textual en tiempo real.',
         icon: '🌐', defaultEnabled: true, showInSettings: true
       },

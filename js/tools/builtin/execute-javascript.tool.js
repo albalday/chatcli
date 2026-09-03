@@ -158,7 +158,7 @@
       metadata: { icon: '⚡', label: definition.name },
       settings: {
         titleKey: 'agent_js_title',
-        titleFallback: '⚡ Ejecución de JavaScript Local (Sandbox)',
+        titleFallback: 'Ejecución de JavaScript Local (Sandbox)',
         descKey: 'agent_js_desc',
         descFallback: 'Permite al modelo invocar execute_javascript para calcular, procesar datos o validar algoritmos en un entorno seguro en el navegador.',
         icon: '⚡',

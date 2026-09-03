@@ -109,10 +109,10 @@
       if (typeof navigator !== 'undefined' && navigator.clipboard) {
         await navigator.clipboard.writeText(text);
       }
-      const originalText = dom.btnCopyDebug.textContent;
-      dom.btnCopyDebug.textContent = '✅';
+      const originalHtml = dom.btnCopyDebug.innerHTML;
+      dom.btnCopyDebug.innerHTML = '<svg class="ui-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
       setTimeout(() => {
-        dom.btnCopyDebug.textContent = originalText;
+        dom.btnCopyDebug.innerHTML = originalHtml;
       }, 1500);
       return true;
     } catch (e) {
@@ -137,7 +137,7 @@
       entry.innerHTML = `
         <div class="debug-entry-header">
           <span class="debug-time">[${getFormattedTime()}]</span>
-          <span class="debug-tag raw">${isOutgoing ? '📤 RAW OUT' : '📥 RAW IN'}</span>
+          <span class="debug-tag raw">${isOutgoing ? 'RAW OUT' : 'RAW IN'}</span>
         </div>
         <div class="debug-msg">${Markdown.escapeHtml(text)}</div>
       `;
@@ -162,7 +162,7 @@
         entry.innerHTML = `
           <div class="debug-entry-header">
             <span class="debug-time">[${getFormattedTime()}]</span>
-            <span class="debug-tag thinking">🧠 ${t('debug_tag_thinking')}</span>
+            <span class="debug-tag thinking">${t('debug_tag_thinking')}</span>
           </div>
           <div class="debug-msg"></div>
         `;
@@ -253,9 +253,11 @@
       }
 
       let isMaximized = false;
-      dom.debugInterceptorDialog.classList.remove('maximized');
+      const MAXIMIZE_SVG = '<svg class="ui-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>';
+      const RESTORE_SVG = '<svg class="ui-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"></polyline><polyline points="20 10 14 10 14 4"></polyline><line x1="14" y1="10" x2="21" y2="3"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>';
+
       if (dom.btnMaximizeDebugModal) {
-        dom.btnMaximizeDebugModal.textContent = '⛶';
+        dom.btnMaximizeDebugModal.innerHTML = MAXIMIZE_SVG;
       }
 
       if (dom.debugModalEndpointBadge) {
@@ -287,7 +289,7 @@
         dom.btnMaximizeDebugModal.onclick = () => {
           isMaximized = !isMaximized;
           dom.debugInterceptorDialog.classList.toggle('maximized', isMaximized);
-          dom.btnMaximizeDebugModal.textContent = isMaximized ? '🗗' : '⛶';
+          dom.btnMaximizeDebugModal.innerHTML = isMaximized ? RESTORE_SVG : MAXIMIZE_SVG;
         };
       }
 
@@ -313,7 +315,7 @@
             const span = dom.btnCopyDebugJson.querySelector('span');
             if (span) {
               const old = span.textContent;
-              span.textContent = '✅ Copiado';
+              span.textContent = 'Copiado';
               setTimeout(() => { span.textContent = old; }, 1500);
             }
           } catch (e) {}

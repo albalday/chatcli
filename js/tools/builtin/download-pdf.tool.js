@@ -76,7 +76,7 @@
       category: 'web',
       metadata: { icon: '📄', label: definition.name },
       settings: {
-        titleKey: 'agent_pdf_title', titleFallback: '📄 Descarga y Lectura de Documentos PDF',
+        titleKey: 'agent_pdf_title', titleFallback: 'Descarga y Lectura de Documentos PDF',
         descKey: 'agent_pdf_desc', descFallback: 'Permite al modelo descargar documentos PDF desde la web y extraer todo su texto al contexto en tiempo real.',
         icon: '📄', defaultEnabled: true, showInSettings: true
       },

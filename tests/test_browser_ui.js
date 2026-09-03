@@ -1022,3 +1022,132 @@ test('Browser UI - Iconos Fase 5: Iconos Vectoriales SVG en Modales, Pestañas, 
     await browser.close();
   }
 });
+
+test('Fase 6: Verificación global de iconos SVG, accesibilidad y auditoría residual', async (t) => {
+  const browser = await chromium.launch({ headless: true });
+  const page = await browser.newPage();
+
+  try {
+    const fileUrl = 'file://' + path.resolve(__dirname, '../index.html');
+    await page.goto(fileUrl, { waitUntil: 'load' });
+
+    // 1. Verificar estructura y renderizado de SVGs
+    const svgValidation = await page.evaluate(() => {
+      const svgs = Array.from(document.querySelectorAll('svg.ui-icon'));
+      const allWellFormed = svgs.every(svg => {
+        return svg.tagName.toLowerCase() === 'svg' &&
+          svg.getAttribute('viewBox') === '0 0 24 24' &&
+          svg.children.length > 0;
+      });
+
+      // Validar dimensiones en SVGs actualmente visibles en pantalla
+      const visibleHeaderSvgs = Array.from(document.querySelectorAll('.top-header svg.ui-icon'));
+      const headerSvgsRendered = visibleHeaderSvgs.every(svg => {
+        const rect = svg.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+      });
+
+      // Validar que ninguna opción de selector de proveedor contiene emojis
+      const apiTypeSelect = document.getElementById('setting-api-type');
+      const optionsText = Array.from(apiTypeSelect?.options || []).map(o => o.textContent).join(' ');
+      const hasOptionEmojis = /🤖|🦙|🔀|🎭|✨/.test(optionsText);
+
+      // Validar que la cabecera, sidebar y controles de ajuste no contienen emojis residuales
+      const headerText = document.querySelector('.app-header')?.textContent || '';
+      const sidebarText = document.querySelector('.sidebar')?.textContent || '';
+      const settingsTabsText = document.querySelector('#settings-dialog .modal-tabs-nav')?.textContent || '';
+
+      const forbiddenEmojis = /⚡|📊|🌿|📤|📜|🧠|➕|🔍|🗑️|✏️|👁️|☀️|🌙/;
+      const hasHeaderEmojis = forbiddenEmojis.test(headerText);
+      const hasSidebarEmojis = /➕|🗑️|✏️/.test(sidebarText);
+      const hasSettingsTabsEmojis = /🌐|⚙️|🤖|🎨|🔍/.test(settingsTabsText);
+
+      return {
+        svgCount: svgs.length,
+        allWellFormed,
+        headerSvgsRendered,
+        hasOptionEmojis,
+        hasHeaderEmojis,
+        hasSidebarEmojis,
+        hasSettingsTabsEmojis
+      };
+    });
+
+    assert.ok(svgValidation.svgCount >= 20, `Debe haber al menos 20 iconos vectoriales en la interfaz (encontrados: ${svgValidation.svgCount})`);
+    assert.ok(svgValidation.allWellFormed, 'Todos los iconos SVG deben estar bien formados con viewBox="0 0 24 24" y trazo vectorial');
+    assert.ok(svgValidation.headerSvgsRendered, 'Los iconos SVG visibles en la cabecera deben renderizarse con dimensiones positivas');
+    assert.equal(svgValidation.hasOptionEmojis, false, 'El selector de proveedor no debe contener emojis');
+    assert.equal(svgValidation.hasHeaderEmojis, false, 'La cabecera no debe contener emojis residuales');
+    assert.equal(svgValidation.hasSidebarEmojis, false, 'La barra lateral no debe contener emojis residuales');
+    assert.equal(svgValidation.hasSettingsTabsEmojis, false, 'Las pestañas de configuración no deben contener emojis residuales');
+
+    // 2. Verificar alternancia de temas claro/oscuro y stroke de currentColor
+    const themeTest = await page.evaluate(() => {
+      const btnThemeLight = document.getElementById('btn-theme-light');
+      const btnThemeDark = document.getElementById('btn-theme-dark');
+      btnThemeDark.click();
+      const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+
+      // Verificar que los SVGs usan currentColor
+      const sampleSvg = document.querySelector('.app-header svg.ui-icon');
+      const strokeAttr = sampleSvg?.getAttribute('stroke');
+
+      btnThemeLight.click();
+      const isLight = !document.documentElement.getAttribute('data-theme') || document.documentElement.getAttribute('data-theme') === 'light';
+
+      return {
+        isDark,
+        isLight,
+        usesCurrentColor: strokeAttr === 'currentColor'
+      };
+    });
+
+    assert.ok(themeTest.isDark, 'Debe activar correctamente el tema oscuro');
+    assert.ok(themeTest.isLight, 'Debe activar correctamente el tema claro');
+    assert.ok(themeTest.usesCurrentColor, 'Los iconos vectoriales deben usar stroke="currentColor" para heredar contraste dinámicamente');
+
+    // 3. Verificar inspector de capacidades con SVGs vectoriales
+    const inspectorCapSvgs = await page.evaluate(() => {
+      // Simular reporte en UIInspector
+      const fakeReport = {
+        provider: { id: 'openai', label: 'OpenAI Test' },
+        endpoint: { normalized: 'https://api.openai.com/v1/chat/completions' },
+        model: { selected: 'gpt-4o', totalDiscovered: 1 },
+        inspectionTimeMs: 120,
+        capabilities: {
+          streaming: { status: 'confirmed', detail: 'OK' },
+          tools: { status: 'confirmed', detail: 'OK' },
+          vision: { status: 'confirmed', detail: 'OK' },
+          reasoning: { status: 'confirmed', detail: 'OK' }
+        }
+      };
+
+      const elements = {
+        inspectorResults: document.getElementById('inspector-results')
+      };
+
+      const inspector = window.ChatUIInspector || window.UIInspector;
+      if (inspector && typeof inspector.renderInspectorReport === 'function') {
+        inspector.renderInspectorReport(elements, fakeReport);
+      }
+
+      const capCards = Array.from(document.querySelectorAll('#inspector-results .inspector-cap-card'));
+      const cardsHaveSvgs = capCards.length > 0 && capCards.every(c => !!c.querySelector('.cap-card-title svg.ui-icon'));
+      const text = document.getElementById('inspector-results')?.textContent || '';
+      const hasCapEmojis = /📡|⚙️|👁️|🧠|📋|💾|🔢|🤖/.test(text);
+
+      return {
+        cardCount: capCards.length,
+        cardsHaveSvgs,
+        hasCapEmojis
+      };
+    });
+
+    assert.ok(inspectorCapSvgs.cardCount >= 4, 'Deben renderizarse las tarjetas de capacidad en el inspector');
+    assert.ok(inspectorCapSvgs.cardsHaveSvgs, 'Todas las tarjetas de capacidad deben renderizar iconos SVG vectoriales');
+    assert.equal(inspectorCapSvgs.hasCapEmojis, false, 'Las tarjetas de capacidad no deben contener emojis residuales');
+
+  } finally {
+    await browser.close();
+  }
+});

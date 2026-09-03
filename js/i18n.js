@@ -158,7 +158,7 @@
       cache_hit_log: '⚡ Caché de contexto activa: {cached} tokens leídos de caché.',
 
       // Respuestas agénticas y herramientas
-      tool_js_title: '⚡ Herramienta Ejecutada: execute_javascript ({ms}ms)',
+      tool_js_title: 'Herramienta Ejecutada: execute_javascript ({ms}ms)',
       tool_js_title_running: 'Ejecutar JavaScript',
       tool_badge_executing: 'Ejecutando...',
       tool_badge_fetching: 'Consultando...',
@@ -246,22 +246,22 @@
       theme_light: 'Modo Claro',
       theme_dark: 'Modo Oscuro',
       agent_intro: 'Configura las herramientas agénticas y el contexto temporal que se transmiten al modelo.',
-      agent_search_title: '🔍 Búsqueda en DuckDuckGo en Tiempo Real',
+      agent_search_title: 'Búsqueda en DuckDuckGo en Tiempo Real',
       agent_search_desc: 'Permite al modelo invocar search_web para buscar información actualizada, definiciones, noticias y enlaces web mediante la API de DuckDuckGo.',
-      agent_js_title: '⚡ Ejecución de JavaScript Local (Sandbox)',
+      agent_js_title: 'Ejecución de JavaScript Local (Sandbox)',
       agent_js_desc: 'Permite al modelo invocar execute_javascript para calcular, procesar datos o validar algoritmos en un entorno seguro en el navegador.',
-      agent_web_title: '🌐 Navegación Web en Tiempo Real',
+      agent_web_title: 'Navegación Web en Tiempo Real',
       agent_web_desc: 'Permite al modelo invocar fetch_web_page para consultar páginas web públicas y extraer su contenido textual en tiempo real.',
-      agent_pdf_title: '📄 Descarga y Lectura de Documentos PDF',
+      agent_pdf_title: 'Descarga y Lectura de Documentos PDF',
       agent_pdf_desc: 'Permite al modelo descargar documentos PDF desde la web y extraer todo su texto al contexto en tiempo real.',
-      agent_chart_title: '📊 Visualización de Datos y Gráficos Nativos (SVG)',
+      agent_chart_title: 'Visualización de Datos y Gráficos Nativos (SVG)',
       agent_chart_desc: 'Permite al modelo invocar render_chart para generar y mostrar gráficos interactivos de barras, líneas o sectores sin librerías externas.',
-      agent_cache_title: '⚡ Caché de Contexto (Context / Prompt Caching)',
+      agent_cache_title: 'Caché de Contexto (Context / Prompt Caching)',
       agent_cache_desc: 'Reutiliza la caché de contexto (KV Cache / Prompt Caching) en servidores compatibles (OpenAI, Claude, OpenRouter, Gemini, LM Studio, vLLM) reduciendo latencia y coste. Se invalida y reconstruye automáticamente si borras mensajes del chat.',
-      agent_datetime_title: '🕒 Fecha y Hora Actual',
+      agent_datetime_title: 'Fecha y Hora Actual',
       agent_datetime_desc: 'Incluye la fecha en el sistema y permite al modelo consultar la hora exacta.',
       datetime_initial_user_msg: 'La fecha y hora actual es: {datetime}.',
-      agent_raw_logs_title: '📡 Captura de Tráfico Raw en Logs',
+      agent_raw_logs_title: 'Captura de Tráfico Raw en Logs',
       agent_raw_logs_desc: 'Registra todo el tráfico de red entrante y saliente (solicitudes HTTP, chunks SSE crudos y llamadas de herramientas) en la pestaña dedicada Raw del panel de logs.',
       field_system_prompt: 'Prompt del Sistema (Opcional)',
       field_system_prompt_hint: 'Instrucciones base personalizadas que guían el comportamiento del asistente (opcional).',
@@ -291,8 +291,8 @@
       err_file_process: 'No se pudo procesar el archivo {name}: {err}',
 
       // Markdown & Sandbox
-      md_thought_title: '💭 Proceso de razonamiento',
-      md_thought_reasoning: '💭 Razonando...',
+      md_thought_title: 'Proceso de razonamiento',
+      md_thought_reasoning: 'Razonando...',
       md_run_js_title: 'Ejecutar en sandbox local (sin acceso a red ni archivos)',
       md_run_js_btn: 'Ejecutar JS',
       md_copy_code_title: 'Copiar código',
@@ -337,7 +337,7 @@
       export_pdf_desc: 'Genera un documento PDF limpio maquetado para lectura e informes.',
 
       // Gráficos interactivos
-      tool_chart_title: '📊 Visualización de Datos ({type})',
+      tool_chart_title: 'Visualización de Datos ({type})',
 
       // Contexto del sistema de fecha/hora del mundo real
       system_context_prefix: '\n\n[INFORMACIÓN TEMPORAL DEL MUNDO REAL]\n- Fecha y hora actual del mundo real: {datetime}.\n- Año presente en el mundo real: {year}.\n- Contexto temporal obligatorio: Esta es la fecha y hora REAL y PRESENTE del mundo físico en el que se produce esta conversación. No es una fecha hipotética, ni una simulación, ni una fecha futura. Todo acontecimiento anterior a este momento pertenece al pasado, y el año actual es {year}. Responde y razona siempre tomando esta fecha como el momento presente real de hoy.',
@@ -487,7 +487,7 @@
       cache_hit_log: '⚡ Context cache active: {cached} tokens read from cache.',
 
       // Respuestas agénticas y herramientas
-      tool_js_title: '⚡ Tool Executed: execute_javascript ({ms}ms)',
+      tool_js_title: 'Tool Executed: execute_javascript ({ms}ms)',
       tool_js_title_running: 'Execute JavaScript',
       tool_badge_executing: 'Executing...',
       tool_badge_fetching: 'Fetching...',
@@ -575,22 +575,22 @@
       theme_light: 'Light Mode',
       theme_dark: 'Dark Mode',
       agent_intro: 'Configure agentic tools and temporal context passed to the model.',
-      agent_search_title: '🔍 Real-time DuckDuckGo Search',
+      agent_search_title: 'Real-time DuckDuckGo Search',
       agent_search_desc: 'Allows the model to call search_web to search for up-to-date information, definitions, news, and links using the DuckDuckGo API.',
-      agent_js_title: '⚡ Local JavaScript Execution (Sandbox)',
+      agent_js_title: 'Local JavaScript Execution (Sandbox)',
       agent_js_desc: 'Allows the model to call execute_javascript to compute, process data, or validate algorithms safely in the browser.',
-      agent_web_title: '🌐 Real-time Web Browsing',
+      agent_web_title: 'Real-time Web Browsing',
       agent_web_desc: 'Allows the model to call fetch_web_page to retrieve public web pages and extract their text content in real-time.',
-      agent_pdf_title: '📄 PDF Document Download & Reading',
+      agent_pdf_title: 'PDF Document Download & Reading',
       agent_pdf_desc: 'Allows the model to download PDF documents from the web and extract all readable text into context in real-time.',
-      agent_chart_title: '📊 Data Visualization & Native SVG Charts',
+      agent_chart_title: 'Data Visualization & Native SVG Charts',
       agent_chart_desc: 'Allows the model to call render_chart to generate and display interactive bar, line, doughnut or pie charts without external libraries.',
-      agent_cache_title: '⚡ Context / Prompt Caching',
+      agent_cache_title: 'Context / Prompt Caching',
       agent_cache_desc: 'Reuses context cache (KV Cache / Prompt Caching) on compatible servers (OpenAI, Claude, OpenRouter, Gemini, LM Studio, vLLM) reducing latency and costs. Automatically invalidated and rebuilt if you delete messages from chat.',
-      agent_datetime_title: '🕒 Current Date & Time',
+      agent_datetime_title: 'Current Date & Time',
       agent_datetime_desc: 'Includes date in system context and allows the model to query exact time.',
       datetime_initial_user_msg: 'The current date and time is: {datetime}.',
-      agent_raw_logs_title: '📡 Capture Raw Traffic in Logs',
+      agent_raw_logs_title: 'Capture Raw Traffic in Logs',
       agent_raw_logs_desc: 'Records all unmodified incoming and outgoing network traffic (HTTP requests, raw SSE chunks, and tool invocations) in the dedicated Raw tab of the logs panel.',
       field_system_prompt: 'System Prompt (Optional)',
       field_system_prompt_hint: 'Custom base instructions guiding the assistant behavior (optional).',
@@ -620,8 +620,8 @@
       err_file_process: 'Could not process file {name}: {err}',
 
       // Markdown & Sandbox
-      md_thought_title: '💭 Reasoning process',
-      md_thought_reasoning: '💭 Reasoning...',
+      md_thought_title: 'Reasoning process',
+      md_thought_reasoning: 'Reasoning...',
       md_run_js_title: 'Run in local sandbox (no network or files)',
       md_run_js_btn: 'Run JS',
       md_copy_code_title: 'Copy code',
@@ -666,7 +666,7 @@
       export_pdf_desc: 'Generates a clean PDF document formatted for reading and reports.',
 
       // Interactive Charts
-      tool_chart_title: '📊 Data Visualization ({type})',
+      tool_chart_title: 'Data Visualization ({type})',
 
       // Real-world temporal system context
       system_context_prefix: '\n\n[REAL-WORLD TEMPORAL INFORMATION]\n- Current real-world date and time: {datetime}.\n- Current real-world year: {year}.\n- Mandatory temporal context: This is the ACTUAL, REAL-WORLD PRESENT time of the physical world in which this conversation is occurring. It is NOT a hypothetical date, a simulation, or a future date. All events prior to this timestamp are in the past, and the current year is {year}. Always answer and reason taking this date and time as today\'s real-world present.',

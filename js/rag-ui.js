@@ -308,17 +308,17 @@
     if (!branchId) return;
 
     const btnExport = document.getElementById('btn-rag-export-branch');
-    const prevText = btnExport?.textContent;
+    const prevHtml = btnExport?.innerHTML;
     try {
       if (btnExport) {
         btnExport.disabled = true;
-        btnExport.textContent = '⏳ Exportando 0%...';
+        btnExport.textContent = 'Exportando 0%...';
       }
       const { blob, filename } = await storage().exportBranchBlob(branchId, {
         includeSources: false,
         compress: true,
         onProgress: ({ current, total, percent }) => {
-          if (btnExport) btnExport.textContent = `⏳ Exportando ${percent}% (${current}/${total})...`;
+          if (btnExport) btnExport.textContent = `Exportando ${percent}% (${current}/${total})...`;
         }
       });
       const url = URL.createObjectURL(blob);
@@ -327,14 +327,14 @@
       anchor.download = filename;
       anchor.click();
       setTimeout(() => URL.revokeObjectURL(url), 10000);
-      if (btnExport) btnExport.textContent = '✅ ¡Exportado!';
+      if (btnExport) btnExport.textContent = '¡Exportado!';
       await new Promise(resolve => setTimeout(resolve, 1500));
     } catch (error) {
       alert(`Error al exportar la rama: ${error.message || error}`);
     } finally {
       if (btnExport) {
         btnExport.disabled = false;
-        btnExport.textContent = prevText || '⬇️ Respaldo';
+        if (prevHtml) btnExport.innerHTML = prevHtml;
       }
     }
   }
@@ -342,11 +342,11 @@
   async function importBranchFile(file) {
     if (!file) return null;
     const btnImport = document.getElementById('btn-rag-import-branch');
-    const prevText = btnImport?.textContent;
+    const prevHtml = btnImport?.innerHTML;
     try {
       if (btnImport) {
         btnImport.disabled = true;
-        btnImport.textContent = '⏳ Descomprimiendo...';
+        btnImport.textContent = 'Descomprimiendo...';
       }
       let text;
       try {
@@ -358,16 +358,16 @@
         throw err;
       }
       if (!text) throw new Error('El archivo de respaldo está vacío o no se pudo leer.');
-      if (btnImport) btnImport.textContent = '⏳ Restaurando 0%...';
+      if (btnImport) btnImport.textContent = 'Restaurando 0%...';
 
       const branch = await storage().importBranch(text, ({ current, total, percent }) => {
-        if (btnImport) btnImport.textContent = `⏳ Restaurando ${percent}% (${current}/${total})...`;
+        if (btnImport) btnImport.textContent = `Restaurando ${percent}% (${current}/${total})...`;
       });
       indexer()?.invalidateBranch(branch.id);
       await renderManageTab(branch.id);
       await renderActiveTab();
       await updateQuota();
-      alert(`✅ Rama "${branch.name}" restaurada con éxito.`);
+      alert(`Rama "${branch.name}" restaurada con éxito.`);
       return branch;
     } catch (error) {
       alert(`Error al restaurar: ${error.message || error}`);
@@ -375,7 +375,7 @@
     } finally {
       if (btnImport) {
         btnImport.disabled = false;
-        btnImport.textContent = prevText || '⬆️ Restaurar';
+        if (prevHtml) btnImport.innerHTML = prevHtml;
       }
     }
   }
