@@ -13,6 +13,13 @@ test('UIInspector - getBadgeClass, getBadgeIcon y getStatusLabel', () => {
   assert.ok(UIInspector.getStatusLabel('confirmed'));
 });
 
+test('UIInspector - identifica el bloqueo CORS de Ollama y muestra una solución breve', () => {
+  const help = UIInspector.getOllamaConnectionHelp('ollama', new Error('NetworkError when attempting to fetch resource.'));
+  assert.ok(help.includes('OLLAMA_ORIGINS=*'));
+  assert.equal(UIInspector.getOllamaConnectionHelp('openai', new Error('NetworkError when attempting to fetch resource.')), '');
+  assert.equal(UIInspector.getOllamaConnectionHelp('ollama', new Error('HTTP 404')), '');
+});
+
 test('UIInspector - populateModelList puebla datalist y selectHelper', () => {
   const datalistOptions = [];
   const selectOptions = [];
@@ -95,4 +102,3 @@ test('UIInspector - renderInspectorReport muestra error y no genera badges si la
   assert.equal(fakeResultsContainer.innerHTML.includes('cap-badge'), false, 'No debe renderizar badges de capacidades');
   assert.equal(fakeResultsContainer.innerHTML.includes('inspector-cap-grid'), false, 'No debe renderizar la cuadrícula de capacidades');
 });
-

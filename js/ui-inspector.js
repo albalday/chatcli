@@ -73,6 +73,13 @@
     }
   }
 
+  function getOllamaConnectionHelp(apiType, error) {
+    const type = String(apiType || '').trim().toLowerCase();
+    const message = String(error?.message || error || '');
+    const isBrowserNetworkError = /networkerror|failed to fetch|load failed|network request failed/i.test(message);
+    return type === 'ollama' && isBrowserNetworkError ? t('err_ollama_origins') : '';
+  }
+
   function loadCachedModels(elements, appConfig) {
     try {
       const Storage = getStorage();
@@ -211,7 +218,8 @@
       console.error('Error querying server models:', err);
       if (elements.serverQueryStatus) {
         elements.serverQueryStatus.className = 'server-query-status status-error';
-        elements.serverQueryStatus.innerHTML = t('err_api_connect', { err: escapeHtml(err.message || String(err)) });
+        const ollamaHelp = getOllamaConnectionHelp(apiType, err);
+        elements.serverQueryStatus.innerHTML = ollamaHelp || t('err_api_connect', { err: escapeHtml(err.message || String(err)) });
       }
     } finally {
       elements.btnQueryServer.disabled = false;
@@ -386,9 +394,10 @@
       renderInspectorReport(elements, report);
     } catch (err) {
       console.error('Error in Provider Inspector:', err);
+      const ollamaHelp = getOllamaConnectionHelp(apiType, err);
       elements.inspectorResults.innerHTML = `
         <div class="server-query-status status-error" style="display: block;">
-          ${escapeHtml(err.message || String(err))}
+          ${ollamaHelp || escapeHtml(err.message || String(err))}
         </div>
       `;
     } finally {
@@ -405,6 +414,7 @@
     handleQueryServer,
     handleRunInspector,
     renderInspectorReport,
+    getOllamaConnectionHelp,
     getBadgeClass,
     getBadgeIcon,
     getStatusLabel

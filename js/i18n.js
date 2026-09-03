@@ -287,6 +287,7 @@
       err_connecting_models: '⏳ Conectando con {url} para obtener modelos...',
       msg_models_success: '✅ <strong>{count} modelos detectados con éxito</strong> en <code>{endpoint}</code>.',
       err_api_connect: '❌ <strong>Error al conectar con la API:</strong> {err}',
+      err_ollama_origins: '❌ Ollama bloqueó el acceso desde el navegador. Añade <code>OLLAMA_ORIGINS=*</code> a su configuración y reinicia Ollama.',
       err_file_process: 'No se pudo procesar el archivo {name}: {err}',
 
       // Markdown & Sandbox
@@ -614,6 +615,7 @@
       err_connecting_models: '⏳ Connecting to {url} to fetch models...',
       msg_models_success: '✅ <strong>{count} models detected successfully</strong> at <code>{endpoint}</code>.',
       err_api_connect: '❌ <strong>Error connecting to API:</strong> {err}',
+      err_ollama_origins: '❌ Ollama blocked browser access. Add <code>OLLAMA_ORIGINS=*</code> to its configuration and restart Ollama.',
       err_file_process: 'Could not process file {name}: {err}',
 
       // Markdown & Sandbox
