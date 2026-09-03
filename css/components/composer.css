@@ -19,7 +19,7 @@
   flex-wrap: wrap;
   gap: 0.5rem;
   margin-bottom: 0.5rem;
-  max-width: var(--max-content-width, 48rem);
+  max-width: var(--max-content-width, 68rem);
   width: 100%;
   margin-left: auto;
   margin-right: auto;
@@ -88,7 +88,7 @@
   padding: 0.5rem 0.65rem 0.5rem 0.75rem;
   box-shadow: var(--shadow-composer);
   transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
-  max-width: var(--max-content-width, 48rem);
+  max-width: var(--max-content-width, 68rem);
   width: 100%;
   margin-left: auto;
   margin-right: auto;
@@ -447,7 +447,7 @@
   margin-bottom: 0.1rem;
   line-height: 1.4;
   user-select: none;
-  max-width: var(--max-content-width, 48rem);
+  max-width: var(--max-content-width, 68rem);
   margin-left: auto;
   margin-right: auto;
 }

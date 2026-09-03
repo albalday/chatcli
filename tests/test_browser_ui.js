@@ -264,8 +264,8 @@ test('Browser UI - Fase 3: Canvas de Mensajes Centrado, Tipografía y Markdown',
       };
     });
 
-    assert.ok(canvasMetrics.userWidth <= 800, `El ancho de mensaje (${canvasMetrics.userWidth}px) debe respetar el canvas de lectura max-width: 48rem`);
-    assert.ok(canvasMetrics.astWidth <= 800, `El ancho del asistente (${canvasMetrics.astWidth}px) debe respetar el canvas de lectura max-width: 48rem`);
+    assert.ok(canvasMetrics.userWidth <= 1120 && canvasMetrics.userWidth > 900, `El ancho de mensaje (${canvasMetrics.userWidth}px) debe respetar el canvas de lectura ampliado max-width: 68rem`);
+    assert.ok(canvasMetrics.astWidth <= 1120 && canvasMetrics.astWidth > 900, `El ancho del asistente (${canvasMetrics.astWidth}px) debe respetar el canvas de lectura ampliado max-width: 68rem`);
 
     // 2. Validar acordeón de razonamiento plegable
     const thoughtInfo = await page.evaluate(() => {
@@ -335,7 +335,7 @@ test('Browser UI - Fase 4: Composer Flotante Omnibox, Auto-expansión y Botones 
     });
 
     assert.ok(composerMetrics.borderRadius >= 20, `El radio de curvatura (${composerMetrics.borderRadius}px) debe ser estilo omnibox (>= 20px / 1.5rem)`);
-    assert.ok(composerMetrics.width <= 800, `El ancho del composer (${composerMetrics.width}px) debe alinearse con max-width: 48rem`);
+    assert.ok(composerMetrics.width <= 1120 && composerMetrics.width > 900, `El ancho del composer (${composerMetrics.width}px) debe alinearse con max-width: 68rem`);
     assert.notEqual(composerMetrics.boxShadow, 'none', 'El composer debe tener elevación mediante sombra');
 
     // 2. Validar autoexpansión del textarea al introducir múltiples líneas
