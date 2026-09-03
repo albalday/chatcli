@@ -56,6 +56,17 @@ test('ChatEngine - injectStreamingCursor inserta el cursor antes de cerrar etiqu
   assert.equal(resEmpty, '<span class="streaming-cursor"></span>');
 });
 
+test('ChatEngine - adjunta las imágenes recuperadas cuando el usuario las solicita', () => {
+  const image = '![Página 1](rag-image://doc_boeing:img_1)';
+  const imageRequest = [{ role: 'user', content: 'Sácame las imágenes del documento.' }];
+  const result = ChatEngine.appendRetrievedImages('Aquí tienes la imagen:', [image], imageRequest, 'es');
+
+  assert.match(result, /### Imágenes extraídas/);
+  assert.match(result, /rag-image:\/\/doc_boeing:img_1/);
+  assert.equal(ChatEngine.appendRetrievedImages('Respuesta factual.', [image], [{ role: 'user', content: '¿Cuál es el importe?' }]), 'Respuesta factual.');
+  assert.equal(ChatEngine.appendRetrievedImages(image, [image], imageRequest), image);
+});
+
 test('ChatEngine - buildEffectiveMessages inyecta fecha, RAG y formatea mensajes', (t) => {
   const history = [
     { role: 'user', content: '¿Qué manuales tengo disponibles?' }
@@ -200,6 +211,42 @@ test('ChatEngine - executeAgentTurnLoop ejecuta llamadas a herramientas y genera
   assert.equal(history[3].role, 'assistant');
 
   ChatAPI.streamChatCompletion = originalStream;
+});
+
+test('ChatEngine - incorpora imágenes de RAG aunque el modelo omita su Markdown', async () => {
+  const originalStream = ChatAPI.streamChatCompletion;
+  const originalDispatch = ChatAgentCore.dispatchToolCall;
+  const image = '![Página 1](rag-image://doc_boeing:img_1)';
+  let callCount = 0;
+
+  ChatAPI.streamChatCompletion = async (params) => {
+    callCount++;
+    if (callCount === 1) {
+      const toolCalls = [{ id: 'call_image', type: 'function', function: { name: 'read_knowledge_chunk', arguments: JSON.stringify({ chunkId: 'doc_boeing:chunk:0' }) } }];
+      if (params.onDone) params.onDone('', null, toolCalls);
+      return { accumulatedText: '', toolCalls, stats: null };
+    }
+    const response = 'A continuación se muestra la imagen extraída.';
+    if (params.onDone) params.onDone(response, null, null);
+    return { accumulatedText: response, toolCalls: null, stats: null };
+  };
+  ChatAgentCore.dispatchToolCall = async () => ({
+    success: true,
+    result: { imageMarkdown: [image] },
+    resultText: 'Fragmento recuperado.',
+    markdownBlock: ''
+  });
+
+  const history = [{ role: 'user', content: 'Sácame las imágenes del documento Boeing.' }];
+  const result = await ChatEngine.executeAgentTurnLoop({
+    apiUrl: 'http://localhost:1234/v1', apiType: 'openai', model: 'test-model',
+    chatHistory: history, appConfig: { language: 'es', activeRagBranchId: 'branch_test' }
+  });
+
+  assert.match(result.finalAssistantText, /A continuación se muestra/);
+  assert.match(result.finalAssistantText, /rag-image:\/\/doc_boeing:img_1/);
+  ChatAPI.streamChatCompletion = originalStream;
+  ChatAgentCore.dispatchToolCall = originalDispatch;
 });
 
 test('ChatEngine - executeAgentTurnLoop protege contra bucles infinitos repetidos', async (t) => {
