@@ -759,18 +759,31 @@ test('Browser UI - Iconos Fase 2: Iconos Vectoriales SVG en Header Superior y Co
     await page.waitForFunction(() => document.getElementById('reasoning-menu')?.style.display !== 'none');
 
     const menuHeaderInfo = await page.evaluate(() => {
+      const menu = document.getElementById('reasoning-menu');
       const header = document.querySelector('.reasoning-menu-header');
+      const options = document.querySelector('.reasoning-options');
+      const lowOption = document.querySelector('.reasoning-option[data-level="low"]');
+      const lowIcon = lowOption?.querySelector('.option-icon');
+      const lowText = lowOption?.querySelector('.option-text');
       const svg = header?.querySelector('svg');
       const text = header?.textContent || '';
       return {
         hasSvg: !!svg,
         hasEmoji: text.includes('🧠'),
-        text: text.trim()
+        text: text.trim(),
+        flexDirection: menu ? getComputedStyle(menu).flexDirection : '',
+        headerBottom: header?.getBoundingClientRect().bottom || 0,
+        optionsTop: options?.getBoundingClientRect().top || 0,
+        lowIconRight: lowIcon?.getBoundingClientRect().right || 0,
+        lowTextLeft: lowText?.getBoundingClientRect().left || 0
       };
     });
 
     assert.ok(menuHeaderInfo.hasSvg, 'La cabecera del menú de razonamiento debe contener un SVG (brain)');
     assert.equal(menuHeaderInfo.hasEmoji, false, 'La cabecera del menú no debe contener el emoji 🧠');
+    assert.equal(menuHeaderInfo.flexDirection, 'column', 'El menú de razonamiento debe apilar cabecera y opciones verticalmente');
+    assert.ok(menuHeaderInfo.optionsTop >= menuHeaderInfo.headerBottom, 'Las opciones deben mostrarse debajo de la cabecera, no a su lado');
+    assert.ok(menuHeaderInfo.lowTextLeft - menuHeaderInfo.lowIconRight <= 10, 'El texto del nivel bajo debe quedar junto a su indicador');
   } finally {
     await browser.close();
   }

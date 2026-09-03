@@ -206,6 +206,8 @@
   min-width: 250px;
   max-width: 320px;
   overflow: hidden;
+  /* Se abre con display:flex desde ui-reasoning.js. Mantener cabecera y opciones apiladas. */
+  flex-direction: column;
   animation: fadeIn 0.15s ease-out;
 }
 
@@ -225,9 +227,12 @@
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
+  min-width: 0;
 }
 
 .reasoning-model-badge {
+  flex: 0 1 auto;
+  max-width: 112px;
   font-size: 0.7rem;
   font-weight: 500;
   padding: 0.15rem 0.45rem;
@@ -235,6 +240,9 @@
   background-color: var(--bg-surface);
   border: 1px solid var(--border-color);
   color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .reasoning-status-banner {
@@ -274,7 +282,8 @@
 .reasoning-option {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
+  gap: 0.45rem;
   padding: 0.45rem 0.75rem;
   border-radius: var(--radius-md);
   border: 1px solid transparent;
@@ -285,6 +294,10 @@
   transition: all 0.15s ease;
   width: 100%;
   text-align: left;
+}
+
+.reasoning-option .option-text {
+  min-width: 0;
 }
 
 .reasoning-option:hover {
