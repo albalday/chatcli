@@ -60,7 +60,7 @@
   min-height: 0;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  padding: 3.2rem 0.5rem 0.75rem 0.5rem;
+  padding: 1.25rem 0.75rem 1rem 0.75rem;
   display: flex;
   flex-direction: column;
   gap: 1.25rem;

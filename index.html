@@ -56,14 +56,64 @@
     </div>
   </aside>
 
-  <!-- Botón flotante para abrir el historial de conversaciones en la esquina superior izquierda de la pantalla -->
-  <button type="button" id="btn-toggle-sidebar" class="btn-top-left-sidebar" data-i18n-title="btn_sidebar_title" title="Abrir historial de conversaciones">
-    <span>💬</span>
-    <span data-i18n="btn_open_history">Abrir historial</span>
-  </button>
+
 
   <!-- Contenedor Principal del Chat (Usa todo el alto de la página: 100vh) -->
   <main class="chat-container">
+    <!-- Barra Superior / Header estilo ChatGPT & Gemini -->
+    <header class="app-header">
+      <div class="header-left">
+        <button type="button" id="btn-toggle-sidebar" class="btn-header-icon" data-i18n-title="btn_sidebar_title" title="Abrir historial de conversaciones" aria-label="Abrir historial">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+            <line x1="9" y1="3" x2="9" y2="21"></line>
+          </svg>
+        </button>
+
+        <label class="badge-pill badge-profile" data-i18n-title="profile_badge_title" title="Perfil de conexión activo">
+          <span class="profile-icon">⚡</span>
+          <select id="active-profile-select" aria-label="Perfil de conexión activo"></select>
+        </label>
+
+        <div id="connection-tokens-badge" class="badge-pill badge-tokens" style="display: none;" title="Uso de tokens informado por el servidor">
+          <span class="tokens-icon">📊</span>
+          <span id="connection-tokens-text" class="tokens-text">0 tok</span>
+        </div>
+      </div>
+
+      <div class="header-center">
+        <span class="app-brand-title">ZeroChat</span>
+      </div>
+
+      <div class="header-right">
+        <button type="button" id="btn-open-rag" class="btn-header-tool btn-rag-mini" data-i18n-title="btn_rag_title" title="Gestionar conocimiento local">
+          <span>🌿</span>
+          <span class="btn-header-label" data-i18n="btn_rag">Conocimiento</span>
+        </button>
+        <button type="button" id="btn-quick-export" class="btn-header-tool" data-i18n-title="btn_export_chat_title" title="Exportar conversación (Markdown, JSON, PDF)">
+          <span>📤</span>
+          <span class="btn-header-label" data-i18n="btn_export_short">Exportar</span>
+        </button>
+        <button type="button" id="btn-clear-chat" class="btn-header-tool" data-i18n-title="btn_clear_chat_title" title="Limpiar conversación actual">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="3 6 5 6 21 6"></polyline>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+          </svg>
+          <span class="btn-header-label" data-i18n="btn_clear_chat">Limpiar</span>
+        </button>
+        <button type="button" id="btn-toggle-debug" class="btn-header-tool btn-debug-toggle" data-i18n-title="btn_logs_title" title="Abrir/Cerrar panel lateral de logs y depuración">
+          <span class="debug-toggle-icon">📜</span>
+          <span class="btn-header-label" data-i18n="btn_logs">Logs y Debug</span>
+        </button>
+        <button type="button" id="btn-open-settings" class="btn-header-tool btn-config-mini" data-i18n-title="btn_settings_title" title="Abrir configuración de API y Modelo">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+          <span class="btn-header-label" data-i18n="btn_settings">Configuración</span>
+        </button>
+      </div>
+    </header>
     <div id="messages-list" class="messages-list">
       <!-- Estado de Bienvenida inicial -->
       <div id="welcome-banner" class="welcome-banner">
@@ -89,48 +139,7 @@
       <!-- Previsualización de archivos adjuntos -->
       <div id="attachments-container" class="attachments-container" style="display: none;"></div>
 
-      <!-- Barra de herramientas y configuración compacta al lado de la pregunta -->
-      <div class="input-toolbar-top">
-        <div class="toolbar-left">
-          <label class="badge-pill badge-profile" data-i18n-title="profile_badge_title" title="Perfil de conexión activo">
-            <span class="profile-icon">⚡</span>
-            <select id="active-profile-select" aria-label="Perfil de conexión activo"></select>
-          </label>
-          <div id="connection-tokens-badge" class="badge-pill badge-tokens" style="display: none;" title="Uso de tokens informado por el servidor">
-            <span class="tokens-icon">📊</span>
-            <span id="connection-tokens-text" class="tokens-text">0 tok</span>
-          </div>
-        </div>
-        <div class="toolbar-right">
-          <button type="button" id="btn-open-rag" class="btn-tool-mini btn-rag-mini" data-i18n-title="btn_rag_title" title="Gestionar conocimiento local">
-            <span>🌿</span>
-            <span data-i18n="btn_rag">Conocimiento</span>
-          </button>
-          <button type="button" id="btn-quick-export" class="btn-tool-mini" data-i18n-title="btn_export_chat_title" title="Exportar conversación (Markdown, JSON, PDF)">
-            <span>📤</span>
-            <span data-i18n="btn_export_short">Exportar</span>
-          </button>
-          <button type="button" id="btn-clear-chat" class="btn-tool-mini" data-i18n-title="btn_clear_chat_title" title="Limpiar conversación actual">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="3 6 5 6 21 6"></polyline>
-              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-            </svg>
-            <span data-i18n="btn_clear_chat">Limpiar</span>
-          </button>
 
-          <button type="button" id="btn-toggle-debug" class="btn-tool-mini btn-debug-toggle" data-i18n-title="btn_logs_title" title="Abrir/Cerrar panel lateral de logs y depuración">
-            <span class="debug-toggle-icon">📜</span>
-            <span data-i18n="btn_logs">Logs y Debug</span>
-          </button>
-          <button type="button" id="btn-open-settings" class="btn-tool-mini btn-config-mini" data-i18n-title="btn_settings_title" title="Abrir configuración de API y Modelo">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="3"></circle>
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-            </svg>
-            <span data-i18n="btn_settings">Configuración</span>
-          </button>
-        </div>
-      </div>
 
       <form id="chat-form" class="chat-input-container">
         <!-- Input oculto para selección de archivos -->

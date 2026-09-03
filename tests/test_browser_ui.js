@@ -106,24 +106,70 @@ test('Browser UI - Modo Oscuro y resolución de Design Tokens', async () => {
   }
 });
 
-test('Browser UI - Integridad del Layout e interactividad del DOM', async () => {
+test('Browser UI - Fase 2: Header Superior Moderno y Acciones Integradas', async () => {
   const browser = await chromium.launch({ headless: true });
   try {
     const page = await browser.newPage();
     const filePath = 'file://' + path.resolve(__dirname, '../zerochat.html');
     await page.goto(filePath, { waitUntil: 'load' });
 
-    // El sidebar debe estar inicialmente cerrado en vista estándar
-    const sidebarDisplay = await page.$eval('#chat-sidebar', el => getComputedStyle(el).display);
-    assert.equal(sidebarDisplay, 'none', 'El sidebar debe estar cerrado por defecto');
+    // 1. Verificar presencia y posición del header moderno
+    const headerInfo = await page.$eval('.app-header', el => {
+      const rect = el.getBoundingClientRect();
+      const style = getComputedStyle(el);
+      return {
+        exists: !!el,
+        position: style.position,
+        top: rect.top,
+        height: rect.height,
+        display: style.display
+      };
+    });
+    assert.ok(headerInfo.exists, 'El header (.app-header) debe existir');
+    assert.equal(headerInfo.display, 'flex', 'El header debe ser flex');
+    assert.ok(headerInfo.height >= 40, 'El header debe tener altura suficiente');
 
-    // El botón flotante para abrir sidebar debe existir
-    const hasToggleBtn = await page.$eval('#btn-toggle-sidebar', el => !!el);
-    assert.ok(hasToggleBtn, 'El botón para abrir sidebar debe existir');
+    // 2. Verificar que la antigua barra superior sobre el prompt ya NO existe
+    const hasOldToolbar = await page.$eval('.input-toolbar-top', () => true).catch(() => false);
+    assert.equal(hasOldToolbar, false, 'La barra .input-toolbar-top obsoleta debe haber sido retirada');
 
-    // El input de usuario debe ser editable y tener placeholder
-    const inputPlaceholder = await page.$eval('#user-input', el => el.getAttribute('placeholder'));
-    assert.ok(inputPlaceholder && inputPlaceholder.length > 0, 'El input debe tener placeholder');
+    // 3. Verificar que el botón de toggle del sidebar reside en el header y abre/cierra la barra lateral
+    const isSidebarToggleInHeader = await page.$eval('.app-header #btn-toggle-sidebar', el => !!el);
+    assert.ok(isSidebarToggleInHeader, '#btn-toggle-sidebar debe residir dentro de .app-header');
+
+    // Estado inicial: sidebar cerrado
+    const sidebarInitialDisplay = await page.$eval('#chat-sidebar', el => getComputedStyle(el).display);
+    assert.equal(sidebarInitialDisplay, 'none');
+
+    // Abrir sidebar pulsando el botón del header
+    await page.click('#btn-toggle-sidebar');
+    const sidebarOpenedDisplay = await page.$eval('#chat-sidebar', el => getComputedStyle(el).display);
+    assert.equal(sidebarOpenedDisplay, 'flex', 'El sidebar debe abrirse (display: flex) tras pulsar el botón del header');
+
+    // Cerrar sidebar pulsando el botón de cerrar del sidebar
+    await page.click('#btn-close-sidebar');
+    const sidebarClosedAgain = await page.$eval('#chat-sidebar', el => getComputedStyle(el).display);
+    assert.equal(sidebarClosedAgain, 'none', 'El sidebar debe cerrarse');
+
+    // 4. Selector de perfiles activo en el header
+    const hasProfileSelect = await page.$eval('.app-header #active-profile-select', el => !!el);
+    assert.ok(hasProfileSelect, 'El selector de perfil debe residir dentro del header');
+
+    // 5. Botón de Configuración abre el diálogo
+    await page.click('#btn-open-settings');
+    await page.waitForFunction(() => document.getElementById('settings-dialog')?.open);
+    const isSettingsOpen = await page.$eval('#settings-dialog', el => el.open);
+    assert.ok(isSettingsOpen, 'Pulsar el botón de ajustes en el header debe abrir #settings-dialog');
+    await page.click('#btn-close-settings');
+    await page.waitForFunction(() => !document.getElementById('settings-dialog')?.open);
+
+    // 6. Botón de RAG abre el diálogo de conocimiento (asíncrono con refresh)
+    await page.click('#btn-open-rag');
+    await page.waitForFunction(() => document.getElementById('rag-modal')?.open);
+    const isRagOpen = await page.$eval('#rag-modal', el => el.open);
+    assert.ok(isRagOpen, 'Pulsar el botón de conocimiento en el header debe abrir #rag-modal');
+    await page.click('#btn-close-rag');
+    await page.waitForFunction(() => !document.getElementById('rag-modal')?.open);
   } finally {
     await browser.close();
   }
