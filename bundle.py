@@ -27,6 +27,22 @@ import sys
 import time
 from typing import Dict, List, Optional, Tuple
 
+CSS_MODULE_FILES = [
+    "tokens.css",
+    "base.css",
+    "layout.css",
+    "components/header.css",
+    "components/sidebar.css",
+    "components/messages.css",
+    "components/markdown.css",
+    "components/composer.css",
+    "components/modals.css",
+    "components/tools.css",
+    "components/debug.css",
+    "theme-overrides.css",
+    "print.css"
+]
+
 JS_MODULE_FILES = [
     "vendor/orama.browser.js",
     "storage-db.js",
@@ -534,9 +550,17 @@ def build_standalone_html(mode: str = "prod", force_fallback: bool = False, verb
         raw_html = f.read()
     raw_html_size = len(raw_html.encode("utf-8"))
 
-    # 2. Cargar y procesar CSS
+    # 2. Cargar y procesar CSS (Modular con fallback a styles.css)
     raw_css = ""
-    if os.path.exists(css_path):
+    css_dir = os.path.join(base_dir, "css")
+    module_paths = [os.path.join(css_dir, f) for f in CSS_MODULE_FILES]
+    if all(os.path.exists(m) for m in module_paths):
+        parts = []
+        for m in module_paths:
+            with open(m, "r", encoding="utf-8") as f:
+                parts.append(f.read())
+        raw_css = "\n\n".join(parts)
+    elif os.path.exists(css_path):
         with open(css_path, "r", encoding="utf-8") as f:
             raw_css = f.read()
     raw_css_size = len(raw_css.encode("utf-8"))

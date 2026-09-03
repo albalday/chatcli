@@ -1,0 +1,234 @@
+/* ==========================================================================
+   Burbujas y Mensajes
+   ========================================================================== */
+.message-wrapper {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.message-wrapper.user {
+  align-items: flex-end;
+}
+
+.message-wrapper.assistant {
+  align-items: flex-start;
+}
+
+.message-row {
+  display: flex;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.message-row.user {
+  flex-direction: row-reverse;
+}
+
+
+
+.message-content-wrapper {
+  max-width: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.message-wrapper.user .message-content-wrapper {
+  align-items: flex-end;
+}
+
+.message-content {
+  width: fit-content;
+  max-width: 100%;
+  padding: 0.85rem 1.15rem;
+  border-radius: var(--radius-lg);
+  font-size: 0.885rem;
+  line-height: 1.55;
+  position: relative;
+  word-break: break-word;
+}
+
+.message-row.user .message-content {
+  background-color: var(--bg-user-bubble);
+  color: var(--text-user);
+  border-bottom-right-radius: var(--radius-sm);
+  white-space: pre-wrap;
+  max-width: 85%;
+}
+
+.message-row.assistant .message-content {
+  background-color: var(--bg-assistant-bubble);
+  color: var(--text-main);
+  border-bottom-left-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  width: 100%;
+}
+
+.message-error .message-content {
+  background-color: #fee2e2;
+  border-color: #fca5a5;
+  color: #991b1b;
+}
+
+/* Fila unificada de pie de mensaje (Estadísticas y Acciones en la misma línea) */
+.message-footer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.message-wrapper.user .message-footer-row {
+  justify-content: flex-end;
+}
+
+/* Estadísticas de respuesta */
+.message-stats {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.725rem;
+  color: var(--text-muted);
+  padding: 0.2rem 0.55rem;
+  background-color: #e2e8f0;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  width: fit-content;
+  margin: 0;
+}
+
+.stat-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.stat-item.stat-item-cache {
+  color: #0284c7;
+  font-weight: 600;
+}
+
+/* Acciones del mensaje (Copiar, Borrar) */
+.message-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0;
+  opacity: 0.8;
+  transition: opacity 0.15s ease;
+  margin-left: auto;
+}
+
+.message-wrapper:hover .message-actions {
+  opacity: 1;
+}
+
+.btn-msg-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  padding: 0.2rem 0.5rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-msg-action:hover {
+  background-color: #e2e8f0;
+  color: var(--text-main);
+  border-color: var(--border-color);
+}
+
+.btn-msg-action.btn-delete:hover {
+  color: var(--danger);
+  background-color: #fee2e2;
+  border-color: #fca5a5;
+}
+
+.btn-msg-action.copied {
+  color: var(--success);
+}
+
+/* Cursor parpadeante durante streaming */
+.streaming-cursor {
+  display: inline-block;
+  width: 7px;
+  height: 1.1em;
+  background-color: var(--primary);
+  vertical-align: -0.15em;
+  margin-left: 3px;
+  border-radius: 1px;
+  animation: blink 0.8s infinite;
+}
+
+.initial-cursor {
+  margin: 0.2rem 0;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* Estilos de contenido Markdown dentro del mensaje */
+.message-content h1,
+.message-content h2,
+.message-content h3 {
+  margin-top: 0.75rem;
+  margin-bottom: 0.4rem;
+  font-weight: 700;
+}
+
+.message-content h1 { font-size: 1.2rem; }
+.message-content h2 { font-size: 1.08rem; }
+.message-content h3 { font-size: 0.98rem; }
+
+.message-content p {
+  margin-bottom: 0.6rem;
+}
+
+.message-content p:last-child {
+  margin-bottom: 0;
+}
+
+.message-content ul,
+.message-content ol {
+  padding-left: 1.4rem;
+  margin-bottom: 0.6rem;
+}
+
+.message-content li {
+  margin-bottom: 0.25rem;
+}
+
+.message-content blockquote {
+  border-left: 3px solid var(--primary);
+  padding-left: 0.75rem;
+  margin: 0.6rem 0;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.message-content code:not(pre code) {
+  background-color: #e2e8f0;
+  color: #0f172a;
+  padding: 0.15rem 0.35rem;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+}
+
+.message-row.user .message-content code:not(pre code) {
+  background-color: rgba(255, 255, 255, 0.2);
+  color: white;
+}
