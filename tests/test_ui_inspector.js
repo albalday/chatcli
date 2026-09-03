@@ -77,3 +77,22 @@ test('UIInspector - renderInspectorReport genera markup de metadatos y capacidad
   assert.ok(fakeResultsContainer.innerHTML.includes('145 ms'));
   assert.ok(fakeResultsContainer.innerHTML.includes('cap-badge-confirmed'));
 });
+
+test('UIInspector - renderInspectorReport muestra error y no genera badges si la conexión falló', () => {
+  const fakeResultsContainer = { innerHTML: '' };
+  const elements = { inspectorResults: fakeResultsContainer };
+
+  const failedReport = {
+    success: false,
+    connected: false,
+    error: 'Error de conexión: No se pudo conectar con http://localhost:9999/v1/chat/completions (ECONNREFUSED)'
+  };
+
+  UIInspector.renderInspectorReport(elements, failedReport);
+
+  assert.ok(fakeResultsContainer.innerHTML.includes('status-error'), 'Debe tener contenedor de error');
+  assert.ok(fakeResultsContainer.innerHTML.includes('ECONNREFUSED'), 'Debe mostrar el mensaje de error');
+  assert.equal(fakeResultsContainer.innerHTML.includes('cap-badge'), false, 'No debe renderizar badges de capacidades');
+  assert.equal(fakeResultsContainer.innerHTML.includes('inspector-cap-grid'), false, 'No debe renderizar la cuadrícula de capacidades');
+});
+

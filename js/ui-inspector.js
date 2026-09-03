@@ -253,6 +253,15 @@
   function renderInspectorReport(elements, report) {
     if (!elements || !elements.inspectorResults || !report) return;
 
+    if (report.success === false || report.connected === false) {
+      elements.inspectorResults.innerHTML = `
+        <div class="server-query-status status-error" style="display: block;">
+          ${escapeHtml(report.error || 'Fallo de conexión: No se pudo conectar con el servidor.')}
+        </div>
+      `;
+      return;
+    }
+
     const p = report.provider || {};
     const ep = report.endpoint || {};
     const m = report.model || {};
@@ -337,7 +346,14 @@
     const model = elements.settingModel ? elements.settingModel.value.trim() : (appConfig?.model || '');
 
     if (!apiUrl) {
-      alert(t('err_api_connect', { err: 'Por favor, introduce una URL de servidor válida.' }));
+      if (elements.inspectorResults) {
+        elements.inspectorResults.style.display = 'block';
+        elements.inspectorResults.innerHTML = `
+          <div class="server-query-status status-error" style="display: block;">
+            Por favor, introduce una URL de servidor válida.
+          </div>
+        `;
+      }
       return;
     }
 
@@ -362,6 +378,10 @@
 
       addDebugLog('network', `Ejecutando Provider Inspector en ${apiUrl} [${apiType}]`);
       const report = await API.inspectProvider({ apiUrl, apiType, apiKey, model });
+
+      if (report && (report.success === false || report.connected === false)) {
+        throw new Error(report.error || 'Fallo de conexión con el servidor.');
+      }
 
       renderInspectorReport(elements, report);
     } catch (err) {
