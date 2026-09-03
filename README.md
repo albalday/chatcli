@@ -1,5 +1,4 @@
 # ZeroChat
-
 ZeroChat es un cliente web universal de chat, agente IA y conocimiento local. La distribución final se entrega como un único archivo autónomo, `zerochat.html`, que puede abrirse directamente mediante `file://` y no requiere backend propio.
 
 ## Características
