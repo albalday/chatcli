@@ -1983,7 +1983,7 @@
         size: file.size,
         type: 'pdf',
         content: String(extractedText),
-        preview: `📕 ${file.name} (${formatBytes(file.size)})`
+        preview: `${file.name} (${formatBytes(file.size)})`
       };
     }
 
@@ -1997,7 +1997,7 @@
         mimeType: mime,
         content: `[Imagen adjunta: ${file.name} (${formatBytes(file.size)})]`,
         dataUrl: base64,
-        preview: `🖼️ ${file.name} (${formatBytes(file.size)})`
+        preview: `${file.name} (${formatBytes(file.size)})`
       };
     }
 
@@ -2008,7 +2008,7 @@
       size: file.size,
       type: 'text',
       content: text,
-      preview: `📄 ${file.name} (${formatBytes(file.size)})`
+      preview: `${file.name} (${formatBytes(file.size)})`
     };
   }
 

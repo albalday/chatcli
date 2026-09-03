@@ -1,0 +1,39 @@
+/* ==========================================================================
+   Iconos Vectoriales Monocromáticos (ChatIcons) - ZeroChat
+   ========================================================================== */
+
+.ui-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  flex-shrink: 0;
+  line-height: 1;
+  color: inherit;
+}
+
+.ui-icon svg,
+svg.ui-icon {
+  display: block;
+  stroke: currentColor;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+  transition: transform 0.15s ease, stroke 0.15s ease;
+}
+
+.ui-icon-spin,
+svg.ui-icon-spin {
+  animation: ui-icon-spin-keyframes 1s linear infinite;
+}
+
+@keyframes ui-icon-spin-keyframes {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+

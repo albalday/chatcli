@@ -81,7 +81,33 @@
     });
   }
 
-  function renderSidebarChats(elements, savedSessions, currentSessionId, callbacks = {}) {
+  function getChronologicalCategory(date) {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const yesterday = today - 86400000;
+    const last7Days = today - (7 * 86400000);
+    const last30Days = today - (30 * 86400000);
+
+    const d = new Date(date).getTime();
+    if (d >= today) return 'today';
+    if (d >= yesterday) return 'yesterday';
+    if (d >= last7Days) return 'last7days';
+    if (d >= last30Days) return 'last30days';
+    return 'older';
+  }
+
+  function getCategoryLabel(category) {
+    switch (category) {
+      case 'today': return t('sidebar_group_today', 'Hoy');
+      case 'yesterday': return t('sidebar_group_yesterday', 'Ayer');
+      case 'last7days': return t('sidebar_group_last7days', 'Últimos 7 días');
+      case 'last30days': return t('sidebar_group_last30days', 'Últimos 30 días');
+      case 'older': return t('sidebar_group_older', 'Anteriores');
+      default: return '';
+    }
+  }
+
+  function renderSidebarChats(elements, savedSessions, currentSessionId, callbacks = {}, options = {}) {
     if (!elements || !elements.sidebarChatsList) return;
     elements.sidebarChatsList.innerHTML = '';
 
@@ -100,15 +126,35 @@
       return;
     }
 
+    let currentCategory = null;
     matching.forEach(s => {
+      const d = new Date(s.updatedAt || s.createdAt || Date.now());
+
+      if (options && options.groupByDate && !filterText) {
+        const cat = getChronologicalCategory(d);
+        if (cat !== currentCategory) {
+          currentCategory = cat;
+          const groupHeader = doc.createElement('div');
+          groupHeader.className = 'sidebar-group-header';
+          groupHeader.textContent = getCategoryLabel(cat);
+          elements.sidebarChatsList.appendChild(groupHeader);
+        }
+      }
+
       const item = doc.createElement('div');
       item.className = 'sidebar-chat-item' + (s.id === currentSessionId ? ' active' : '');
       item.setAttribute('data-session-id', s.id);
 
-      const d = new Date(s.updatedAt || s.createdAt || Date.now());
       const timeStr = d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       const rawTitle = s.title || t('chat_untitled') || 'Nueva conversación';
       const safeTitle = escapeHtml(rawTitle);
+
+      const editSvg = (typeof ChatIcons !== 'undefined' && ChatIcons.has('edit'))
+        ? ChatIcons.get('edit', { size: 13 })
+        : '<svg class="ui-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>';
+      const trashSvg = (typeof ChatIcons !== 'undefined' && ChatIcons.has('trash'))
+        ? ChatIcons.get('trash', { size: 13 })
+        : '<svg class="ui-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>';
 
       item.innerHTML = `
         <div class="sidebar-chat-info">
@@ -116,8 +162,8 @@
           <span class="sidebar-chat-time">${timeStr}</span>
         </div>
         <div class="sidebar-chat-actions">
-          <button type="button" class="btn-chat-action btn-rename" title="Renombrar chat">✏️</button>
-          <button type="button" class="btn-chat-action btn-delete" title="Eliminar chat">🗑️</button>
+          <button type="button" class="btn-chat-action btn-rename" title="Renombrar chat">${editSvg}</button>
+          <button type="button" class="btn-chat-action btn-delete" title="Eliminar chat">${trashSvg}</button>
         </div>
       `;
 
@@ -155,6 +201,7 @@
     openSidebar,
     closeSidebar,
     filterSessions,
+    getChronologicalCategory,
     renderSidebarChats
   };
 });

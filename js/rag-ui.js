@@ -124,8 +124,8 @@
 
     if (title) {
       if (activeCount === 0) title.textContent = 'Conocimiento desactivado';
-      else if (activeCount === 1) title.textContent = `🔎 ${activeList[0].name}`;
-      else title.textContent = `🔎 ${activeCount} ramas activas (${activeList.map(b => b.name).join(', ')})`;
+      else if (activeCount === 1) title.textContent = activeList[0].name;
+      else title.textContent = `${activeCount} ramas activas (${activeList.map(b => b.name).join(', ')})`;
     }
     if (description) {
       if (activeCount === 0) description.textContent = 'Selecciona una o varias ramas para que el agente pueda buscar en tus documentos.';
@@ -196,7 +196,7 @@
       <div class="rag-documents-list">${documents.length ? documents.map(document => `
         <div class="rag-document-card" data-document-id="${escapeHtml(document.id)}">
           <div><strong>${escapeHtml(document.title)}</strong><div class="toggle-card-desc">${formatDocumentMetrics(document)}</div></div>
-          <button type="button" class="btn-secondary btn-danger-hover" data-delete-document="${escapeHtml(document.id)}">🗑️</button>
+          <button type="button" class="btn-secondary btn-danger-hover" data-delete-document="${escapeHtml(document.id)}" title="Eliminar documento"><svg class="ui-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>
         </div>`).join('') : '<div class="rag-empty-state">La rama todavía no contiene documentos.</div>'}</div>`;
 
     const input = document.getElementById('rag-file-input');
@@ -308,17 +308,17 @@
     if (!branchId) return;
 
     const btnExport = document.getElementById('btn-rag-export-branch');
-    const prevText = btnExport?.textContent;
+    const prevHtml = btnExport?.innerHTML;
     try {
       if (btnExport) {
         btnExport.disabled = true;
-        btnExport.textContent = '⏳ Exportando 0%...';
+        btnExport.textContent = 'Exportando 0%...';
       }
       const { blob, filename } = await storage().exportBranchBlob(branchId, {
         includeSources: false,
         compress: true,
         onProgress: ({ current, total, percent }) => {
-          if (btnExport) btnExport.textContent = `⏳ Exportando ${percent}% (${current}/${total})...`;
+          if (btnExport) btnExport.textContent = `Exportando ${percent}% (${current}/${total})...`;
         }
       });
       const url = URL.createObjectURL(blob);
@@ -327,14 +327,14 @@
       anchor.download = filename;
       anchor.click();
       setTimeout(() => URL.revokeObjectURL(url), 10000);
-      if (btnExport) btnExport.textContent = '✅ ¡Exportado!';
+      if (btnExport) btnExport.textContent = '¡Exportado!';
       await new Promise(resolve => setTimeout(resolve, 1500));
     } catch (error) {
       alert(`Error al exportar la rama: ${error.message || error}`);
     } finally {
       if (btnExport) {
         btnExport.disabled = false;
-        btnExport.textContent = prevText || '⬇️ Respaldo';
+        if (prevHtml) btnExport.innerHTML = prevHtml;
       }
     }
   }
@@ -342,11 +342,11 @@
   async function importBranchFile(file) {
     if (!file) return null;
     const btnImport = document.getElementById('btn-rag-import-branch');
-    const prevText = btnImport?.textContent;
+    const prevHtml = btnImport?.innerHTML;
     try {
       if (btnImport) {
         btnImport.disabled = true;
-        btnImport.textContent = '⏳ Descomprimiendo...';
+        btnImport.textContent = 'Descomprimiendo...';
       }
       let text;
       try {
@@ -358,16 +358,16 @@
         throw err;
       }
       if (!text) throw new Error('El archivo de respaldo está vacío o no se pudo leer.');
-      if (btnImport) btnImport.textContent = '⏳ Restaurando 0%...';
+      if (btnImport) btnImport.textContent = 'Restaurando 0%...';
 
       const branch = await storage().importBranch(text, ({ current, total, percent }) => {
-        if (btnImport) btnImport.textContent = `⏳ Restaurando ${percent}% (${current}/${total})...`;
+        if (btnImport) btnImport.textContent = `Restaurando ${percent}% (${current}/${total})...`;
       });
       indexer()?.invalidateBranch(branch.id);
       await renderManageTab(branch.id);
       await renderActiveTab();
       await updateQuota();
-      alert(`✅ Rama "${branch.name}" restaurada con éxito.`);
+      alert(`Rama "${branch.name}" restaurada con éxito.`);
       return branch;
     } catch (error) {
       alert(`Error al restaurar: ${error.message || error}`);
@@ -375,7 +375,7 @@
     } finally {
       if (btnImport) {
         btnImport.disabled = false;
-        btnImport.textContent = prevText || '⬆️ Restaurar';
+        if (prevHtml) btnImport.innerHTML = prevHtml;
       }
     }
   }
@@ -384,7 +384,8 @@
     if (typeof document === 'undefined') return;
     const node = document.getElementById('rag-storage-quota-info');
     const estimate = await storage().getStorageEstimate();
-    if (node) node.textContent = estimate.quota ? `💾 IndexedDB: ${formatBytes(estimate.usage)} de ${formatBytes(estimate.quota)}` : '💾 IndexedDB local';
+    const dbIcon = '<svg class="ui-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>';
+    if (node) node.innerHTML = estimate.quota ? `${dbIcon} <span>IndexedDB: ${formatBytes(estimate.usage)} de ${formatBytes(estimate.quota)}</span>` : `${dbIcon} <span>IndexedDB local</span>`;
   }
 
   async function refresh() {
@@ -406,7 +407,17 @@
       activeBranchIds = new Set();
     }
     const modal = document.getElementById('rag-modal');
-    document.getElementById('btn-open-rag')?.addEventListener('click', async () => { await refresh(); modal?.showModal(); });
+    document.getElementById('btn-open-rag')?.addEventListener('click', async () => {
+      await refresh();
+      const navButtons = document.querySelectorAll('#rag-modal-tabs-nav [data-rag-tab]');
+      const activeBtn = Array.from(navButtons).find(b => b.classList.contains('active')) || navButtons[0];
+      if (activeBtn) {
+        navButtons.forEach(item => item.classList.toggle('active', item === activeBtn));
+        document.querySelectorAll('#rag-modal .modal-tab-pane').forEach(pane => pane.classList.toggle('active', pane.id === activeBtn.dataset.ragTab));
+        if (activeBtn.dataset.ragTab === 'tab-rag-manage') await renderManageTab();
+      }
+      modal?.showModal();
+    });
     document.getElementById('btn-close-rag')?.addEventListener('click', () => modal?.close());
     document.getElementById('btn-close-rag-footer')?.addEventListener('click', () => modal?.close());
     document.getElementById('btn-rag-toggle-master')?.addEventListener('click', async () => { setActiveBranchIds([]); await renderActiveTab(); });

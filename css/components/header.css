@@ -1,0 +1,211 @@
+/* ==========================================================================
+   ZeroChat Header & Navigation - Barra Superior estilo ChatGPT & Gemini
+   ========================================================================== */
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--header-height, 3.5rem);
+  min-height: var(--header-height, 3.5rem);
+  padding: 0 1rem;
+  border-bottom: 1px solid var(--border-color);
+  background-color: var(--bg-surface);
+  position: sticky;
+  top: 0;
+  z-index: var(--z-header, 100);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  user-select: none;
+}
+
+.header-left,
+.header-center,
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.header-left {
+  flex: 1 1 0%;
+  justify-content: flex-start;
+  min-width: 0;
+}
+
+.header-center {
+  flex: 0 0 auto;
+  justify-content: center;
+}
+
+.header-right {
+  flex: 1 1 0%;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+/* Marca / Título en Header */
+.app-brand-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text-main);
+  opacity: 0.9;
+}
+
+/* Botón de alternancia de barra lateral (Sidebar Toggle) */
+.btn-header-icon {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-header-icon:hover {
+  background-color: var(--bg-hover);
+  color: var(--text-main);
+  border-color: var(--border-color);
+}
+
+.btn-header-icon:active {
+  transform: scale(0.96);
+}
+
+/* Cápsula de Perfil / Modelo */
+.badge-pill.badge-profile {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: var(--radius-full);
+  background-color: var(--bg-surface-subtle);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  font-size: 0.825rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  max-width: 240px;
+}
+
+.badge-pill.badge-profile:hover {
+  border-color: var(--primary);
+  background-color: var(--bg-hover);
+}
+
+.badge-pill.badge-profile:focus-within {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary-light);
+}
+
+.badge-pill.badge-profile select {
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  outline: none;
+  padding-right: 0.25rem;
+  text-overflow: ellipsis;
+  max-width: 190px;
+}
+
+/* Insignia de Tokens de Contexto Informados */
+.badge-pill.badge-tokens {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.55rem;
+  border-radius: var(--radius-full);
+  background-color: var(--bg-surface-subtle);
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  font-size: 0.725rem;
+  font-weight: 500;
+  cursor: help;
+  user-select: none;
+}
+
+.badge-pill.badge-tokens:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.tokens-icon {
+  font-size: 0.8rem;
+  line-height: 1;
+}
+
+.tokens-text {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Botones de Acción del Header */
+.btn-header-tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.65rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-surface);
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.btn-header-tool:hover {
+  background-color: var(--bg-hover);
+  color: var(--text-main);
+  border-color: var(--primary);
+}
+
+.btn-header-tool:active {
+  transform: scale(0.97);
+}
+
+.btn-header-tool.btn-rag-mini.active,
+.btn-header-tool.btn-debug-toggle.active {
+  background-color: var(--primary-light);
+  color: var(--primary);
+  border-color: var(--primary);
+  font-weight: 600;
+}
+
+/* Responsive: Ocultar texto de etiquetas en pantallas estrechas */
+@media (max-width: 900px) {
+  .btn-header-label {
+    display: none;
+  }
+  
+  .btn-header-tool {
+    padding: 0.35rem 0.45rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .app-brand-title {
+    display: none;
+  }
+
+  .badge-pill.badge-profile {
+    max-width: 150px;
+  }
+
+  .badge-pill.badge-profile select {
+    max-width: 110px;
+  }
+}

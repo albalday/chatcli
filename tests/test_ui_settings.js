@@ -92,3 +92,59 @@ test('UISettings - applyProfileToForm rellena los inputs de configuración', () 
   assert.equal(elements.settingEnableRawLogs.checked, true);
   assert.equal(elements.settingSendDateTime.checked, true);
 });
+
+test('UISettings - handleSaveProfile guarda el perfil y la configuración activa sin cerrar el modal', () => {
+  let profileSaved = null;
+  let configSaved = null;
+  let populatedWith = null;
+
+  globalThis.Storage = {
+    saveProfile: (name, data) => { profileSaved = { name, data }; },
+    saveConfig: (cfg) => { configSaved = cfg; }
+  };
+
+  const elements = {
+    settingProfileName: { value: 'Perfil Ollama Rápido' },
+    settingApiUrl: { value: 'http://localhost:11434' },
+    settingApiType: { value: 'ollama' },
+    settingApiKey: { value: '' },
+    settingModel: { value: 'llama3.2:latest' },
+    settingSystemPrompt: { value: 'Instrucciones locales' },
+    settingTemperature: { value: '0.5' },
+    settingEnableContextCache: { checked: true },
+    settingEnableRawLogs: { checked: false },
+    settingSendDateTime: { checked: true },
+    profileActionFeedback: { style: { display: 'none' }, className: '', textContent: '' }
+  };
+
+  const appConfig = {
+    activeProfileName: 'Local chat',
+    apiUrl: 'http://localhost:1234/v1',
+    theme: 'dark',
+    language: 'es'
+  };
+
+  const populateProfileSelector = (name) => {
+    populatedWith = name;
+  };
+
+  const saved = UISettings.handleSaveProfile(elements, appConfig, populateProfileSelector);
+
+  assert.ok(saved, 'Debe retornar la configuración guardada');
+  assert.equal(saved.activeProfileName, 'Perfil Ollama Rápido');
+  assert.equal(saved.apiUrl, 'http://localhost:11434');
+  assert.equal(saved.model, 'llama3.2:latest');
+
+  assert.ok(profileSaved, 'Debe haber llamado a Storage.saveProfile');
+  assert.equal(profileSaved.name, 'Perfil Ollama Rápido');
+  assert.equal(profileSaved.data.apiUrl, 'http://localhost:11434');
+
+  assert.ok(configSaved, 'Debe haber llamado a Storage.saveConfig para persistir inmediatamente');
+  assert.equal(configSaved.activeProfileName, 'Perfil Ollama Rápido');
+  assert.equal(configSaved.apiUrl, 'http://localhost:11434');
+
+  assert.equal(populatedWith, 'Perfil Ollama Rápido', 'Debe actualizar el selector de perfiles');
+  assert.equal(elements.profileActionFeedback.style.display, 'block');
+
+  delete globalThis.Storage;
+});

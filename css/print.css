@@ -1,0 +1,123 @@
+/* ==========================================================================
+   Estilos de Impresión (@media print)
+   ========================================================================== */
+@media print {
+  @page {
+    margin: 1.5cm;
+    size: auto;
+  }
+
+  html, body {
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    overflow-x: visible !important;
+    overflow-y: visible !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    position: static !important;
+    width: 100% !important;
+    display: block !important;
+  }
+
+  .chat-sidebar,
+  .debug-panel,
+  .app-header,
+  .chat-input-wrapper,
+  .input-toolbar-top,
+  .message-actions,
+  .btn-msg-action,
+  .btn-top-left-sidebar,
+  .welcome-banner,
+  .modal-dialog,
+  dialog {
+    display: none !important;
+  }
+
+  .chat-container {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    display: block !important;
+    position: static !important;
+  }
+
+  .messages-list {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    overflow-y: visible !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    display: block !important;
+    gap: 0 !important;
+  }
+
+  .message-wrapper {
+    display: block !important;
+    width: 100% !important;
+    margin-bottom: 1.5rem !important;
+    page-break-inside: avoid;
+    break-inside: avoid;
+    animation: none !important;
+  }
+
+  .message-row {
+    display: block !important;
+    width: 100% !important;
+  }
+
+  .message-content-wrapper {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .message-content {
+    width: 100% !important;
+    max-width: 100% !important;
+    display: block !important;
+    box-shadow: none !important;
+    border: 1px solid #e2e8f0 !important;
+    background-color: #f8fafc !important;
+    color: #0f172a !important;
+    border-radius: 6px !important;
+    padding: 0.8rem 1rem !important;
+    page-break-inside: auto;
+    break-inside: auto;
+  }
+
+  .message-row.user .message-content {
+    background-color: #f1f5f9 !important;
+    color: #0f172a !important;
+    border-left: 4px solid #3b82f6 !important;
+  }
+
+  .message-row.assistant .message-content {
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+    border-left: 4px solid #10b981 !important;
+  }
+
+  .message-footer-row {
+    display: none !important;
+  }
+
+  pre, code {
+    white-space: pre-wrap !important;
+    word-break: break-word !important;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  table {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+}

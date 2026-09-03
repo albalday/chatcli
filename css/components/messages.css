@@ -1,0 +1,327 @@
+/* ==========================================================================
+   ZeroChat Messages Canvas - Canvas de Lectura Centrado estilo ChatGPT & Gemini
+   ========================================================================== */
+
+/* Contenedor individual de mensaje (centrado a max-width de lectura) */
+.message-wrapper {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: var(--max-content-width, 68rem);
+  margin-left: auto;
+  margin-right: auto;
+  padding: 0 0.5rem;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.message-wrapper.user {
+  align-items: flex-end;
+}
+
+.message-wrapper.assistant {
+  align-items: flex-start;
+}
+
+.message-row {
+  display: flex;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.message-row.user {
+  flex-direction: row-reverse;
+}
+
+.message-content-wrapper {
+  max-width: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.message-wrapper.user .message-content-wrapper {
+  align-items: flex-end;
+}
+
+/* Burbuja / Bloque de Contenido */
+.message-content {
+  width: fit-content;
+  max-width: 100%;
+  font-size: 0.935rem;
+  line-height: 1.6;
+  position: relative;
+  word-break: break-word;
+}
+
+/* Mensaje del Usuario: Tarjeta limpia y sutil alineada a la derecha */
+.message-row.user .message-content {
+  background-color: var(--bg-surface-subtle);
+  color: var(--text-main);
+  border: 1px solid var(--border-color);
+  border-radius: 1.25rem 1.25rem 0.25rem 1.25rem;
+  padding: 0.75rem 1.15rem;
+  white-space: pre-wrap;
+  max-width: 85%;
+  box-shadow: var(--shadow-xs);
+}
+
+[data-theme="dark"] .message-row.user .message-content {
+  background-color: #1e293b;
+  color: var(--text-main);
+  border-color: #334155;
+}
+
+/* Mensaje del Asistente: Canvas plano integrado sin bordes pesados */
+.message-row.assistant .message-content {
+  background-color: transparent;
+  color: var(--text-main);
+  border: none;
+  padding: 0.35rem 0;
+  width: 100%;
+  text-wrap: pretty;
+}
+
+/* Mensaje de Error */
+.message-error .message-content {
+  background-color: #fee2e2;
+  border: 1px solid #fca5a5;
+  color: #991b1b;
+  border-radius: var(--radius-md);
+  padding: 0.75rem 1rem;
+}
+
+[data-theme="dark"] .message-error .message-content {
+  background-color: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.35);
+  color: #fca5a5;
+}
+
+/* Fila unificada de pie de mensaje (Estadísticas y Acciones) */
+.message-footer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.message-wrapper.user .message-footer-row {
+  justify-content: flex-end;
+}
+
+/* Estadísticas de respuesta */
+.message-stats {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.725rem;
+  color: var(--text-muted);
+  padding: 0.2rem 0.55rem;
+  background-color: var(--bg-surface-subtle);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  width: fit-content;
+  margin: 0;
+}
+
+.stat-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.stat-item .ui-icon {
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+.stat-item.stat-item-cache {
+  color: #0284c7;
+  font-weight: 600;
+}
+
+/* Acciones del mensaje (Copiar, Borrar, Reusar) */
+.message-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin: 0;
+  opacity: 0.35;
+  transition: opacity 0.15s ease;
+  margin-left: auto;
+}
+
+.message-wrapper:hover .message-actions,
+.message-wrapper:focus-within .message-actions {
+  opacity: 1;
+}
+
+.btn-msg-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-msg-action .ui-icon {
+  flex-shrink: 0;
+}
+
+.btn-msg-action:hover {
+  background-color: var(--bg-hover);
+  color: var(--text-main);
+  border-color: var(--border-color);
+}
+
+.btn-msg-action.btn-delete:hover {
+  color: var(--danger);
+  background-color: #fee2e2;
+  border-color: #fca5a5;
+}
+
+[data-theme="dark"] .btn-msg-action.btn-delete:hover {
+  background-color: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.btn-msg-action.copied {
+  color: var(--success);
+}
+
+/* Bloque de razonamiento / CoT <think> como acordeón elegante */
+.thought-block {
+  margin: 0.85rem 0;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  border-left: 3px solid var(--primary);
+  background-color: var(--bg-surface-subtle);
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+
+.thought-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.5rem 0.85rem;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 0.825rem;
+  color: var(--text-muted);
+  background-color: transparent;
+  user-select: none;
+  transition: color 0.15s, background-color 0.15s;
+}
+
+.thought-summary:hover {
+  color: var(--text-main);
+  background-color: var(--bg-hover);
+}
+
+.thought-content {
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  border-top: 1px solid var(--border-subtle);
+  font-style: normal;
+}
+
+/* Cursor parpadeante durante streaming */
+.streaming-cursor {
+  display: inline-block;
+  width: 6px;
+  height: 1.15em;
+  background-color: var(--primary);
+  vertical-align: -0.15em;
+  margin-left: 3px;
+  border-radius: 1px;
+  animation: blink 0.8s infinite;
+}
+
+.initial-cursor {
+  margin: 0.2rem 0;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* Tipografía de Contenido Markdown dentro del Mensaje */
+.message-content h1,
+.message-content h2,
+.message-content h3,
+.message-content h4 {
+  margin-top: 1.15rem;
+  margin-bottom: 0.45rem;
+  font-weight: 700;
+  color: var(--text-main);
+  line-height: 1.35;
+}
+
+.message-content h1 { font-size: 1.35rem; }
+.message-content h2 { font-size: 1.18rem; }
+.message-content h3 { font-size: 1.05rem; }
+.message-content h4 { font-size: 0.95rem; }
+
+.message-content p {
+  margin-bottom: 0.85rem;
+  line-height: 1.65;
+}
+
+.message-content p:last-child {
+  margin-bottom: 0;
+}
+
+.message-content ul,
+.message-content ol {
+  padding-left: 1.5rem;
+  margin-bottom: 0.85rem;
+}
+
+.message-content li {
+  margin-bottom: 0.35rem;
+  line-height: 1.6;
+}
+
+.message-content blockquote {
+  border-left: 3px solid var(--primary);
+  padding-left: 0.85rem;
+  margin: 0.85rem 0;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.message-content code:not(pre code) {
+  background-color: var(--code-bg);
+  color: var(--code-text);
+  padding: 0.15rem 0.4rem;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+  border: 1px solid var(--border-color);
+}
+
+.message-row.user .message-content code:not(pre code) {
+  background-color: rgba(0, 0, 0, 0.06);
+  border-color: rgba(0, 0, 0, 0.08);
+  color: var(--text-main);
+}
+
+[data-theme="dark"] .message-row.user .message-content code:not(pre code) {
+  background-color: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+}

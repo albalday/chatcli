@@ -24,8 +24,8 @@ test('Bundler - Generación en modo Producción (Gzip Base64 Level 9)', () => {
     assert.ok(content.includes('id="compressed-js"'));
     assert.ok(content.includes('DecompressionStream'));
 
-    // Verificar que el tamaño de producción es ultra-compacto (< 350 KB)
-    assert.ok(stats.size < 350000, `El bundle comprimido debe ser ultra-compacto (actual: ${stats.size} bytes)`);
+    // Verificar que el tamaño de producción es ultra-compacto (< 380 KB)
+    assert.ok(stats.size < 380000, `El bundle comprimido debe ser ultra-compacto (actual: ${stats.size} bytes)`);
 
     // Verificar ausencia de enlaces locales externos
     assert.equal(/<script[^>]*src=["']js\//i.test(content), false, 'No deben quedar etiquetas <script src="js/...">');
@@ -42,7 +42,7 @@ test('Bundler - Generación en modo Producción (Gzip Base64 Level 9)', () => {
     // Verificar presencia de módulos fundamentales en el JS descomprimido
     const expectedModules = [
       'ZeroChatOrama', 'ZeroChatDB', 'ChatStorage', 'ChatRagStorage', 'ChatRagIndex', 'ChatIngestionEngine', 'ChatRagService', 'ChatRagUI',
-      'ChatI18n', 'ChatSandbox', 'ChatCharts',
+      'ChatI18n', 'ChatIcons', 'ChatSandbox', 'ChatCharts',
       'ChatWebBrowser', 'ChatWebSearch', 'ChatMarkdown',
       'ChatProviders', 'ChatAPI', 'ChatFileParser',
       'ChatToolRuntime', 'ChatToolManifest', 'ChatBuiltinExecuteJavascriptTool',

@@ -32,11 +32,17 @@
     if (!doc) return null;
     const card = doc.createElement('div'); card.className = 'tool-card-wrapper'; return card;
   }
+  const SPINNER_SVG = '<svg class="ui-icon ui-icon-spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"></path></svg>';
+  const CHECK_SVG = '<svg class="ui-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+  const ERROR_SVG = '<svg class="ui-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>';
+  const CHEVRON_SVG = '<svg class="ui-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>';
+  const DOC_ICON_SVG = '<svg class="ui-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>';
+
   function createLiveCard(args, ui) {
     const card = createCardWrapper(ui); if (!card) return null;
     const Markdown = ui?.markdown || { escapeHtml: value => String(value || '') };
     const t = ui?.t || (key => key);
-    card.innerHTML = `<div class="tool-execution-card rag-execution-card collapsed"><div class="tool-card-header"><div class="tool-card-title"><span>📄</span><span>Fragmento de conocimiento</span></div><div class="tool-card-header-actions"><span class="tool-card-badge status-loading">⏳ Leyendo ${Markdown.escapeHtml(args?.chunkId || '')}...</span><button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Expandir'}"><span>▸</span></button></div></div><div class="tool-card-collapsible-body"><div class="tool-card-result"><div class="tool-loading-placeholder">⏳ Recuperando texto desde IndexedDB...</div></div></div></div>`;
+    card.innerHTML = `<div class="tool-execution-card rag-execution-card collapsed"><div class="tool-card-header"><div class="tool-card-title"><span>${DOC_ICON_SVG}</span><span>Fragmento de conocimiento</span></div><div class="tool-card-header-actions"><span class="tool-card-badge status-loading">${SPINNER_SVG} <span>Leyendo ${Markdown.escapeHtml(args?.chunkId || '')}...</span></span><button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Expandir'}">${CHEVRON_SVG}</button></div></div><div class="tool-card-collapsible-body"><div class="tool-card-result"><div class="tool-loading-placeholder">${SPINNER_SVG} <span>Recuperando texto desde IndexedDB...</span></div></div></div></div>`;
     return card;
   }
   function updateLiveCard(card, _args, result = {}, _elapsedMs, ui) {
@@ -45,7 +51,7 @@
     const success = result?.success !== false && !result?.error;
     const content = result?.content || result?.error || '';
     const badge = card.querySelector('.tool-card-badge');
-    if (badge) { badge.className = `tool-card-badge ${success ? 'status-success' : 'status-error'}`; badge.textContent = success ? `✅ Fragmento recuperado (${content.length} caracteres)` : `❌ ${result?.error || 'No encontrado'}`; }
+    if (badge) { badge.className = `tool-card-badge ${success ? 'status-success' : 'status-error'}`; badge.innerHTML = success ? `${CHECK_SVG} <span>Fragmento recuperado (${content.length} caracteres)</span>` : `${ERROR_SVG} <span>${result?.error || 'No encontrado'}</span>`; }
     const body = card.querySelector('.tool-card-result');
     if (body) body.innerHTML = `<pre class="tool-result-pre"><code>${Markdown.escapeHtml(content.slice(0, 2500))}${content.length > 2500 ? '\n…' : ''}</code></pre>`;
   }

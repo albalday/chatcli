@@ -82,3 +82,49 @@ test('UISidebar - renderSidebarChats renderiza items y marca la sesión activa',
   appendedItems[0]._click({ target: appendedItems[0] });
   assert.equal(switchedTo, 'sess_1');
 });
+
+test('UISidebar - getChronologicalCategory clasifica correctamente según fecha', () => {
+  const now = Date.now();
+  assert.equal(UISidebar.getChronologicalCategory(now), 'today');
+  assert.equal(UISidebar.getChronologicalCategory(now - 86400000), 'yesterday');
+  assert.equal(UISidebar.getChronologicalCategory(now - (3 * 86400000)), 'last7days');
+  assert.equal(UISidebar.getChronologicalCategory(now - (15 * 86400000)), 'last30days');
+  assert.equal(UISidebar.getChronologicalCategory(now - (60 * 86400000)), 'older');
+});
+
+test('UISidebar - renderSidebarChats con groupByDate añade cabeceras de grupo', () => {
+  const appendedItems = [];
+  const fakeList = {
+    innerHTML: '',
+    ownerDocument: {
+      createElement: (tag) => ({
+        tagName: tag,
+        className: '',
+        attributes: {},
+        innerHTML: '',
+        textContent: '',
+        setAttribute: () => {},
+        querySelector: () => ({ addEventListener: () => {} }),
+        addEventListener: () => {}
+      })
+    },
+    appendChild: (item) => appendedItems.push(item)
+  };
+
+  const elements = { sidebarChatsList: fakeList };
+  const now = Date.now();
+  const sessions = [
+    { id: 'sess_1', title: 'Hoy Chat', updatedAt: now },
+    { id: 'sess_2', title: 'Ayer Chat', updatedAt: now - 86400000 },
+    { id: 'sess_3', title: 'Viejo Chat', updatedAt: now - (60 * 86400000) }
+  ];
+
+  UISidebar.renderSidebarChats(elements, sessions, 'sess_1', {}, { groupByDate: true });
+
+  // Deben haberse añadido cabeceras de grupo intercaladas
+  const headers = appendedItems.filter(i => i.className === 'sidebar-group-header');
+  assert.equal(headers.length, 3, 'Debe haber 3 cabeceras de grupo');
+  assert.equal(headers[0].textContent, 'Hoy');
+  assert.equal(headers[1].textContent, 'Ayer');
+  assert.equal(headers[2].textContent, 'Anteriores');
+});

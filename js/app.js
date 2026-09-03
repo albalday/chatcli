@@ -1,5 +1,5 @@
 /**
- * Aplicación principal del cliente de chat Web (ZeroChat v5.5.1).
+ * Aplicación principal del cliente de chat Web (ZeroChat v6.0).
  * Desarrollo 100% asistido por IA: colaboración entre Codex y Antigravity para implementar
  * un motor RAG local funcional utilizando la librería externa Orama como vendor autónomo,
  * iterando e implementando sin tocar una sola línea de código manual por parte del usuario.
@@ -44,6 +44,13 @@
   function t(key, params) {
     if (I18n.t) return I18n.t(key, params);
     return key;
+  }
+
+  function getMsgIcon(name, size = 12) {
+    if (typeof window !== 'undefined' && window.ChatIcons && window.ChatIcons.has(name)) {
+      return window.ChatIcons.get(name, { size });
+    }
+    return '';
   }
 
   // Estado de la aplicación
@@ -208,8 +215,8 @@
       temperatureVal: document.getElementById('temperature-val'),
       themeButtons: document.querySelectorAll('.btn-theme-toggle'),
       langButtons: document.querySelectorAll('.btn-lang-toggle'),
-      modalTabs: document.querySelectorAll('.modal-tab-btn'),
-      modalPanes: document.querySelectorAll('.modal-tab-pane'),
+      modalTabs: document.querySelectorAll('#settings-dialog .modal-tabs-nav .modal-tab-btn'),
+      modalPanes: document.querySelectorAll('#settings-dialog .modal-tab-pane'),
       btnRunInspector: document.getElementById('btn-run-inspector'),
       inspectorResults: document.getElementById('inspector-results'),
       agentToolsContainer: document.getElementById('agent-tools-container'),
@@ -548,6 +555,10 @@
 
   function autoResizeTextarea() {
     if (!elements.userInput) return;
+    if (!elements.userInput.value) {
+      elements.userInput.style.height = '';
+      return;
+    }
     elements.userInput.style.height = 'auto';
     const newHeight = Math.min(elements.userInput.scrollHeight, 160);
     elements.userInput.style.height = `${newHeight}px`;
@@ -706,7 +717,7 @@
     const btnReuse = document.createElement('button');
     btnReuse.type = 'button';
     btnReuse.className = 'btn-msg-action';
-    btnReuse.innerHTML = `✏️ <span>${t('btn_reuse')}</span>`;
+    btnReuse.innerHTML = `${getMsgIcon('edit', 12)} <span>${t('btn_reuse')}</span>`;
     btnReuse.title = t('btn_reuse_title');
     btnReuse.addEventListener('click', () => {
       elements.userInput.value = originalPrompt || text;
@@ -717,7 +728,7 @@
     const btnDelete = document.createElement('button');
     btnDelete.type = 'button';
     btnDelete.className = 'btn-msg-action btn-delete';
-    btnDelete.innerHTML = `🗑️ <span>${t('btn_delete')}</span>`;
+    btnDelete.innerHTML = `${getMsgIcon('trash', 12)} <span>${t('btn_delete')}</span>`;
     btnDelete.title = t('btn_delete_usr_title');
     btnDelete.addEventListener('click', () => removeMessage(wrapper));
 
@@ -768,13 +779,13 @@
     const btnCopy = document.createElement('button');
     btnCopy.type = 'button';
     btnCopy.className = 'btn-msg-action btn-copy-full';
-    btnCopy.innerHTML = `📋 <span>${t('btn_copy')}</span>`;
+    btnCopy.innerHTML = `${getMsgIcon('copy', 12)} <span>${t('btn_copy')}</span>`;
     btnCopy.title = t('btn_copy_title');
 
     const btnDelete = document.createElement('button');
     btnDelete.type = 'button';
     btnDelete.className = 'btn-msg-action btn-delete';
-    btnDelete.innerHTML = `🗑️ <span>${t('btn_delete')}</span>`;
+    btnDelete.innerHTML = `${getMsgIcon('trash', 12)} <span>${t('btn_delete')}</span>`;
     btnDelete.title = t('btn_delete_ast_title');
     btnDelete.addEventListener('click', () => removeMessage(wrapper));
 
@@ -859,17 +870,22 @@
     function updateStatsDisplay(stats) {
       if (!stats) return;
       statsContainer.style.display = 'inline-flex';
+      const clockSvg = getMsgIcon('clock', 11);
+      const zapSvg = getMsgIcon('zap', 11);
+      const docSvg = getMsgIcon('file-text', 11);
+      const dbSvg = getMsgIcon('database', 11);
+
       const cacheHtml = (stats.cachedTokens && stats.cachedTokens > 0)
-        ? `<span>•</span><span class="stat-item stat-item-cache" title="${t('stat_cache_title')}">${t('stat_cache_tokens', { tokens: stats.cachedTokens })}</span>`
+        ? `<span>•</span><span class="stat-item stat-item-cache" title="${t('stat_cache_title')}">${dbSvg} <span>${t('stat_cache_tokens', { tokens: stats.cachedTokens })}</span></span>`
         : '';
       statsContainer.innerHTML = `
-        <span class="stat-item" title="${t('stat_ttft_title')}">${t('stat_ttft', { sec: stats.ttftSec })}</span>
+        <span class="stat-item" title="${t('stat_ttft_title')}">${clockSvg} <span>${t('stat_ttft', { sec: stats.ttftSec })}</span></span>
         <span>•</span>
-        <span class="stat-item" title="${t('stat_speed_title')}">${t('stat_speed', { speed: stats.tokensPerSec })}</span>
+        <span class="stat-item" title="${t('stat_speed_title')}">${zapSvg} <span>${t('stat_speed', { speed: stats.tokensPerSec })}</span></span>
         <span>•</span>
-        <span class="stat-item" title="${t('stat_total_time_title')}">${t('stat_total_time', { sec: stats.totalSec })}</span>
+        <span class="stat-item" title="${t('stat_total_time_title')}">${clockSvg} <span>${t('stat_total_time', { sec: stats.totalSec })}</span></span>
         <span>•</span>
-        <span class="stat-item" title="${t('stat_tokens_title')}">${t('stat_tokens', { tokens: stats.tokens })}</span>${cacheHtml}
+        <span class="stat-item" title="${t('stat_tokens_title')}">${docSvg} <span>${t('stat_tokens', { tokens: stats.tokens })}</span></span>${cacheHtml}
       `;
       updateConnectionTokensBadge(stats);
     }
@@ -989,11 +1005,11 @@
         const fullMd = loopResult?.accumulatedMarkdown || loopResult?.finalAssistantText || '';
         await navigator.clipboard.writeText(fullMd);
         const span = btnCopy.querySelector('span');
-        const originalText = span.textContent;
-        span.textContent = t('copied_text');
+        const originalText = span ? span.textContent : '';
+        btnCopy.innerHTML = `${getMsgIcon('check', 12)} <span>${t('copied_text')}</span>`;
         btnCopy.classList.add('copied');
         setTimeout(() => {
-          span.textContent = originalText;
+          btnCopy.innerHTML = `${getMsgIcon('copy', 12)} <span>${originalText || t('btn_copy')}</span>`;
           btnCopy.classList.remove('copied');
         }, 2000);
       } catch (err) {
@@ -1096,10 +1112,33 @@
     }
   }
 
-  function handleSaveProfile() {
-    if (UISettings.handleSaveProfile) {
-      UISettings.handleSaveProfile(elements, appConfig, populateProfileSelector);
+  function saveCurrentSettings(closeModal = true) {
+    const newConfig = gatherCurrentFormConfig();
+
+    if (Storage.saveConfig) {
+      Storage.saveConfig(newConfig);
     }
+    appConfig = newConfig;
+
+    if (chatHistory.length > 0 && chatHistory[0].role === 'system') {
+      chatHistory[0].content = appConfig.systemPrompt || '';
+    }
+
+    updateUIFromConfig();
+
+    if (typeof populateProfileSelector === 'function') {
+      populateProfileSelector(newConfig.activeProfileName);
+    }
+
+    if (closeModal) {
+      closeSettingsModal();
+    } else {
+      showProfileFeedback(t('msg_profile_saved', { name: newConfig.activeProfileName }) || `Perfil "${newConfig.activeProfileName}" guardado con éxito.`, 'success');
+    }
+  }
+
+  function handleSaveProfile() {
+    saveCurrentSettings(false);
   }
 
   function handleDeleteProfile() {
@@ -1125,21 +1164,8 @@
   }
 
   function handleSaveSettings(e) {
-    e.preventDefault();
-
-    const newConfig = gatherCurrentFormConfig();
-
-    if (Storage.saveConfig) {
-      Storage.saveConfig(newConfig);
-    }
-    appConfig = newConfig;
-
-    if (chatHistory.length > 0 && chatHistory[0].role === 'system') {
-      chatHistory[0].content = appConfig.systemPrompt || '';
-    }
-
-    updateUIFromConfig();
-    closeSettingsModal();
+    if (e && e.preventDefault) e.preventDefault();
+    saveCurrentSettings(true);
   }
 
   function handleResetSettings() {
@@ -1240,7 +1266,7 @@
         onSwitchSession: switchToSession,
         onRenameSession: renameSession,
         onDeleteSession: deleteSession
-      });
+      }, { groupByDate: true });
     }
   }
 
@@ -1490,9 +1516,9 @@
           btnCopy.onclick = async () => {
             if (navigator.clipboard) {
               await navigator.clipboard.writeText(fullAssistantMarkdown || content.innerText);
-              btnCopy.innerHTML = `✅ <span>${t('btn_copied')}</span>`;
+              btnCopy.innerHTML = `${getMsgIcon('check', 12)} <span>${t('btn_copied')}</span>`;
               setTimeout(() => {
-                btnCopy.innerHTML = `📋 <span>${t('btn_copy')}</span>`;
+                btnCopy.innerHTML = `${getMsgIcon('copy', 12)} <span>${t('btn_copy')}</span>`;
               }, 2000);
             }
           };
@@ -2112,7 +2138,7 @@
       exportConversationAsPrint
     };
 
-    console.log('💬 ZeroChat v5.5.1 initialized with autonomous tools and local Orama knowledge.');
+    console.log('💬 ZeroChat v6.0 initialized with autonomous tools and local Orama knowledge.');
   }
 
   if (document.readyState === 'loading') {

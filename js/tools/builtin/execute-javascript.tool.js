@@ -56,6 +56,12 @@
     };
   }
 
+  const SPINNER_SVG = '<svg class="ui-icon ui-icon-spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"></path></svg>';
+  const CHECK_SVG = '<svg class="ui-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+  const ERROR_SVG = '<svg class="ui-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>';
+  const CHEVRON_SVG = '<svg class="ui-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>';
+  const JS_ICON_SVG = '<svg class="ui-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>';
+
   function createLiveCard(args, ui) {
     const cardDiv = createCardWrapper(ui);
     if (!cardDiv) return null;
@@ -65,18 +71,18 @@
       <div class="tool-execution-card">
         <div class="tool-card-header">
           <div class="tool-card-title">
-            <span>⚡</span>
+            <span>${JS_ICON_SVG}</span>
             <span>${t('tool_js_title_running') || 'execute_javascript'}</span>
           </div>
           <div class="tool-card-header-actions">
-            <span class="tool-card-badge status-loading">⏳ ${t('tool_badge_executing') || 'Ejecutando...'}</span>
-            <button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Minimizar'}"><span>▾</span></button>
+            <span class="tool-card-badge status-loading">${SPINNER_SVG} <span>${t('tool_badge_executing') || 'Ejecutando...'}</span></span>
+            <button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Minimizar'}">${CHEVRON_SVG}</button>
           </div>
         </div>
         <div class="tool-card-collapsible-body">
           <pre class="tool-card-code"><code>${Markdown.escapeHtml(code)}</code></pre>
           <div class="tool-card-result">
-            <div class="tool-loading-placeholder">⏳ ${t('tool_loading_js') || 'Ejecutando código en sandbox local...'}</div>
+            <div class="tool-loading-placeholder">${SPINNER_SVG} <span>${t('tool_loading_js') || 'Ejecutando código en sandbox local...'}</span></div>
           </div>
         </div>
       </div>
@@ -91,9 +97,9 @@
     const badgeEl = cardDiv.querySelector('.tool-card-badge');
     if (badgeEl) {
       badgeEl.className = `tool-card-badge ${isSuccess ? 'status-success' : 'status-error'}`;
-      badgeEl.textContent = isSuccess
-        ? `✅ ${t('tool_status_success') || 'Completado'} (${elapsedMs || 0}ms)`
-        : `❌ Error (${elapsedMs || 0}ms)`;
+      badgeEl.innerHTML = isSuccess
+        ? `${CHECK_SVG} <span>${t('tool_status_success') || 'Completado'} (${elapsedMs || 0}ms)</span>`
+        : `${ERROR_SVG} <span>Error (${elapsedMs || 0}ms)</span>`;
     }
     const resContainer = cardDiv.querySelector('.tool-card-result');
     if (resContainer) {
@@ -124,10 +130,10 @@
     cardDiv.innerHTML = `
       <div class="tool-execution-card">
         <div class="tool-card-header">
-          <div class="tool-card-title"><span>⚡</span><span>${t('tool_js_title_running') || 'execute_javascript'}</span></div>
+          <div class="tool-card-title"><span>${JS_ICON_SVG}</span><span>${t('tool_js_title_running') || 'execute_javascript'}</span></div>
           <div class="tool-card-header-actions">
-            <span class="tool-card-badge status-success">✅ ${t('tool_status_success') || 'Completado'}</span>
-            <button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Minimizar'}"><span>▾</span></button>
+            <span class="tool-card-badge status-success">${CHECK_SVG} <span>${t('tool_status_success') || 'Completado'}</span></span>
+            <button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Minimizar'}">${CHEVRON_SVG}</button>
           </div>
         </div>
         <div class="tool-card-collapsible-body">
@@ -152,7 +158,7 @@
       metadata: { icon: '⚡', label: definition.name },
       settings: {
         titleKey: 'agent_js_title',
-        titleFallback: '⚡ Ejecución de JavaScript Local (Sandbox)',
+        titleFallback: 'Ejecución de JavaScript Local (Sandbox)',
         descKey: 'agent_js_desc',
         descFallback: 'Permite al modelo invocar execute_javascript para calcular, procesar datos o validar algoritmos en un entorno seguro en el navegador.',
         icon: '⚡',

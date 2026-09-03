@@ -33,7 +33,8 @@
     const Charts = ui?.charts || null;
     if (Charts?.renderChartCard) return Charts.renderChartCard(args);
     const escapeHtml = ui?.markdown?.escapeHtml || ((value) => String(value || ''));
-    return `<div class="chat-chart-card">📊 ${escapeHtml(args.title || 'Gráfico')}</div>`;
+    const chartIconSvg = '<svg class="ui-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="20" x2="12" y2="10"></line><line x1="18" y1="20" x2="18" y2="4"></line><line x1="6" y1="20" x2="6" y2="16"></line></svg>';
+    return `<div class="chat-chart-card">${chartIconSvg} ${escapeHtml(args.title || 'Gráfico')}</div>`;
   }
 
   function updateLiveCard(cardDiv, args, _result, _elapsedMs, ui) {
@@ -54,7 +55,7 @@
       aliases: ['renderchart', 'draw_chart', 'create_chart', 'plot_chart', 'generate_chart', 'show_chart', 'chart', 'grafico'],
       category: 'charts',
       metadata: { icon: '📊', label: definition.name },
-      settings: { titleKey: 'agent_chart_title', titleFallback: '📊 Visualización de Datos y Gráficos Nativos (SVG)', descKey: 'agent_chart_desc', descFallback: 'Permite al modelo invocar render_chart para generar y mostrar gráficos interactivos de barras, líneas o sectores sin librerías externas.', icon: '📊', defaultEnabled: true, showInSettings: true },
+      settings: { titleKey: 'agent_chart_title', titleFallback: 'Visualización de Datos y Gráficos Nativos (SVG)', descKey: 'agent_chart_desc', descFallback: 'Permite al modelo invocar render_chart para generar y mostrar gráficos interactivos de barras, líneas o sectores sin librerías externas.', icon: '📊', defaultEnabled: true, showInSettings: true },
       promptGuide: (lang) => lang === 'en'
         ? '- `render_chart(type="...", title="...", labels=[...], datasets=[...])`: Generates and displays native interactive SVG charts (bar, line, pie, doughnut).'
         : '- `render_chart(type="...", title="...", labels=[...], datasets=[...])`: Genera y visualiza gráficos SVG nativos interactivos (barras, líneas, sectores, donut).',

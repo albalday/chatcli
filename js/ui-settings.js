@@ -20,7 +20,9 @@
   function getStorage() {
     return (typeof window !== 'undefined' && window.ChatStorage)
       ? window.ChatStorage
-      : (typeof require !== 'undefined' ? (function () { try { return require('./cookies.js'); } catch (e) { return null; } })() : null);
+      : (typeof globalThis !== 'undefined' && (globalThis.ChatStorage || globalThis.Storage))
+        ? (globalThis.ChatStorage || globalThis.Storage)
+        : (typeof require !== 'undefined' ? (function () { try { return require('./cookies.js'); } catch (e) { return null; } })() : null);
   }
 
   function getAgentCore() {
@@ -218,7 +220,11 @@
   }
 
   function gatherCurrentFormConfig(elements, appConfig) {
-    const profileName = elements?.settingProfileName ? elements.settingProfileName.value.trim() : (appConfig?.activeProfileName || 'Local chat');
+    const profileName = (elements?.settingProfileName && elements.settingProfileName.value.trim())
+      ? elements.settingProfileName.value.trim()
+      : ((elements?.profileSelectHelper && elements.profileSelectHelper.value)
+        ? elements.profileSelectHelper.value
+        : (appConfig?.activeProfileName || 'Local chat'));
     const selectedModel = elements?.settingModel ? elements.settingModel.value.trim() : '';
 
     return {
@@ -238,7 +244,8 @@
       enableRawLogs: elements?.settingEnableRawLogs ? elements.settingEnableRawLogs.checked : Boolean(appConfig?.enableRawLogs),
       enableDebugMessages: Boolean(appConfig?.enableDebugMessages),
       sendDateTime: elements?.settingSendDateTime ? elements.settingSendDateTime.checked : true,
-      activeRagBranchId: appConfig?.activeRagBranchId || ''
+      activeRagBranchId: appConfig?.activeRagBranchId || '',
+      activeRagBranchIds: Array.isArray(appConfig?.activeRagBranchIds) ? [...appConfig.activeRagBranchIds] : []
     };
   }
 
@@ -255,25 +262,28 @@
   }
 
   function handleSaveProfile(elements, appConfig, populateProfileSelector) {
-    const name = elements?.settingProfileName ? elements.settingProfileName.value.trim() : '';
-    if (!name) {
-      showProfileFeedback(elements, t('err_profile_name_empty') || 'Por favor, escribe un nombre para el perfil.', 'error');
-      return;
-    }
-
     const currentConfig = gatherCurrentFormConfig(elements, appConfig);
+    const name = currentConfig.activeProfileName || 'Local chat';
     const Storage = getStorage();
     if (Storage?.saveProfile) {
       Storage.saveProfile(name, currentConfig);
-      if (typeof populateProfileSelector === 'function') {
-        populateProfileSelector(name);
-      }
-      showProfileFeedback(elements, t('msg_profile_saved', { name }) || `Perfil "${name}" guardado con éxito.`, 'success');
     }
+    if (Storage?.saveConfig) {
+      Storage.saveConfig(currentConfig);
+    }
+    if (typeof populateProfileSelector === 'function') {
+      populateProfileSelector(name);
+    }
+    showProfileFeedback(elements, t('msg_profile_saved', { name }) || `Perfil "${name}" guardado con éxito.`, 'success');
+    return currentConfig;
   }
 
   function handleDeleteProfile(elements, populateProfileSelector, applyProfile) {
-    const name = elements?.settingProfileName ? elements.settingProfileName.value.trim() : '';
+    const name = (elements?.settingProfileName && elements.settingProfileName.value.trim())
+      ? elements.settingProfileName.value.trim()
+      : ((elements?.profileSelectHelper && elements.profileSelectHelper.value)
+        ? elements.profileSelectHelper.value
+        : '');
     if (!name) return;
 
     const confirmMsg = t('confirm_delete_profile', { name }) || `¿Estás seguro de que deseas eliminar el perfil "${name}"?`;
@@ -336,12 +346,14 @@
       elements.settingSendDateTime.checked = appConfig?.sendDateTime !== false;
     }
 
-    if (elements.modalTabs && elements.modalTabs.length > 0) {
-      elements.modalTabs.forEach(b => b.classList.remove('active'));
-      elements.modalPanes.forEach(p => p.classList.remove('active'));
-      elements.modalTabs[0].classList.add('active');
-      const doc = elements.settingsDialog.ownerDocument || document;
-      const firstPane = doc.getElementById(elements.modalTabs[0].getAttribute('data-tab'));
+    const settingsTabs = elements.settingsDialog?.querySelectorAll ? elements.settingsDialog.querySelectorAll('.modal-tabs-nav .modal-tab-btn') : elements.modalTabs;
+    const settingsPanes = elements.settingsDialog?.querySelectorAll ? elements.settingsDialog.querySelectorAll('.modal-tab-pane') : elements.modalPanes;
+    if (settingsTabs && settingsTabs.length > 0) {
+      settingsTabs.forEach(b => b.classList.remove('active'));
+      if (settingsPanes) settingsPanes.forEach(p => p.classList.remove('active'));
+      settingsTabs[0].classList.add('active');
+      const doc = elements.settingsDialog?.ownerDocument || document;
+      const firstPane = doc.getElementById(settingsTabs[0].getAttribute('data-tab'));
       if (firstPane) firstPane.classList.add('active');
     }
 
