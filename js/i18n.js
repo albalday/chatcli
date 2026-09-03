@@ -66,7 +66,7 @@
       // Barra de entrada y formulario
       btn_attach_title: 'Adjuntar archivos (PDF, código, texto, imágenes)',
       reasoning_btn_title: 'Nivel de razonamiento (Desactivado por defecto)',
-      reasoning_menu_title: '🧠 Nivel de Razonamiento',
+      reasoning_menu_title: 'Nivel de Razonamiento',
       input_placeholder: 'Envía un mensaje o arrastra un archivo... (Enter para enviar, Shift+Enter para nueva línea)',
       btn_stop: 'Detener',
       btn_stop_title: 'Detener respuesta',
@@ -395,7 +395,7 @@
       // Barra de entrada y formulario
       btn_attach_title: 'Attach files (PDF, code, text, images)',
       reasoning_btn_title: 'Reasoning effort level (Disabled by default)',
-      reasoning_menu_title: '🧠 Reasoning Level',
+      reasoning_menu_title: 'Reasoning Level',
       input_placeholder: 'Send a message or drag a file... (Enter to send, Shift+Enter for new line)',
       btn_stop: 'Stop',
       btn_stop_title: 'Stop response generation',

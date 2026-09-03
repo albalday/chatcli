@@ -663,3 +663,60 @@ test('Browser UI - Fase 7: Accesibilidad WCAG 2.1 AA, Focus-Visible y Reduced Mo
     await browser.close();
   }
 });
+
+test('Browser UI - Iconos Fase 2: Iconos Vectoriales SVG en Header Superior y Composer', async () => {
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+    const filePath = 'file://' + path.resolve(__dirname, '../zerochat.html');
+    await page.goto(filePath, { waitUntil: 'load' });
+    await page.waitForSelector('#welcome-banner');
+
+    // 1. Validar iconos SVG en el Header
+    const headerIcons = await page.evaluate(() => {
+      const profileSvg = document.querySelector('.badge-profile .profile-icon svg');
+      const ragSvg = document.querySelector('#btn-open-rag svg');
+      const exportSvg = document.querySelector('#btn-quick-export svg');
+      const debugSvg = document.querySelector('#btn-toggle-debug svg');
+      const reasoningSvg = document.querySelector('#btn-reasoning svg');
+
+      return {
+        hasProfileSvg: !!profileSvg,
+        hasRagSvg: !!ragSvg,
+        hasExportSvg: !!exportSvg,
+        hasDebugSvg: !!debugSvg,
+        hasReasoningSvg: !!reasoningSvg,
+        ragWidth: ragSvg ? parseFloat(getComputedStyle(ragSvg).width) : 0,
+        reasoningWidth: reasoningSvg ? parseFloat(getComputedStyle(reasoningSvg).width) : 0
+      };
+    });
+
+    assert.ok(headerIcons.hasProfileSvg, 'El selector de perfiles debe contener un SVG vectorial (zap)');
+    assert.ok(headerIcons.hasRagSvg, 'El botón RAG debe contener un SVG vectorial (layers)');
+    assert.ok(headerIcons.hasExportSvg, 'El botón de exportar debe contener un SVG vectorial (download)');
+    assert.ok(headerIcons.hasDebugSvg, 'El botón de debug debe contener un SVG vectorial (terminal)');
+    assert.ok(headerIcons.hasReasoningSvg, 'El botón de razonamiento debe contener un SVG vectorial (brain)');
+    assert.ok(headerIcons.ragWidth >= 12, 'El icono RAG debe tener dimensiones computadas válidas');
+    assert.ok(headerIcons.reasoningWidth >= 12, 'El icono de razonamiento debe tener dimensiones válidas');
+
+    // 2. Abrir menú de razonamiento y verificar cabecera con SVG
+    await page.click('#btn-reasoning');
+    await page.waitForFunction(() => document.getElementById('reasoning-menu')?.style.display !== 'none');
+
+    const menuHeaderInfo = await page.evaluate(() => {
+      const header = document.querySelector('.reasoning-menu-header');
+      const svg = header?.querySelector('svg');
+      const text = header?.textContent || '';
+      return {
+        hasSvg: !!svg,
+        hasEmoji: text.includes('🧠'),
+        text: text.trim()
+      };
+    });
+
+    assert.ok(menuHeaderInfo.hasSvg, 'La cabecera del menú de razonamiento debe contener un SVG (brain)');
+    assert.equal(menuHeaderInfo.hasEmoji, false, 'La cabecera del menú no debe contener el emoji 🧠');
+  } finally {
+    await browser.close();
+  }
+});

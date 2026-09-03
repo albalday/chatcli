@@ -67,12 +67,12 @@
         </button>
 
         <label class="badge-pill badge-profile" data-i18n-title="profile_badge_title" title="Perfil de conexión activo">
-          <span class="profile-icon">⚡</span>
+          <span class="profile-icon"><svg class="ui-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg></span>
           <select id="active-profile-select" aria-label="Perfil de conexión activo"></select>
         </label>
 
         <div id="connection-tokens-badge" class="badge-pill badge-tokens" style="display: none;" title="Uso de tokens informado por el servidor">
-          <span class="tokens-icon">📊</span>
+          <span class="tokens-icon"><svg class="ui-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg></span>
           <span id="connection-tokens-text" class="tokens-text">0 tok</span>
         </div>
       </div>
@@ -83,11 +83,11 @@
 
       <div class="header-right">
         <button type="button" id="btn-open-rag" class="btn-header-tool btn-rag-mini" data-i18n-title="btn_rag_title" title="Gestionar conocimiento local">
-          <span>🌿</span>
+          <svg class="ui-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
           <span class="btn-header-label" data-i18n="btn_rag">Conocimiento</span>
         </button>
         <button type="button" id="btn-quick-export" class="btn-header-tool" data-i18n-title="btn_export_chat_title" title="Exportar conversación (Markdown, JSON, PDF)">
-          <span>📤</span>
+          <svg class="ui-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
           <span class="btn-header-label" data-i18n="btn_export_short">Exportar</span>
         </button>
         <button type="button" id="btn-clear-chat" class="btn-header-tool" data-i18n-title="btn_clear_chat_title" title="Limpiar conversación actual">
@@ -98,7 +98,7 @@
           <span class="btn-header-label" data-i18n="btn_clear_chat">Limpiar</span>
         </button>
         <button type="button" id="btn-toggle-debug" class="btn-header-tool btn-debug-toggle" data-i18n-title="btn_logs_title" title="Abrir/Cerrar panel lateral de logs y depuración">
-          <span class="debug-toggle-icon">📜</span>
+          <span class="debug-toggle-icon"><svg class="ui-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg></span>
           <span class="btn-header-label" data-i18n="btn_logs">Logs y Debug</span>
         </button>
         <button type="button" id="btn-open-settings" class="btn-header-tool btn-config-mini" data-i18n-title="btn_settings_title" title="Abrir configuración de API y Modelo">
@@ -151,14 +151,14 @@
         <!-- Control de Nivel de Razonamiento (Thinking) -->
         <div class="reasoning-control-wrapper">
           <button type="button" id="btn-reasoning" class="btn-reasoning" data-i18n-title="reasoning_btn_title" title="Nivel de razonamiento (Desactivado por defecto)">
-            <span class="reasoning-icon">🧠</span>
+            <span class="reasoning-icon"><svg class="ui-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 4.44-2.04zm5 0a2.5 2.5 0 0 0-2.5 2.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-4.44-2.04z"></path></svg></span>
             <span id="reasoning-label" class="reasoning-label">None</span>
           </button>
 
           <!-- Menú desplegable de niveles -->
           <div id="reasoning-menu" class="reasoning-menu" style="display: none;">
             <div class="reasoning-menu-header">
-              <span data-i18n="reasoning_menu_title">🧠 Nivel de Razonamiento</span>
+              <span class="reasoning-menu-title-wrapper"><svg class="ui-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 4.44-2.04zm5 0a2.5 2.5 0 0 0-2.5 2.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-4.44-2.04z"></path></svg><span data-i18n="reasoning_menu_title">Nivel de Razonamiento</span></span>
               <span id="reasoning-model-badge" class="reasoning-model-badge">-</span>
             </div>
             <div class="reasoning-options" id="reasoning-options-container">

@@ -55,3 +55,4 @@ test('ChatIcons - get maneja fallback sutil ante icono desconocido sin lanzar ex
   assert.ok(fallbackSvg.startsWith('<svg'));
   assert.ok(fallbackSvg.includes('<circle'));
 });
+
