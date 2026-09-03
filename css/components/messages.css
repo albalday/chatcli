@@ -1,10 +1,16 @@
 /* ==========================================================================
-   Burbujas y Mensajes
+   ZeroChat Messages Canvas - Canvas de Lectura Centrado estilo ChatGPT & Gemini
    ========================================================================== */
+
+/* Contenedor individual de mensaje (centrado a max-width de lectura) */
 .message-wrapper {
   display: flex;
   flex-direction: column;
   width: 100%;
+  max-width: var(--max-content-width, 48rem);
+  margin-left: auto;
+  margin-right: auto;
+  padding: 0 0.5rem;
   animation: fadeIn 0.2s ease-out;
 }
 
@@ -26,8 +32,6 @@
   flex-direction: row-reverse;
 }
 
-
-
 .message-content-wrapper {
   max-width: 100%;
   width: 100%;
@@ -39,47 +43,67 @@
   align-items: flex-end;
 }
 
+/* Burbuja / Bloque de Contenido */
 .message-content {
   width: fit-content;
   max-width: 100%;
-  padding: 0.85rem 1.15rem;
-  border-radius: var(--radius-lg);
-  font-size: 0.885rem;
-  line-height: 1.55;
+  font-size: 0.935rem;
+  line-height: 1.6;
   position: relative;
   word-break: break-word;
 }
 
+/* Mensaje del Usuario: Tarjeta limpia y sutil alineada a la derecha */
 .message-row.user .message-content {
-  background-color: var(--bg-user-bubble);
-  color: var(--text-user);
-  border-bottom-right-radius: var(--radius-sm);
+  background-color: var(--bg-surface-subtle);
+  color: var(--text-main);
+  border: 1px solid var(--border-color);
+  border-radius: 1.25rem 1.25rem 0.25rem 1.25rem;
+  padding: 0.75rem 1.15rem;
   white-space: pre-wrap;
   max-width: 85%;
+  box-shadow: var(--shadow-xs);
 }
 
-.message-row.assistant .message-content {
-  background-color: var(--bg-assistant-bubble);
+[data-theme="dark"] .message-row.user .message-content {
+  background-color: #1e293b;
   color: var(--text-main);
-  border-bottom-left-radius: var(--radius-sm);
-  border: 1px solid var(--border-color);
-  width: 100%;
+  border-color: #334155;
 }
 
+/* Mensaje del Asistente: Canvas plano integrado sin bordes pesados */
+.message-row.assistant .message-content {
+  background-color: transparent;
+  color: var(--text-main);
+  border: none;
+  padding: 0.35rem 0;
+  width: 100%;
+  text-wrap: pretty;
+}
+
+/* Mensaje de Error */
 .message-error .message-content {
   background-color: #fee2e2;
-  border-color: #fca5a5;
+  border: 1px solid #fca5a5;
   color: #991b1b;
+  border-radius: var(--radius-md);
+  padding: 0.75rem 1rem;
 }
 
-/* Fila unificada de pie de mensaje (Estadísticas y Acciones en la misma línea) */
+[data-theme="dark"] .message-error .message-content {
+  background-color: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.35);
+  color: #fca5a5;
+}
+
+/* Fila unificada de pie de mensaje (Estadísticas y Acciones) */
 .message-footer-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   width: 100%;
   gap: 0.5rem;
-  margin-top: 0.4rem;
+  margin-top: 0.35rem;
   flex-wrap: wrap;
 }
 
@@ -95,7 +119,8 @@
   font-size: 0.725rem;
   color: var(--text-muted);
   padding: 0.2rem 0.55rem;
-  background-color: #e2e8f0;
+  background-color: var(--bg-surface-subtle);
+  border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
   font-family: var(--font-mono);
   width: fit-content;
@@ -113,18 +138,19 @@
   font-weight: 600;
 }
 
-/* Acciones del mensaje (Copiar, Borrar) */
+/* Acciones del mensaje (Copiar, Borrar, Reusar) */
 .message-actions {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.3rem;
   margin: 0;
-  opacity: 0.8;
+  opacity: 0.35;
   transition: opacity 0.15s ease;
   margin-left: auto;
 }
 
-.message-wrapper:hover .message-actions {
+.message-wrapper:hover .message-actions,
+.message-wrapper:focus-within .message-actions {
   opacity: 1;
 }
 
@@ -135,7 +161,7 @@
   background: transparent;
   border: 1px solid transparent;
   color: var(--text-muted);
-  padding: 0.2rem 0.5rem;
+  padding: 0.25rem 0.5rem;
   border-radius: var(--radius-sm);
   font-size: 0.75rem;
   font-weight: 500;
@@ -144,7 +170,7 @@
 }
 
 .btn-msg-action:hover {
-  background-color: #e2e8f0;
+  background-color: var(--bg-hover);
   color: var(--text-main);
   border-color: var(--border-color);
 }
@@ -155,15 +181,59 @@
   border-color: #fca5a5;
 }
 
+[data-theme="dark"] .btn-msg-action.btn-delete:hover {
+  background-color: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
 .btn-msg-action.copied {
   color: var(--success);
+}
+
+/* Bloque de razonamiento / CoT <think> como acordeón elegante */
+.thought-block {
+  margin: 0.85rem 0;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  border-left: 3px solid var(--primary);
+  background-color: var(--bg-surface-subtle);
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+
+.thought-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.5rem 0.85rem;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 0.825rem;
+  color: var(--text-muted);
+  background-color: transparent;
+  user-select: none;
+  transition: color 0.15s, background-color 0.15s;
+}
+
+.thought-summary:hover {
+  color: var(--text-main);
+  background-color: var(--bg-hover);
+}
+
+.thought-content {
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  border-top: 1px solid var(--border-subtle);
+  font-style: normal;
 }
 
 /* Cursor parpadeante durante streaming */
 .streaming-cursor {
   display: inline-block;
-  width: 7px;
-  height: 1.1em;
+  width: 6px;
+  height: 1.15em;
   background-color: var(--primary);
   vertical-align: -0.15em;
   margin-left: 3px;
@@ -180,21 +250,26 @@
   50% { opacity: 0; }
 }
 
-/* Estilos de contenido Markdown dentro del mensaje */
+/* Tipografía de Contenido Markdown dentro del Mensaje */
 .message-content h1,
 .message-content h2,
-.message-content h3 {
-  margin-top: 0.75rem;
-  margin-bottom: 0.4rem;
+.message-content h3,
+.message-content h4 {
+  margin-top: 1.15rem;
+  margin-bottom: 0.45rem;
   font-weight: 700;
+  color: var(--text-main);
+  line-height: 1.35;
 }
 
-.message-content h1 { font-size: 1.2rem; }
-.message-content h2 { font-size: 1.08rem; }
-.message-content h3 { font-size: 0.98rem; }
+.message-content h1 { font-size: 1.35rem; }
+.message-content h2 { font-size: 1.18rem; }
+.message-content h3 { font-size: 1.05rem; }
+.message-content h4 { font-size: 0.95rem; }
 
 .message-content p {
-  margin-bottom: 0.6rem;
+  margin-bottom: 0.85rem;
+  line-height: 1.65;
 }
 
 .message-content p:last-child {
@@ -203,32 +278,41 @@
 
 .message-content ul,
 .message-content ol {
-  padding-left: 1.4rem;
-  margin-bottom: 0.6rem;
+  padding-left: 1.5rem;
+  margin-bottom: 0.85rem;
 }
 
 .message-content li {
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.35rem;
+  line-height: 1.6;
 }
 
 .message-content blockquote {
   border-left: 3px solid var(--primary);
-  padding-left: 0.75rem;
-  margin: 0.6rem 0;
-  color: var(--text-muted);
+  padding-left: 0.85rem;
+  margin: 0.85rem 0;
+  color: var(--text-secondary);
   font-style: italic;
 }
 
 .message-content code:not(pre code) {
-  background-color: #e2e8f0;
-  color: #0f172a;
-  padding: 0.15rem 0.35rem;
+  background-color: var(--code-bg);
+  color: var(--code-text);
+  padding: 0.15rem 0.4rem;
   border-radius: var(--radius-sm);
   font-family: var(--font-mono);
   font-size: 0.875em;
+  border: 1px solid var(--border-color);
 }
 
 .message-row.user .message-content code:not(pre code) {
-  background-color: rgba(255, 255, 255, 0.2);
-  color: white;
+  background-color: rgba(0, 0, 0, 0.06);
+  border-color: rgba(0, 0, 0, 0.08);
+  color: var(--text-main);
+}
+
+[data-theme="dark"] .message-row.user .message-content code:not(pre code) {
+  background-color: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
 }

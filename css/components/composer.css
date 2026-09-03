@@ -175,6 +175,10 @@
   flex-wrap: wrap;
   gap: 0.5rem;
   margin-bottom: 0.4rem;
+  max-width: var(--max-content-width, 48rem);
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .file-chip {
@@ -282,6 +286,10 @@
   padding: 0.5rem 0.75rem 0.5rem 0.6rem;
   box-shadow: var(--shadow-md);
   transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
+  max-width: var(--max-content-width, 48rem);
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .chat-input-container:focus-within {
@@ -544,41 +552,6 @@
   line-height: 1.35;
 }
 
-/* Bloque de pensamiento / CoT <think> */
-.thought-block {
-  margin: 0.75rem 0;
-  border-radius: var(--radius-md);
-  border: 1px solid #cbd5e1;
-  background-color: #f8fafc;
-  overflow: hidden;
-}
-
-.thought-summary {
-  padding: 0.5rem 0.85rem;
-  cursor: pointer;
-  font-weight: 500;
-  font-size: 0.825rem;
-  color: #64748b;
-  background-color: #f1f5f9;
-  user-select: none;
-  transition: background 0.15s;
-  display: flex;
-  align-items: center;
-}
-
-.thought-summary:hover {
-  background-color: #e2e8f0;
-  color: #334155;
-}
-
-.thought-content {
-  padding: 0.75rem 0.95rem;
-  font-size: 0.875rem;
-  color: #475569;
-  line-height: 1.55;
-  border-top: 1px solid #e2e8f0;
-  font-style: italic;
-}
 
 .chat-textarea {
   flex: 1;

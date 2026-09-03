@@ -174,3 +174,145 @@ test('Browser UI - Fase 2: Header Superior Moderno y Acciones Integradas', async
     await browser.close();
   }
 });
+
+test('Browser UI - Fase 3: Canvas de Mensajes Centrado, Tipografía y Markdown', async () => {
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+    const filePath = 'file://' + path.resolve(__dirname, '../zerochat.html');
+    await page.goto(filePath, { waitUntil: 'load' });
+
+    // Esperar a que la inicialización asíncrona de sesión en IndexedDB concluya
+    await page.waitForSelector('#welcome-banner');
+    await new Promise(r => setTimeout(r, 200));
+
+    // Simular renderizado de un mensaje de usuario y uno del asistente
+    await page.evaluate(() => {
+      const messagesList = document.getElementById('messages-list');
+      
+      // Mensaje de Usuario
+      const userMsg = document.createElement('div');
+      userMsg.className = 'message-wrapper user';
+      userMsg.innerHTML = `
+        <div class="message-row user">
+          <div class="message-content-wrapper">
+            <div class="message-content">Hola ZeroChat, muéstrame una tabla y código.</div>
+            <div class="message-footer-row">
+              <div class="message-actions">
+                <button class="btn-msg-action">✏️ Editar</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+      messagesList.appendChild(userMsg);
+
+      // Mensaje de Asistente con Razonamiento, Tabla y Código
+      const astMsg = document.createElement('div');
+      astMsg.className = 'message-wrapper assistant';
+      astMsg.innerHTML = `
+        <div class="message-row assistant">
+          <div class="message-content-wrapper">
+            <div class="message-content">
+              <details class="thought-block" open>
+                <summary class="thought-summary">🧠 Proceso de razonamiento</summary>
+                <div class="thought-content">Analizando la solicitud para generar la respuesta estructurada...</div>
+              </details>
+              <p>Aquí tienes los datos solicitados en formato de tabla y código:</p>
+              <div class="table-container">
+                <table class="markdown-table">
+                  <thead><tr><th>Parámetro</th><th>Valor</th><th>Estado</th></tr></thead>
+                  <tbody>
+                    <tr><td>Modelo</td><td>Gemini 2.5</td><td>Activo</td></tr>
+                    <tr><td>Tokens</td><td>1.2k</td><td>OK</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="code-block-container">
+                <div class="code-block-header">
+                  <span class="code-lang">javascript</span>
+                  <div class="code-block-actions">
+                    <button class="btn-copy-code">Copiar</button>
+                  </div>
+                </div>
+                <pre><code>console.log("Canvas moderno activo");</code></pre>
+              </div>
+            </div>
+            <div class="message-footer-row">
+              <div class="message-stats">
+                <span class="stat-item">⚡ 45 tok/s</span>
+              </div>
+              <div class="message-actions">
+                <button class="btn-msg-action">📋 Copiar</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+      messagesList.appendChild(astMsg);
+    });
+
+    // 1. Validar centrado y ancho máximo del canvas de mensajes
+    const canvasMetrics = await page.evaluate(() => {
+      const userWrapper = document.querySelector('.message-wrapper.user');
+      const astWrapper = document.querySelector('.message-wrapper.assistant');
+      const rectUser = userWrapper.getBoundingClientRect();
+      const rectAst = astWrapper.getBoundingClientRect();
+      return {
+        userWidth: rectUser.width,
+        astWidth: rectAst.width,
+        userLeft: rectUser.left,
+        userRight: window.innerWidth - rectUser.right
+      };
+    });
+
+    // En viewport de 1280px, el canvas centrado con max-width: 48rem (~768px) no debe desparramarse por toda la pantalla
+    assert.ok(canvasMetrics.userWidth <= 800, `El ancho de mensaje (${canvasMetrics.userWidth}px) debe respetar el canvas de lectura max-width: 48rem`);
+    assert.ok(canvasMetrics.astWidth <= 800, `El ancho del asistente (${canvasMetrics.astWidth}px) debe respetar el canvas de lectura max-width: 48rem`);
+
+    // 2. Validar acordeón de razonamiento plegable
+    const thoughtInfo = await page.evaluate(() => {
+      const block = document.querySelector('.thought-block');
+      return {
+        isOpen: block.open,
+        hasBorderAccent: getComputedStyle(block).borderLeftWidth !== '0px'
+      };
+    });
+    assert.ok(thoughtInfo.isOpen, 'El bloque de razonamiento debe renderizarse inicialmente desplegado');
+    assert.ok(thoughtInfo.hasBorderAccent, 'El bloque de razonamiento debe tener borde de acento');
+
+    // Plegar el acordeón haciendo click en el summary
+    await page.click('.thought-summary');
+    const isNowClosed = await page.$eval('.thought-block', el => !el.open);
+    assert.ok(isNowClosed, 'Pulsar en el summary del pensamiento debe plegar el acordeón');
+
+    // 3. Validar bloque de código
+    const codeBlockInfo = await page.evaluate(() => {
+      const codeBlock = document.querySelector('.code-block-container');
+      const copyBtn = document.querySelector('.btn-copy-code');
+      const pre = document.querySelector('.code-block-container pre');
+      return {
+        hasCodeBlock: !!codeBlock,
+        hasCopyBtn: !!copyBtn,
+        preOverflow: getComputedStyle(pre).overflowX
+      };
+    });
+    assert.ok(codeBlockInfo.hasCodeBlock, 'El bloque de código debe existir');
+    assert.ok(codeBlockInfo.hasCopyBtn, 'El botón de copiar código debe existir');
+    assert.equal(codeBlockInfo.preOverflow, 'auto', 'El bloque pre debe tener overflow-x: auto');
+
+    // 4. Validar tabla GFM
+    const tableInfo = await page.evaluate(() => {
+      const table = document.querySelector('.markdown-table');
+      const container = document.querySelector('.table-container');
+      return {
+        rows: table.querySelectorAll('tr').length,
+        hasBorder: getComputedStyle(container).borderWidth !== '0px'
+      };
+    });
+    assert.equal(tableInfo.rows, 3, 'La tabla debe tener 3 filas (1 thead + 2 tbody)');
+    assert.ok(tableInfo.hasBorder, 'El contenedor de tabla debe tener borde');
+  } finally {
+    await browser.close();
+  }
+});
