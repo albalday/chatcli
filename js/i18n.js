@@ -59,6 +59,8 @@
       rag_help_storage_desc: 'Los archivos, metadatos y fragmentos se guardan en IndexedDB. Orama construye en memoria un índice de búsqueda local para la rama activa.',
       rag_help_private_title: 'Sin permisos ni costes de ingesta',
       rag_help_private_desc: 'Seleccionar un archivo solo permite leer esa carga. No se solicitan permisos sobre carpetas y no se llama a ningún LLM para resumir o indexar.',
+      rag_help_llm_title: 'Configurar el modelo para responder sobre documentos',
+      rag_help_llm_desc: 'Para preguntas factuales sobre documentos, usa una temperatura baja (0 a 0,2): reduce variaciones y hace más probable que el modelo se atenga a los fragmentos recuperados. Una temperatura de 0,7 o superior conviene para redacción creativa, no para extraer cifras o hechos. El modelo también debe admitir llamadas a herramientas; si no las admite, no podrá consultar esta base documental.',
       lang_switcher_title: 'Cambiar idioma / Switch language',
 
       // Barra de entrada y formulario
@@ -381,6 +383,8 @@
       rag_help_storage_desc: 'Files, metadata, and chunks are stored in IndexedDB. Orama builds an in-memory local search index for the active branch.',
       rag_help_private_title: 'No permissions or ingestion costs',
       rag_help_private_desc: 'Selecting a file only grants access to that upload. No folder permissions are requested and no LLM is called to summarize or index it.',
+      rag_help_llm_title: 'Configure the model for document answers',
+      rag_help_llm_desc: 'For factual questions about documents, use a low temperature (0 to 0.2): it reduces variation and makes the model more likely to follow retrieved excerpts. A temperature of 0.7 or above is better for creative writing, not extracting figures or facts. The model must also support tool calls; otherwise it cannot query this knowledge base.',
       lang_switcher_title: 'Switch language / Cambiar idioma',
 
       // Barra de entrada y formulario

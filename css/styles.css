@@ -4174,6 +4174,8 @@ input:checked + .slider:before {
 }
 .rag-branch-select-card.active { border-color: var(--primary-color); background: var(--primary-light); }
 .rag-branch-select-card .toggle-card-info { display: grid; gap: 0.2rem; }
+.rag-branch-metrics, .rag-workspace-summary { color: var(--text-muted); font-size: 0.78rem; }
+.rag-workspace-summary { padding: 0.65rem 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: var(--bg-surface); }
 
 .rag-manage-toolbar {
   display: flex;
@@ -4210,6 +4212,11 @@ input:checked + .slider:before {
 .rag-ingestion-progress-item { display: grid; grid-template-columns: minmax(120px, 0.5fr) 1fr minmax(100px, 0.4fr); }
 .rag-ingestion-progress-item.error { border-color: var(--danger-color, #dc2626); }
 .rag-ingestion-progress-item progress { width: 100%; }
+.rag-ingestion-global-progress { display: grid; grid-template-columns: 1fr minmax(140px, 0.6fr) auto; align-items: center; gap: 0.65rem; padding: 0.75rem 0.8rem; margin-bottom: 0.65rem; border: 1px solid var(--primary-color); border-radius: var(--radius-sm); background: var(--primary-light); }
+.rag-ingestion-global-progress > div { display: grid; gap: 0.1rem; }
+.rag-ingestion-global-progress span { color: var(--text-muted); font-size: 0.78rem; }
+.rag-ingestion-global-progress progress { width: 100%; }
+.rag-ingestion-progress-recent { display: grid; gap: 0.5rem; }
 .rag-empty-state { padding: 2rem; text-align: center; color: var(--text-muted); }
 .rag-storage-quota-info { font-size: 0.75rem; color: var(--text-muted); }
 .rag-help-container { display: grid; gap: 1rem; }
@@ -4218,4 +4225,5 @@ input:checked + .slider:before {
   .rag-modal { width: 98vw; height: 94vh; }
   .rag-manage-toolbar { align-items: stretch; flex-direction: column; }
   .rag-ingestion-progress-item { grid-template-columns: 1fr; }
+  .rag-ingestion-global-progress { grid-template-columns: 1fr; }
 }

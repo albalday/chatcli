@@ -47,6 +47,10 @@ test('IngestionEngine - procesa cola, persiste e indexa sin cliente LLM', async 
   assert.equal((await RagStorage.getDocumentsByBranch(branch.id)).length, 1);
   assert.ok(progress.some(event => event.status === 'chunking'));
   assert.ok(progress.every(event => event.percent >= 0 && event.percent <= 100));
+  assert.ok(progress.every(event => event.totalFiles === 3 && event.finishedFiles >= 0));
+  const finalProgress = progress[progress.length - 1];
+  assert.equal(finalProgress.finishedFiles, 3);
+  assert.equal(finalProgress.overallPercent, 100);
   const found = await RagIndex.searchBranch(branch.id, 'BGP', { tolerance: 0 });
   assert.equal(found.hits[0].documentTitle, 'uno.md');
 });

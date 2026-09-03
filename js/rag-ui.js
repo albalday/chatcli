@@ -34,6 +34,22 @@
     return `${(bytes / Math.pow(1024, exponent)).toFixed(exponent ? 1 : 0)} ${units[exponent]}`;
   }
 
+  async function getBranchMetrics(branches) {
+    const metrics = await Promise.all((branches || []).map(async branch => {
+      const documents = await storage().getDocumentsByBranch(branch.id);
+      return [branch.id, {
+        documentCount: documents.length,
+        totalBytes: documents.reduce((sum, document) => sum + (Number(document.fileSize) || 0), 0)
+      }];
+    }));
+    return new Map(metrics);
+  }
+
+  function formatBranchMetrics(metrics) {
+    const count = Number(metrics?.documentCount) || 0;
+    return `${count} documento${count === 1 ? '' : 's'} · ${formatBytes(metrics?.totalBytes || 0)}`;
+  }
+
   function getActiveBranchIds() {
     return Array.from(activeBranchIds);
   }
@@ -90,6 +106,7 @@
   async function renderActiveTab() {
     if (typeof document === 'undefined') return;
     const branches = await storage().getBranches();
+    const branchMetrics = await getBranchMetrics(branches);
     const list = document.getElementById('rag-active-branch-list');
     const title = document.getElementById('rag-active-status-title');
     const description = document.getElementById('rag-active-status-desc');
@@ -118,9 +135,10 @@
     }
     list.innerHTML = branches.map(branch => {
       const isActive = activeBranchIds.has(branch.id);
+      const metrics = branchMetrics.get(branch.id);
       return `
       <button type="button" class="setting-toggle-card rag-branch-select-card${isActive ? ' active' : ''}" data-branch-id="${escapeHtml(branch.id)}">
-        <span class="toggle-card-info"><strong>${escapeHtml(branch.name)}</strong><span class="toggle-card-desc">${escapeHtml(branch.description || 'Sin descripción')}</span></span>
+        <span class="toggle-card-info"><strong>${escapeHtml(branch.name)}</strong><span class="toggle-card-desc">${escapeHtml(branch.description || 'Sin descripción')}</span><span class="rag-branch-metrics">${escapeHtml(formatBranchMetrics(metrics))}</span></span>
         <span class="rag-branch-badge-status">${isActive ? '✓ Activa' : '+ Activar'}</span>
       </button>`;
     }).join('');
@@ -134,6 +152,18 @@
     return `<div class="rag-ingestion-progress-item ${event.status === 'error' ? 'error' : ''}"><strong>${escapeHtml(event.fileName)}</strong><span>${escapeHtml(event.message)}</span><progress max="100" value="${Number(event.percent) || 0}"></progress></div>`;
   }
 
+  function globalProgressMarkup(event) {
+    const total = Number(event.totalFiles) || 0;
+    const finished = Number(event.finishedFiles) || 0;
+    const processed = Number(event.processedFiles) || 0;
+    const failed = Number(event.failedFiles) || 0;
+    const overallPercent = Math.round(Number(event.overallPercent) || 0);
+    const status = failed
+      ? `${processed} indexados · ${failed} con error`
+      : `${processed} indexados`;
+    return `<div class="rag-ingestion-global-progress"><div><strong>Carga global: ${finished} de ${total}</strong><span>${status}</span></div><progress max="100" value="${overallPercent}"></progress><span>${overallPercent}%</span></div>`;
+  }
+
   async function renderWorkspace(branchId) {
     if (typeof document === 'undefined') return;
     const workspace = document.getElementById('rag-manage-workspace');
@@ -143,7 +173,12 @@
       return;
     }
     const documents = await storage().getDocumentsByBranch(branchId);
+    const branchSummary = formatBranchMetrics({
+      documentCount: documents.length,
+      totalBytes: documents.reduce((sum, document) => sum + (Number(document.fileSize) || 0), 0)
+    });
     workspace.innerHTML = `
+      <div class="rag-workspace-summary">Esta rama contiene <strong>${escapeHtml(branchSummary)}</strong>.</div>
       <label class="rag-dropzone" id="rag-dropzone">
         <strong>Arrastra o selecciona archivos</strong>
         <span>PDF, Markdown o texto · guardado privado en IndexedDB</span>
@@ -180,7 +215,10 @@
     const events = new Map();
     await ingestion().processDocumentQueue(files, branchId, event => {
       events.set(event.fileIndex, event);
-      if (container) container.innerHTML = Array.from(events.values()).map(progressMarkup).join('');
+      if (container) {
+        const recentEvents = Array.from(events.values()).slice(-12).reverse();
+        container.innerHTML = `${globalProgressMarkup(event)}<div class="rag-ingestion-progress-recent">${recentEvents.map(progressMarkup).join('')}</div>`;
+      }
     });
     await renderWorkspace(branchId);
     await updateQuota();
@@ -189,10 +227,11 @@
   async function renderManageTab(preferredBranchId) {
     if (typeof document === 'undefined') return;
     const branches = await storage().getBranches();
+    const branchMetrics = await getBranchMetrics(branches);
     const select = document.getElementById('rag-manage-branch-select');
     if (!select) return;
     const selected = preferredBranchId || select.value || branches[0]?.id || '';
-    select.innerHTML = branches.map(branch => `<option value="${escapeHtml(branch.id)}"${branch.id === selected ? ' selected' : ''}>${escapeHtml(branch.name)}</option>`).join('');
+    select.innerHTML = branches.map(branch => `<option value="${escapeHtml(branch.id)}"${branch.id === selected ? ' selected' : ''}>${escapeHtml(branch.name)} (${escapeHtml(formatBranchMetrics(branchMetrics.get(branch.id)))})</option>`).join('');
     select.disabled = !branches.length;
     await renderWorkspace(selected);
   }

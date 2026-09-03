@@ -181,7 +181,17 @@
     if (!branchId) throw new Error('Se requiere una rama de destino.');
     const result = { total: queue.length, processed: 0, failed: 0, documents: [], errors: [] };
     const emit = (fileIndex, fileName, status, message, percent, errorDetails) => {
-      if (typeof onProgress === 'function') onProgress({ fileIndex, totalFiles: queue.length, fileName, status, message, percent, errorDetails });
+      if (typeof onProgress === 'function') {
+        const finishedFiles = result.processed + result.failed;
+        const isFinished = status === 'completed' || status === 'error';
+        const overallPercent = queue.length
+          ? Math.min(100, ((finishedFiles + (isFinished ? 0 : (Number(percent) || 0) / 100)) / queue.length) * 100)
+          : 100;
+        onProgress({
+          fileIndex, totalFiles: queue.length, fileName, status, message, percent, errorDetails,
+          processedFiles: result.processed, failedFiles: result.failed, finishedFiles, overallPercent
+        });
+      }
     };
     for (let fileIndex = 0; fileIndex < queue.length; fileIndex++) {
       const file = queue[fileIndex];
@@ -208,14 +218,14 @@
           fileSize: Number(file?.size) || preparedText.length, chunks
         }, file, images);
         if (index?.invalidateBranch) index.invalidateBranch(branchId);
-        emit(fileIndex, fileName, 'completed', `${fileName} indexado (${chunks.length} fragmentos, ${(images && images.length) || 0} imágenes).`, 100);
         result.processed++;
         result.documents.push(document);
+        emit(fileIndex, fileName, 'completed', `${fileName} indexado (${chunks.length} fragmentos, ${(images && images.length) || 0} imágenes).`, 100);
       } catch (error) {
         const message = error?.message || String(error);
-        emit(fileIndex, fileName, 'error', `Error en ${fileName}: ${message}`, 0, message);
         result.failed++;
         result.errors.push({ fileName, error: message });
+        emit(fileIndex, fileName, 'error', `Error en ${fileName}: ${message}`, 0, message);
       }
     }
     return result;

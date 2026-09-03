@@ -27,8 +27,10 @@ test('I18n - Traducciones del conocimiento local', () => {
   I18n.setLanguage('es', false);
   assert.equal(I18n.t('rag_modal_title'), 'Conocimiento local');
   assert.ok(I18n.t('rag_help_storage_desc').includes('IndexedDB'));
+  assert.match(I18n.t('rag_help_llm_desc'), /temperatura baja/);
 
   I18n.setLanguage('en', false);
   assert.equal(I18n.t('rag_modal_title'), 'Local knowledge');
   assert.ok(I18n.t('rag_help_storage_desc').includes('Orama'));
+  assert.match(I18n.t('rag_help_llm_desc'), /low temperature/);
 });
