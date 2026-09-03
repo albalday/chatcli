@@ -7,7 +7,7 @@
 
   const definition = {
     name: 'read_knowledge_chunk',
-    description: 'Lee el texto completo de un fragmento obtenido previamente con search_knowledge_base. Si contiene imágenes, el resultado identifica las líneas Markdown exactas para mostrarlas; copia literalmente la que uses en la respuesta final y no afirmes que una imagen se muestra si no incluyes su línea Markdown.',
+    description: 'Lee el texto completo de un fragmento obtenido previamente con search_knowledge_base.',
     parameters: {
       type: 'object',
       properties: { chunkId: { type: 'string', description: 'Identificador exacto del fragmento (chunkId).' } },
@@ -26,12 +26,6 @@
     return context.activeRagBranchIds || context.activeRagBranchId || context.branchId || context.config?.activeRagBranchIds || context.config?.activeRagBranchId || '';
   }
   const getBranchId = getBranchIds;
-
-  function formatImagesForModel(result = {}) {
-    const images = Array.isArray(result.imageMarkdown) ? result.imageMarkdown.filter(Boolean) : [];
-    if (!images.length) return '';
-    return `\n\n[IMÁGENES RECUPERADAS]\nSi muestras una imagen al usuario, copia literalmente una de estas líneas Markdown en la respuesta final. No digas que la imagen se muestra si no incluyes su línea:\n${images.join('\n')}`;
-  }
 
   function createCardWrapper(ui) {
     const doc = ui?.document || (typeof document !== 'undefined' ? document : null);
@@ -76,7 +70,7 @@
         return service?.readKnowledgeChunk ? service.readKnowledgeChunk(getBranchIds(context), args) : { success: false, error: 'Servicio de RAG no disponible.' };
       },
       result: {
-        toModel: (_args, result) => (result?.content || JSON.stringify(result || {})) + formatImagesForModel(result),
+        toModel: (_args, result) => result?.content || JSON.stringify(result || {}),
         toMarkdown: args => `> 📄 **read_knowledge_chunk** (${args.chunkId || ''})\n\n`
       },
       formatter: (args, result) => result.success

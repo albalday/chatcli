@@ -42,17 +42,6 @@ test('RagService - lista, busca y lee chunks', async () => {
   assert.match(read.content, /PostgreSQL/);
 });
 
-test('RagService - identifica las referencias Markdown de imágenes en un fragmento', async () => {
-  const branch = await RagStorage.createBranch('Informes visuales');
-  const document = await RagStorage.saveDocument({
-    id: 'doc_images', branchId: branch.id, title: 'informe.pdf', fileType: 'pdf',
-    chunks: [{ content: 'Resumen de la página.\n\n![Gráfico de ventas](rag-image://doc_images:img_1)' }]
-  });
-
-  const read = await RagService.readKnowledgeChunk(branch.id, { chunkId: `${document.id}:chunk:0` });
-  assert.deepEqual(read.imageMarkdown, ['![Gráfico de ventas](rag-image://doc_images:img_1)']);
-});
-
 test('RagService - valida rama, consulta y chunk', async () => {
   assert.equal((await RagService.listDocuments('')).success, false);
   assert.equal((await RagService.searchKnowledgeBase('', { query: '' })).success, false);

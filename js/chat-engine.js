@@ -106,26 +106,6 @@
     return trimmed + '<span class="streaming-cursor"></span>';
   }
 
-  function userRequestsImages(chatHistory = []) {
-    const lastUserMessage = [...chatHistory].reverse().find(message => message?.role === 'user');
-    const content = Array.isArray(lastUserMessage?.content)
-      ? lastUserMessage.content.filter(part => part?.type === 'text').map(part => part.text).join(' ')
-      : String(lastUserMessage?.content || '');
-    return /\b(?:im[aá]genes?|figuras?|diagramas?|gr[aá]ficos?|images?|figures?|diagrams?|graphics?|charts?)\b/i.test(content);
-  }
-
-  function appendRetrievedImages(finalText, imageMarkdown = [], chatHistory = [], language = 'es') {
-    if (!userRequestsImages(chatHistory)) return String(finalText || '');
-    const validImages = Array.from(new Set((imageMarkdown || []).filter(reference =>
-      /^!\[[^\]]*\]\(rag-image:\/\/[a-zA-Z0-9_\-:]+\)$/i.test(String(reference || '').trim())
-    ).map(reference => String(reference).trim())));
-    const text = String(finalText || '');
-    const missingImages = validImages.filter(reference => !text.includes(reference));
-    if (!missingImages.length) return text;
-    const title = language === 'en' ? '### Extracted images' : '### Imágenes extraídas';
-    return `${text.trim()}\n\n${title}\n\n${missingImages.join('\n\n')}`.trim();
-  }
-
   /**
    * Construye el array de mensajes normalizado y enriquecido para la API de inferencia.
    * @param {Array} chatHistory - Historial de mensajes de la conversación.
@@ -384,7 +364,6 @@
     let finalAssistantText = '';
     let finalStats = null;
     let isCancelled = false;
-    const retrievedImageMarkdown = [];
 
     while (turnIndex < maxAgentTurns) {
       if (signal && signal.aborted) {
@@ -596,7 +575,6 @@
           }
         }
 
-        currentTurnText = appendRetrievedImages(currentTurnText, retrievedImageMarkdown, chatHistory, appConfig.language);
         if (turnBlock) {
           turnBlock.innerHTML = parseMd(currentTurnText || tr('empty_response', 'Respuesta vacía'));
           attachEvts(turnBlock);
@@ -717,12 +695,6 @@
         onToolCallEnd({ turnIndex, toolCall: tc, result: toolExecRes });
       }
 
-      if ((rawFuncName === 'read_knowledge_chunk' || normName === 'read_knowledge_chunk') && Array.isArray(toolExecRes?.result?.imageMarkdown)) {
-        toolExecRes.result.imageMarkdown.forEach(reference => {
-          if (typeof reference === 'string' && !retrievedImageMarkdown.includes(reference)) retrievedImageMarkdown.push(reference);
-        });
-      }
-
       if (turnFinalStats && typeof onStats === 'function') onStats(turnFinalStats);
       scrollFn();
 
@@ -828,7 +800,6 @@
         }
       }
 
-      finalSynthText = appendRetrievedImages(finalSynthText, retrievedImageMarkdown, chatHistory, appConfig.language);
       if (finalSynthText && finalSynthBlock) {
         finalSynthBlock.innerHTML = parseMd(finalSynthText);
         attachEvts(finalSynthBlock);
@@ -857,8 +828,6 @@
     getDailyDateAnchor,
     getToolsSystemPromptGuide,
     injectStreamingCursor,
-    userRequestsImages,
-    appendRetrievedImages,
     buildEffectiveMessages,
     executeAgentTurnLoop
   };

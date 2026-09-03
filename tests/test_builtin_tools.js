@@ -172,12 +172,6 @@ test('Builtin Tools - RAG tools consumen el servicio inyectado y propagan rama a
   assert.equal(listResult.text, 'Documento');
   assert.equal(searchResult.text, 'Coincidencia');
   assert.equal(readResult.content, 'Contenido');
-  const readTool = ReadKnowledgeChunkTool.createTool(AgentCore.Tool);
-  const imageResultForModel = readTool.serializeResultForModel({}, {
-    content: 'Fragmento con gráfico.', imageMarkdown: ['![Gráfico](rag-image://doc_1:img_1)']
-  });
-  assert.match(imageResultForModel, /IMÁGENES RECUPERADAS/);
-  assert.match(imageResultForModel, /!\[Gráfico\]\(rag-image:\/\/doc_1:img_1\)/);
   assert.deepEqual(calls, [
     { name: 'list', branchId: 'branch-1' },
     { name: 'search', branchId: 'branch-1', args: searchArgs },
