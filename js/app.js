@@ -1,5 +1,5 @@
 /**
- * Aplicación principal del cliente de chat Web (ZeroChat v5.5).
+ * Aplicación principal del cliente de chat Web (ZeroChat v5.5.1).
  * Desarrollo 100% asistido por IA: colaboración entre Codex y Antigravity para implementar
  * un motor RAG local funcional utilizando la librería externa Orama como vendor autónomo,
  * iterando e implementando sin tocar una sola línea de código manual por parte del usuario.
@@ -2112,7 +2112,7 @@
       exportConversationAsPrint
     };
 
-    console.log('💬 ZeroChat v5.5 initialized with autonomous tools and local Orama knowledge.');
+    console.log('💬 ZeroChat v5.5.1 initialized with autonomous tools and local Orama knowledge.');
   }
 
   if (document.readyState === 'loading') {
