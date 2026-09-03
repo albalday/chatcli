@@ -42,7 +42,7 @@ test('Bundler - Generación en modo Producción (Gzip Base64 Level 9)', () => {
     // Verificar presencia de módulos fundamentales en el JS descomprimido
     const expectedModules = [
       'ZeroChatOrama', 'ZeroChatDB', 'ChatStorage', 'ChatRagStorage', 'ChatRagIndex', 'ChatIngestionEngine', 'ChatRagService', 'ChatRagUI',
-      'ChatI18n', 'ChatSandbox', 'ChatCharts',
+      'ChatI18n', 'ChatIcons', 'ChatSandbox', 'ChatCharts',
       'ChatWebBrowser', 'ChatWebSearch', 'ChatMarkdown',
       'ChatProviders', 'ChatAPI', 'ChatFileParser',
       'ChatToolRuntime', 'ChatToolManifest', 'ChatBuiltinExecuteJavascriptTool',
