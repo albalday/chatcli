@@ -4221,6 +4221,19 @@ input:checked + .slider:before {
 .rag-storage-quota-info { font-size: 0.75rem; color: var(--text-muted); }
 .rag-help-container { display: grid; gap: 1rem; }
 
+/* Mantener Documentos y Ayuda en la misma escala tipográfica que Activar. */
+.rag-manage-workspace,
+.rag-help-container { font-size: 0.82rem; }
+.rag-manage-workspace .rag-dropzone strong,
+.rag-manage-workspace .rag-document-card strong,
+.rag-help-container .setting-card-title { font-size: 0.82rem; }
+.rag-manage-workspace .rag-dropzone span,
+.rag-manage-workspace .rag-document-card .toggle-card-desc,
+.rag-help-container .setting-card-desc {
+  font-size: 0.725rem;
+  line-height: 1.35;
+}
+
 @media (max-width: 768px) {
   .rag-modal { width: 98vw; height: 94vh; }
   .rag-manage-toolbar { align-items: stretch; flex-direction: column; }
