@@ -312,11 +312,14 @@
     try {
       if (btnExport) {
         btnExport.disabled = true;
-        btnExport.textContent = '⏳ Exportando...';
+        btnExport.textContent = '⏳ Exportando 0%...';
       }
       const { blob, filename } = await storage().exportBranchBlob(branchId, {
         includeSources: false,
-        compress: true
+        compress: true,
+        onProgress: ({ current, total, percent }) => {
+          if (btnExport) btnExport.textContent = `⏳ Exportando ${percent}% (${current}/${total})...`;
+        }
       });
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
@@ -324,6 +327,8 @@
       anchor.download = filename;
       anchor.click();
       setTimeout(() => URL.revokeObjectURL(url), 10000);
+      if (btnExport) btnExport.textContent = '✅ ¡Exportado!';
+      await new Promise(resolve => setTimeout(resolve, 1500));
     } catch (error) {
       alert(`Error al exportar la rama: ${error.message || error}`);
     } finally {

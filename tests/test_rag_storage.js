@@ -149,6 +149,52 @@ test('RagStorage - exportBranchBlob genera un respaldo comprimido gzip en stream
   assert.equal(docs.length, 1);
 });
 
+test('RagStorage - exporta e importa información de imágenes y reasigna referencias en chunks', async () => {
+  const branch = await RagStorage.createBranch('ImagesTest');
+  await RagStorage.saveDocument({
+    id: 'doc_original',
+    branchId: branch.id,
+    title: 'doc-with-image.pdf',
+    fileType: 'pdf',
+    chunks: [
+      { order: 0, title: 'Sección con gráfico', content: 'Aquí está el balance: ![Balance](rag-image://doc_original:img_1)' }
+    ]
+  }, null, [
+    { id: 'img_1', page: 1, mimeType: 'image/jpeg', dataUrl: 'data:image/jpeg;base64,1234', label: 'Balance' }
+  ]);
+
+  let progressCalled = false;
+  const { blob } = await RagStorage.exportBranchBlob(branch.id, {
+    compress: true,
+    onProgress: (p) => {
+      if (p.percent === 100) progressCalled = true;
+    }
+  });
+  assert.ok(progressCalled);
+
+  const ds = new DecompressionStream('gzip');
+  const decompressedText = await new Response(blob.stream().pipeThrough(ds)).text();
+  const parsed = JSON.parse(decompressedText);
+  assert.equal(parsed.documents[0].imageCount, 1);
+  assert.equal(parsed.documents[0].images.length, 1);
+  assert.equal(parsed.documents[0].images[0].id, 'img_1');
+
+  // Restaurar en una nueva rama sin borrar la anterior (provocará asignación de nuevo document.id)
+  const restoredBranch = await RagStorage.importBranch(decompressedText);
+  const restoredDocs = await RagStorage.getDocumentsByBranch(restoredBranch.id);
+  assert.equal(restoredDocs.length, 1);
+  assert.equal(restoredDocs[0].imageCount, 1);
+
+  // Las imágenes deben haberse guardado para el nuevo documento
+  const restoredImages = await RagStorage.getDocumentImages(restoredDocs[0].id);
+  assert.equal(restoredImages.length, 1);
+  assert.equal(restoredImages[0].dataUrl, 'data:image/jpeg;base64,1234');
+
+  // Los chunks deben haber reasignado la referencia de imagen al nuevo ID de documento
+  const restoredChunks = await RagStorage.getChunksByDocument(restoredDocs[0].id);
+  assert.ok(restoredChunks[0].content.includes(`rag-image://${restoredDocs[0].id}:img_1`));
+});
+
 test('RagStorage - getChunkById resuelve alias comunes generados por LLMs (docId#0, docId:0)', async () => {
   const branch = await RagStorage.createBranch('AliasTest');
   const doc = await RagStorage.saveDocument({

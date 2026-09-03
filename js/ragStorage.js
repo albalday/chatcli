@@ -483,6 +483,9 @@
     if (!branch) throw new NotFoundError(`No existe la rama ${branchId}.`);
     const documents = await getDocumentsByBranch(branchId);
     const includeSources = options.includeSources !== false;
+    const onProgress = typeof options.onProgress === 'function' ? options.onProgress : null;
+    const total = documents.length;
+    let current = 0;
     const exportedDocuments = [];
     for (const document of documents) {
       const chunks = await getChunksByDocument(document.id);
@@ -491,10 +494,12 @@
         ? await serializeSource(await getSourceFile(document.id), document.mimeType)
         : null;
       exportedDocuments.push({
+        id: document.id,
         title: document.title,
         fileType: document.fileType,
         mimeType: document.mimeType,
         fileSize: document.fileSize,
+        imageCount: document.imageCount || (images ? images.length : 0),
         source,
         images: (images && images.length > 0) ? images : undefined,
         chunks: chunks.map(chunk => ({
@@ -505,6 +510,13 @@
           pageEnd: chunk.pageEnd
         }))
       });
+      current++;
+      if (onProgress) {
+        onProgress({ current, total, percent: Math.round((current / total) * 100), docTitle: document.title });
+        if (current % 10 === 0) {
+          await new Promise(resolve => setTimeout(resolve, 0));
+        }
+      }
     }
     return {
       schema: 'zerochat-knowledge',
@@ -524,6 +536,9 @@
 
     const compress = options.compress !== false && typeof CompressionStream !== 'undefined';
     const includeSources = Boolean(options.includeSources);
+    const onProgress = typeof options.onProgress === 'function' ? options.onProgress : null;
+    const total = documents.length;
+    let current = 0;
 
     if (typeof TransformStream !== 'undefined' && compress) {
       const ts = new TransformStream();
@@ -550,10 +565,12 @@
           ? await serializeSource(await getSourceFile(document.id), document.mimeType)
           : null;
         const docRecord = {
+          id: document.id,
           title: document.title,
           fileType: document.fileType,
           mimeType: document.mimeType,
           fileSize: document.fileSize,
+          imageCount: document.imageCount || (images ? images.length : 0),
           source,
           images: (images && images.length > 0) ? images : undefined,
           chunks: chunks.map(chunk => ({
@@ -567,6 +584,14 @@
         const chunkJson = (first ? '' : ',\n') + JSON.stringify(docRecord);
         first = false;
         await writer.write(encoder.encode(chunkJson));
+
+        current++;
+        if (onProgress) {
+          onProgress({ current, total, percent: Math.round((current / total) * 100), docTitle: document.title });
+          if (current % 10 === 0) {
+            await new Promise(resolve => setTimeout(resolve, 0));
+          }
+        }
       }
 
       await writer.write(encoder.encode('\n]}'));
@@ -579,7 +604,7 @@
       };
     }
 
-    const backup = await exportBranch(branchId, { includeSources });
+    const backup = await exportBranch(branchId, { includeSources, onProgress });
     const jsonStr = JSON.stringify(backup);
     const plainBlob = new Blob([jsonStr], { type: 'application/json' });
     return {
@@ -603,13 +628,33 @@
       const total = data.documents.length;
       let current = 0;
       for (const document of data.documents) {
+        const oldDocId = document.id;
+        let targetDocId = oldDocId;
+        if (!targetDocId || (await getDocumentById(targetDocId))) {
+          targetDocId = generateId('doc');
+        }
+
+        // Si cambia el ID del documento, actualizar las referencias a imágenes en los chunks
+        const sourceChunks = Array.isArray(document.chunks) ? document.chunks : [];
+        const remappedChunks = sourceChunks.map(chunk => {
+          if (oldDocId && oldDocId !== targetDocId && chunk.content && chunk.content.includes(`rag-image://${oldDocId}:`)) {
+            return {
+              ...chunk,
+              content: chunk.content.split(`rag-image://${oldDocId}:`).join(`rag-image://${targetDocId}:`)
+            };
+          }
+          return chunk;
+        });
+
         await saveDocument({
+          id: targetDocId,
           branchId: branch.id,
           title: document.title,
           fileType: document.fileType,
           mimeType: document.mimeType,
           fileSize: document.fileSize,
-          chunks: document.chunks
+          imageCount: document.imageCount || (document.images ? document.images.length : 0),
+          chunks: remappedChunks
         }, deserializeSource(document.source), document.images || []);
         current++;
         if (typeof onProgress === 'function') {
