@@ -54,7 +54,6 @@
         enableAgentWeb: true,
         enableAgentSearch: true,
         enableAgentChart: true,
-        enableContextCache: true,
         enableRawLogs: false,
         enableDebugMessages: false,
         sendDateTime: true

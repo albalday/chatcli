@@ -137,7 +137,6 @@
         reasoningEffort = 'none',
         toolsList = [],
         toolChoice = 'auto',
-        enableContextCache = true,
         jsonMode = false,
         stream = true
       } = params;
@@ -163,7 +162,7 @@
         this.applyTools(payload, toolsList, toolChoice);
       }
 
-      if (capabilities.promptCaching && enableContextCache) {
+      if (capabilities.promptCaching) {
         this.applyContextCache(payload, { toolsList, messages: formattedMessages });
       }
 
@@ -475,8 +474,7 @@
             messages: [{ role: 'user', content: 'hi' }],
             stream: true,
             temperature: 0.1,
-            reasoningEffort: 'none',
-            enableContextCache: false
+            reasoningEffort: 'none'
           });
           probePayload.max_tokens = 1;
 
@@ -718,7 +716,6 @@
         reasoningEffort = 'none',
         toolsList = [],
         toolChoice = 'auto',
-        enableContextCache = true,
         stream = true
       } = params;
 
@@ -742,7 +739,7 @@
       };
 
       if (systemContent) {
-        if (enableContextCache && capabilities.promptCaching) {
+        if (capabilities.promptCaching) {
           payload.system = [{ type: 'text', text: systemContent, cache_control: { type: 'ephemeral' } }];
         } else {
           payload.system = systemContent;
@@ -768,12 +765,12 @@
           }
           return t;
         });
-        if (enableContextCache && capabilities.promptCaching && payload.tools.length > 0) {
+        if (capabilities.promptCaching && payload.tools.length > 0) {
           payload.tools[payload.tools.length - 1].cache_control = { type: 'ephemeral' };
         }
       }
 
-      if (capabilities.promptCaching && enableContextCache) {
+      if (capabilities.promptCaching) {
         this.applyContextCache(payload, { toolsList, messages: nonSystemMessages });
       }
 

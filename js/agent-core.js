@@ -747,9 +747,6 @@
         reasoningEffort = 'none',
         enableTools = true,
         toolFilterOptions = {},
-        enableContextCache = true,
-        cacheInvalidated = false,
-        cacheRevision = null,
         signal = null,
         maxSteps = this.maxSteps,
         timeoutMs = this.timeoutMs,
@@ -848,9 +845,6 @@
         let stepStats = null;
         let streamError = null;
 
-        const isFirstStep = stepIndex === 0;
-        const currentCacheInvalidated = isFirstStep && cacheInvalidated;
-
         try {
           const streamResult = await API.streamChatCompletion({
             apiUrl,
@@ -865,9 +859,6 @@
             enableAgentWeb: toolFilterOptions.enableAgentWeb !== false,
             enableAgentSearch: toolFilterOptions.enableAgentSearch !== false,
             enableAgentChart: toolFilterOptions.enableAgentChart !== false,
-            enableContextCache,
-            cacheInvalidated: currentCacheInvalidated,
-            cacheRevision,
             signal: combinedSignal,
 
             onReasoningChunk: (chunk, accumulated) => {
@@ -950,7 +941,6 @@
                   reasoningEffort,
                   enableTools: true,
                   toolChoice: 'none',
-                  enableContextCache,
                   signal: combinedSignal,
                   onChunk: (fullTextSoFar, delta, stats) => {
                     currentStepText = fullTextSoFar;
@@ -1022,7 +1012,6 @@
                   temperature,
                   reasoningEffort,
                   enableTools: false,
-                  enableContextCache,
                   signal: combinedSignal,
                   onChunk: (fullTextSoFar, delta, stats) => {
                     finalAccumulatedText = fullTextSoFar;
@@ -1151,7 +1140,6 @@
               reasoningEffort,
               enableTools: true,
               toolChoice: 'none',
-              enableContextCache,
               signal: combinedSignal,
               onChunk: (fullTextSoFar, delta, stats) => {
                 finalAccumulatedText = fullTextSoFar;

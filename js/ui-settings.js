@@ -208,9 +208,6 @@
     if (elements.agentToolsContainer) {
       renderAgentToolsUI(elements.agentToolsContainer, profileData.enabledTools || {});
     }
-    if (elements.settingEnableContextCache && profileData.enableContextCache !== undefined) {
-      elements.settingEnableContextCache.checked = profileData.enableContextCache !== false;
-    }
     if (elements.settingEnableRawLogs && profileData.enableRawLogs !== undefined) {
       elements.settingEnableRawLogs.checked = profileData.enableRawLogs === true;
     }
@@ -240,7 +237,6 @@
       theme: appConfig?.theme || 'light',
       language: appConfig?.language || 'es',
       enabledTools: gatherEnabledToolsFromUI(elements?.agentToolsContainer),
-      enableContextCache: elements?.settingEnableContextCache ? elements.settingEnableContextCache.checked : true,
       enableRawLogs: elements?.settingEnableRawLogs ? elements.settingEnableRawLogs.checked : Boolean(appConfig?.enableRawLogs),
       enableDebugMessages: Boolean(appConfig?.enableDebugMessages),
       sendDateTime: elements?.settingSendDateTime ? elements.settingSendDateTime.checked : true,
@@ -336,9 +332,6 @@
     if (elements.agentToolsContainer) {
       renderAgentToolsUI(elements.agentToolsContainer, appConfig?.enabledTools || {});
     }
-    if (elements.settingEnableContextCache) {
-      elements.settingEnableContextCache.checked = appConfig?.enableContextCache !== false;
-    }
     if (elements.settingEnableRawLogs) {
       elements.settingEnableRawLogs.checked = appConfig?.enableRawLogs === true;
     }
@@ -385,7 +378,6 @@
 
       if (elements.modelSelectHelper) elements.modelSelectHelper.value = defaults.model;
       if (elements.agentToolsContainer) renderAgentToolsUI(elements.agentToolsContainer, defaults.enabledTools || {});
-      if (elements.settingEnableContextCache) elements.settingEnableContextCache.checked = defaults.enableContextCache !== false;
       if (elements.settingEnableRawLogs) elements.settingEnableRawLogs.checked = defaults.enableRawLogs === true;
       if (elements.settingSendDateTime) elements.settingSendDateTime.checked = defaults.sendDateTime !== false;
       return defaults;

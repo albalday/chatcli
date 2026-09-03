@@ -155,8 +155,6 @@
       stat_tokens_title: 'Tokens totales estimados',
       stat_cache_tokens: '{tokens} cache',
       stat_cache_title: 'Tokens leídos desde la caché de contexto del servidor (Prompt/KV Caching)',
-      cache_invalidated_log: '🔄 Caché de contexto invalidada tras el borrado de mensajes del chat. Se reconstruye un contexto limpio en el servidor.',
-      cache_hit_log: '⚡ Caché de contexto activa: {cached} tokens leídos de caché.',
 
       // Respuestas agénticas y herramientas
       tool_js_title: 'Herramienta Ejecutada: execute_javascript ({ms}ms)',
@@ -257,8 +255,8 @@
       agent_pdf_desc: 'Permite al modelo descargar documentos PDF desde la web y extraer todo su texto al contexto en tiempo real.',
       agent_chart_title: 'Visualización de Datos y Gráficos Nativos (SVG)',
       agent_chart_desc: 'Permite al modelo invocar render_chart para generar y mostrar gráficos interactivos de barras, líneas o sectores sin librerías externas.',
-      agent_cache_title: 'Caché de Contexto (Context / Prompt Caching)',
-      agent_cache_desc: 'Reutiliza la caché de contexto (KV Cache / Prompt Caching) en servidores compatibles (OpenAI, Claude, OpenRouter, Gemini, LM Studio, vLLM) reduciendo latencia y coste. Se invalida y reconstruye automáticamente si borras mensajes del chat.',
+      model_cache_title: 'Caché de contexto automática',
+      model_cache_desc: 'El cliente aplica automáticamente las marcas de caché compatibles con el proveedor. En servidores locales, la caché KV se administra en el servidor.',
       agent_datetime_title: 'Fecha y Hora Actual',
       agent_datetime_desc: 'Incluye la fecha en el sistema y permite al modelo consultar la hora exacta.',
       datetime_initial_user_msg: 'La fecha y hora actual es: {datetime}.',
@@ -484,8 +482,6 @@
       stat_tokens_title: 'Estimated total tokens',
       stat_cache_tokens: '{tokens} cache',
       stat_cache_title: 'Tokens read from server context cache (Prompt / KV Caching)',
-      cache_invalidated_log: '🔄 Context cache invalidated after message deletion. Clean context rebuilt on server.',
-      cache_hit_log: '⚡ Context cache active: {cached} tokens read from cache.',
 
       // Respuestas agénticas y herramientas
       tool_js_title: 'Tool Executed: execute_javascript ({ms}ms)',
@@ -586,8 +582,8 @@
       agent_pdf_desc: 'Allows the model to download PDF documents from the web and extract all readable text into context in real-time.',
       agent_chart_title: 'Data Visualization & Native SVG Charts',
       agent_chart_desc: 'Allows the model to call render_chart to generate and display interactive bar, line, doughnut or pie charts without external libraries.',
-      agent_cache_title: 'Context / Prompt Caching',
-      agent_cache_desc: 'Reuses context cache (KV Cache / Prompt Caching) on compatible servers (OpenAI, Claude, OpenRouter, Gemini, LM Studio, vLLM) reducing latency and costs. Automatically invalidated and rebuilt if you delete messages from chat.',
+      model_cache_title: 'Automatic context caching',
+      model_cache_desc: 'The client automatically applies cache markers supported by the provider. On local servers, the KV cache is managed by the server.',
       agent_datetime_title: 'Current Date & Time',
       agent_datetime_desc: 'Includes date in system context and allows the model to query exact time.',
       datetime_initial_user_msg: 'The current date and time is: {datetime}.',

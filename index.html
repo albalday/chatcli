@@ -514,6 +514,15 @@
               <line x1="12" y1="16" x2="12" y2="12"></line>
               <line x1="12" y1="8" x2="12.01" y2="8"></line>
             </svg>
+            <span><strong data-i18n="model_cache_title">Caché de contexto automática</strong><br><span data-i18n="model_cache_desc">El cliente aplica automáticamente las marcas de caché que admita el proveedor. En servidores locales la caché KV se administra en el servidor.</span></span>
+          </div>
+
+          <div class="cookie-notice">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="16" x2="12" y2="12"></line>
+              <line x1="12" y1="8" x2="12.01" y2="8"></line>
+            </svg>
             <span data-i18n-html="cookie_notice">Toda la configuración se almacena localmente de forma persistente (compatible tanto con <strong>file://</strong> como con servidores web).</span>
           </div>
         </div>
@@ -541,21 +550,6 @@
 
           <!-- Contenedor dinámico de herramientas agénticas registradas -->
           <div id="agent-tools-container" class="agent-tools-container"></div>
-
-          <div class="setting-toggle-card">
-            <div class="toggle-card-info">
-              <div class="toggle-card-title">
-                <span data-i18n="agent_cache_title">Caché de Contexto (Context / Prompt Caching)</span>
-              </div>
-              <p class="toggle-card-desc" data-i18n="agent_cache_desc">
-                Reutiliza la memoria caché de contexto (KV Cache / Prompt Caching) en servidores compatibles (OpenAI, Claude, OpenRouter, Gemini, LM Studio, vLLM) reduciendo latencia y costes. Se invalida automáticamente al borrar mensajes del chat.
-              </p>
-            </div>
-            <label class="switch">
-              <input type="checkbox" id="setting-enable-context-cache" checked>
-              <span class="slider"></span>
-            </label>
-          </div>
         </div>
 
         <!-- Pestaña 4: Visualización e Idioma -->

@@ -562,6 +562,15 @@ test('Browser UI - Fase 6: Modales <dialog> Modernos con Blur y Tarjetas de Herr
     assert.ok(dialogMetrics.borderRadius >= 16, `El radio de curvatura (${dialogMetrics.borderRadius}px) debe ser moderno (>= 16px / 1.25rem)`);
     assert.notEqual(dialogMetrics.boxShadow, 'none', 'El modal debe tener elevación con sombra');
 
+    const contextCachePlacement = await page.evaluate(() => ({
+      automaticNotice: !!document.querySelector('#tab-model [data-i18n="model_cache_title"]'),
+      legacyToggle: !!document.getElementById('setting-enable-context-cache'),
+      agentCacheText: document.querySelector('#tab-agent')?.textContent.includes('Caché de Contexto') || false
+    }));
+    assert.ok(contextCachePlacement.automaticNotice, 'La caché automática debe explicarse en la pestaña Modelo');
+    assert.equal(contextCachePlacement.legacyToggle, false, 'La caché no debe exponerse como un interruptor de Agente');
+    assert.equal(contextCachePlacement.agentCacheText, false, 'La pestaña Agente no debe presentar la caché como herramienta');
+
     // 2. Navegar entre pestañas del modal (Ej. pestaña Proveedores / Herramientas)
     const tabButtons = await page.$$('.modal-tab-btn');
     assert.ok(tabButtons.length >= 2, 'Debe haber múltiples pestañas en el modal de configuración');

@@ -317,8 +317,6 @@
       activeRagBranchId = '',
       activeRagBranchIds = [],
       currentRagSystemContext = '',
-      sessionCacheInvalidated = false,
-      sessionCacheRevision = Date.now(),
       signal,
       container,
       onTurnStart,
@@ -390,9 +388,6 @@
       let turnFinalStats = null;
       let streamError = null;
 
-      const isFirstTurn = turnIndex === 0;
-      const currentCacheInvalidated = isFirstTurn && sessionCacheInvalidated;
-
       const effectiveMessages = buildEffectiveMessages(chatHistory, appConfig, {
         currentRagSystemContext,
         activeRagBranchId: resolvedActiveRagBranchId,
@@ -416,9 +411,6 @@
         enableTools: activeToolDefs.length > 0,
         activeRagBranchId: resolvedActiveRagBranchId || '',
         activeRagBranchIds: resolvedActiveRagBranchIds,
-        enableContextCache: appConfig.enableContextCache !== false,
-        cacheInvalidated: currentCacheInvalidated,
-        cacheRevision: sessionCacheRevision,
         signal: signal,
 
         onBeforeRequest: onBeforeRequest,
@@ -526,7 +518,6 @@
               enableAgentChart: false,
               activeRagBranchId: resolvedActiveRagBranchId || '',
               activeRagBranchIds: resolvedActiveRagBranchIds,
-              enableContextCache: appConfig.enableContextCache !== false,
               signal: signal,
 
               onReasoningChunk: function (chunk) {
@@ -759,7 +750,6 @@
           toolChoice: 'none',
           activeRagBranchId: resolvedActiveRagBranchId || '',
           activeRagBranchIds: resolvedActiveRagBranchIds,
-          enableContextCache: appConfig.enableContextCache !== false,
           signal: signal,
 
           onReasoningChunk: function (chunk) {
