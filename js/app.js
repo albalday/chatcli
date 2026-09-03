@@ -46,6 +46,13 @@
     return key;
   }
 
+  function getMsgIcon(name, size = 12) {
+    if (typeof window !== 'undefined' && window.ChatIcons && window.ChatIcons.has(name)) {
+      return window.ChatIcons.get(name, { size });
+    }
+    return '';
+  }
+
   // Estado de la aplicación
   let appConfig = Storage.loadConfig ? Storage.loadConfig() : {
     apiUrl: 'http://localhost:1234/v1',
@@ -710,7 +717,7 @@
     const btnReuse = document.createElement('button');
     btnReuse.type = 'button';
     btnReuse.className = 'btn-msg-action';
-    btnReuse.innerHTML = `✏️ <span>${t('btn_reuse')}</span>`;
+    btnReuse.innerHTML = `${getMsgIcon('edit', 12)} <span>${t('btn_reuse')}</span>`;
     btnReuse.title = t('btn_reuse_title');
     btnReuse.addEventListener('click', () => {
       elements.userInput.value = originalPrompt || text;
@@ -721,7 +728,7 @@
     const btnDelete = document.createElement('button');
     btnDelete.type = 'button';
     btnDelete.className = 'btn-msg-action btn-delete';
-    btnDelete.innerHTML = `🗑️ <span>${t('btn_delete')}</span>`;
+    btnDelete.innerHTML = `${getMsgIcon('trash', 12)} <span>${t('btn_delete')}</span>`;
     btnDelete.title = t('btn_delete_usr_title');
     btnDelete.addEventListener('click', () => removeMessage(wrapper));
 
@@ -772,13 +779,13 @@
     const btnCopy = document.createElement('button');
     btnCopy.type = 'button';
     btnCopy.className = 'btn-msg-action btn-copy-full';
-    btnCopy.innerHTML = `📋 <span>${t('btn_copy')}</span>`;
+    btnCopy.innerHTML = `${getMsgIcon('copy', 12)} <span>${t('btn_copy')}</span>`;
     btnCopy.title = t('btn_copy_title');
 
     const btnDelete = document.createElement('button');
     btnDelete.type = 'button';
     btnDelete.className = 'btn-msg-action btn-delete';
-    btnDelete.innerHTML = `🗑️ <span>${t('btn_delete')}</span>`;
+    btnDelete.innerHTML = `${getMsgIcon('trash', 12)} <span>${t('btn_delete')}</span>`;
     btnDelete.title = t('btn_delete_ast_title');
     btnDelete.addEventListener('click', () => removeMessage(wrapper));
 
@@ -863,17 +870,22 @@
     function updateStatsDisplay(stats) {
       if (!stats) return;
       statsContainer.style.display = 'inline-flex';
+      const clockSvg = getMsgIcon('clock', 11);
+      const zapSvg = getMsgIcon('zap', 11);
+      const docSvg = getMsgIcon('file-text', 11);
+      const dbSvg = getMsgIcon('database', 11);
+
       const cacheHtml = (stats.cachedTokens && stats.cachedTokens > 0)
-        ? `<span>•</span><span class="stat-item stat-item-cache" title="${t('stat_cache_title')}">${t('stat_cache_tokens', { tokens: stats.cachedTokens })}</span>`
+        ? `<span>•</span><span class="stat-item stat-item-cache" title="${t('stat_cache_title')}">${dbSvg} <span>${t('stat_cache_tokens', { tokens: stats.cachedTokens })}</span></span>`
         : '';
       statsContainer.innerHTML = `
-        <span class="stat-item" title="${t('stat_ttft_title')}">${t('stat_ttft', { sec: stats.ttftSec })}</span>
+        <span class="stat-item" title="${t('stat_ttft_title')}">${clockSvg} <span>${t('stat_ttft', { sec: stats.ttftSec })}</span></span>
         <span>•</span>
-        <span class="stat-item" title="${t('stat_speed_title')}">${t('stat_speed', { speed: stats.tokensPerSec })}</span>
+        <span class="stat-item" title="${t('stat_speed_title')}">${zapSvg} <span>${t('stat_speed', { speed: stats.tokensPerSec })}</span></span>
         <span>•</span>
-        <span class="stat-item" title="${t('stat_total_time_title')}">${t('stat_total_time', { sec: stats.totalSec })}</span>
+        <span class="stat-item" title="${t('stat_total_time_title')}">${clockSvg} <span>${t('stat_total_time', { sec: stats.totalSec })}</span></span>
         <span>•</span>
-        <span class="stat-item" title="${t('stat_tokens_title')}">${t('stat_tokens', { tokens: stats.tokens })}</span>${cacheHtml}
+        <span class="stat-item" title="${t('stat_tokens_title')}">${docSvg} <span>${t('stat_tokens', { tokens: stats.tokens })}</span></span>${cacheHtml}
       `;
       updateConnectionTokensBadge(stats);
     }
@@ -993,11 +1005,11 @@
         const fullMd = loopResult?.accumulatedMarkdown || loopResult?.finalAssistantText || '';
         await navigator.clipboard.writeText(fullMd);
         const span = btnCopy.querySelector('span');
-        const originalText = span.textContent;
-        span.textContent = t('copied_text');
+        const originalText = span ? span.textContent : '';
+        btnCopy.innerHTML = `${getMsgIcon('check', 12)} <span>${t('copied_text')}</span>`;
         btnCopy.classList.add('copied');
         setTimeout(() => {
-          span.textContent = originalText;
+          btnCopy.innerHTML = `${getMsgIcon('copy', 12)} <span>${originalText || t('btn_copy')}</span>`;
           btnCopy.classList.remove('copied');
         }, 2000);
       } catch (err) {
@@ -1494,9 +1506,9 @@
           btnCopy.onclick = async () => {
             if (navigator.clipboard) {
               await navigator.clipboard.writeText(fullAssistantMarkdown || content.innerText);
-              btnCopy.innerHTML = `✅ <span>${t('btn_copied')}</span>`;
+              btnCopy.innerHTML = `${getMsgIcon('check', 12)} <span>${t('btn_copied')}</span>`;
               setTimeout(() => {
-                btnCopy.innerHTML = `📋 <span>${t('btn_copy')}</span>`;
+                btnCopy.innerHTML = `${getMsgIcon('copy', 12)} <span>${t('btn_copy')}</span>`;
               }, 2000);
             }
           };

@@ -189,6 +189,10 @@ test('Browser UI - Fase 3: Canvas de Mensajes Centrado, Tipografía y Markdown',
     // Simular renderizado de un mensaje de usuario y uno del asistente
     await page.evaluate(() => {
       const messagesList = document.getElementById('messages-list');
+      const editSvg = window.ChatIcons?.get('edit', { size: 12 }) || '';
+      const brainSvg = window.ChatIcons?.get('brain', { size: 13 }) || '';
+      const zapSvg = window.ChatIcons?.get('zap', { size: 11 }) || '';
+      const copySvg = window.ChatIcons?.get('copy', { size: 12 }) || '';
       
       // Mensaje de Usuario
       const userMsg = document.createElement('div');
@@ -199,7 +203,7 @@ test('Browser UI - Fase 3: Canvas de Mensajes Centrado, Tipografía y Markdown',
             <div class="message-content">Hola ZeroChat, muéstrame una tabla y código.</div>
             <div class="message-footer-row">
               <div class="message-actions">
-                <button class="btn-msg-action">✏️ Editar</button>
+                <button class="btn-msg-action">${editSvg} <span>Editar</span></button>
               </div>
             </div>
           </div>
@@ -215,7 +219,7 @@ test('Browser UI - Fase 3: Canvas de Mensajes Centrado, Tipografía y Markdown',
           <div class="message-content-wrapper">
             <div class="message-content">
               <details class="thought-block" open>
-                <summary class="thought-summary">🧠 Proceso de razonamiento</summary>
+                <summary class="thought-summary">${brainSvg} Proceso de razonamiento</summary>
                 <div class="thought-content">Analizando la solicitud para generar la respuesta estructurada...</div>
               </details>
               <p>Aquí tienes los datos solicitados en formato de tabla y código:</p>
@@ -240,10 +244,10 @@ test('Browser UI - Fase 3: Canvas de Mensajes Centrado, Tipografía y Markdown',
             </div>
             <div class="message-footer-row">
               <div class="message-stats">
-                <span class="stat-item">⚡ 45 tok/s</span>
+                <span class="stat-item">${zapSvg} <span>45 tok/s</span></span>
               </div>
               <div class="message-actions">
-                <button class="btn-msg-action">📋 Copiar</button>
+                <button class="btn-msg-action">${copySvg} <span>Copiar</span></button>
               </div>
             </div>
           </div>
@@ -309,6 +313,34 @@ test('Browser UI - Fase 3: Canvas de Mensajes Centrado, Tipografía y Markdown',
     });
     assert.equal(tableInfo.rows, 3, 'La tabla debe tener 3 filas (1 thead + 2 tbody)');
     assert.ok(tableInfo.hasBorder, 'El contenedor de tabla debe tener borde');
+
+    // 5. Validar que las acciones de mensaje y las estadísticas usan SVG limpios sin emojis
+    const msgActionsInfo = await page.evaluate(() => {
+      const actionBtns = Array.from(document.querySelectorAll('.btn-msg-action'));
+      const statItems = Array.from(document.querySelectorAll('.stat-item'));
+      const emojiRegex = /[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/u;
+      
+      const allActionBtnsHaveSvg = actionBtns.every(btn => btn.querySelector('svg.ui-icon'));
+      const noActionBtnHasEmoji = actionBtns.every(btn => !emojiRegex.test(btn.textContent));
+      const allStatsHaveSvg = statItems.every(item => item.querySelector('svg.ui-icon'));
+      const noStatHasEmoji = statItems.every(item => !emojiRegex.test(item.textContent));
+
+      return {
+        allActionBtnsHaveSvg,
+        noActionBtnHasEmoji,
+        allStatsHaveSvg,
+        noStatHasEmoji,
+        actionBtnCount: actionBtns.length,
+        statCount: statItems.length
+      };
+    });
+
+    assert.ok(msgActionsInfo.actionBtnCount > 0, 'Deben existir botones de acción de mensaje');
+    assert.ok(msgActionsInfo.allActionBtnsHaveSvg, 'Todos los botones de acción deben contener un SVG .ui-icon');
+    assert.ok(msgActionsInfo.noActionBtnHasEmoji, 'Ningún botón de acción debe tener emojis en su texto');
+    assert.ok(msgActionsInfo.statCount > 0, 'Deben existir items de estadísticas');
+    assert.ok(msgActionsInfo.allStatsHaveSvg, 'Todos los items de estadísticas deben contener un SVG .ui-icon');
+    assert.ok(msgActionsInfo.noStatHasEmoji, 'Ningún item de estadísticas debe tener emojis en su texto');
   } finally {
     await browser.close();
   }
