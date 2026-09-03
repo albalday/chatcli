@@ -548,6 +548,10 @@
 
   function autoResizeTextarea() {
     if (!elements.userInput) return;
+    if (!elements.userInput.value) {
+      elements.userInput.style.height = '';
+      return;
+    }
     elements.userInput.style.height = 'auto';
     const newHeight = Math.min(elements.userInput.scrollHeight, 160);
     elements.userInput.style.height = `${newHeight}px`;

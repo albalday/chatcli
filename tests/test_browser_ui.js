@@ -260,13 +260,10 @@ test('Browser UI - Fase 3: Canvas de Mensajes Centrado, Tipografía y Markdown',
       const rectAst = astWrapper.getBoundingClientRect();
       return {
         userWidth: rectUser.width,
-        astWidth: rectAst.width,
-        userLeft: rectUser.left,
-        userRight: window.innerWidth - rectUser.right
+        astWidth: rectAst.width
       };
     });
 
-    // En viewport de 1280px, el canvas centrado con max-width: 48rem (~768px) no debe desparramarse por toda la pantalla
     assert.ok(canvasMetrics.userWidth <= 800, `El ancho de mensaje (${canvasMetrics.userWidth}px) debe respetar el canvas de lectura max-width: 48rem`);
     assert.ok(canvasMetrics.astWidth <= 800, `El ancho del asistente (${canvasMetrics.astWidth}px) debe respetar el canvas de lectura max-width: 48rem`);
 
@@ -312,6 +309,96 @@ test('Browser UI - Fase 3: Canvas de Mensajes Centrado, Tipografía y Markdown',
     });
     assert.equal(tableInfo.rows, 3, 'La tabla debe tener 3 filas (1 thead + 2 tbody)');
     assert.ok(tableInfo.hasBorder, 'El contenedor de tabla debe tener borde');
+  } finally {
+    await browser.close();
+  }
+});
+
+test('Browser UI - Fase 4: Composer Flotante Omnibox, Auto-expansión y Botones Circulares', async () => {
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+    const filePath = 'file://' + path.resolve(__dirname, '../zerochat.html');
+    await page.goto(filePath, { waitUntil: 'load' });
+    await page.waitForSelector('#welcome-banner');
+
+    // 1. Validar geometría y curvatura del Omnibox (.chat-input-container)
+    const composerMetrics = await page.evaluate(() => {
+      const container = document.querySelector('.chat-input-container');
+      const style = getComputedStyle(container);
+      const rect = container.getBoundingClientRect();
+      return {
+        borderRadius: parseFloat(style.borderRadius),
+        width: rect.width,
+        boxShadow: style.boxShadow
+      };
+    });
+
+    assert.ok(composerMetrics.borderRadius >= 20, `El radio de curvatura (${composerMetrics.borderRadius}px) debe ser estilo omnibox (>= 20px / 1.5rem)`);
+    assert.ok(composerMetrics.width <= 800, `El ancho del composer (${composerMetrics.width}px) debe alinearse con max-width: 48rem`);
+    assert.notEqual(composerMetrics.boxShadow, 'none', 'El composer debe tener elevación mediante sombra');
+
+    // 2. Validar autoexpansión del textarea al introducir múltiples líneas
+    const initialHeight = await page.$eval('#user-input', el => el.offsetHeight);
+    await page.fill('#user-input', 'Línea 1\nLínea 2\nLínea 3\nLínea 4\nLínea 5');
+    await page.dispatchEvent('#user-input', 'input');
+
+    const expandedHeight = await page.$eval('#user-input', el => el.offsetHeight);
+    assert.ok(expandedHeight > initialHeight, `La altura del textarea debe crecer con contenido multilínea (de ${initialHeight}px a ${expandedHeight}px)`);
+
+    // Limpiar input y verificar vuelta a altura mínima
+    await page.fill('#user-input', '');
+    await page.dispatchEvent('#user-input', 'input');
+    const resetHeight = await page.$eval('#user-input', el => el.offsetHeight);
+    assert.ok(resetHeight <= initialHeight, 'Al vaciar el texto debe volver a la altura mínima');
+
+    // 3. Validar botón circular de envío y botón de adjuntar
+    const buttonStyles = await page.evaluate(() => {
+      const btnSend = document.getElementById('btn-send');
+      const btnAttach = document.getElementById('btn-attach-file');
+      const sendStyle = getComputedStyle(btnSend);
+      const attachStyle = getComputedStyle(btnAttach);
+      return {
+        sendRadius: parseFloat(sendStyle.borderRadius),
+        sendWidth: parseFloat(sendStyle.width),
+        sendHeight: parseFloat(sendStyle.height),
+        attachRadius: parseFloat(attachStyle.borderRadius)
+      };
+    });
+
+    assert.equal(buttonStyles.sendWidth, buttonStyles.sendHeight, 'El botón de envío debe ser perfectamente circular (width === height)');
+    assert.ok(buttonStyles.sendRadius >= 16, 'El botón de envío debe tener borde completamente redondeado');
+    assert.ok(buttonStyles.attachRadius >= 16, 'El botón de adjuntar debe tener borde redondeado');
+
+    // 4. Validar menú desplegable de razonamiento integrado
+    await page.click('#btn-reasoning');
+    const isMenuOpen = await page.$eval('#reasoning-menu', el => el.style.display !== 'none');
+    assert.ok(isMenuOpen, 'Pulsar #btn-reasoning debe desplegar el menú de opciones');
+
+    // 5. Validar metamorfosis dinámica entre botón de Send y Stop
+    // Al simular streaming activando stop-stream:
+    await page.evaluate(() => {
+      const stopBtn = document.getElementById('btn-stop-stream');
+      stopBtn.style.display = 'inline-flex';
+    });
+
+    const isSendHiddenDuringStop = await page.evaluate(() => {
+      const sendBtn = document.getElementById('btn-send');
+      return getComputedStyle(sendBtn).display === 'none';
+    });
+    assert.ok(isSendHiddenDuringStop, 'Cuando el botón de detener está visible, el botón de envío debe ocultarse automáticamente');
+
+    // Restaurar estado inactivo
+    await page.evaluate(() => {
+      const stopBtn = document.getElementById('btn-stop-stream');
+      stopBtn.style.display = 'none';
+    });
+
+    const isSendVisibleAgain = await page.evaluate(() => {
+      const sendBtn = document.getElementById('btn-send');
+      return getComputedStyle(sendBtn).display !== 'none';
+    });
+    assert.ok(isSendVisibleAgain, 'Al terminar el streaming, el botón de envío vuelve a ser visible');
   } finally {
     await browser.close();
   }
