@@ -79,6 +79,12 @@
   transform: scale(0.96);
 }
 
+.btn-header-icon.active {
+  background-color: var(--primary-light);
+  color: var(--primary);
+  border-color: var(--primary);
+}
+
 /* Cápsula de Perfil / Modelo */
 .badge-pill.badge-profile {
   display: inline-flex;
@@ -178,7 +184,8 @@
 }
 
 .btn-header-tool.btn-rag-mini.active,
-.btn-header-tool.btn-debug-toggle.active {
+.btn-header-tool.btn-debug-toggle.active,
+.btn-header-icon.btn-debug-toggle.active {
   background-color: var(--primary-light);
   color: var(--primary);
   border-color: var(--primary);
