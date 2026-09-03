@@ -307,37 +307,62 @@
     const branchId = select?.value;
     if (!branchId) return;
 
-    const docs = await storage().getDocumentsByBranch(branchId);
-    let includeSources = false;
-    if (docs.length <= 5) {
-      includeSources = true;
-    } else {
-      includeSources = confirm(
-        `Esta rama contiene ${docs.length} documentos.\n\n` +
-        `¿Deseas incluir los archivos binarios originales completos (puede ocupar mucho espacio)?\n\n` +
-        `• Aceptar: Respaldo completo (incluye PDFs originales binarios).\n` +
-        `• Cancelar: Respaldo ligero comprimido (recomendado: incluye todos los fragmentos de texto, tablas e imágenes para el RAG en pocos megabytes).`
-      );
+    const btnExport = document.getElementById('btn-rag-export-branch');
+    const prevText = btnExport?.textContent;
+    try {
+      if (btnExport) {
+        btnExport.disabled = true;
+        btnExport.textContent = '⏳ Exportando...';
+      }
+      // Respaldo RAG optimizado (todos los fragmentos de texto, tablas, imágenes y metadatos)
+      // Sin duplicar los binarios originales pesados que superan los límites de memoria del navegador.
+      const { blob, filename } = await storage().exportBranchBlob(branchId, {
+        includeSources: false,
+        compress: true
+      });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = filename;
+      anchor.click();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    } catch (error) {
+      alert(`Error al exportar la rama: ${error.message || error}`);
+    } finally {
+      if (btnExport) {
+        btnExport.disabled = false;
+        btnExport.textContent = prevText || '⬇️ Respaldo';
+      }
     }
-
-    const { blob, filename } = await storage().exportBranchBlob(branchId, { includeSources, compress: true });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = filename;
-    anchor.click();
-    URL.revokeObjectURL(url);
   }
 
   async function importBranchFile(file) {
     if (!file) return null;
-    const text = await decompressFileIfNeeded(file);
-    const branch = await storage().importBranch(text);
-    indexer()?.invalidateBranch(branch.id);
-    await renderManageTab(branch.id);
-    await renderActiveTab();
-    await updateQuota();
-    return branch;
+    const btnImport = document.getElementById('btn-rag-import-branch');
+    const prevText = btnImport?.textContent;
+    try {
+      if (btnImport) {
+        btnImport.disabled = true;
+        btnImport.textContent = '⏳ Restaurando...';
+      }
+      const text = await decompressFileIfNeeded(file);
+      if (!text) throw new Error('El archivo de respaldo está vacío o no se pudo leer.');
+      const branch = await storage().importBranch(text);
+      indexer()?.invalidateBranch(branch.id);
+      await renderManageTab(branch.id);
+      await renderActiveTab();
+      await updateQuota();
+      alert(`✅ Rama "${branch.name}" restaurada con éxito.`);
+      return branch;
+    } catch (error) {
+      alert(`Error al restaurar la rama: ${error.message || error}`);
+      throw error;
+    } finally {
+      if (btnImport) {
+        btnImport.disabled = false;
+        btnImport.textContent = prevText || '⬆️ Restaurar';
+      }
+    }
   }
 
   async function updateQuota() {
