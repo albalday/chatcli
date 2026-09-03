@@ -1387,7 +1387,172 @@
     }
   }
 
-  function extractImagesFromPdfObjects(allObjects, objOffsets, bytes) {
+  const PDF_PASSWORD_PADDING = new Uint8Array([
+    0x28, 0xBF, 0x4E, 0x5E, 0x4E, 0x75, 0x8A, 0x41,
+    0x64, 0x00, 0x4E, 0x56, 0xFF, 0xFA, 0x01, 0x08,
+    0x2E, 0x2E, 0x00, 0xB6, 0xD0, 0x68, 0x3E, 0x80,
+    0x2F, 0x0C, 0xA9, 0xFE, 0x64, 0x53, 0x69, 0x7A
+  ]);
+
+  function concatByteArrays(...arrays) {
+    const result = new Uint8Array(arrays.reduce((total, value) => total + value.length, 0));
+    let offset = 0;
+    for (const value of arrays) {
+      result.set(value, offset);
+      offset += value.length;
+    }
+    return result;
+  }
+
+  function hexToBytes(hex) {
+    const clean = String(hex || '').replace(/\s+/g, '');
+    if (!clean || clean.length % 2 !== 0 || !/^[0-9a-f]+$/i.test(clean)) return null;
+    const bytes = new Uint8Array(clean.length / 2);
+    for (let index = 0; index < bytes.length; index++) bytes[index] = parseInt(clean.slice(index * 2, index * 2 + 2), 16);
+    return bytes;
+  }
+
+  function md5Bytes(input) {
+    const source = input instanceof Uint8Array ? input : new Uint8Array(input || []);
+    const paddedLength = Math.ceil((source.length + 9) / 64) * 64;
+    const padded = new Uint8Array(paddedLength);
+    padded.set(source);
+    padded[source.length] = 0x80;
+    const view = new DataView(padded.buffer);
+    const bitLength = source.length * 8;
+    view.setUint32(paddedLength - 8, bitLength >>> 0, true);
+    view.setUint32(paddedLength - 4, Math.floor(bitLength / 0x100000000), true);
+
+    const shifts = [
+      7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22,
+      5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20,
+      4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23,
+      6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21
+    ];
+    const constants = Array.from({ length: 64 }, (_, index) => Math.floor(Math.abs(Math.sin(index + 1)) * 0x100000000) >>> 0);
+    let a0 = 0x67452301;
+    let b0 = 0xEFCDAB89;
+    let c0 = 0x98BADCFE;
+    let d0 = 0x10325476;
+
+    for (let offset = 0; offset < paddedLength; offset += 64) {
+      const words = Array.from({ length: 16 }, (_, index) => view.getUint32(offset + index * 4, true));
+      let a = a0, b = b0, c = c0, d = d0;
+      for (let index = 0; index < 64; index++) {
+        let f, wordIndex;
+        if (index < 16) {
+          f = (b & c) | (~b & d);
+          wordIndex = index;
+        } else if (index < 32) {
+          f = (d & b) | (~d & c);
+          wordIndex = (5 * index + 1) % 16;
+        } else if (index < 48) {
+          f = b ^ c ^ d;
+          wordIndex = (3 * index + 5) % 16;
+        } else {
+          f = c ^ (b | ~d);
+          wordIndex = (7 * index) % 16;
+        }
+        const sum = (a + f + constants[index] + words[wordIndex]) >>> 0;
+        const rotated = ((sum << shifts[index]) | (sum >>> (32 - shifts[index]))) >>> 0;
+        const previousD = d;
+        d = c;
+        c = b;
+        b = (b + rotated) >>> 0;
+        a = previousD;
+      }
+      a0 = (a0 + a) >>> 0;
+      b0 = (b0 + b) >>> 0;
+      c0 = (c0 + c) >>> 0;
+      d0 = (d0 + d) >>> 0;
+    }
+
+    const digest = new Uint8Array(16);
+    const digestView = new DataView(digest.buffer);
+    digestView.setUint32(0, a0, true);
+    digestView.setUint32(4, b0, true);
+    digestView.setUint32(8, c0, true);
+    digestView.setUint32(12, d0, true);
+    return digest;
+  }
+
+  function rc4Bytes(key, input) {
+    const state = new Uint8Array(256);
+    for (let index = 0; index < 256; index++) state[index] = index;
+    let j = 0;
+    for (let index = 0; index < 256; index++) {
+      j = (j + state[index] + key[index % key.length]) & 0xFF;
+      const swap = state[index]; state[index] = state[j]; state[j] = swap;
+    }
+    const output = new Uint8Array(input.length);
+    let i = 0;
+    j = 0;
+    for (let index = 0; index < input.length; index++) {
+      i = (i + 1) & 0xFF;
+      j = (j + state[i]) & 0xFF;
+      const swap = state[i]; state[i] = state[j]; state[j] = swap;
+      output[index] = input[index] ^ state[(state[i] + state[j]) & 0xFF];
+    }
+    return output;
+  }
+
+  function bytesEqual(left, right, length = Math.min(left?.length || 0, right?.length || 0)) {
+    if (!left || !right || left.length < length || right.length < length) return false;
+    for (let index = 0; index < length; index++) if (left[index] !== right[index]) return false;
+    return true;
+  }
+
+  function createPdfSecurityContext(allObjects, fullText) {
+    const encryptRef = String(fullText || '').match(/\/Encrypt\s+(\d+)\s+(\d+)\s+R/i);
+    if (!encryptRef) return null;
+    const encryptionBody = allObjects.get(encryptRef[1]);
+    if (!encryptionBody) return { encrypted: true, supported: false };
+    const filter = encryptionBody.match(/\/Filter\s*\/([A-Za-z0-9]+)/)?.[1] || '';
+    const version = Number(encryptionBody.match(/\/V\s+(\d+)/)?.[1] || 0);
+    const revision = Number(encryptionBody.match(/\/R\s+(\d+)/)?.[1] || 0);
+    const ownerKey = hexToBytes(encryptionBody.match(/\/O\s*<([0-9A-Fa-f\s]+)>/)?.[1]);
+    const userKey = hexToBytes(encryptionBody.match(/\/U\s*<([0-9A-Fa-f\s]+)>/)?.[1]);
+    const fileId = hexToBytes(String(fullText || '').match(/\/ID\s*\[\s*<([0-9A-Fa-f\s]+)>/)?.[1]);
+    const permissions = Number(encryptionBody.match(/\/P\s+(-?\d+)/)?.[1]);
+    if (filter !== 'Standard' || ![1, 2].includes(version) || ![2, 3].includes(revision) || !ownerKey || !userKey || !fileId || !Number.isFinite(permissions)) {
+      return { encrypted: true, supported: false };
+    }
+
+    const keyLength = revision === 2 ? 5 : Math.min(16, Math.max(5, Number(encryptionBody.match(/\/Length\s+(\d+)/)?.[1] || 40) / 8));
+    const permissionBytes = new Uint8Array(4);
+    new DataView(permissionBytes.buffer).setInt32(0, permissions, true);
+    let digest = md5Bytes(concatByteArrays(PDF_PASSWORD_PADDING, ownerKey, permissionBytes, fileId));
+    if (revision >= 3) {
+      for (let round = 0; round < 50; round++) digest = md5Bytes(digest.slice(0, keyLength));
+    }
+    const fileKey = digest.slice(0, keyLength);
+    let expectedUserKey;
+    if (revision === 2) {
+      expectedUserKey = rc4Bytes(fileKey, PDF_PASSWORD_PADDING);
+    } else {
+      expectedUserKey = md5Bytes(concatByteArrays(PDF_PASSWORD_PADDING, fileId));
+      expectedUserKey = rc4Bytes(fileKey, expectedUserKey);
+      for (let round = 1; round <= 19; round++) {
+        const roundKey = fileKey.map(value => value ^ round);
+        expectedUserKey = rc4Bytes(roundKey, expectedUserKey);
+      }
+    }
+    const valid = bytesEqual(expectedUserKey, userKey, revision === 2 ? 32 : 16);
+    return { encrypted: true, supported: valid, fileKey };
+  }
+
+  function decryptPdfObjectBytes(input, security, objectNumber, generationNumber = 0) {
+    if (!security?.supported || !security.fileKey) return null;
+    const suffix = new Uint8Array([
+      objectNumber & 0xFF, (objectNumber >>> 8) & 0xFF, (objectNumber >>> 16) & 0xFF,
+      generationNumber & 0xFF, (generationNumber >>> 8) & 0xFF
+    ]);
+    const digest = md5Bytes(concatByteArrays(security.fileKey, suffix));
+    const objectKey = digest.slice(0, Math.min(security.fileKey.length + 5, 16));
+    return rc4Bytes(objectKey, input);
+  }
+
+  function extractImagesFromPdfObjects(allObjects, objOffsets, bytes, security = null) {
     const imagesByObjNum = new Map();
     let imgCounter = 1;
 
@@ -1418,6 +1583,12 @@
       const rawBytes = bytes.subarray(offset + dStart, offset + dEnd);
       if (!rawBytes || rawBytes.length < 50) continue;
 
+      const generation = Number(body.match(/^\s*\d+\s+(\d+)\s+obj/)?.[1] || 0);
+      const imageBytes = security?.encrypted
+        ? decryptPdfObjectBytes(rawBytes, security, Number(num), generation)
+        : rawBytes;
+      if (!imageBytes || imageBytes.length < 50) continue;
+
       const isDct = /\/Filter\s*(?:\/DCTDecode|\[\s*\/DCTDecode\s*\])/i.test(body);
       const isJpx = /\/Filter\s*(?:\/JPXDecode|\[\s*\/JPXDecode\s*\])/i.test(body);
 
@@ -1426,15 +1597,15 @@
 
       const isCmyk = body.includes('DeviceCMYK') || body.includes('/ColorSpace/DeviceCMYK') || body.includes('/ColorSpace /DeviceCMYK');
 
-      if (isDct || (rawBytes[0] === 0xFF && rawBytes[1] === 0xD8)) {
+      if ((isDct || (imageBytes[0] === 0xFF && imageBytes[1] === 0xD8)) && imageBytes[0] === 0xFF && imageBytes[1] === 0xD8) {
         mimeType = 'image/jpeg';
-        dataUrl = `data:image/jpeg;base64,${bytesToBase64(rawBytes)}`;
-      } else if (isJpx) {
+        dataUrl = `data:image/jpeg;base64,${bytesToBase64(imageBytes)}`;
+      } else if (isJpx && imageBytes.length >= 12 && imageBytes[4] === 0x6A && imageBytes[5] === 0x50) {
         mimeType = 'image/jp2';
-        dataUrl = `data:image/jp2;base64,${bytesToBase64(rawBytes)}`;
-      } else if (rawBytes[0] === 0x89 && rawBytes[1] === 0x50 && rawBytes[2] === 0x4E && rawBytes[3] === 0x47) {
+        dataUrl = `data:image/jp2;base64,${bytesToBase64(imageBytes)}`;
+      } else if (imageBytes[0] === 0x89 && imageBytes[1] === 0x50 && imageBytes[2] === 0x4E && imageBytes[3] === 0x47) {
         mimeType = 'image/png';
-        dataUrl = `data:image/png;base64,${bytesToBase64(rawBytes)}`;
+        dataUrl = `data:image/png;base64,${bytesToBase64(imageBytes)}`;
       }
 
       if (dataUrl) {
@@ -1443,7 +1614,7 @@
           objNum: String(num),
           width,
           height,
-          sizeBytes: rawBytes.length,
+          sizeBytes: imageBytes.length,
           mimeType: mimeType || 'image/jpeg',
           isCmyk: Boolean(isCmyk),
           dataUrl
@@ -1517,7 +1688,8 @@
     const cmap = await parseCMaps(allObjects, fullText, bytes, objOffsets);
 
     // 3b. Extracción de imágenes XObject (/Subtype /Image)
-    const imagesByObjNum = extractImagesFromPdfObjects(allObjects, objOffsets, bytes);
+    const security = createPdfSecurityContext(allObjects, fullText);
+    const imagesByObjNum = extractImagesFromPdfObjects(allObjects, objOffsets, bytes, security);
     const assignedImages = new Set();
     const allExtractedImages = [];
 

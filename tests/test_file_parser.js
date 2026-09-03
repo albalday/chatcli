@@ -83,3 +83,16 @@ test('FileParser - usa el mapa ToUnicode de la fuente PDF activa', () => {
   const stream = 'BT /F1 12 Tf <0001> Tj /F2 12 Tf <0001> Tj ET';
   assert.equal(FileParser.parsePdfStreamText(stream, aggregate), 'AB');
 });
+
+test('FileParser - descifra imágenes en PDFs con seguridad estándar RC4 sin contraseña', async () => {
+  const fs = require('fs');
+  const path = '/home/alberto/FinanceBench/financebench-main/pdfs/BOEING_2021_10K.pdf';
+  if (!fs.existsSync(path)) return;
+  const data = fs.readFileSync(path);
+  const result = await FileParser.parsePdfDocument(data);
+  assert.ok(result.images.length >= 1, 'Debe extraer al menos una imagen');
+  const img = result.images[0];
+  assert.equal(img.mimeType, 'image/jpeg');
+  assert.ok(img.dataUrl.startsWith('data:image/jpeg;base64,/9j/'), 'El dataUrl debe comenzar con la cabecera JPEG válida');
+});
+
