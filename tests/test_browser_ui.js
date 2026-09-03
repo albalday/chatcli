@@ -912,7 +912,10 @@ test('Browser UI - Iconos Fase 5: Iconos Vectoriales SVG en Modales, Pestañas, 
       const hasTabEmojis = /🌐|⚙️|🤖|🎨|🔍/.test(tabsText);
 
       const toggleKeySvg = !!document.querySelector('#btn-toggle-key svg');
-      const clearAllSvg = !!document.querySelector('#btn-clear-all-data svg');
+      const clearAllBtn = document.getElementById('btn-clear-all-data');
+      const clearAllSvg = !!clearAllBtn?.querySelector('svg');
+      const clearAllHasEmoji = /🗑/.test(clearAllBtn?.textContent || '');
+      const clearAllText = clearAllBtn?.textContent?.trim() || '';
       const themeButtons = Array.from(document.querySelectorAll('.btn-theme-toggle'));
       const themeHaveSvg = themeButtons.every(b => !!b.querySelector('svg'));
 
@@ -921,6 +924,8 @@ test('Browser UI - Iconos Fase 5: Iconos Vectoriales SVG en Modales, Pestañas, 
         hasTabEmojis,
         toggleKeySvg,
         clearAllSvg,
+        clearAllHasEmoji,
+        clearAllText,
         themeHaveSvg
       };
     });
@@ -929,6 +934,8 @@ test('Browser UI - Iconos Fase 5: Iconos Vectoriales SVG en Modales, Pestañas, 
     assert.equal(settingsIcons.hasTabEmojis, false, 'Las pestañas no deben contener emojis residuales');
     assert.ok(settingsIcons.toggleKeySvg, 'El botón de visibilidad de clave debe contener icono SVG');
     assert.ok(settingsIcons.clearAllSvg, 'El botón de borrar todo debe contener icono SVG');
+    assert.equal(settingsIcons.clearAllHasEmoji, false, 'El botón de borrar todo no debe contener emoji');
+    assert.equal(settingsIcons.clearAllText, 'Borrar todo', 'El texto de borrar todo debe ser limpio');
     assert.ok(settingsIcons.themeHaveSvg, 'Los botones de modo claro/oscuro deben contener iconos SVG');
 
     await page.click('#btn-close-settings');
@@ -967,7 +974,16 @@ test('Browser UI - Iconos Fase 5: Iconos Vectoriales SVG en Modales, Pestañas, 
 
     const ragIcons = await page.evaluate(() => {
       const headerSvg = document.querySelector('#rag-modal .rag-header-icon svg');
-      const newBranchSvg = document.querySelector('#btn-rag-new-branch svg');
+      const activeTab = document.querySelector('#rag-modal-tabs-nav .modal-tab-btn.active');
+      const activeTabId = activeTab ? activeTab.dataset.ragTab : null;
+      const activePane = document.querySelector('#rag-modal .modal-tab-pane.active');
+      const activePaneDisplay = activePane ? window.getComputedStyle(activePane).display : 'none';
+
+      const newBranchBtn = document.getElementById('btn-rag-new-branch');
+      const newBranchSvg = newBranchBtn?.querySelector('svg');
+      const newBranchHasPlusInText = (newBranchBtn?.textContent || '').includes('+');
+      const newBranchText = newBranchBtn?.textContent?.trim() || '';
+
       const editBranchSvg = document.querySelector('#btn-rag-edit-branch svg');
       const deleteBranchSvg = document.querySelector('#btn-rag-delete-branch svg');
       const exportBranchSvg = document.querySelector('#btn-rag-export-branch svg');
@@ -976,7 +992,11 @@ test('Browser UI - Iconos Fase 5: Iconos Vectoriales SVG en Modales, Pestañas, 
 
       return {
         hasHeaderSvg: !!headerSvg,
+        activeTabId,
+        activePaneDisplay,
         hasNewBranchSvg: !!newBranchSvg,
+        newBranchHasPlusInText,
+        newBranchText,
         hasEditBranchSvg: !!editBranchSvg,
         hasDeleteBranchSvg: !!deleteBranchSvg,
         hasExportBranchSvg: !!exportBranchSvg,
@@ -986,7 +1006,11 @@ test('Browser UI - Iconos Fase 5: Iconos Vectoriales SVG en Modales, Pestañas, 
     });
 
     assert.ok(ragIcons.hasHeaderSvg, 'La cabecera de RAG debe tener icono SVG');
+    assert.equal(ragIcons.activeTabId, 'tab-rag-active', 'El modal de conocimiento debe activar la pestaña Activar por defecto');
+    assert.equal(ragIcons.activePaneDisplay, 'flex', 'El pane de la pestaña activa debe estar visible');
     assert.ok(ragIcons.hasNewBranchSvg, 'El botón de nueva rama debe tener icono SVG');
+    assert.equal(ragIcons.newBranchHasPlusInText, false, 'El botón de nueva rama no debe tener símbolo + en el texto');
+    assert.equal(ragIcons.newBranchText, 'Nueva rama', 'El texto del botón de nueva rama debe ser exactamente "Nueva rama"');
     assert.ok(ragIcons.hasEditBranchSvg, 'El botón de editar rama debe tener icono SVG');
     assert.ok(ragIcons.hasDeleteBranchSvg, 'El botón de eliminar rama debe tener icono SVG');
     assert.ok(ragIcons.hasExportBranchSvg, 'El botón de respaldar rama debe tener icono SVG');

@@ -124,8 +124,8 @@
 
     if (title) {
       if (activeCount === 0) title.textContent = 'Conocimiento desactivado';
-      else if (activeCount === 1) title.textContent = `🔎 ${activeList[0].name}`;
-      else title.textContent = `🔎 ${activeCount} ramas activas (${activeList.map(b => b.name).join(', ')})`;
+      else if (activeCount === 1) title.textContent = activeList[0].name;
+      else title.textContent = `${activeCount} ramas activas (${activeList.map(b => b.name).join(', ')})`;
     }
     if (description) {
       if (activeCount === 0) description.textContent = 'Selecciona una o varias ramas para que el agente pueda buscar en tus documentos.';
@@ -407,7 +407,17 @@
       activeBranchIds = new Set();
     }
     const modal = document.getElementById('rag-modal');
-    document.getElementById('btn-open-rag')?.addEventListener('click', async () => { await refresh(); modal?.showModal(); });
+    document.getElementById('btn-open-rag')?.addEventListener('click', async () => {
+      await refresh();
+      const navButtons = document.querySelectorAll('#rag-modal-tabs-nav [data-rag-tab]');
+      const activeBtn = Array.from(navButtons).find(b => b.classList.contains('active')) || navButtons[0];
+      if (activeBtn) {
+        navButtons.forEach(item => item.classList.toggle('active', item === activeBtn));
+        document.querySelectorAll('#rag-modal .modal-tab-pane').forEach(pane => pane.classList.toggle('active', pane.id === activeBtn.dataset.ragTab));
+        if (activeBtn.dataset.ragTab === 'tab-rag-manage') await renderManageTab();
+      }
+      modal?.showModal();
+    });
     document.getElementById('btn-close-rag')?.addEventListener('click', () => modal?.close());
     document.getElementById('btn-close-rag-footer')?.addEventListener('click', () => modal?.close());
     document.getElementById('btn-rag-toggle-master')?.addEventListener('click', async () => { setActiveBranchIds([]); await renderActiveTab(); });

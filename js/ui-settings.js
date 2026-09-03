@@ -336,12 +336,14 @@
       elements.settingSendDateTime.checked = appConfig?.sendDateTime !== false;
     }
 
-    if (elements.modalTabs && elements.modalTabs.length > 0) {
-      elements.modalTabs.forEach(b => b.classList.remove('active'));
-      elements.modalPanes.forEach(p => p.classList.remove('active'));
-      elements.modalTabs[0].classList.add('active');
-      const doc = elements.settingsDialog.ownerDocument || document;
-      const firstPane = doc.getElementById(elements.modalTabs[0].getAttribute('data-tab'));
+    const settingsTabs = elements.settingsDialog?.querySelectorAll ? elements.settingsDialog.querySelectorAll('.modal-tabs-nav .modal-tab-btn') : elements.modalTabs;
+    const settingsPanes = elements.settingsDialog?.querySelectorAll ? elements.settingsDialog.querySelectorAll('.modal-tab-pane') : elements.modalPanes;
+    if (settingsTabs && settingsTabs.length > 0) {
+      settingsTabs.forEach(b => b.classList.remove('active'));
+      if (settingsPanes) settingsPanes.forEach(p => p.classList.remove('active'));
+      settingsTabs[0].classList.add('active');
+      const doc = elements.settingsDialog?.ownerDocument || document;
+      const firstPane = doc.getElementById(settingsTabs[0].getAttribute('data-tab'));
       if (firstPane) firstPane.classList.add('active');
     }
 
