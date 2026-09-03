@@ -1,4 +1,4 @@
-# ZeroChat v6.0
+# ZeroChat
 
 ZeroChat es un cliente web universal de chat, agente IA y conocimiento local. La distribución final se entrega como un único archivo autónomo, `zerochat.html`, que puede abrirse directamente mediante `file://` y no requiere backend propio.
 
@@ -46,6 +46,8 @@ Requisitos de compilación: Node.js, npm y Python 3. La aplicación generada no 
 ```bash
 npm ci
 npm test
+npm run test:unit       # iteración rápida sin tests de navegador
+npm run test:browser    # suite visual de Chromium/Playwright
 npm run build
 ```
 
