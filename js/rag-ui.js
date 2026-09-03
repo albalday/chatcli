@@ -51,8 +51,11 @@
   }
 
   function formatDocumentMetrics(document) {
-    const imageCount = Number(document?.imageCount) || 0;
-    return `${document?.chunkCount || 0} fragmentos · ${formatBytes(document?.fileSize)} · ${imageCount} ${imageCount === 1 ? 'imagen' : 'imágenes'}`;
+    const hasImageCount = Number.isInteger(document?.imageCount) && document.imageCount >= 0;
+    const images = hasImageCount
+      ? `${document.imageCount} ${document.imageCount === 1 ? 'imagen' : 'imágenes'}`
+      : 'imágenes: recarga necesaria';
+    return `${document?.chunkCount || 0} fragmentos · ${formatBytes(document?.fileSize)} · ${images}`;
   }
 
   function getActiveBranchIds() {
