@@ -50,6 +50,11 @@
     return `${count} documento${count === 1 ? '' : 's'} · ${formatBytes(metrics?.totalBytes || 0)}`;
   }
 
+  function formatDocumentMetrics(document) {
+    const imageCount = Number(document?.imageCount) || 0;
+    return `${document?.chunkCount || 0} fragmentos · ${formatBytes(document?.fileSize)} · ${imageCount} ${imageCount === 1 ? 'imagen' : 'imágenes'}`;
+  }
+
   function getActiveBranchIds() {
     return Array.from(activeBranchIds);
   }
@@ -187,7 +192,7 @@
       <div id="rag-ingestion-progress"></div>
       <div class="rag-documents-list">${documents.length ? documents.map(document => `
         <div class="rag-document-card" data-document-id="${escapeHtml(document.id)}">
-          <div><strong>${escapeHtml(document.title)}</strong><div class="toggle-card-desc">${document.chunkCount} fragmentos · ${formatBytes(document.fileSize)}</div></div>
+          <div><strong>${escapeHtml(document.title)}</strong><div class="toggle-card-desc">${formatDocumentMetrics(document)}</div></div>
           <button type="button" class="btn-secondary btn-danger-hover" data-delete-document="${escapeHtml(document.id)}">🗑️</button>
         </div>`).join('') : '<div class="rag-empty-state">La rama todavía no contiene documentos.</div>'}</div>`;
 

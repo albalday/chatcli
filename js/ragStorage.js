@@ -165,6 +165,7 @@
       mimeType: String(data.mimeType || ''),
       fileSize: Number(data.fileSize) || 0,
       chunkCount: 0,
+      imageCount: Math.max(0, Math.floor(Number(data.imageCount) || 0)),
       createdAt: Number(data.createdAt) || now,
       updatedAt: Number(data.updatedAt) || now
     };
@@ -293,9 +294,9 @@
   }
 
   async function saveDocument(data, sourceFile = null, images = []) {
-    const { document, chunks } = validateDocument(data);
-    if (!(await getBranchById(document.branchId))) throw new NotFoundError(`No existe la rama ${document.branchId}.`);
     const docImages = Array.isArray(images) ? images : [];
+    const { document, chunks } = validateDocument({ ...data, imageCount: docImages.length });
+    if (!(await getBranchById(document.branchId))) throw new NotFoundError(`No existe la rama ${document.branchId}.`);
     const db = await openDatabase();
     if (!db) {
       memory.documents.set(document.id, document);

@@ -224,6 +224,7 @@ trailer
 
   const imagesFromStorage = await RagStorage.getDocumentImages(savedDoc.id);
   assert.strictEqual(imagesFromStorage.length, 1);
+  assert.strictEqual(savedDoc.imageCount, 1);
   const singleImage = await RagStorage.getDocumentImage(savedDoc.id, 'img_1');
   assert.ok(singleImage, 'Debe recuperar la imagen por ID');
   assert.strictEqual(singleImage.width, 800);

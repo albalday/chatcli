@@ -13,7 +13,7 @@
   'use strict';
 
   const DB_NAME = 'ZeroChatDB';
-  const DB_VERSION = 2;
+  const DB_VERSION = 3;
   const STORES = Object.freeze({
     conversations: 'conversations',
     messages: 'messages',
@@ -39,7 +39,33 @@
     if (!store.indexNames.contains(name)) store.createIndex(name, keyPath, options);
   }
 
-  function upgradeSchema(db, transaction) {
+  function backfillDocumentImageCounts(transaction) {
+    const documents = transaction.objectStore(STORES.ragDocuments);
+    const files = transaction.objectStore(STORES.ragFiles);
+    const request = documents.openCursor();
+    request.onsuccess = (event) => {
+      const cursor = event.target.result;
+      if (!cursor) return;
+      const document = cursor.value;
+      if (Number.isInteger(document.imageCount) && document.imageCount >= 0) {
+        cursor.continue();
+        return;
+      }
+      const fileRequest = files.get(document.id);
+      fileRequest.onsuccess = () => {
+        document.imageCount = Array.isArray(fileRequest.result?.images) ? fileRequest.result.images.length : 0;
+        const updateRequest = cursor.update(document);
+        updateRequest.onsuccess = () => cursor.continue();
+      };
+      fileRequest.onerror = () => {
+        document.imageCount = 0;
+        const updateRequest = cursor.update(document);
+        updateRequest.onsuccess = () => cursor.continue();
+      };
+    };
+  }
+
+  function upgradeSchema(db, transaction, oldVersion) {
     let store;
     if (!db.objectStoreNames.contains(STORES.conversations)) {
       store = db.createObjectStore(STORES.conversations, { keyPath: 'id' });
@@ -100,6 +126,8 @@
     if (!db.objectStoreNames.contains(STORES.ragMeta)) {
       db.createObjectStore(STORES.ragMeta, { keyPath: 'key' });
     }
+
+    if (oldVersion > 0 && oldVersion < 3) backfillDocumentImageCounts(transaction);
   }
 
   function openDatabase() {
@@ -115,7 +143,7 @@
         resolve(null);
         return;
       }
-      request.onupgradeneeded = (event) => upgradeSchema(event.target.result, event.target.transaction);
+      request.onupgradeneeded = (event) => upgradeSchema(event.target.result, event.target.transaction, event.oldVersion);
       request.onsuccess = (event) => {
         const db = event.target.result;
         db.onversionchange = () => { db.close(); dbPromise = null; };

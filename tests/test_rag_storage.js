@@ -6,7 +6,7 @@ beforeEach(async () => RagStorage.clearAllData());
 
 test('RagStorage - usa el esquema RAG unificado de ZeroChatDB', () => {
   assert.equal(RagStorage.DB_NAME, 'ZeroChatDB');
-  assert.equal(RagStorage.DB_VERSION, 2);
+  assert.equal(RagStorage.DB_VERSION, 3);
   assert.equal(RagStorage.STORE_BRANCHES, 'rag_branches');
   assert.equal(RagStorage.STORE_DOCUMENTS, 'rag_documents');
   assert.equal(RagStorage.STORE_FILES, 'rag_files');
@@ -41,6 +41,7 @@ test('RagStorage - guarda metadatos, archivo original y chunks por separado', as
 
   const stored = await RagStorage.getDocumentById(document.id);
   assert.equal(stored.chunkCount, 2);
+  assert.equal(stored.imageCount, 0);
   assert.equal(stored.chunks, undefined);
   assert.deepEqual(await RagStorage.getSourceFile(document.id), source);
 
@@ -49,6 +50,16 @@ test('RagStorage - guarda metadatos, archivo original y chunks por separado', as
   assert.equal(chunks[0].id, `${document.id}:chunk:0`);
   assert.equal(chunks[1].content, 'Configuración de memoria DDR3.');
   assert.equal((await RagStorage.getChunksByBranch(branch.id)).length, 2);
+});
+
+test('RagStorage - guarda el número de imágenes como metadato del documento', async () => {
+  const branch = await RagStorage.createBranch('Imágenes');
+  const document = await RagStorage.saveDocument({
+    branchId: branch.id, title: 'informe.pdf', fileType: 'pdf', chunks: [{ content: 'Informe con gráfico.' }]
+  }, null, [{ id: 'img_1' }, { id: 'img_2' }]);
+
+  assert.equal(document.imageCount, 2);
+  assert.equal((await RagStorage.getDocumentById(document.id)).imageCount, 2);
 });
 
 test('RagStorage - elimina documentos y ramas en cascada', async () => {
@@ -137,4 +148,3 @@ test('RagStorage - getChunkById resuelve alias comunes generados por LLMs (docId
   assert.ok(cDoc);
   assert.equal(cDoc.content, 'Contenido sección 0');
 });
-
