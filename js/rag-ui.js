@@ -280,25 +280,59 @@
     await updateQuota();
   }
 
+  async function isGzipBlob(blob) {
+    try {
+      if (!blob || blob.size < 2) return false;
+      const slice = blob.slice(0, 2);
+      const buf = await slice.arrayBuffer();
+      const bytes = new Uint8Array(buf);
+      return bytes[0] === 0x1F && bytes[1] === 0x8B;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  async function decompressFileIfNeeded(file) {
+    if (!file) return '';
+    const isGz = file.name?.toLowerCase().endsWith('.gz') || await isGzipBlob(file);
+    if (isGz && typeof DecompressionStream !== 'undefined') {
+      const stream = file.stream().pipeThrough(new DecompressionStream('gzip'));
+      return await new Response(stream).text();
+    }
+    return await file.text();
+  }
+
   async function exportBranch() {
     const select = document.getElementById('rag-manage-branch-select');
     const branchId = select?.value;
     if (!branchId) return;
-    const backup = await storage().exportBranch(branchId);
-    const safeName = String(backup.branch.name || 'conocimiento').normalize('NFKD')
-      .replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'conocimiento';
-    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+
+    const docs = await storage().getDocumentsByBranch(branchId);
+    let includeSources = false;
+    if (docs.length <= 5) {
+      includeSources = true;
+    } else {
+      includeSources = confirm(
+        `Esta rama contiene ${docs.length} documentos.\n\n` +
+        `¿Deseas incluir los archivos binarios originales completos (puede ocupar mucho espacio)?\n\n` +
+        `• Aceptar: Respaldo completo (incluye PDFs originales binarios).\n` +
+        `• Cancelar: Respaldo ligero comprimido (recomendado: incluye todos los fragmentos de texto, tablas e imágenes para el RAG en pocos megabytes).`
+      );
+    }
+
+    const { blob, filename } = await storage().exportBranchBlob(branchId, { includeSources, compress: true });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = url;
-    anchor.download = `${safeName}.zerochat-knowledge.json`;
+    anchor.download = filename;
     anchor.click();
     URL.revokeObjectURL(url);
   }
 
   async function importBranchFile(file) {
     if (!file) return null;
-    const branch = await storage().importBranch(await file.text());
+    const text = await decompressFileIfNeeded(file);
+    const branch = await storage().importBranch(text);
     indexer()?.invalidateBranch(branch.id);
     await renderManageTab(branch.id);
     await renderActiveTab();

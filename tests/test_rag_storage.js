@@ -117,6 +117,38 @@ test('RagStorage - exporta e importa únicamente el formato actual', async () =>
   );
 });
 
+test('RagStorage - exportBranchBlob genera un respaldo comprimido gzip en streaming', async () => {
+  const branch = await RagStorage.createBranch('GzipTest');
+  await RagStorage.saveDocument({
+    branchId: branch.id,
+    title: 'large-doc.txt',
+    fileType: 'txt',
+    chunks: [
+      { order: 0, title: 'Parte 1', content: 'Contenido extenso de prueba para compresión gzip.' }
+    ]
+  }, 'contenido original de prueba');
+
+  const { blob, compressed, filename } = await RagStorage.exportBranchBlob(branch.id, { compress: true });
+  assert.equal(compressed, true);
+  assert.ok(filename.endsWith('.zerochat-knowledge.json.gz'));
+  assert.ok(blob.size > 0);
+
+  // Descomprimir el blob para verificar su estructura
+  const ds = new DecompressionStream('gzip');
+  const decompressedText = await new Response(blob.stream().pipeThrough(ds)).text();
+  const parsed = JSON.parse(decompressedText);
+  assert.equal(parsed.schema, 'zerochat-knowledge');
+  assert.equal(parsed.documents.length, 1);
+  assert.equal(parsed.documents[0].chunks[0].content, 'Contenido extenso de prueba para compresión gzip.');
+
+  // Probar importación tras limpiar datos
+  await RagStorage.clearAllData();
+  const restored = await RagStorage.importBranch(decompressedText);
+  assert.equal(restored.name, 'GzipTest');
+  const docs = await RagStorage.getDocumentsByBranch(restored.id);
+  assert.equal(docs.length, 1);
+});
+
 test('RagStorage - getChunkById resuelve alias comunes generados por LLMs (docId#0, docId:0)', async () => {
   const branch = await RagStorage.createBranch('AliasTest');
   const doc = await RagStorage.saveDocument({

@@ -478,20 +478,25 @@
     return true;
   }
 
-  async function exportBranch(branchId) {
+  async function exportBranch(branchId, options = {}) {
     const branch = await getBranchById(branchId);
     if (!branch) throw new NotFoundError(`No existe la rama ${branchId}.`);
     const documents = await getDocumentsByBranch(branchId);
+    const includeSources = options.includeSources !== false;
     const exportedDocuments = [];
     for (const document of documents) {
       const chunks = await getChunksByDocument(document.id);
-      const source = await serializeSource(await getSourceFile(document.id), document.mimeType);
+      const images = await getDocumentImages(document.id);
+      const source = includeSources
+        ? await serializeSource(await getSourceFile(document.id), document.mimeType)
+        : null;
       exportedDocuments.push({
         title: document.title,
         fileType: document.fileType,
         mimeType: document.mimeType,
         fileSize: document.fileSize,
         source,
+        images: (images && images.length > 0) ? images : undefined,
         chunks: chunks.map(chunk => ({
           order: chunk.order,
           title: chunk.title,
@@ -507,6 +512,80 @@
       exportedAt: new Date().toISOString(),
       branch: { name: branch.name, description: branch.description, language: branch.language },
       documents: exportedDocuments
+    };
+  }
+
+  async function exportBranchBlob(branchId, options = {}) {
+    const branch = await getBranchById(branchId);
+    if (!branch) throw new NotFoundError(`No existe la rama ${branchId}.`);
+    const documents = await getDocumentsByBranch(branchId);
+    const safeName = String(branch.name || 'conocimiento').normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'conocimiento';
+
+    const compress = options.compress !== false && typeof CompressionStream !== 'undefined';
+    const includeSources = Boolean(options.includeSources);
+
+    if (typeof TransformStream !== 'undefined' && compress) {
+      const ts = new TransformStream();
+      const writer = ts.writable.getWriter();
+      const cs = new CompressionStream('gzip');
+      const compressedStream = ts.readable.pipeThrough(cs);
+      const responsePromise = new Response(compressedStream).blob();
+      const encoder = new TextEncoder();
+
+      const headerObj = {
+        schema: 'zerochat-knowledge',
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        branch: { name: branch.name, description: branch.description, language: branch.language }
+      };
+      const headerStr = JSON.stringify(headerObj);
+      await writer.write(encoder.encode(headerStr.slice(0, -1) + ',"documents":[\n'));
+
+      let first = true;
+      for (const document of documents) {
+        const chunks = await getChunksByDocument(document.id);
+        const images = await getDocumentImages(document.id);
+        const source = includeSources
+          ? await serializeSource(await getSourceFile(document.id), document.mimeType)
+          : null;
+        const docRecord = {
+          title: document.title,
+          fileType: document.fileType,
+          mimeType: document.mimeType,
+          fileSize: document.fileSize,
+          source,
+          images: (images && images.length > 0) ? images : undefined,
+          chunks: chunks.map(chunk => ({
+            order: chunk.order,
+            title: chunk.title,
+            content: chunk.content,
+            pageStart: chunk.pageStart,
+            pageEnd: chunk.pageEnd
+          }))
+        };
+        const chunkJson = (first ? '' : ',\n') + JSON.stringify(docRecord);
+        first = false;
+        await writer.write(encoder.encode(chunkJson));
+      }
+
+      await writer.write(encoder.encode('\n]}'));
+      await writer.close();
+      const blob = await responsePromise;
+      return {
+        blob,
+        compressed: true,
+        filename: `${safeName}.zerochat-knowledge.json.gz`
+      };
+    }
+
+    const backup = await exportBranch(branchId, { includeSources });
+    const jsonStr = JSON.stringify(backup);
+    const plainBlob = new Blob([jsonStr], { type: 'application/json' });
+    return {
+      blob: plainBlob,
+      compressed: false,
+      filename: `${safeName}.zerochat-knowledge.json`
     };
   }
 
@@ -529,7 +608,7 @@
           mimeType: document.mimeType,
           fileSize: document.fileSize,
           chunks: document.chunks
-        }, deserializeSource(document.source));
+        }, deserializeSource(document.source), document.images || []);
       }
       return branch;
     } catch (error) {
@@ -543,7 +622,7 @@
     saveDocument, getDocumentsByBranch, getDocumentById,
     getChunksByBranch, getChunksByDocument, getChunkById, getSourceFile, deleteDocument,
     getDocumentImages, getDocumentImage,
-    getStorageEstimate, requestPersistentStorage, clearAllData, exportBranch, importBranch, openDatabase,
+    getStorageEstimate, requestPersistentStorage, clearAllData, exportBranch, exportBranchBlob, importBranch, openDatabase,
     RagStorageError, ValidationError, QuotaExceededError, NotFoundError,
     DB_NAME: Database?.DB_NAME || 'ZeroChatDB', DB_VERSION: Database?.DB_VERSION || 2,
     STORE_BRANCHES: STORES.ragBranches, STORE_DOCUMENTS: STORES.ragDocuments,
