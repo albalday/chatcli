@@ -27,7 +27,7 @@
 
       // Barra de herramientas superior
       profile_badge_title: 'Perfil de conexión activo (clic para abrir Configuración)',
-      tokens_badge_title: 'Contexto de conversación: {{used}} / {{limit}} tokens ({{percent}}% ocupado)',
+      tokens_badge_title: 'Tokens de contexto: {{used}} tokens',
       server_badge_title: 'Servidor configurado (clic para cambiar)',
       model_badge_title: 'Modelo activo (clic para cambiar)',
       no_model: '(Sin modelo)',
@@ -351,7 +351,7 @@
 
       // Barra de herramientas superior
       profile_badge_title: 'Active connection profile (click to open Settings)',
-      tokens_badge_title: 'Conversation context: {{used}} / {{limit}} tokens ({{percent}}% used)',
+      tokens_badge_title: 'Context tokens: {{used}} tokens',
       server_badge_title: 'Configured server (click to change)',
       model_badge_title: 'Active model (click to change)',
       no_model: '(No model)',
