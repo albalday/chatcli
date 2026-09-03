@@ -1244,7 +1244,7 @@
         onSwitchSession: switchToSession,
         onRenameSession: renameSession,
         onDeleteSession: deleteSession
-      });
+      }, { groupByDate: true });
     }
   }
 

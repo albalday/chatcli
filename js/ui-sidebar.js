@@ -81,7 +81,33 @@
     });
   }
 
-  function renderSidebarChats(elements, savedSessions, currentSessionId, callbacks = {}) {
+  function getChronologicalCategory(date) {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const yesterday = today - 86400000;
+    const last7Days = today - (7 * 86400000);
+    const last30Days = today - (30 * 86400000);
+
+    const d = new Date(date).getTime();
+    if (d >= today) return 'today';
+    if (d >= yesterday) return 'yesterday';
+    if (d >= last7Days) return 'last7days';
+    if (d >= last30Days) return 'last30days';
+    return 'older';
+  }
+
+  function getCategoryLabel(category) {
+    switch (category) {
+      case 'today': return t('sidebar_group_today', 'Hoy');
+      case 'yesterday': return t('sidebar_group_yesterday', 'Ayer');
+      case 'last7days': return t('sidebar_group_last7days', 'Últimos 7 días');
+      case 'last30days': return t('sidebar_group_last30days', 'Últimos 30 días');
+      case 'older': return t('sidebar_group_older', 'Anteriores');
+      default: return '';
+    }
+  }
+
+  function renderSidebarChats(elements, savedSessions, currentSessionId, callbacks = {}, options = {}) {
     if (!elements || !elements.sidebarChatsList) return;
     elements.sidebarChatsList.innerHTML = '';
 
@@ -100,12 +126,25 @@
       return;
     }
 
+    let currentCategory = null;
     matching.forEach(s => {
+      const d = new Date(s.updatedAt || s.createdAt || Date.now());
+
+      if (options && options.groupByDate && !filterText) {
+        const cat = getChronologicalCategory(d);
+        if (cat !== currentCategory) {
+          currentCategory = cat;
+          const groupHeader = doc.createElement('div');
+          groupHeader.className = 'sidebar-group-header';
+          groupHeader.textContent = getCategoryLabel(cat);
+          elements.sidebarChatsList.appendChild(groupHeader);
+        }
+      }
+
       const item = doc.createElement('div');
       item.className = 'sidebar-chat-item' + (s.id === currentSessionId ? ' active' : '');
       item.setAttribute('data-session-id', s.id);
 
-      const d = new Date(s.updatedAt || s.createdAt || Date.now());
       const timeStr = d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       const rawTitle = s.title || t('chat_untitled') || 'Nueva conversación';
       const safeTitle = escapeHtml(rawTitle);
@@ -155,6 +194,7 @@
     openSidebar,
     closeSidebar,
     filterSessions,
+    getChronologicalCategory,
     renderSidebarChats
   };
 });

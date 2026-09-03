@@ -403,3 +403,103 @@ test('Browser UI - Fase 4: Composer Flotante Omnibox, Auto-expansión y Botones 
     await browser.close();
   }
 });
+
+test('Browser UI - Fase 5: Barra Lateral de Conversaciones Moderna, Grupos y Drawer', async () => {
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+    const filePath = 'file://' + path.resolve(__dirname, '../zerochat.html');
+    await page.goto(filePath, { waitUntil: 'load' });
+    await page.waitForSelector('#welcome-banner');
+
+    // 1. Abrir barra lateral
+    await page.click('#btn-toggle-sidebar');
+    const isSidebarVisible = await page.$eval('#chat-sidebar', el => getComputedStyle(el).display === 'flex');
+    assert.ok(isSidebarVisible, 'El sidebar debe mostrarse con display flex');
+
+    // 2. Validar botón destacado "+ Nueva conversación"
+    const newChatBtnInfo = await page.evaluate(() => {
+      const btn = document.getElementById('btn-sidebar-new-chat');
+      const style = getComputedStyle(btn);
+      return {
+        exists: !!btn,
+        text: btn.textContent.trim(),
+        borderRadius: parseFloat(style.borderRadius),
+        bgColor: style.backgroundColor
+      };
+    });
+    assert.ok(newChatBtnInfo.exists, 'El botón #btn-sidebar-new-chat debe existir');
+    assert.ok(newChatBtnInfo.text.includes('Nueva conversación'), 'El botón debe contener el texto de nueva conversación');
+    assert.ok(newChatBtnInfo.borderRadius >= 16, 'El botón de nueva conversación debe ser redondeado estilo cápsula');
+
+    // 3. Validar buscador de historial con icono
+    const searchInfo = await page.evaluate(() => {
+      const input = document.getElementById('sidebar-search-input');
+      const icon = document.querySelector('.sidebar-search-icon');
+      return {
+        hasInput: !!input,
+        hasIcon: !!icon,
+        placeholder: input.getAttribute('placeholder')
+      };
+    });
+    assert.ok(searchInfo.hasInput, 'El input de búsqueda debe existir');
+    assert.ok(searchInfo.hasIcon, 'El icono de búsqueda debe existir');
+
+    // 4. Inyectar sesiones de prueba con diferentes fechas para probar agrupación cronológica
+    await page.evaluate(() => {
+      const now = Date.now();
+      const mockSessions = [
+        { id: 'chat-today-1', title: 'Plan de Refactorización UI', updatedAt: now },
+        { id: 'chat-yesterday-1', title: 'Consulta de Base de Datos', updatedAt: now - 86400000 },
+        { id: 'chat-older-1', title: 'Diseño de Algoritmos Inicial', updatedAt: now - (45 * 86400000) }
+      ];
+      const elements = {
+        sidebarChatsList: document.getElementById('sidebar-chats-list'),
+        sidebarSearchInput: document.getElementById('sidebar-search-input')
+      };
+      window.ChatUISidebar.renderSidebarChats(elements, mockSessions, 'chat-today-1', {}, { groupByDate: true });
+    });
+
+    // Validar cabeceras de grupos cronológicos
+    const groupHeaders = await page.$$eval('.sidebar-group-header', els => els.map(e => e.textContent.trim()));
+    assert.ok(groupHeaders.length >= 2, 'Deben existir cabeceras de agrupación cronológica');
+    assert.ok(groupHeaders.includes('Hoy'), 'Debe incluir grupo Hoy');
+    assert.ok(groupHeaders.includes('Ayer'), 'Debe incluir grupo Ayer');
+
+    // Validar chat activo
+    const activeItem = await page.$eval('.sidebar-chat-item.active', el => el.getAttribute('data-session-id'));
+    assert.equal(activeItem, 'chat-today-1', 'El chat actual debe tener la clase .active');
+
+    // 5. Validar filtrado dinámico mediante buscador
+    await page.fill('#sidebar-search-input', 'Refactorización');
+    await page.evaluate(() => {
+      const now = Date.now();
+      const mockSessions = [
+        { id: 'chat-today-1', title: 'Plan de Refactorización UI', updatedAt: now },
+        { id: 'chat-yesterday-1', title: 'Consulta de Base de Datos', updatedAt: now - 86400000 }
+      ];
+      const elements = {
+        sidebarChatsList: document.getElementById('sidebar-chats-list'),
+        sidebarSearchInput: document.getElementById('sidebar-search-input')
+      };
+      window.ChatUISidebar.renderSidebarChats(elements, mockSessions, 'chat-today-1', {}, { groupByDate: true });
+    });
+
+    const filteredCount = await page.$$eval('.sidebar-chat-item', els => els.length);
+    assert.equal(filteredCount, 1, 'Solo debe coincidir 1 chat con el filtro');
+
+    // 6. Validar comportamiento responsive en móvil (Drawer Mode)
+    await page.setViewportSize({ width: 500, height: 800 });
+    const mobileSidebarStyle = await page.$eval('#chat-sidebar', el => {
+      const s = getComputedStyle(el);
+      return {
+        position: s.position,
+        zIndex: parseInt(s.zIndex, 10)
+      };
+    });
+    assert.equal(mobileSidebarStyle.position, 'fixed', 'En móvil, el sidebar debe posicionarse como fixed drawer');
+    assert.ok(mobileSidebarStyle.zIndex >= 100, 'En móvil, el zIndex debe ser elevado para superponerse al chat');
+  } finally {
+    await browser.close();
+  }
+});
