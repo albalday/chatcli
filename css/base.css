@@ -42,12 +42,20 @@ body {
 
 button:focus-visible,
 a:focus-visible,
-input:focus-visible,
+input:not(.chat-textarea):focus-visible,
 select:focus-visible,
-textarea:focus-visible,
+textarea:not(.chat-textarea):focus-visible,
 summary:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
+}
+
+.chat-textarea,
+.chat-textarea:focus,
+.chat-textarea:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+  border: none !important;
 }
 
 /* ==========================================================================
