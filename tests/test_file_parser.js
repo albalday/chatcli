@@ -56,3 +56,30 @@ test('FileParser - compacta glifos espaciados de PDF antes de indexarlos', () =>
   assert.match(normalized, /CASH FLOW/);
   assert.match(normalized, /CAPITAL EXPENDITURES/);
 });
+
+test('FileParser - compacta páginas PDF que contienen un glifo por línea', () => {
+  const extracted = [
+    '--- Página 60 ---',
+    'C', 'a', 's', 'h', '',
+    'F', 'l', 'o', 'w', 's', '',
+    'f', 'r', 'o', 'm', '',
+    'I', 'n', 'v', 'e', 's', 't', 'i', 'n', 'g', '',
+    'A', 'c', 't', 'i', 'v', 'i', 't', 'i', 'e', 's', '',
+    '(', '1', ',', '5', '7', '7', ')'
+  ].join('\n');
+
+  const normalized = FileParser.collapseVerticallySplitGlyphs(extracted);
+  assert.match(normalized, /Cash Flows from Investing Activities \(1,577\)/);
+  assert.doesNotMatch(normalized, /C\na\ns\nh/);
+});
+
+test('FileParser - usa el mapa ToUnicode de la fuente PDF activa', () => {
+  const aggregate = new Map([['0001', 'X']]);
+  aggregate.byFontName = new Map([
+    ['F1', new Map([['0001', 'A']])],
+    ['F2', new Map([['0001', 'B']])]
+  ]);
+
+  const stream = 'BT /F1 12 Tf <0001> Tj /F2 12 Tf <0001> Tj ET';
+  assert.equal(FileParser.parsePdfStreamText(stream, aggregate), 'AB');
+});

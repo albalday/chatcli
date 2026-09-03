@@ -142,6 +142,7 @@
   async function parseCMaps(allObjects, fullText, bytes, objOffsets) {
     const cmap = new Map();
     const toUnicodeObjNums = new Set();
+    const cmapByObject = new Map();
 
     // Buscar referencias /ToUnicode en fullText y en todos los objetos (incluidos los de ObjStm)
     const toUnicodeRegex = /\/ToUnicode\s+(\d+)\s+\d+\s+R/g;
@@ -163,9 +164,12 @@
     }
 
     for (const objNum of toUnicodeObjNums) {
+      const localCmap = new Map();
       const body = allObjects.get(String(objNum));
       if (body && (body.includes('beginbfchar') || body.includes('beginbfrange'))) {
+        parseCMapData(body, localCmap);
         parseCMapData(body, cmap);
+        cmapByObject.set(String(objNum), localCmap);
         continue;
       }
 
@@ -186,12 +190,38 @@
             const decomp = await decompressDeflateData(rawBytes);
             if (decomp) {
               const text = new TextDecoder('latin1').decode(decomp);
+              parseCMapData(text, localCmap);
               parseCMapData(text, cmap);
             }
           } catch (e) {}
         }
       }
+      if (localCmap.size > 0) cmapByObject.set(String(objNum), localCmap);
     }
+
+    // Los códigos CID solo son únicos dentro de una fuente. Mantener también
+    // los mapas por nombre de recurso (/F1, /F2...) evita que el último CMap
+    // leído corrompa texto y cifras pertenecientes a otra fuente.
+    const cmapByFontObject = new Map();
+    for (const [objNum, body] of allObjects.entries()) {
+      const match = body.match(/\/ToUnicode\s+(\d+)\s+\d+\s+R/);
+      if (!match) continue;
+      const localCmap = cmapByObject.get(String(match[1]));
+      if (localCmap) cmapByFontObject.set(String(objNum), localCmap);
+    }
+
+    const byFontName = new Map();
+    for (const body of allObjects.values()) {
+      const resourceRegex = /\/([^\s/<>\[\]()]+)\s+(\d+)\s+\d+\s+R/g;
+      let resourceMatch;
+      while ((resourceMatch = resourceRegex.exec(body)) !== null) {
+        const localCmap = cmapByFontObject.get(String(resourceMatch[2]));
+        if (localCmap && !byFontName.has(resourceMatch[1])) {
+          byFontName.set(resourceMatch[1], localCmap);
+        }
+      }
+    }
+    cmap.byFontName = byFontName;
 
     return cmap;
   }
@@ -263,6 +293,7 @@
 
     let out = [];
     let inTextObject = false;
+    let activeCmap = cmap;
     const len = streamString.length;
     let i = 0;
 
@@ -297,6 +328,15 @@
         continue;
       }
 
+      // Seleccionar el ToUnicode de la fuente activa indicada por el operador
+      // PDF "/Fname size Tf". El mapa agregado queda como fallback.
+      if (c === 47 /* / */ && cmap && cmap.byFontName) {
+        const fontMatch = streamString.substring(i).match(/^\/([^\s/<>\[\]()]+)\s+[-+]?(?:\d+\.?\d*|\.\d+)\s+Tf\b/);
+        if (fontMatch) {
+          activeCmap = cmap.byFontName.get(fontMatch[1]) || cmap;
+        }
+      }
+
       // Literal string: (texto)
       if (c === 40 /* ( */) {
         let depth = 1;
@@ -317,7 +357,7 @@
           lit += streamString.charAt(j);
           j++;
         }
-        if (lit) out.push(mapPdfLiteralString(lit, cmap));
+        if (lit) out.push(mapPdfLiteralString(lit, activeCmap));
         i = j;
         continue;
       }
@@ -341,10 +381,10 @@
         let decoded = '';
         for (let k = 0; k < hex.length; k += 4) {
           const chunk = hex.substr(k, 4).toLowerCase();
-          if (cmap.has(chunk)) decoded += cmap.get(chunk);
+          if (activeCmap.has(chunk)) decoded += activeCmap.get(chunk);
           else {
             const sub2 = hex.substr(k, 2).toLowerCase();
-            if (cmap.has(sub2)) { decoded += cmap.get(sub2); k -= 2; }
+            if (activeCmap.has(sub2)) { decoded += activeCmap.get(sub2); k -= 2; }
             else {
               const code = parseInt(chunk, 16);
               if (!isNaN(code) && code >= 32 && code < 127) decoded += String.fromCharCode(code);
@@ -381,7 +421,7 @@
               lit += streamString.charAt(k);
               k++;
             }
-            arrText += mapPdfLiteralString(lit, cmap);
+            arrText += mapPdfLiteralString(lit, activeCmap);
             j = k;
             continue;
           } else if (ac === 60 /* < */) {
@@ -398,10 +438,10 @@
             if (k < len && streamString.charCodeAt(k) === 62) k++;
             for (let m = 0; m < hex.length; m += 4) {
               const chunk = hex.substr(m, 4).toLowerCase();
-              if (cmap.has(chunk)) arrText += cmap.get(chunk);
+              if (activeCmap.has(chunk)) arrText += activeCmap.get(chunk);
               else {
                 const sub2 = hex.substr(m, 2).toLowerCase();
-                if (cmap.has(sub2)) { arrText += cmap.get(sub2); m -= 2; }
+                if (activeCmap.has(sub2)) { arrText += activeCmap.get(sub2); m -= 2; }
               }
             }
             j = k;
@@ -510,6 +550,40 @@
     });
 
     return out;
+  }
+
+  /**
+   * Algunos generadores PDF emiten cada glifo como una operación de texto
+   * independiente. El extractor conserva esas operaciones como líneas, por lo
+   * que una página termina siendo "C\na\ns\nh\n\nF\nl\no\nw". Solo normalizamos
+   * páginas donde este patrón es dominante para no alterar documentos que
+   * realmente contienen listas de una letra o tablas verticales.
+   */
+  function collapseVerticallySplitGlyphs(text) {
+    if (!text || typeof text !== 'string') return text;
+
+    return text.split(/(?=--- Página \d+ ---\n)/).map(section => {
+      const firstNewline = section.indexOf('\n');
+      if (firstNewline < 0) return section;
+
+      const heading = section.slice(0, firstNewline + 1);
+      const body = section.slice(firstNewline + 1);
+      const nonEmptyLines = body.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+      if (nonEmptyLines.length < 20) return section;
+
+      const singleGlyphLines = nonEmptyLines.filter(line => Array.from(line).length === 1).length;
+      if (singleGlyphLines / nonEmptyLines.length < 0.65) return section;
+
+      const blocks = body.split(/\r?\n\s*\r?\n+/).map(block => {
+        const lines = block.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+        if (lines.length >= 2 && lines.every(line => Array.from(line).length === 1)) {
+          return lines.join('');
+        }
+        return lines.join(' ');
+      }).filter(Boolean);
+
+      return heading + blocks.join(' ') + '\n\n';
+    }).join('');
   }
 
   function decodePdfShiftedText(text, offset = 3) {
@@ -1689,6 +1763,7 @@
     let finalCleanText = pages.join('\n\n').trim();
 
     if (finalCleanText) {
+      finalCleanText = collapseVerticallySplitGlyphs(finalCleanText);
       finalCleanText = decodePdfShiftedText(finalCleanText);
     }
 
@@ -1818,6 +1893,8 @@
     convertCmykDataUrlToRgb,
     decodePdfShiftedText,
     unshiftAsciiString,
-    collapseSpacedLettersAndNumbers
+    collapseSpacedLettersAndNumbers,
+    collapseVerticallySplitGlyphs,
+    parsePdfStreamText
   };
 });
