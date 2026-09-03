@@ -314,8 +314,6 @@
         btnExport.disabled = true;
         btnExport.textContent = '⏳ Exportando...';
       }
-      // Respaldo RAG optimizado (todos los fragmentos de texto, tablas, imágenes y metadatos)
-      // Sin duplicar los binarios originales pesados que superan los límites de memoria del navegador.
       const { blob, filename } = await storage().exportBranchBlob(branchId, {
         includeSources: false,
         compress: true
@@ -343,11 +341,23 @@
     try {
       if (btnImport) {
         btnImport.disabled = true;
-        btnImport.textContent = '⏳ Restaurando...';
+        btnImport.textContent = '⏳ Descomprimiendo...';
       }
-      const text = await decompressFileIfNeeded(file);
+      let text;
+      try {
+        text = await decompressFileIfNeeded(file);
+      } catch (err) {
+        if (err.name === 'RangeError' || err.code === 'ERR_STRING_TOO_LONG' || String(err).includes('string')) {
+          throw new Error('El archivo supera el límite de memoria del navegador (512 MB). Utiliza el respaldo ligero optimizado.');
+        }
+        throw err;
+      }
       if (!text) throw new Error('El archivo de respaldo está vacío o no se pudo leer.');
-      const branch = await storage().importBranch(text);
+      if (btnImport) btnImport.textContent = '⏳ Restaurando 0%...';
+
+      const branch = await storage().importBranch(text, ({ current, total, percent }) => {
+        if (btnImport) btnImport.textContent = `⏳ Restaurando ${percent}% (${current}/${total})...`;
+      });
       indexer()?.invalidateBranch(branch.id);
       await renderManageTab(branch.id);
       await renderActiveTab();
@@ -355,7 +365,7 @@
       alert(`✅ Rama "${branch.name}" restaurada con éxito.`);
       return branch;
     } catch (error) {
-      alert(`Error al restaurar la rama: ${error.message || error}`);
+      alert(`Error al restaurar: ${error.message || error}`);
       throw error;
     } finally {
       if (btnImport) {

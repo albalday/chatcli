@@ -589,7 +589,7 @@
     };
   }
 
-  async function importBranch(backup) {
+  async function importBranch(backup, onProgress) {
     let data = backup;
     if (typeof data === 'string') {
       try { data = JSON.parse(data); }
@@ -600,6 +600,8 @@
     }
     const branch = await createBranch(data.branch);
     try {
+      const total = data.documents.length;
+      let current = 0;
       for (const document of data.documents) {
         await saveDocument({
           branchId: branch.id,
@@ -609,6 +611,13 @@
           fileSize: document.fileSize,
           chunks: document.chunks
         }, deserializeSource(document.source), document.images || []);
+        current++;
+        if (typeof onProgress === 'function') {
+          onProgress({ current, total, percent: Math.round((current / total) * 100), docTitle: document.title });
+          if (current % 10 === 0) {
+            await new Promise(resolve => setTimeout(resolve, 0));
+          }
+        }
       }
       return branch;
     } catch (error) {
