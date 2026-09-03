@@ -792,3 +792,103 @@ test('Browser UI - Iconos Fase 3: Iconos Vectoriales SVG en Barra Lateral e Hist
     await browser.close();
   }
 });
+
+test('Browser UI - Iconos Fase 4: Iconos Vectoriales SVG en Tarjetas Agénticas y Badges de Estado', async () => {
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+    const filePath = 'file://' + path.resolve(__dirname, '../zerochat.html');
+    await page.goto(filePath, { waitUntil: 'load' });
+    await page.waitForSelector('#welcome-banner');
+
+    const toolCardsResult = await page.evaluate(() => {
+      const container = document.getElementById('messages-list') || document.body;
+
+      // 1. Crear tarjeta viva de execute_javascript
+      const jsCard = ChatToolCards.createLiveToolCard('execute_javascript', { code: 'console.log("hola");' });
+      container.appendChild(jsCard);
+
+      const jsTitle = jsCard.querySelector('.tool-card-title');
+      const jsTitleSvg = jsTitle?.querySelector('svg');
+      const jsBadge = jsCard.querySelector('.tool-card-badge');
+      const jsBadgeSpinnerSvg = jsBadge?.querySelector('svg.ui-icon-spin');
+      const jsCollapseSvg = jsCard.querySelector('.btn-tool-collapse svg');
+
+      const jsTitleHasEmoji = jsTitle?.textContent.includes('⚡') || false;
+      const jsBadgeHasEmoji = jsBadge?.textContent.includes('⏳') || false;
+
+      // 2. Actualizar tarjeta viva a completada
+      ChatToolCards.updateLiveToolCard(jsCard, 'execute_javascript', {}, { success: true, result: 'hola' }, 42);
+      const jsBadgeSuccessSvg = jsBadge?.querySelector('svg');
+      const jsBadgeSuccessHasEmoji = jsBadge?.textContent.includes('✅') || false;
+
+      // 3. Crear tarjeta de search_web
+      const searchCard = ChatToolCards.createLiveToolCard('search_web', { query: 'test query' });
+      container.appendChild(searchCard);
+
+      const searchTitle = searchCard.querySelector('.search-card-title');
+      const searchTitleSvg = searchTitle?.querySelector('svg');
+      const searchBadge = searchCard.querySelector('.search-card-badge');
+      const searchBadgeSpinnerSvg = searchBadge?.querySelector('svg.ui-icon-spin');
+
+      const searchTitleHasEmoji = searchTitle?.textContent.includes('🔍') || false;
+      const searchBadgeHasEmoji = searchBadge?.textContent.includes('⏳') || false;
+
+      // 4. Renderizar gráfico nativo
+      let chartSvgFound = false;
+      let chartEmojiFound = true;
+      if (typeof ChatCharts !== 'undefined' && typeof ChatCharts.renderChartCard === 'function') {
+        const chartHtml = ChatCharts.renderChartCard({
+          type: 'bar',
+          title: 'Ventas Mensuales',
+          labels: ['Ene', 'Feb'],
+          datasets: [{ label: 'Ventas', data: [10, 20] }]
+        });
+        const chartWrapper = document.createElement('div');
+        chartWrapper.innerHTML = chartHtml;
+        container.appendChild(chartWrapper);
+
+        const chartHeader = chartWrapper.querySelector('.chat-chart-title');
+        chartSvgFound = !!chartHeader?.querySelector('svg');
+        chartEmojiFound = chartHeader?.textContent.includes('📊') || false;
+      }
+
+      return {
+        hasJsTitleSvg: !!jsTitleSvg,
+        jsTitleHasEmoji,
+        hasJsBadgeSpinnerSvg: !!jsBadgeSpinnerSvg,
+        jsBadgeHasEmoji,
+        hasJsCollapseSvg: !!jsCollapseSvg,
+        hasJsBadgeSuccessSvg: !!jsBadgeSuccessSvg,
+        jsBadgeSuccessHasEmoji,
+        hasSearchTitleSvg: !!searchTitleSvg,
+        searchTitleHasEmoji,
+        hasSearchBadgeSpinnerSvg: !!searchBadgeSpinnerSvg,
+        searchBadgeHasEmoji,
+        chartSvgFound,
+        chartEmojiFound
+      };
+    });
+
+    // Validaciones JS Tool Card
+    assert.ok(toolCardsResult.hasJsTitleSvg, 'execute_javascript debe tener icono SVG');
+    assert.equal(toolCardsResult.jsTitleHasEmoji, false, 'execute_javascript no debe tener emoji ⚡');
+    assert.ok(toolCardsResult.hasJsBadgeSpinnerSvg, 'El badge en ejecución debe tener un spinner SVG animado');
+    assert.equal(toolCardsResult.jsBadgeHasEmoji, false, 'El badge no debe tener emoji ⏳');
+    assert.ok(toolCardsResult.hasJsCollapseSvg, 'El botón de colapsar debe tener un chevron SVG');
+    assert.ok(toolCardsResult.hasJsBadgeSuccessSvg, 'El badge de completado debe tener un check SVG');
+    assert.equal(toolCardsResult.jsBadgeSuccessHasEmoji, false, 'El badge de completado no debe tener emoji ✅');
+
+    // Validaciones Search Web Card
+    assert.ok(toolCardsResult.hasSearchTitleSvg, 'search_web debe tener icono SVG');
+    assert.equal(toolCardsResult.searchTitleHasEmoji, false, 'search_web no debe tener emoji 🔍');
+    assert.ok(toolCardsResult.hasSearchBadgeSpinnerSvg, 'El badge de búsqueda debe tener spinner SVG');
+    assert.equal(toolCardsResult.searchBadgeHasEmoji, false, 'El badge de búsqueda no debe tener emoji ⏳');
+
+    // Validaciones Chart Card
+    assert.ok(toolCardsResult.chartSvgFound, 'La tarjeta de gráficos debe tener un icono SVG');
+    assert.equal(toolCardsResult.chartEmojiFound, false, 'La tarjeta de gráficos no debe tener emoji 📊');
+  } finally {
+    await browser.close();
+  }
+});

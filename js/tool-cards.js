@@ -1,4 +1,4 @@
-/** Renderer genérico: cada tool declara su propia vista. */
+/** Renderer genérico: cada tool declara su propia vista con iconos vectoriales SVG. */
 (function (root, factory) {
   if (typeof exports === 'object' && typeof module !== 'undefined') module.exports = factory();
   else root.ChatToolCards = factory();
@@ -8,25 +8,70 @@
   const t = (key, params) => (typeof window !== 'undefined' && window.ChatI18n?.t) ? window.ChatI18n.t(key, params) : key;
   const normalizeName = name => String(name || '').trim().toLowerCase().replace(/_/g, '');
   const getView = name => (typeof window !== 'undefined' && window.ChatAgentCore?.registry?.getTool) ? window.ChatAgentCore.registry.getTool(name)?.view : null;
-  const context = () => ({ document: typeof document === 'undefined' ? null : document, markdown: getMarkdown(), charts: typeof window !== 'undefined' ? window.ChatCharts : null, t });
+
+  const SPINNER_SVG = '<svg class="ui-icon ui-icon-spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"></path></svg>';
+  const CHECK_SVG = '<svg class="ui-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+  const ERROR_SVG = '<svg class="ui-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>';
+  const CHEVRON_SVG = '<svg class="ui-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>';
+  const DEFAULT_TOOL_ICON = '<svg class="ui-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>';
+
+  const context = () => ({
+    document: typeof document === 'undefined' ? null : document,
+    markdown: getMarkdown(),
+    charts: typeof window !== 'undefined' ? window.ChatCharts : null,
+    icons: typeof window !== 'undefined' ? window.ChatIcons : null,
+    t,
+    SPINNER_SVG,
+    CHECK_SVG,
+    ERROR_SVG,
+    CHEVRON_SVG
+  });
+
   function fallback(name, args, isHistorical = false) {
     const card = document.createElement('div'); card.className = 'tool-card-wrapper';
     const hasArgs = args && typeof args === 'object' && Object.keys(args).length > 0;
     const tool = (typeof window !== 'undefined' && window.ChatAgentCore?.registry?.getTool) ? window.ChatAgentCore.registry.getTool(name) : null;
-    const icon = tool?.metadata?.icon || '⚙️';
+    const icon = (typeof window !== 'undefined' && window.ChatIcons?.has(name))
+      ? window.ChatIcons.get(name, { size: 14 })
+      : (tool?.metadata?.iconSvg || DEFAULT_TOOL_ICON);
     const badgeClass = isHistorical ? 'tool-card-badge status-success' : 'tool-card-badge status-loading';
-    const badgeText = isHistorical ? `✅ ${t('tool_status_success') || 'Completado'}` : `⏳ ${t('tool_badge_executing') || 'Ejecutando...'}`;
+    const badgeContent = isHistorical
+      ? `${CHECK_SVG} <span>${t('tool_status_success') || 'Completado'}</span>`
+      : `${SPINNER_SVG} <span>${t('tool_badge_executing') || 'Ejecutando...'}</span>`;
     const collapseBtn = hasArgs
-      ? `<button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Minimizar'}"><span>▾</span></button>`
+      ? `<button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Minimizar'}">${CHEVRON_SVG}</button>`
       : '';
     const bodyHtml = hasArgs
       ? `<div class="tool-card-collapsible-body"><div class="tool-card-result"><pre class="tool-card-code"><code>${getMarkdown().escapeHtml(JSON.stringify(args, null, 2))}</code></pre></div></div>`
       : '';
-    card.innerHTML = `<div class="tool-execution-card"><div class="tool-card-header"><div class="tool-card-title"><span>${icon}</span><span>${getMarkdown().escapeHtml(name)}</span></div><div class="tool-card-header-actions"><span class="${badgeClass}">${badgeText}</span>${collapseBtn}</div></div>${bodyHtml}</div>`;
+    card.innerHTML = `<div class="tool-execution-card"><div class="tool-card-header"><div class="tool-card-title"><span>${icon}</span><span>${getMarkdown().escapeHtml(name)}</span></div><div class="tool-card-header-actions"><span class="${badgeClass}">${badgeContent}</span>${collapseBtn}</div></div>${bodyHtml}</div>`;
     return card;
   }
+
   function createLiveToolCard(name, args = {}) { if (typeof document === 'undefined') return null; const view = getView(name); return view?.createLiveCard ? view.createLiveCard(args, context()) : fallback(name, args, false); }
-  function updateLiveToolCard(card, name, args = {}, result = {}, elapsedMs = 0) { const view = getView(name); if (view?.updateLiveCard) return view.updateLiveCard(card, args, result, elapsedMs, context()); const badge = card?.querySelector('.tool-card-badge'); if (badge) { const isSuccess = result?.success !== false && !result?.error; badge.className = `tool-card-badge ${isSuccess ? 'status-success' : 'status-error'}`; badge.textContent = isSuccess ? `✅ ${t('tool_status_success') || 'Completado'} (${elapsedMs}ms)` : `❌ Error (${elapsedMs}ms)`; } }
+  function updateLiveToolCard(card, name, args = {}, result = {}, elapsedMs = 0) {
+    const view = getView(name);
+    if (view?.updateLiveCard) return view.updateLiveCard(card, args, result, elapsedMs, context());
+    const badge = card?.querySelector('.tool-card-badge');
+    if (badge) {
+      const isSuccess = result?.success !== false && !result?.error;
+      badge.className = `tool-card-badge ${isSuccess ? 'status-success' : 'status-error'}`;
+      badge.innerHTML = isSuccess
+        ? `${CHECK_SVG} <span>${t('tool_status_success') || 'Completado'} (${elapsedMs}ms)</span>`
+        : `${ERROR_SVG} <span>Error (${elapsedMs}ms)</span>`;
+    }
+  }
   function renderHistoricalToolCard(call, message) { if (!call?.function || typeof document === 'undefined') return null; let args = {}; try { args = typeof call.function.arguments === 'object' ? call.function.arguments : JSON.parse(call.function.arguments || '{}'); } catch (e) { args = { input: call.function.arguments || '' }; } const view = getView(call.function.name); return view?.renderHistoricalCard ? view.renderHistoricalCard(args, message, context()) : fallback(call.function.name, args, true); }
-  return { normalizeName, resolveToolView: getView, createLiveToolCard, updateLiveToolCard, renderHistoricalToolCard };
+
+  return {
+    normalizeName,
+    resolveToolView: getView,
+    createLiveToolCard,
+    updateLiveToolCard,
+    renderHistoricalToolCard,
+    SPINNER_SVG,
+    CHECK_SVG,
+    ERROR_SVG,
+    CHEVRON_SVG
+  };
 }));
