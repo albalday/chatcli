@@ -14,6 +14,21 @@
     try { return JSON.parse(String(rawArgs)); } catch (_) { return { query: String(rawArgs) }; }
   }
 
+  function extractImageMarkdown(content) {
+    const references = [];
+    const seen = new Set();
+    const pattern = /!\[([^\]]*)\]\((rag-image:\/\/[a-zA-Z0-9_\-:]+)\)/gi;
+    let match;
+    while ((match = pattern.exec(String(content || ''))) !== null) {
+      const markdown = `![${match[1]}](${match[2]})`;
+      if (!seen.has(markdown)) {
+        seen.add(markdown);
+        references.push(markdown);
+      }
+    }
+    return references;
+  }
+
   function normalizeBranchIds(input) {
     if (!input) return [];
     const list = Array.isArray(input) ? input : String(input).split(',');
@@ -268,6 +283,7 @@
         return { success: false, error: `No existe el fragmento ${chunkId} en las ramas activas.` };
       }
       const document = await RagStorage.getDocumentById(chunk.documentId);
+      const imageMarkdown = extractImageMarkdown(chunk.content);
       return {
         success: true,
         chunkId,
@@ -277,6 +293,7 @@
         sectionTitle: chunk.title,
         charCount: chunk.content.length,
         content: chunk.content,
+        imageMarkdown,
         pageStart: chunk.pageStart,
         pageEnd: chunk.pageEnd
       };
@@ -286,7 +303,7 @@
   }
 
   return {
-    parseArguments, normalizeBranchIds, resolveBranches,
+    parseArguments, extractImageMarkdown, normalizeBranchIds, resolveBranches,
     normalizeDocumentReference, documentReferenceTokens, selectDocumentCandidate,
     buildRagSystemContext, injectRagContext,
     listDocuments, searchKnowledgeBase, readKnowledgeChunk
