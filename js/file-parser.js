@@ -451,7 +451,7 @@
     'CASH', 'FLOW', 'FLOWS', 'BALANCE', 'SHEET', 'TOTAL', 'MARGIN', 'MARGINS',
     'DIVIDEND', 'DIVIDENDS', 'EARNING', 'EARNINGS', 'SHARE', 'SHARES', 'DEBT',
     'SALES', 'COST', 'COSTS', 'OPERATING', 'FINANCIAL', 'REPORT', 'REPORTS',
-    'TAX', 'TAXES', 'NET', 'GROSS', 'CAPITAL', 'INTEREST', 'PERIOD', 'QUARTER',
+    'TAX', 'TAXES', 'NET', 'GROSS', 'CAPITAL', 'EXPENDITURE', 'EXPENDITURES', 'INTEREST', 'PERIOD', 'QUARTER',
     'ANNUAL', 'CURRENT', 'INVESTMENT', 'INVESTMENTS', 'DEPRECIATION', 'AMORTIZATION',
     'PRODUCTION', 'TONNES', 'TONS', 'PRICE', 'PRICES', 'VOLUME', 'SEGMENT', 'RESULTS',
     'AUDIT', 'AUDITED', 'COMPANY', 'CORPORATION', 'GROUP', 'CONSOLIDATED', 'MILLION', 'THOUSAND',
@@ -516,6 +516,7 @@
     if (!text || typeof text !== 'string' || text.length < 3) return text;
     const lines = text.split(/\r?\n/);
     let anyDecoded = false;
+    let anySpacingNormalized = false;
     let tableContextActive = false;
 
     const decodedLines = lines.map(line => {
@@ -525,8 +526,13 @@
         return line;
       }
 
+      // Mantener la ruta original para fuentes con desplazamiento +3. En los
+      // PDF normales, además, compactamos glifos separados para que una línea
+      // como "C a s h F l o w" sea indexable.
       const candidate = unshiftAsciiString(trimmed, offset);
       const collapsed = collapseSpacedLettersAndNumbers(candidate);
+      const rawCollapsed = collapseSpacedLettersAndNumbers(trimmed);
+      if (rawCollapsed !== trimmed) anySpacingNormalized = true;
 
       const candidateUpper = collapsed.toUpperCase();
       const tokens = candidateUpper.split(/[^A-Z]+/);
@@ -546,10 +552,10 @@
         return collapsed.replace(/[ \t]+/g, ' ').trim();
       }
 
-      return line;
+      return rawCollapsed;
     });
 
-    return anyDecoded ? decodedLines.join('\n') : text;
+    return (anyDecoded || anySpacingNormalized) ? decodedLines.join('\n') : text;
   }
 
   async function decompressDeflateData(uint8Array) {

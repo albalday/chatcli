@@ -46,3 +46,13 @@ test('FileParser - no altera texto normal en español o inglés (evita falsos po
   const englishText = 'The quick brown fox jumps over the lazy dog. Revenue was positive in Q3.';
   assert.equal(FileParser.decodePdfShiftedText(englishText), englishText);
 });
+
+test('FileParser - compacta glifos espaciados de PDF antes de indexarlos', () => {
+  const extracted = 'C a s h F l o w\nC a p i t a l E x p e n d i t u r e s';
+  const normalized = FileParser.decodePdfShiftedText(extracted);
+
+  assert.doesNotMatch(normalized, /C a s h/);
+  assert.doesNotMatch(normalized, /C a p i t a l/);
+  assert.match(normalized, /CASH FLOW/);
+  assert.match(normalized, /CAPITAL EXPENDITURES/);
+});
