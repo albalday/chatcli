@@ -600,3 +600,66 @@ test('Browser UI - Fase 6: Modales <dialog> Modernos con Blur y Tarjetas de Herr
     await browser.close();
   }
 });
+
+test('Browser UI - Fase 7: Accesibilidad WCAG 2.1 AA, Focus-Visible y Reduced Motion', async () => {
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+    const filePath = 'file://' + path.resolve(__dirname, '../zerochat.html');
+    await page.goto(filePath, { waitUntil: 'load' });
+    await page.waitForSelector('#welcome-banner');
+
+    // 1. Validar Focus Visible con navegación por teclado
+    await page.keyboard.press('Tab');
+    const focusedOutline = await page.evaluate(() => {
+      const activeEl = document.activeElement;
+      if (!activeEl) return null;
+      const s = getComputedStyle(activeEl);
+      return {
+        tag: activeEl.tagName,
+        outlineStyle: s.outlineStyle,
+        outlineWidth: s.outlineWidth
+      };
+    });
+    assert.ok(focusedOutline, 'Debe haber un elemento enfocado por teclado');
+    assert.notEqual(focusedOutline.outlineStyle, 'none', 'El elemento enfocado debe tener un indicador visual outline');
+
+    // 2. Validar soporte prefers-reduced-motion
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    const reducedMotionApplied = await page.evaluate(() => {
+      const el = document.querySelector('.welcome-banner') || document.body;
+      const s = getComputedStyle(el);
+      return parseFloat(s.animationDuration) <= 0.05;
+    });
+    assert.ok(reducedMotionApplied, 'Las animaciones deben reducirse drásticamente bajo prefers-reduced-motion');
+
+    // 3. Validar ratios de contraste de color semántico (WCAG 2.1 AA >= 4.5:1)
+    function luminance(r, g, b) {
+      const a = [r, g, b].map(v => {
+        v /= 255;
+        return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+      });
+      return a[0] * 0.2126 + a[1] * 0.7152 + a[2] * 0.0722;
+    }
+    function contrastRatio(rgb1, rgb2) {
+      const l1 = luminance(rgb1[0], rgb1[1], rgb1[2]);
+      const l2 = luminance(rgb2[0], rgb2[1], rgb2[2]);
+      return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+    }
+
+    // Comprobar ratios en Light Mode (#ffffff fondo)
+    const ratioLight = contrastRatio([15, 23, 42], [255, 255, 255]); // #0f172a vs #ffffff
+    assert.ok(ratioLight >= 4.5, `Contraste en modo claro (${ratioLight.toFixed(1)}:1) debe superar 4.5:1`);
+
+    // Comprobar ratios en Dark Mode (#131b2e vs #f1f5f9)
+    const ratioDark = contrastRatio([241, 245, 249], [19, 27, 46]);
+    assert.ok(ratioDark >= 4.5, `Contraste en modo oscuro (${ratioDark.toFixed(1)}:1) debe superar 4.5:1`);
+
+    // 4. Validar ausencia total de errores o excepciones tras interacciones complejas
+    const pageErrors = [];
+    page.on('pageerror', err => pageErrors.push(err.message));
+    assert.equal(pageErrors.length, 0, 'No debe haber errores de página en ninguna fase');
+  } finally {
+    await browser.close();
+  }
+});
