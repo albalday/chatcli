@@ -12,17 +12,9 @@ ZeroChat es un cliente web universal de chat, agente IA y conocimiento local. La
 
 ## Conocimiento local
 
-La ingesta y la recuperación se realizan completamente en el navegador:
+La ingesta, el índice y la recuperación se realizan completamente en el navegador. No se usa un LLM durante la ingesta ni se solicita acceso persistente a carpetas. Los PDF formados solo por imágenes necesitan OCR previo.
 
-1. El texto se extrae de PDF, Markdown o TXT.
-2. Se divide de forma determinista en bloques principales de hasta 6.000 caracteres, con 400 caracteres de solapamiento y preferencia por límites naturales.
-3. El archivo original, sus metadatos y sus fragmentos se guardan por separado en `ZeroChatDB` (IndexedDB).
-4. Orama construye bajo demanda índices derivados en memoria por rama o por documento, según el alcance de la consulta.
-5. El agente consulta el contenido mediante `search_knowledge_base`, que puede focalizar una fuente identificable o diversificar resultados entre varias fuentes, y amplía fragmentos concretos con `read_knowledge_chunk`. `list_documents` queda disponible para inventarios completos.
-
-La ingesta no llama a ningún LLM, no genera resúmenes y no solicita acceso persistente a carpetas. Por tanto, no tiene costes de modelo ni depende de la File System Access API. Los PDF basados únicamente en imágenes necesitan OCR previo.
-
-Cada rama puede descargarse y restaurarse con el formato actual `zerochat-knowledge`. No se incluyen migraciones ni compatibilidad con formatos experimentales anteriores.
+Puedes respaldar y restaurar cada rama de conocimiento desde la interfaz. La lista actual de herramientas y sus contratos está en [docs/TOOLS.md](docs/TOOLS.md).
 
 ## Privacidad y persistencia
 
@@ -52,37 +44,32 @@ npm run build
 
 `npm run build` genera el bundle de Orama para navegador y después reconstruye `zerochat.html`. También puede reconstruirse únicamente el HTML con `python3 bundle.py` cuando el vendor ya está actualizado.
 
-## Estructura relevante
+### Abrir el mismo proyecto en otro ordenador
 
-```text
-zerochat/
-├── index.html
-├── zerochat.html
-├── bundle.py
-├── package.json
-├── css/styles.css
-├── js/
-│   ├── storage-db.js       # Esquema y conexión IndexedDB compartidos
-│   ├── cookies.js          # Configuración e historial de chat
-│   ├── ragStorage.js       # Persistencia del conocimiento y respaldos
-│   ├── ingestionEngine.js  # Extracción y particionado determinista
-│   ├── rag-index.js        # Índice local de Orama
-│   ├── rag-service.js      # Recuperación y contexto para las tools
-│   ├── rag-ui.js           # Gestión de ramas y documentos
-│   ├── file-parser.js      # Lectura de PDF, texto e imágenes adjuntas
-│   ├── tools/              # Contratos y herramientas del agente
-│   └── vendor/orama.browser.js
-├── scripts/                # Generación del vendor de navegador
-├── tests/
-└── THIRD_PARTY_NOTICES.md
+El repositorio es la fuente única del código y del archivo distribuible `zerochat.html`. Para preparar un ordenador nuevo instala Git, una versión LTS actual de Node.js (incluye npm), Python 3 y VS Code; después ejecuta:
+
+```bash
+git clone https://github.com/albalday/zerochat.git
+cd zerochat
+git switch dev
+npm ci
+code .
 ```
 
+`npm ci` reconstruye `node_modules/` exactamente a partir de `package-lock.json`; esa carpeta no se versiona porque es generada y varía según el sistema. Para ejecutar la aplicación no hace falta compilar nada: abre `zerochat.html` en un navegador. Para desarrollar o verificar cambios usa `npm test` y `npm run build`. Si se van a ejecutar las pruebas de navegador, instala Chromium de Playwright una vez con `npx playwright install chromium`.
+
+Al volver a trabajar en ese ordenador, actualiza antes de empezar con `git pull --ff-only origin dev`. Tras confirmar y subir los cambios desde cualquiera de los equipos, el otro queda sincronizado con el mismo comando.
+
+No se sincronizan deliberadamente los datos privados o propios de cada navegador: claves API, perfiles, conversaciones, adjuntos y bases de conocimiento locales (se guardan en localStorage/IndexedDB), ni `.gh/` (configuración y credenciales locales de GitHub CLI). Las conversaciones se pueden mover con **Exportar** → JSON e **Importar**; las ramas de conocimiento tienen **Respaldo** y **Restaurar**. No subas claves API a GitHub.
+
+## Consultar la estructura actual
+
+No se mantiene un inventario manual de archivos en este documento: se quedaría obsoleto. Para ver el contenido exacto de la versión clonada o confirmada, ejecuta:
+
+```bash
+git ls-tree -r --name-only HEAD
+```
+
+Para localizar un componente concreto, usa por ejemplo `rg --files js tests css`.
+
 Las reglas de contribución, pruebas y empaquetado están en [AGENT_GUIDELINES.md](AGENT_GUIDELINES.md). Las dependencias de terceros y sus licencias se detallan en [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
-
-## Desarrollo colaborativo con IA (Zero-Code)
-
-Este proyecto ha sido desarrollado y evolucionado como un experimento real de **programación 100% asistida por IA sin intervención manual de código por parte del usuario**:
-
-- **Colaboración Codex & Antigravity**: La arquitectura modular dual, el motor RAG local, el pipeline de pruebas unitarias, la optimización de rendimiento y la resolución iterativa de incidencias complejas fueron guiados e implementados colaborativamente por los asistentes de IA Codex y Antigravity.
-- **Librería externa para RAG local**: Se integró [Orama](https://orama.com/orama-js) como única librería externa especializada, empaquetada como vendor local autónomo dentro del bundle, posibilitando un índice de búsqueda en memoria ultrarrápido y 100% privado en el cliente sobre IndexedDB.
-- **Flujo sin código manual**: Demuestra la viabilidad práctica de diseñar, depurar, perfilar y desplegar software web de alta complejidad técnica iterando mediante especificación conversacional de alto nivel.
