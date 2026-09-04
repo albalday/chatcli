@@ -54,15 +54,27 @@
 
   function formatBranchMetrics(metrics) {
     const count = Number(metrics?.documentCount) || 0;
-    return `${count} documento${count === 1 ? '' : 's'} de ${formatBytes(metrics?.totalBytes || 0)}`;
+    const bytes = formatBytes(metrics?.totalBytes || 0);
+    return t('rag_branch_summary_format', {
+      count,
+      plural: count === 1 ? '' : 's',
+      bytes
+    }) || `${count} documento${count === 1 ? '' : 's'} de ${bytes}`;
   }
 
   function formatDocumentMetrics(document) {
     const hasImageCount = Number.isInteger(document?.imageCount) && document.imageCount >= 0;
-    const images = hasImageCount
-      ? `${document.imageCount} ${document.imageCount === 1 ? 'imagen' : 'imágenes'}`
-      : 'imágenes: recarga necesaria';
-    return `${document?.chunkCount || 0} fragmentos · ${formatBytes(document?.fileSize)} · ${images}`;
+    let images;
+    if (hasImageCount) {
+      images = document.imageCount === 1
+        ? (t('rag_image_count_singular', { count: 1 }) || '1 imagen')
+        : (t('rag_image_count_plural', { count: document.imageCount }) || `${document.imageCount} imágenes`);
+    } else {
+      images = t('rag_image_count_reload') || 'imágenes: recarga necesaria';
+    }
+    const chunks = document?.chunkCount || 0;
+    const size = formatBytes(document?.fileSize);
+    return t('rag_doc_metrics_format', { chunks, size, images }) || `${chunks} fragmentos · ${size} · ${images}`;
   }
 
   function getActiveBranchIds() {
@@ -114,8 +126,10 @@
     const count = activeBranchIds.size;
     button.classList.toggle('active', count > 0);
     button.title = count === 0
-      ? 'Gestionar conocimiento local'
-      : (count === 1 ? 'Conocimiento local activo (1 rama)' : `Conocimiento local activo (${count} ramas)`);
+      ? (t('btn_rag_title') || 'Gestionar conocimiento local')
+      : (count === 1
+        ? (t('rag_toolbar_active_single') || 'Conocimiento local activo (1 rama)')
+        : (t('rag_toolbar_active_multi', { count }) || `Conocimiento local activo (${count} ramas)`));
   }
 
   async function renderActiveTab() {
@@ -130,31 +144,35 @@
     const activeCount = activeList.length;
 
     if (title) {
-      if (activeCount === 0) title.textContent = 'Conocimiento desactivado';
+      if (activeCount === 0) title.textContent = t('rag_status_disabled') || 'Conocimiento desactivado';
       else if (activeCount === 1) title.textContent = activeList[0].name;
-      else title.textContent = `${activeCount} ramas activas (${activeList.map(b => b.name).join(', ')})`;
+      else title.textContent = t('rag_status_active_count', { count: activeCount, list: activeList.map(b => b.name).join(', ') }) || `${activeCount} ramas activas (${activeList.map(b => b.name).join(', ')})`;
     }
     if (description) {
-      if (activeCount === 0) description.textContent = 'Selecciona una o varias ramas para que el agente pueda buscar en tus documentos.';
-      else if (activeCount === 1) description.textContent = 'El agente puede buscar fragmentos de esta rama mediante Orama.';
-      else description.textContent = `El agente consultará en paralelo las ${activeCount} ramas activas en cada búsqueda.`;
+      if (activeCount === 0) description.textContent = t('rag_status_disabled_desc') || 'Selecciona una o varias ramas para que el agente pueda buscar en tus documentos.';
+      else if (activeCount === 1) description.textContent = t('rag_status_desc_single') || 'El agente puede buscar fragmentos de esta rama mediante Orama.';
+      else description.textContent = t('rag_status_desc_multi', { count: activeCount }) || `El agente consultará en paralelo las ${activeCount} ramas activas en cada búsqueda.`;
     }
     if (toggle) {
       toggle.disabled = activeCount === 0;
-      toggle.textContent = 'Desactivar todas';
+      toggle.textContent = t('rag_disable_all') || 'Desactivar todas';
     }
     if (!list) return;
     if (!branches.length) {
-      list.innerHTML = '<div class="rag-empty-state">No hay ramas. Crea la primera en la pestaña Documentos.</div>';
+      list.innerHTML = `<div class="rag-empty-state">${t('rag_no_branches_active') || 'No hay ramas. Crea la primera en la pestaña Documentos.'}</div>`;
       return;
     }
     list.innerHTML = branches.map(branch => {
       const isActive = activeBranchIds.has(branch.id);
       const metrics = branchMetrics.get(branch.id);
+      const formatted = formatBranchMetrics(metrics);
+      const loadedText = t('rag_branch_loaded', { summary: formatted }) || `Esta rama cargó ${formatted}`;
+      const descText = branch.description || t('rag_branch_no_desc') || 'Sin descripción';
+      const badgeText = isActive ? (t('rag_branch_active_badge') || '✓ Activa') : (t('rag_branch_activate_badge') || '+ Activar');
       return `
       <button type="button" class="setting-toggle-card rag-branch-select-card${isActive ? ' active' : ''}" data-branch-id="${escapeHtml(branch.id)}">
-        <span class="toggle-card-info"><strong>${escapeHtml(branch.name)}</strong><span class="toggle-card-desc">${escapeHtml(branch.description || 'Sin descripción')}</span><span class="rag-branch-metrics">Esta rama cargó ${escapeHtml(formatBranchMetrics(metrics))}</span></span>
-        <span class="rag-branch-badge-status">${isActive ? '✓ Activa' : '+ Activar'}</span>
+        <span class="toggle-card-info"><strong>${escapeHtml(branch.name)}</strong><span class="toggle-card-desc">${escapeHtml(descText)}</span><span class="rag-branch-metrics">${escapeHtml(loadedText)}</span></span>
+        <span class="rag-branch-badge-status">${badgeText}</span>
       </button>`;
     }).join('');
     list.querySelectorAll('[data-branch-id]').forEach(button => button.addEventListener('click', async () => {
@@ -174,9 +192,10 @@
     const failed = Number(event.failedFiles) || 0;
     const overallPercent = Math.round(Number(event.overallPercent) || 0);
     const status = failed
-      ? `${processed} indexados · ${failed} con error`
-      : `${processed} indexados`;
-    return `<div class="rag-ingestion-global-progress"><div><strong>Carga global: ${finished} de ${total}</strong><span>${status}</span></div><progress max="100" value="${overallPercent}"></progress><span>${overallPercent}%</span></div>`;
+      ? (t('rag_ingestion_status_errors', { processed, failed }) || `${processed} indexados · ${failed} con error`)
+      : (t('rag_ingestion_status', { processed }) || `${processed} indexados`);
+    const header = t('rag_ingestion_global', { finished, total }) || `Carga global: ${finished} de ${total}`;
+    return `<div class="rag-ingestion-global-progress"><div><strong>${escapeHtml(header)}</strong><span>${status}</span></div><progress max="100" value="${overallPercent}"></progress><span>${overallPercent}%</span></div>`;
   }
 
   function syncFooterSummaryVisibility(isManage) {
@@ -194,7 +213,9 @@
     const el = document.getElementById('rag-branch-summary-footer');
     if (!el) return;
     if (metrics) {
-      el.innerHTML = `Esta rama cargó <strong>${escapeHtml(formatBranchMetrics(metrics))}</strong>.`;
+      const formatted = formatBranchMetrics(metrics);
+      const loadedHtml = t('rag_branch_loaded', { summary: `<strong>${escapeHtml(formatted)}</strong>` }) || `Esta rama cargó <strong>${escapeHtml(formatted)}</strong>.`;
+      el.innerHTML = loadedHtml.endsWith('.') ? loadedHtml : `${loadedHtml}.`;
     } else {
       el.innerHTML = '';
     }
@@ -207,7 +228,7 @@
     const workspace = document.getElementById('rag-manage-workspace');
     if (!workspace) return;
     if (!branchId) {
-      workspace.innerHTML = '<div class="rag-empty-state">Escribe un nombre arriba y pulsa "Crear rama" para empezar.</div>';
+      workspace.innerHTML = `<div class="rag-empty-state">${t('rag_workspace_empty') || 'Escribe un nombre arriba y pulsa "Crear rama" para empezar.'}</div>`;
       updateBranchSummaryFooter(null);
       return;
     }
@@ -217,18 +238,23 @@
       totalBytes: documents.reduce((sum, document) => sum + (Number(document.fileSize) || 0), 0)
     };
     updateBranchSummaryFooter(branchMetrics);
+    const dropzoneTitle = t('rag_dropzone_title') || 'Arrastra o selecciona archivos';
+    const dropzoneHint = t('rag_dropzone_hint') || 'PDF, Markdown o texto · guardado privado en IndexedDB';
+    const deleteDocTitle = t('rag_delete_doc_title') || 'Eliminar documento';
+    const emptyDocsText = t('rag_branch_empty_docs') || 'La rama todavía no contiene documentos.';
+
     workspace.innerHTML = `
       <label class="rag-dropzone" id="rag-dropzone">
-        <strong>Arrastra o selecciona archivos</strong>
-        <span>PDF, Markdown o texto · guardado privado en IndexedDB</span>
+        <strong>${escapeHtml(dropzoneTitle)}</strong>
+        <span>${escapeHtml(dropzoneHint)}</span>
         <input id="rag-file-input" type="file" accept=".pdf,.txt,.md,.markdown,text/plain,text/markdown,application/pdf" multiple hidden>
       </label>
       <div id="rag-ingestion-progress"></div>
       <div class="rag-documents-list">${documents.length ? documents.map(document => `
         <div class="rag-document-card" data-document-id="${escapeHtml(document.id)}">
           <div><strong>${escapeHtml(document.title)}</strong><div class="toggle-card-desc">${formatDocumentMetrics(document)}</div></div>
-          <button type="button" class="btn-secondary btn-danger-hover" data-delete-document="${escapeHtml(document.id)}" title="Eliminar documento"><svg class="ui-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>
-        </div>`).join('') : '<div class="rag-empty-state">La rama todavía no contiene documentos.</div>'}</div>`;
+          <button type="button" class="btn-secondary btn-danger-hover" data-delete-document="${escapeHtml(document.id)}" title="${escapeHtml(deleteDocTitle)}"><svg class="ui-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>
+        </div>`).join('') : `<div class="rag-empty-state">${escapeHtml(emptyDocsText)}</div>`}</div>`;
 
     const input = document.getElementById('rag-file-input');
     const dropzone = document.getElementById('rag-dropzone');
@@ -240,7 +266,8 @@
       dropzone.addEventListener('drop', event => { event.preventDefault(); dropzone.classList.remove('drag-over'); handleFiles(event.dataTransfer.files); });
     }
     workspace.querySelectorAll('[data-delete-document]').forEach(button => button.addEventListener('click', async () => {
-      if (!confirm('¿Eliminar este documento y todos sus fragmentos?')) return;
+      const confirmMsg = t('rag_delete_doc_confirm') || '¿Eliminar este documento y todos sus fragmentos?';
+      if (!confirm(confirmMsg)) return;
       await storage().deleteDocument(button.dataset.deleteDocument);
       indexer()?.invalidateBranch(branchId);
       await renderWorkspace(branchId);
@@ -430,7 +457,8 @@
   async function deleteBranch() {
     const select = document.getElementById('rag-manage-branch-select');
     const id = select?.value;
-    if (!id || !confirm('¿Eliminar la rama y todos sus documentos?')) return;
+    const confirmMsg = t('rag_delete_branch_confirm') || '¿Eliminar la rama y todos sus documentos?';
+    if (!id || !confirm(confirmMsg)) return;
     await storage().deleteBranch(id);
     indexer()?.invalidateBranch(id);
     if (activeBranchIds.has(id)) {
@@ -546,7 +574,10 @@
     const node = document.getElementById('rag-storage-quota-info');
     const estimate = await storage().getStorageEstimate();
     const dbIcon = '<svg class="ui-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>';
-    if (node) node.innerHTML = estimate.quota ? `${dbIcon} <span>IndexedDB: ${formatBytes(estimate.usage)} de ${formatBytes(estimate.quota)}</span>` : `${dbIcon} <span>IndexedDB local</span>`;
+    const quotaText = estimate.quota
+      ? (t('rag_quota_indexeddb', { usage: formatBytes(estimate.usage), quota: formatBytes(estimate.quota) }) || `IndexedDB: ${formatBytes(estimate.usage)} de ${formatBytes(estimate.quota)}`)
+      : (t('rag_quota_indexeddb_local') || 'IndexedDB local');
+    if (node) node.innerHTML = `${dbIcon} <span>${escapeHtml(quotaText)}</span>`;
   }
 
   async function refresh() {
@@ -621,6 +652,18 @@
       if (isManage) await renderManageTab();
     }));
     updateToolbarStatus();
+
+    if (typeof window !== 'undefined') {
+      if (window.ChatI18n?.onChange) {
+        window.ChatI18n.onChange(() => {
+          refresh().catch(() => {});
+        });
+      } else {
+        window.addEventListener('zerochat:languagechange', () => {
+          refresh().catch(() => {});
+        });
+      }
+    }
   }
 
   return {

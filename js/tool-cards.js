@@ -58,7 +58,7 @@
       badge.className = `tool-card-badge ${isSuccess ? 'status-success' : 'status-error'}`;
       badge.innerHTML = isSuccess
         ? `${CHECK_SVG} <span>${t('tool_status_success') || 'Completado'} (${elapsedMs}ms)</span>`
-        : `${ERROR_SVG} <span>Error (${elapsedMs}ms)</span>`;
+        : `${ERROR_SVG} <span>${t('tool_status_error', { ms: elapsedMs }) || `Error (${elapsedMs}ms)`}</span>`;
     }
   }
   function renderHistoricalToolCard(call, message) { if (!call?.function || typeof document === 'undefined') return null; let args = {}; try { args = typeof call.function.arguments === 'object' ? call.function.arguments : JSON.parse(call.function.arguments || '{}'); } catch (e) { args = { input: call.function.arguments || '' }; } const view = getView(call.function.name); return view?.renderHistoricalCard ? view.renderHistoricalCard(args, message, context()) : fallback(call.function.name, args, true); }

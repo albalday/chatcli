@@ -162,8 +162,8 @@
           <span class="sidebar-chat-time">${timeStr}</span>
         </div>
         <div class="sidebar-chat-actions">
-          <button type="button" class="btn-chat-action btn-rename" title="Renombrar chat">${editSvg}</button>
-          <button type="button" class="btn-chat-action btn-delete" title="Eliminar chat">${trashSvg}</button>
+          <button type="button" class="btn-chat-action btn-rename" title="${escapeHtml(t('sidebar_rename_chat_title') || 'Renombrar chat')}">${editSvg}</button>
+          <button type="button" class="btn-chat-action btn-delete" title="${escapeHtml(t('sidebar_delete_chat_title') || 'Eliminar chat')}">${trashSvg}</button>
         </div>
       `;
 

@@ -264,7 +264,7 @@
     if (report.success === false || report.connected === false) {
       elements.inspectorResults.innerHTML = `
         <div class="server-query-status status-error" style="display: block;">
-          ${escapeHtml(report.error || 'Fallo de conexión: No se pudo conectar con el servidor.')}
+          ${escapeHtml(report.error || t('inspector_conn_failed') || 'Fallo de conexión: No se pudo conectar con el servidor.')}
         </div>
       `;
       return;
@@ -316,25 +316,31 @@
     });
 
     const modelInfoText = m.totalDiscovered > 0
-      ? `${m.totalDiscovered} modelo(s) descubierto(s)`
-      : (m.selected ? `Modelo: ${escapeHtml(m.selected)}` : 'Sin modelos listados');
+      ? (t('inspector_discovered_models', { count: m.totalDiscovered }) || `${m.totalDiscovered} modelo(s) descubierto(s)`)
+      : (m.selected ? (t('inspector_model_selected', { model: escapeHtml(m.selected) }) || `Modelo: ${escapeHtml(m.selected)}`) : (t('inspector_no_models') || 'Sin modelos listados'));
+
+    const metaProvider = t('inspector_meta_provider') || 'Proveedor';
+    const metaEndpoint = t('inspector_meta_endpoint') || 'Endpoint Chat';
+    const metaModels = t('inspector_meta_models') || 'Modelos';
+    const metaLatency = t('inspector_meta_latency') || 'Latencia Diagnóstico';
+    const unknownText = t('inspector_unknown') || 'Desconocido';
 
     elements.inspectorResults.innerHTML = `
       <div class="inspector-header-meta">
         <div class="inspector-meta-item">
-          <span class="meta-label">Proveedor</span>
-          <span class="meta-value">${escapeHtml(p.label || p.id || 'Desconocido')}</span>
+          <span class="meta-label">${escapeHtml(metaProvider)}</span>
+          <span class="meta-value">${escapeHtml(p.label || p.id || unknownText)}</span>
         </div>
         <div class="inspector-meta-item">
-          <span class="meta-label">Endpoint Chat</span>
+          <span class="meta-label">${escapeHtml(metaEndpoint)}</span>
           <span class="meta-value" style="font-family: monospace; font-size: 0.775rem;">${escapeHtml(ep.normalized || ep.raw || '')}</span>
         </div>
         <div class="inspector-meta-item">
-          <span class="meta-label">Modelos</span>
+          <span class="meta-label">${escapeHtml(metaModels)}</span>
           <span class="meta-value">${escapeHtml(modelInfoText)}</span>
         </div>
         <div class="inspector-meta-item">
-          <span class="meta-label">Latencia Diagnóstico</span>
+          <span class="meta-label">${escapeHtml(metaLatency)}</span>
           <span class="meta-value">${report.inspectionTimeMs || 0} ms</span>
         </div>
       </div>
@@ -358,7 +364,7 @@
         elements.inspectorResults.style.display = 'block';
         elements.inspectorResults.innerHTML = `
           <div class="server-query-status status-error" style="display: block;">
-            Por favor, introduce una URL de servidor válida.
+            ${escapeHtml(t('err_invalid_url') || 'Por favor, introduce una URL de servidor válida.')}
           </div>
         `;
       }
@@ -381,14 +387,14 @@
     try {
       const API = getApi();
       if (!API?.inspectProvider) {
-        throw new Error('Módulo de inspección no disponible.');
+        throw new Error(t('inspector_module_unavailable') || 'Módulo de inspección no disponible.');
       }
 
       addDebugLog('network', `Ejecutando Provider Inspector en ${apiUrl} [${apiType}]`);
       const report = await API.inspectProvider({ apiUrl, apiType, apiKey, model });
 
       if (report && (report.success === false || report.connected === false)) {
-        throw new Error(report.error || 'Fallo de conexión con el servidor.');
+        throw new Error(report.error || t('inspector_conn_failed') || 'Fallo de conexión con el servidor.');
       }
 
       renderInspectorReport(elements, report);

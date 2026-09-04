@@ -41,17 +41,23 @@
   function createLiveCard(args, ui) {
     const card = createCardWrapper(ui); if (!card) return null;
     const Markdown = ui?.markdown || { escapeHtml: value => String(value || '') };
-    const t = ui?.t || (key => key);
-    card.innerHTML = `<div class="tool-execution-card rag-execution-card collapsed"><div class="tool-card-header"><div class="tool-card-title"><span>${DOC_ICON_SVG}</span><span>Fragmento de conocimiento</span></div><div class="tool-card-header-actions"><span class="tool-card-badge status-loading">${SPINNER_SVG} <span>Leyendo ${Markdown.escapeHtml(args?.chunkId || '')}...</span></span><button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Expandir'}">${CHEVRON_SVG}</button></div></div><div class="tool-card-collapsible-body"><div class="tool-card-result"><div class="tool-loading-placeholder">${SPINNER_SVG} <span>Recuperando texto desde IndexedDB...</span></div></div></div></div>`;
+    const t = ui?.t || ((key, params) => key);
+    const title = t('tool_rag_read_title') || 'Fragmento de conocimiento';
+    const loading = t('tool_rag_read_loading', { chunkId: Markdown.escapeHtml(args?.chunkId || '') }) || `Leyendo ${Markdown.escapeHtml(args?.chunkId || '')}...`;
+    const retrieving = t('tool_rag_read_retrieving') || 'Recuperando texto desde IndexedDB...';
+    card.innerHTML = `<div class="tool-execution-card rag-execution-card collapsed"><div class="tool-card-header"><div class="tool-card-title"><span>${DOC_ICON_SVG}</span><span>${title}</span></div><div class="tool-card-header-actions"><span class="tool-card-badge status-loading">${SPINNER_SVG} <span>${loading}</span></span><button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Expandir'}">${CHEVRON_SVG}</button></div></div><div class="tool-card-collapsible-body"><div class="tool-card-result"><div class="tool-loading-placeholder">${SPINNER_SVG} <span>${retrieving}</span></div></div></div></div>`;
     return card;
   }
   function updateLiveCard(card, _args, result = {}, _elapsedMs, ui) {
     if (!card) return;
+    const t = ui?.t || ((key, params) => key);
     const Markdown = ui?.markdown || { escapeHtml: value => String(value || '') };
     const success = result?.success !== false && !result?.error;
     const content = result?.content || result?.error || '';
     const badge = card.querySelector('.tool-card-badge');
-    if (badge) { badge.className = `tool-card-badge ${success ? 'status-success' : 'status-error'}`; badge.innerHTML = success ? `${CHECK_SVG} <span>Fragmento recuperado (${content.length} caracteres)</span>` : `${ERROR_SVG} <span>${result?.error || 'No encontrado'}</span>`; }
+    const retrievedLabel = t('tool_rag_read_retrieved', { chars: content.length }) || `Fragmento recuperado (${content.length} caracteres)`;
+    const notFoundLabel = result?.error || t('tool_rag_read_not_found') || 'No encontrado';
+    if (badge) { badge.className = `tool-card-badge ${success ? 'status-success' : 'status-error'}`; badge.innerHTML = success ? `${CHECK_SVG} <span>${retrievedLabel}</span>` : `${ERROR_SVG} <span>${notFoundLabel}</span>`; }
     const body = card.querySelector('.tool-card-result');
     if (body) body.innerHTML = `<pre class="tool-result-pre"><code>${Markdown.escapeHtml(content.slice(0, 2500))}${content.length > 2500 ? '\n…' : ''}</code></pre>`;
   }

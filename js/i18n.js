@@ -73,6 +73,34 @@
       rag_help_private_desc: 'Seleccionar un archivo solo permite leer esa carga. No se solicitan permisos sobre carpetas y no se llama a ningún LLM para resumir o indexar.',
       rag_help_llm_title: 'Configurar el modelo para responder sobre documentos',
       rag_help_llm_desc: 'Para preguntas factuales sobre documentos, usa una temperatura baja (0 a 0,2): reduce variaciones y hace más probable que el modelo se atenga a los fragmentos recuperados. Una temperatura de 0,7 o superior conviene para redacción creativa, no para extraer cifras o hechos. El modelo también debe admitir llamadas a herramientas; si no las admite, no podrá consultar esta base documental.',
+      rag_branch_loaded: 'Esta rama cargó {summary}',
+      rag_branch_summary_format: '{count} documento{plural} de {bytes}',
+      rag_doc_metrics_format: '{chunks} fragmentos · {size} · {images}',
+      rag_image_count_singular: '{count} imagen',
+      rag_image_count_plural: '{count} imágenes',
+      rag_image_count_reload: 'imágenes: recarga necesaria',
+      rag_branch_active_badge: '✓ Activa',
+      rag_branch_activate_badge: '+ Activar',
+      rag_branch_no_desc: 'Sin descripción',
+      rag_no_branches_active: 'No hay ramas. Crea la primera en la pestaña Documentos.',
+      rag_status_desc_multi: 'El agente consultará en paralelo las {count} ramas activas en cada búsqueda.',
+      rag_status_desc_single: 'El agente puede buscar fragmentos de esta rama mediante Orama.',
+      rag_status_desc_all: 'El agente puede buscar fragmentos en todas las ramas activas mediante Orama.',
+      rag_status_active_count: '{count} ramas activas ({list})',
+      rag_toolbar_active_single: 'Conocimiento local activo (1 rama)',
+      rag_toolbar_active_multi: 'Conocimiento local activo ({count} ramas)',
+      rag_workspace_empty: 'Escribe un nombre arriba y pulsa "Crear rama" para empezar.',
+      rag_dropzone_title: 'Arrastra o selecciona archivos',
+      rag_dropzone_hint: 'PDF, Markdown o texto · guardado privado en IndexedDB',
+      rag_branch_empty_docs: 'La rama todavía no contiene documentos.',
+      rag_delete_doc_title: 'Eliminar documento',
+      rag_delete_doc_confirm: '¿Eliminar este documento y todos sus fragmentos?',
+      rag_delete_branch_confirm: '¿Eliminar la rama y todos sus documentos?',
+      rag_ingestion_global: 'Carga global: {finished} de {total}',
+      rag_ingestion_status: '{processed} indexados',
+      rag_ingestion_status_errors: '{processed} indexados · {failed} con error',
+      rag_quota_indexeddb: 'IndexedDB: {usage} de {quota}',
+      rag_quota_indexeddb_local: 'IndexedDB local',
       lang_switcher_title: 'Cambiar idioma / Switch language',
 
       // Barra de entrada y formulario
@@ -195,6 +223,25 @@
       tool_search_empty: 'No se encontraron resultados directos en DuckDuckGo para esta búsqueda.',
       tool_error_title: 'Error procesando la herramienta:',
       tool_error_assistant: 'Error en la respuesta del asistente:',
+      tool_rag_list_title: 'Base de Conocimiento (Índice de Documentos)',
+      tool_rag_list_loading: 'Consultando documentos indexados...',
+      tool_rag_list_retrieving: 'Recuperando documentos desde IndexedDB...',
+      tool_rag_list_indexed: '{count} doc{plural} indexado{plural}',
+      tool_rag_search_title: 'Conocimiento local: "{query}"',
+      tool_rag_search_loading: 'Buscando con Orama...',
+      tool_rag_search_building: 'Construyendo el índice local...',
+      tool_rag_search_matches: '{count} coincidencia{plural} · {scope}',
+      tool_rag_read_title: 'Fragmento de conocimiento',
+      tool_rag_read_loading: 'Leyendo {chunkId}...',
+      tool_rag_read_retrieving: 'Recuperando texto desde IndexedDB...',
+      tool_rag_read_retrieved: 'Fragmento recuperado ({chars} caracteres)',
+      tool_rag_read_not_found: 'No encontrado',
+      tool_err_query: 'Error al consultar',
+      tool_err_execution: 'Error de ejecución',
+      tool_err_search: 'Error búsqueda',
+      tool_status_success: 'Completado',
+      tool_status_error: 'Error ({ms}ms)',
+      tool_chart_fallback_title: 'Gráfico',
 
       // Modal de Configuración
       modal_title: 'Configuración del Chat',
@@ -221,6 +268,16 @@
       inspector_cap_modelListing: 'Descubrimiento de Modelos',
       inspector_summary_title: 'Informe de Capacidades del Proveedor',
       inspector_models_found: '{count} modelos detectados',
+      inspector_meta_provider: 'Proveedor',
+      inspector_meta_endpoint: 'Endpoint Chat',
+      inspector_meta_models: 'Modelos',
+      inspector_meta_latency: 'Latencia Diagnóstico',
+      inspector_discovered_models: '{count} modelo(s) descubierto(s)',
+      inspector_no_models: 'Sin modelos listados',
+      inspector_unknown: 'Desconocido',
+      inspector_model_selected: 'Modelo: {model}',
+      inspector_conn_failed: 'Fallo de conexión: No se pudo conectar con el servidor.',
+      inspector_module_unavailable: 'Módulo de inspección no disponible.',
       field_language: 'Idioma de la Interfaz (Language)',
       field_language_hint: 'Selecciona el idioma visual de la aplicación.',
       field_profile: 'Perfil de Conexión / Servidor',
@@ -359,6 +416,8 @@
       btn_delete_all_chats: 'Borrar todos',
       btn_delete_all_chats_title: 'Eliminar todas las conversaciones guardadas',
       chat_untitled: 'Nueva conversación',
+      sidebar_rename_chat_title: 'Renombrar chat',
+      sidebar_delete_chat_title: 'Eliminar chat',
       chat_delete_confirm: '¿Seguro que deseas eliminar esta conversación?',
       chat_delete_all_confirm: '¿Estás seguro de que deseas eliminar todas las conversaciones guardadas? Esta acción no se puede deshacer.',
       chat_imported_success: 'Conversación importada con éxito.',
@@ -438,6 +497,34 @@
       rag_help_private_desc: 'Selecting a file only grants access to that upload. No folder permissions are requested and no LLM is called to summarize or index it.',
       rag_help_llm_title: 'Configure the model for document answers',
       rag_help_llm_desc: 'For factual questions about documents, use a low temperature (0 to 0.2): it reduces variation and makes the model more likely to follow retrieved excerpts. A temperature of 0.7 or above is better for creative writing, not extracting figures or facts. The model must also support tool calls; otherwise it cannot query this knowledge base.',
+      rag_branch_loaded: 'This branch loaded {summary}',
+      rag_branch_summary_format: '{count} document{plural} of {bytes}',
+      rag_doc_metrics_format: '{chunks} chunks · {size} · {images}',
+      rag_image_count_singular: '{count} image',
+      rag_image_count_plural: '{count} images',
+      rag_image_count_reload: 'images: reload required',
+      rag_branch_active_badge: '✓ Active',
+      rag_branch_activate_badge: '+ Activate',
+      rag_branch_no_desc: 'No description',
+      rag_no_branches_active: 'No branches available. Create the first one in the Documents tab.',
+      rag_status_desc_multi: 'The agent will query the {count} active branches in parallel for each search.',
+      rag_status_desc_single: 'The agent can search chunks in this branch using Orama.',
+      rag_status_desc_all: 'The agent can search chunks across all active branches using Orama.',
+      rag_status_active_count: '{count} active branches ({list})',
+      rag_toolbar_active_single: 'Local knowledge active (1 branch)',
+      rag_toolbar_active_multi: 'Local knowledge active ({count} branches)',
+      rag_workspace_empty: 'Type a name above and click "Create branch" to start.',
+      rag_dropzone_title: 'Drag or select files',
+      rag_dropzone_hint: 'PDF, Markdown or text · private storage in IndexedDB',
+      rag_branch_empty_docs: 'This branch does not contain documents yet.',
+      rag_delete_doc_title: 'Delete document',
+      rag_delete_doc_confirm: 'Delete this document and all its chunks?',
+      rag_delete_branch_confirm: 'Delete this branch and all its documents?',
+      rag_ingestion_global: 'Overall upload: {finished} of {total}',
+      rag_ingestion_status: '{processed} indexed',
+      rag_ingestion_status_errors: '{processed} indexed · {failed} with error',
+      rag_quota_indexeddb: 'IndexedDB: {usage} of {quota}',
+      rag_quota_indexeddb_local: 'Local IndexedDB',
       lang_switcher_title: 'Switch language / Cambiar idioma',
 
       // Barra de entrada y formulario
@@ -560,6 +647,25 @@
       tool_search_empty: 'No search results found on DuckDuckGo for this query.',
       tool_error_title: 'Error processing tool:',
       tool_error_assistant: 'Error in assistant response:',
+      tool_rag_list_title: 'Knowledge Base (Document Index)',
+      tool_rag_list_loading: 'Querying indexed documents...',
+      tool_rag_list_retrieving: 'Retrieving documents from IndexedDB...',
+      tool_rag_list_indexed: '{count} doc{plural} indexed',
+      tool_rag_search_title: 'Local knowledge: "{query}"',
+      tool_rag_search_loading: 'Searching with Orama...',
+      tool_rag_search_building: 'Building local index...',
+      tool_rag_search_matches: '{count} match{plural} · {scope}',
+      tool_rag_read_title: 'Knowledge chunk',
+      tool_rag_read_loading: 'Reading {chunkId}...',
+      tool_rag_read_retrieving: 'Retrieving text from IndexedDB...',
+      tool_rag_read_retrieved: 'Chunk retrieved ({chars} characters)',
+      tool_rag_read_not_found: 'Not found',
+      tool_err_query: 'Query error',
+      tool_err_execution: 'Execution error',
+      tool_err_search: 'Search error',
+      tool_status_success: 'Completed',
+      tool_status_error: 'Error ({ms}ms)',
+      tool_chart_fallback_title: 'Chart',
 
       // Modal de Configuración
       modal_title: 'Chat Settings',
@@ -586,6 +692,16 @@
       inspector_cap_modelListing: 'Model Discovery',
       inspector_summary_title: 'Provider Capabilities Report',
       inspector_models_found: '{count} models detected',
+      inspector_meta_provider: 'Provider',
+      inspector_meta_endpoint: 'Chat Endpoint',
+      inspector_meta_models: 'Models',
+      inspector_meta_latency: 'Diagnostic Latency',
+      inspector_discovered_models: '{count} model(s) discovered',
+      inspector_no_models: 'No models listed',
+      inspector_unknown: 'Unknown',
+      inspector_model_selected: 'Model: {model}',
+      inspector_conn_failed: 'Connection failed: Unable to connect to server.',
+      inspector_module_unavailable: 'Inspection module unavailable.',
       field_language: 'Interface Language (Idioma)',
       field_language_hint: 'Select the visual language of the application.',
       field_profile: 'Connection Profile / Server',
@@ -724,6 +840,8 @@
       btn_delete_all_chats: 'Delete all',
       btn_delete_all_chats_title: 'Delete all saved conversations',
       chat_untitled: 'New conversation',
+      sidebar_rename_chat_title: 'Rename chat',
+      sidebar_delete_chat_title: 'Delete chat',
       chat_delete_confirm: 'Are you sure you want to delete this conversation?',
       chat_delete_all_confirm: 'Are you sure you want to delete all saved conversations? This action cannot be undone.',
       chat_imported_success: 'Conversation imported successfully.',
@@ -787,6 +905,18 @@
     return 'es';
   }
 
+  const changeListeners = [];
+
+  function onChange(callback) {
+    if (typeof callback === 'function') {
+      changeListeners.push(callback);
+    }
+    return () => {
+      const idx = changeListeners.indexOf(callback);
+      if (idx !== -1) changeListeners.splice(idx, 1);
+    };
+  }
+
   function getLanguage() {
     return currentLang;
   }
@@ -803,6 +933,20 @@
       document.documentElement.lang = target;
       applyTranslations(document);
     }
+
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+      try {
+        window.dispatchEvent(new CustomEvent('zerochat:languagechange', { detail: { lang: target } }));
+      } catch (e) {}
+    }
+
+    changeListeners.forEach(fn => {
+      try {
+        fn(target);
+      } catch (err) {
+        console.error('Error in i18n onChange listener:', err);
+      }
+    });
 
     return target;
   }
@@ -932,6 +1076,7 @@
     t,
     getLanguage,
     setLanguage,
+    onChange,
     detectInitialLanguage,
     getFormattedDateTime,
     applyTranslations,
