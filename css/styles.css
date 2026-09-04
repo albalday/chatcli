@@ -5,6 +5,7 @@
 @import "tokens.css";
 @import "base.css";
 @import "layout.css";
+@import "components/icons.css";
 @import "components/header.css";
 @import "components/sidebar.css";
 @import "components/messages.css";

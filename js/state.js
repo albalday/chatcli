@@ -41,6 +41,8 @@
     const defaultState = {
       // 1. Configuración de la Aplicación y Preferencias
       config: {
+        schemaVersion: 2,
+        activeProfile: null,
         apiUrl: 'http://localhost:1234/v1',
         apiType: 'openai',
         apiKey: '',
@@ -50,13 +52,19 @@
         reasoningEffort: 'none',
         theme: 'light',
         language: 'es',
-        enableAgentJs: true,
-        enableAgentWeb: true,
-        enableAgentSearch: true,
-        enableAgentChart: true,
+        enabledTools: {
+          execute_javascript: true,
+          search_web: true,
+          fetch_web_page: true,
+          download_pdf: true,
+          render_chart: true
+        },
         enableRawLogs: false,
         enableDebugMessages: false,
-        sendDateTime: true
+        sendDateTime: true,
+        activeRagBranchId: '',
+        activeRagBranchIds: [],
+        modelReasoningConfig: null
       },
 
       // 2. Sesiones y Conversación Activa

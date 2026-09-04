@@ -89,6 +89,19 @@ test('Storage IndexedDB - Borrado individual y borrado total', async () => {
   assert.equal(emptyList.length, 0);
 });
 
+test('Storage IndexedDB - Borrar todos los datos elimina el historial de chats', async () => {
+  const sessionId = 'conv_clear_all_storage';
+  await Storage.saveConversation(
+    { id: sessionId, title: 'Chat que debe borrarse' },
+    [{ id: 'm1', role: 'user', content: 'Eliminar este historial' }]
+  );
+
+  const cleared = await Storage.clearAllStorage();
+  assert.equal(cleared, true);
+  assert.equal(await Storage.getConversation(sessionId), null);
+  assert.equal((await Storage.getConversationsList()).length, 0);
+});
+
 test('Storage IndexedDB - Preservación íntegra de turnos del asistente y herramientas', async () => {
   const sessionId = 'test_agentic_turn_session';
   const sessionMeta = { id: sessionId, title: 'Chat con herramientas' };

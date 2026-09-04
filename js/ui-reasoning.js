@@ -23,12 +23,6 @@
       : (typeof require !== 'undefined' ? (function () { try { return require('./api.js'); } catch (e) { return null; } })() : null);
   }
 
-  function getStorage() {
-    return (typeof window !== 'undefined' && window.ChatStorage)
-      ? window.ChatStorage
-      : (typeof require !== 'undefined' ? (function () { try { return require('./cookies.js'); } catch (e) { return null; } })() : null);
-  }
-
   function t(key, params) {
     const I18n = getI18n();
     if (I18n && typeof I18n.t === 'function') return I18n.t(key, params);
@@ -169,13 +163,6 @@
   function selectReasoningLevel(elements, appConfig, level, onLevelChanged) {
     let norm = String(level).trim();
     if (norm.toLowerCase() === 'off') norm = 'none';
-    if (appConfig) {
-      appConfig.reasoningEffort = norm;
-    }
-    const Storage = getStorage();
-    if (Storage?.saveConfig) {
-      Storage.saveConfig({ reasoningEffort: norm });
-    }
     updateReasoningUI(elements, norm);
     closeReasoningMenu(elements);
     if (typeof onLevelChanged === 'function') {

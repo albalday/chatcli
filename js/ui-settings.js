@@ -64,8 +64,6 @@
     const doc = (typeof document !== 'undefined') ? document : null;
     const root = doc ? doc.documentElement : null;
     const effective = (theme === 'dark') ? 'dark' : 'light';
-    if (appConfig) appConfig.theme = effective;
-
     if (root) {
       if (effective === 'dark') {
         root.setAttribute('data-theme', 'dark');
@@ -88,17 +86,10 @@
 
   function applyLanguage(elements, appConfig, lang, callbacks = {}) {
     const target = (lang === 'en') ? 'en' : 'es';
-    if (appConfig) appConfig.language = target;
-
     const I18n = getI18n();
     if (I18n?.setLanguage) {
       I18n.setLanguage(target, true);
     }
-    const Storage = getStorage();
-    if (Storage?.saveConfig) {
-      Storage.saveConfig({ language: target });
-    }
-
     if (elements?.currentLangLabel) {
       elements.currentLangLabel.textContent = target.toUpperCase();
     }
@@ -114,7 +105,7 @@
     }
 
     if (elements?.currentProfileName) {
-      const activeProf = (Storage?.getActiveProfileName ? Storage.getActiveProfileName() : appConfig?.activeProfileName) || appConfig?.activeProfileName || 'Local chat';
+      const activeProf = appConfig?.activeProfile?.name || appConfig?.activeProfileName || 'Local chat';
       elements.currentProfileName.textContent = activeProf;
     }
     if (elements?.currentModelName) {
@@ -127,6 +118,9 @@
 
     if (elements?.settingSystemPrompt) {
       elements.settingSystemPrompt.setAttribute('placeholder', t('field_system_prompt_placeholder'));
+    }
+    if (elements?.settingSystemDataPrompt) {
+      elements.settingSystemDataPrompt.setAttribute('placeholder', t('field_system_data_prompt_placeholder'));
     }
     return target;
   }
@@ -199,6 +193,9 @@
     if (elements.settingSystemPrompt && profileData.systemPrompt !== undefined) {
       elements.settingSystemPrompt.value = profileData.systemPrompt;
     }
+    if (elements.settingSystemDataPrompt && profileData.systemDataPrompt !== undefined) {
+      elements.settingSystemDataPrompt.value = profileData.systemDataPrompt;
+    }
     if (elements.settingTemperature && profileData.temperature !== undefined) {
       elements.settingTemperature.value = profileData.temperature;
       if (elements.temperatureVal) {
@@ -221,7 +218,7 @@
       ? elements.settingProfileName.value.trim()
       : ((elements?.profileSelectHelper && elements.profileSelectHelper.value)
         ? elements.profileSelectHelper.value
-        : (appConfig?.activeProfileName || 'Local chat'));
+        : (appConfig?.activeProfile?.name || 'Local chat'));
     const selectedModel = elements?.settingModel ? elements.settingModel.value.trim() : '';
 
     return {
@@ -230,8 +227,9 @@
       apiType: elements?.settingApiType ? elements.settingApiType.value : (appConfig?.apiType || 'openai'),
       apiKey: elements?.settingApiKey ? elements.settingApiKey.value.trim() : '',
       model: selectedModel,
-      systemPrompt: elements?.settingSystemPrompt ? elements.settingSystemPrompt.value.trim() : '',
-      temperature: elements?.settingTemperature ? elements.settingTemperature.value : '0.7',
+      systemPrompt: appConfig?.systemPrompt || '',
+      systemDataPrompt: elements?.settingSystemDataPrompt ? elements.settingSystemDataPrompt.value.trim() : (appConfig?.systemDataPrompt || ''),
+      temperature: appConfig?.temperature || '0.7',
       reasoningEffort: appConfig?.reasoningEffort || 'none',
       modelReasoningConfig: appConfig?.modelReasoningConfig || null,
       theme: appConfig?.theme || 'light',
@@ -257,24 +255,15 @@
     }, 4000);
   }
 
-  function handleSaveProfile(elements, appConfig, populateProfileSelector) {
+  function handleSaveProfile(elements, appConfig, saveProfile) {
     const currentConfig = gatherCurrentFormConfig(elements, appConfig);
     const name = currentConfig.activeProfileName || 'Local chat';
-    const Storage = getStorage();
-    if (Storage?.saveProfile) {
-      Storage.saveProfile(name, currentConfig);
-    }
-    if (Storage?.saveConfig) {
-      Storage.saveConfig(currentConfig);
-    }
-    if (typeof populateProfileSelector === 'function') {
-      populateProfileSelector(name);
-    }
+    if (typeof saveProfile === 'function') saveProfile(name, currentConfig);
     showProfileFeedback(elements, t('msg_profile_saved', { name }) || `Perfil "${name}" guardado con éxito.`, 'success');
     return currentConfig;
   }
 
-  function handleDeleteProfile(elements, populateProfileSelector, applyProfile) {
+  function handleDeleteProfile(elements, removeProfile) {
     const name = (elements?.settingProfileName && elements.settingProfileName.value.trim())
       ? elements.settingProfileName.value.trim()
       : ((elements?.profileSelectHelper && elements.profileSelectHelper.value)
@@ -285,49 +274,20 @@
     const confirmMsg = t('confirm_delete_profile', { name }) || `¿Estás seguro de que deseas eliminar el perfil "${name}"?`;
     if (!confirm(confirmMsg)) return;
 
-    const Storage = getStorage();
-    if (Storage?.deleteProfile) {
-      Storage.deleteProfile(name);
-      const newActive = Storage.getActiveProfileName ? Storage.getActiveProfileName() : 'Local chat';
-      if (typeof populateProfileSelector === 'function') {
-        populateProfileSelector(newActive);
-      }
-      const newProfileData = Storage.getProfile ? Storage.getProfile(newActive) : null;
-      if (newProfileData && typeof applyProfile === 'function') {
-        applyProfile(newProfileData);
-      }
+    if (typeof removeProfile === 'function' && removeProfile(name)) {
       showProfileFeedback(elements, t('msg_profile_deleted', { name }) || `Perfil "${name}" eliminado.`, 'success');
     }
   }
 
   function openSettingsModal(elements, appConfig, callbacks = {}) {
     if (!elements || !elements.settingsDialog) return;
-    const Storage = getStorage();
-    const activeProfileName = (Storage?.getActiveProfileName ? Storage.getActiveProfileName() : appConfig?.activeProfileName) || 'Local chat';
-
-    if (typeof callbacks.populateProfileSelector === 'function') {
-      callbacks.populateProfileSelector(activeProfileName);
+    if (elements.settingsActiveProfileName) {
+      elements.settingsActiveProfileName.textContent = appConfig?.activeProfile?.name || t('connection_no_active_profile');
     }
-
-    if (elements.settingApiType) {
-      elements.settingApiType.value = appConfig?.apiType || 'openai';
-    }
-    if (elements.settingApiUrl) elements.settingApiUrl.value = appConfig?.apiUrl || 'http://localhost:1234/v1';
-    if (elements.settingApiKey) elements.settingApiKey.value = appConfig?.apiKey || '';
-    if (elements.settingModel) elements.settingModel.value = appConfig?.model || '';
-    if (elements.settingSystemPrompt) elements.settingSystemPrompt.value = appConfig?.systemPrompt || '';
-    if (elements.settingTemperature) elements.settingTemperature.value = appConfig?.temperature || '0.7';
-    if (elements.temperatureVal) elements.temperatureVal.textContent = appConfig?.temperature || '0.7';
+    if (elements.settingSystemDataPrompt) elements.settingSystemDataPrompt.value = appConfig?.systemDataPrompt || '';
 
     applyTheme(elements, appConfig, appConfig?.theme || 'light');
     applyLanguage(elements, appConfig, appConfig?.language || 'es', callbacks);
-
-    if (elements.serverQueryStatus) elements.serverQueryStatus.style.display = 'none';
-    if (elements.profileActionFeedback) elements.profileActionFeedback.style.display = 'none';
-
-    if (typeof callbacks.loadCachedModels === 'function') {
-      callbacks.loadCachedModels();
-    }
 
     if (elements.agentToolsContainer) {
       renderAgentToolsUI(elements.agentToolsContainer, appConfig?.enabledTools || {});
@@ -361,17 +321,13 @@
     }
   }
 
-  function handleResetSettings(elements) {
-    const Storage = getStorage();
-    if (Storage?.getDefaultConfig) {
-      const defaults = Storage.getDefaultConfig();
+  function handleResetSettings(elements, defaults = {}) {
+    if (defaults && typeof defaults === 'object') {
       if (elements.settingApiType) elements.settingApiType.value = defaults.apiType || 'openai';
       if (elements.settingApiUrl) elements.settingApiUrl.value = defaults.apiUrl;
       if (elements.settingApiKey) elements.settingApiKey.value = defaults.apiKey;
       if (elements.settingModel) elements.settingModel.value = defaults.model;
-      if (elements.settingSystemPrompt) elements.settingSystemPrompt.value = '';
-      if (elements.settingTemperature) elements.settingTemperature.value = defaults.temperature;
-      if (elements.temperatureVal) elements.temperatureVal.textContent = defaults.temperature;
+      if (elements.settingSystemDataPrompt) elements.settingSystemDataPrompt.value = defaults.systemDataPrompt || '';
 
       applyTheme(elements, null, defaults.theme || 'light');
       applyLanguage(elements, null, defaults.language || 'es');
@@ -382,17 +338,27 @@
       if (elements.settingSendDateTime) elements.settingSendDateTime.checked = defaults.sendDateTime !== false;
       return defaults;
     }
-    return null;
+    return defaults;
   }
 
-  function handleClearAllData() {
+  async function handleClearAllData() {
     if (!confirm(t('confirm_clear_all_data'))) return;
     const Storage = getStorage();
+    let cleared = true;
     if (Storage?.clearAllStorage) {
-      Storage.clearAllStorage();
+      try {
+        cleared = await Storage.clearAllStorage();
+      } catch (error) {
+        console.warn('No se pudieron borrar todos los datos locales:', error);
+        cleared = false;
+      }
     } else {
       try { localStorage.clear(); } catch (e) {}
       try { sessionStorage.clear(); } catch (e) {}
+    }
+    if (cleared === false) {
+      alert('No se pudo borrar el historial de chats. Revisa la consola para más detalles.');
+      return;
     }
     if (typeof window !== 'undefined' && window.location) {
       window.location.reload();

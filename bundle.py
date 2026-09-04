@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """
-ZeroChat Professional Standalone Bundler & Gzip Base64 Compressor.
-Compila los archivos modulares HTML, CSS y JS en un único archivo autónomo y portable 'zerochat.html'.
+Bundler HTML autónomo con compresión Gzip/Base64.
+
+Parte de un documento HTML y detecta, en el mismo orden en que aparecen, sus hojas
+de estilo y scripts locales. Los incorpora en un único HTML portable sin depender de
+la estructura ni del nombre de un proyecto concreto.
 
 Características principales:
 - Concatena todos los archivos JavaScript (.js) en un único cuerpo de código.
@@ -20,116 +23,13 @@ Características principales:
 import argparse
 import base64
 import gzip
-import json
 import os
 import re
 import subprocess
 import sys
 import time
-from typing import Dict, List, Optional, Tuple
-
-CSS_MODULE_FILES = [
-    "tokens.css",
-    "base.css",
-    "layout.css",
-    "components/icons.css",
-    "components/header.css",
-    "components/sidebar.css",
-    "components/messages.css",
-    "components/markdown.css",
-    "components/composer.css",
-    "components/modals.css",
-    "components/tools.css",
-    "components/debug.css",
-    "theme-overrides.css",
-    "print.css"
-]
-
-JS_MODULE_FILES = [
-    "vendor/orama.browser.js",
-    "storage-db.js",
-    "cookies.js",
-    "ragStorage.js",
-    "rag-index.js",
-    "ingestionEngine.js",
-    "rag-service.js",
-    "rag-ui.js",
-    "i18n.js",
-    "icons.js",
-    "sandbox.js",
-    "charts.js",
-    "web-browser.js",
-    "web-search.js",
-    "markdown.js",
-    "providers.js",
-    "api.js",
-    "file-parser.js",
-    "tools/tool-runtime.js",
-    "tools/tool-manifest.js",
-    "tools/builtin/execute-javascript.tool.js",
-    "tools/builtin/search-web.tool.js",
-    "tools/builtin/fetch-web-page.tool.js",
-    "tools/builtin/download-pdf.tool.js",
-    "tools/builtin/render-chart.tool.js",
-    "tools/builtin/get-current-datetime.tool.js",
-    "tools/builtin/list-documents.tool.js",
-    "tools/builtin/search-knowledge-base.tool.js",
-    "tools/builtin/read-knowledge-chunk.tool.js",
-    "agent-core.js",
-    "mcp.js",
-    "debug.js",
-    "tool-cards.js",
-    "attachments.js",
-    "export.js",
-    "state.js",
-    "context-manager.js",
-    "chat-engine.js",
-    "ui-reasoning.js",
-    "ui-inspector.js",
-    "ui-sidebar.js",
-    "ui-settings.js",
-    "app.js"
-]
-
-CORE_EXPORT_SYMBOLS = [
-    "ZeroChatOrama",
-    "ZeroChatDB",
-    "ChatStorage",
-    "ChatRagStorage",
-    "ChatRagIndex",
-    "ChatIngestionEngine",
-    "ChatRagService",
-    "ChatRagUI",
-    "ChatI18n",
-    "ChatIcons",
-    "ChatSandbox",
-    "ChatCharts",
-    "ChatWebBrowser",
-    "ChatWebSearch",
-    "ChatMarkdown",
-    "ChatProviders",
-    "ChatAPI",
-    "ChatFileParser",
-    "ChatToolRuntime",
-    "ChatToolManifest",
-    "ChatBuiltinExecuteJavascriptTool",
-    "ChatBuiltinSearchWebTool",
-    "ChatBuiltinFetchWebPageTool",
-    "ChatBuiltinDownloadPdfTool",
-    "ChatAgentCore",
-    "ChatMCP",
-    "ChatDebug",
-    "ChatToolCards",
-    "ChatAttachments",
-    "ChatExport",
-    "ChatState",
-    "ChatContextManager",
-    "ChatEngine",
-    "ChatUIReasoning",
-    "ChatUIInspector",
-    "ChatUISidebar",
-    "ChatUISettings"
-]
+from typing import Dict, List, Tuple
+from urllib.parse import unquote, urlsplit
 
 BOOTSTRAP_LOADER_SCRIPT = """<script>
 (async () => {
@@ -162,17 +62,85 @@ BOOTSTRAP_LOADER_SCRIPT = """<script>
 </script>"""
 
 
-def read_project_version(base_dir: str) -> str:
-    """Lee la única versión declarada del proyecto (package.json)."""
-    package_path = os.path.join(base_dir, "package.json")
-    try:
-        with open(package_path, "r", encoding="utf-8") as f:
-            version = json.load(f).get("version")
-        if isinstance(version, str) and version.strip():
-            return version.strip()
-    except (OSError, json.JSONDecodeError, AttributeError):
-        pass
-    return "dev"
+LOCAL_STYLESHEET_RE = re.compile(
+    r'<link\b(?=[^>]*\brel=["\'][^"\']*\bstylesheet\b[^"\']*["\'])[^>]*>',
+    re.IGNORECASE,
+)
+SCRIPT_SRC_RE = re.compile(r'<script\b[^>]*\bsrc=["\']([^"\']+)["\'][^>]*>\s*</script\s*>', re.IGNORECASE)
+HREF_RE = re.compile(r'\bhref=["\']([^"\']+)["\']', re.IGNORECASE)
+CSS_IMPORT_RE = re.compile(
+    r'@import\s+(?:url\(\s*)?["\']([^"\')]+)["\']\s*\)?\s*([^;]*);', re.IGNORECASE
+)
+
+
+def local_resource_path(document_dir: str, reference: str) -> str | None:
+    """Devuelve la ruta de un recurso local relativo o ``None`` para URL externas."""
+    parsed = urlsplit(reference)
+    if parsed.scheme or parsed.netloc or reference.startswith("/"):
+        return None
+    path = unquote(parsed.path)
+    if not path:
+        return None
+    return os.path.normpath(os.path.join(document_dir, path))
+
+
+def read_referenced_resources(
+    html: str,
+    document_dir: str,
+    pattern: re.Pattern[str],
+    attribute_pattern: re.Pattern[str],
+    resource_kind: str,
+) -> Tuple[List[str], List[str]]:
+    """Lee recursos locales referenciados por etiquetas HTML, preservando su orden."""
+    contents: List[str] = []
+    missing: List[str] = []
+    for tag_match in pattern.finditer(html):
+        attribute_match = attribute_pattern.search(tag_match.group(0))
+        if not attribute_match:
+            continue
+        reference = attribute_match.group(1)
+        resource_path = local_resource_path(document_dir, reference)
+        if resource_path is None:
+            continue
+        if not os.path.isfile(resource_path):
+            missing.append(reference)
+            continue
+        with open(resource_path, "r", encoding="utf-8") as resource_file:
+            contents.append(resource_file.read())
+    if missing:
+        raise FileNotFoundError(
+            f"Faltan {resource_kind} locales referenciados por el HTML: {', '.join(missing)}"
+        )
+    return contents, [
+        match.group(0)
+        for match in pattern.finditer(html)
+        if (attribute_match := attribute_pattern.search(match.group(0)))
+        and local_resource_path(document_dir, attribute_match.group(1)) is not None
+    ]
+
+
+def read_css_with_imports(css_path: str, import_stack: Tuple[str, ...] = ()) -> str:
+    """Expande ``@import`` locales para que el CSS también sea autónomo."""
+    normalized_path = os.path.normpath(css_path)
+    if normalized_path in import_stack:
+        chain = " -> ".join((*import_stack, normalized_path))
+        raise ValueError(f"Importación CSS circular: {chain}")
+
+    with open(normalized_path, "r", encoding="utf-8") as css_file:
+        css = css_file.read()
+    css_dir = os.path.dirname(normalized_path)
+
+    def replace_import(match: re.Match[str]) -> str:
+        imported_path = local_resource_path(css_dir, match.group(1))
+        if imported_path is None:
+            return match.group(0)
+        if not os.path.isfile(imported_path):
+            raise FileNotFoundError(f"Hoja de estilo importada no encontrada: {match.group(1)}")
+        imported_css = read_css_with_imports(imported_path, (*import_stack, normalized_path))
+        media_query = match.group(2).strip()
+        return f"@media {media_query}{{{imported_css}}}" if media_query else imported_css
+
+    return CSS_IMPORT_RE.sub(replace_import, css)
 
 
 def minify_html(html: str, mode: str = "prod") -> str:
@@ -479,9 +447,9 @@ def verify_bundle(html_content: str, verbose: bool = False) -> Tuple[bool, List[
     """
     Verifica la integridad del archivo distribuible generado:
     1. Estructura HTML básica.
-    2. Ausencia de referencias externas a archivos locales.
+    2. Ausencia de referencias locales a CSS y JavaScript que debían incorporarse.
     3. Presencia del payload comprimido o script JS.
-    4. Descompresión gzip/Base64 y presencia de todos los módulos.
+    4. Descompresión gzip/Base64.
     5. Validación de sintaxis JavaScript embebido con Node.js.
     """
     errors: List[str] = []
@@ -492,14 +460,7 @@ def verify_bundle(html_content: str, verbose: bool = False) -> Tuple[bool, List[
         if tag.lower() not in html_content.lower():
             errors.append(f"Falta la etiqueta requerida '{tag}' en el documento generado.")
 
-    # 2. Ausencia de referencias a scripts/css externos locales
-    if re.search(r'<script[^>]*src=["\']js/[^"\']+["\'][^>]*>', html_content, re.IGNORECASE):
-        errors.append("El archivo generado aún contiene etiquetas <script src=\"js/...\"> sin embeber.")
-
-    if re.search(r'<link[^>]*href=["\']css/[^"\']+["\'][^>]*>', html_content, re.IGNORECASE):
-        errors.append("El archivo generado aún contiene etiquetas <link href=\"css/...\"> sin embeber.")
-
-    # 3. Extraer el código JavaScript (desde gzip Base64 o script plano)
+    # 3. Extraer el código JavaScript desde gzip Base64
     decompressed_js = ""
     compressed_match = re.search(
         r'<script[^>]*type=["\']application/gzip-base64["\'][^>]*id=["\']compressed-js["\'][^>]*>(.*?)</script>',
@@ -515,20 +476,10 @@ def verify_bundle(html_content: str, verbose: bool = False) -> Tuple[bool, List[
         except Exception as e:
             errors.append(f"Error al decodificar o descomprimir el payload gzip Base64: {e}")
     else:
-        # Fallback a script regular (ej: modo dev)
-        script_match = re.search(r'<script(?![^>]*\btype=)[^>]*>(.*?)</script>', html_content, re.DOTALL)
-        if script_match:
-            decompressed_js = script_match.group(1)
-        else:
-            errors.append("No se encontró el payload JavaScript embebido (<script id=\"compressed-js\"> o <script>) en el HTML final.")
+        errors.append("No se encontró el payload JavaScript embebido (<script id=\"compressed-js\">) en el HTML final.")
 
-    # 4. Verificar presencia de símbolos y módulos clave
+    # 4. Validar sintaxis JavaScript embebido con Node.js si está disponible
     if decompressed_js:
-        for symbol in CORE_EXPORT_SYMBOLS:
-            if symbol not in decompressed_js:
-                errors.append(f"El símbolo o módulo esencial '{symbol}' no fue encontrado en el bundle final.")
-
-        # 5. Validación de sintaxis en Node.js si está disponible
         try:
             val_res = subprocess.run(
                 ['node', '-c'],
@@ -546,41 +497,41 @@ def verify_bundle(html_content: str, verbose: bool = False) -> Tuple[bool, List[
     return len(errors) == 0, errors
 
 
-def build_standalone_html(mode: str = "prod", force_fallback: bool = False, verbose: bool = False, output_file: Optional[str] = None) -> bool:
+def build_standalone_html(input_file: str, output_file: str, mode: str = "prod", force_fallback: bool = False, verbose: bool = False) -> bool:
     """
     Ejecuta el pipeline completo de compilación, compresión Gzip Base64 y generación del bundle autónomo.
     """
     start_time = time.time()
-    base_dir = os.path.dirname(os.path.abspath(__file__))
+    input_path = os.path.abspath(input_file)
+    document_dir = os.path.dirname(input_path)
+    output_path = os.path.abspath(output_file)
 
-    index_path = os.path.join(base_dir, "index.html")
-    css_path = os.path.join(base_dir, "css", "styles.css")
-    js_dir = os.path.join(base_dir, "js")
-    output_path = os.path.abspath(output_file) if output_file else os.path.join(base_dir, "zerochat.html")
-    project_version = read_project_version(base_dir)
-
-    if not os.path.exists(index_path):
-        print(f"❌ Error: Archivo base no encontrado: {index_path}", file=sys.stderr)
+    if not os.path.isfile(input_path):
+        print(f"❌ Error: Archivo HTML base no encontrado: {input_path}", file=sys.stderr)
         return False
 
     # 1. Cargar HTML
-    with open(index_path, "r", encoding="utf-8") as f:
+    with open(input_path, "r", encoding="utf-8") as f:
         raw_html = f.read()
     raw_html_size = len(raw_html.encode("utf-8"))
 
-    # 2. Cargar y procesar CSS (Modular con fallback a styles.css)
-    raw_css = ""
-    css_dir = os.path.join(base_dir, "css")
-    module_paths = [os.path.join(css_dir, f) for f in CSS_MODULE_FILES]
-    if all(os.path.exists(m) for m in module_paths):
-        parts = []
-        for m in module_paths:
-            with open(m, "r", encoding="utf-8") as f:
-                parts.append(f.read())
-        raw_css = "\n\n".join(parts)
-    elif os.path.exists(css_path):
-        with open(css_path, "r", encoding="utf-8") as f:
-            raw_css = f.read()
+    # 2. Cargar CSS local según el orden de las etiquetas <link> del HTML base.
+    try:
+        _, css_tags = read_referenced_resources(
+            raw_html, document_dir, LOCAL_STYLESHEET_RE, HREF_RE, "hojas de estilo"
+        )
+        js_parts, js_tags = read_referenced_resources(
+            raw_html, document_dir, SCRIPT_SRC_RE, SCRIPT_SRC_RE, "scripts"
+        )
+        css_parts = [
+            read_css_with_imports(local_resource_path(document_dir, HREF_RE.search(tag).group(1)))
+            for tag in css_tags
+        ]
+    except (OSError, UnicodeDecodeError, ValueError) as error:
+        print(f"❌ Error al leer recursos del HTML base: {error}", file=sys.stderr)
+        return False
+
+    raw_css = "\n\n".join(css_parts)
     raw_css_size = len(raw_css.encode("utf-8"))
 
     css_engine = "Python Fallback"
@@ -599,27 +550,8 @@ def build_standalone_html(mode: str = "prod", force_fallback: bool = False, verb
 
     min_css_size = len(css_min.encode("utf-8"))
 
-    # 3. Cargar y concatenar todos los archivos JavaScript (.js)
-    raw_js_parts: List[str] = []
-    missing_files: List[str] = []
-
-    for jf in JS_MODULE_FILES:
-        jf_path = os.path.join(js_dir, jf)
-        if os.path.exists(jf_path):
-            with open(jf_path, "r", encoding="utf-8") as f:
-                raw_js_parts.append(f.read())
-        else:
-            missing_files.append(jf)
-
-    if missing_files:
-        print(f"❌ Error: Faltan módulos JavaScript requeridos: {', '.join(missing_files)}", file=sys.stderr)
-        return False
-
-    # Concatenar todos los ficheros JS antes de la compresión para el mejor ratio de diccionario
-    version_bootstrap = (
-        f"globalThis.__ZEROCHAT_VERSION__ = {json.dumps(project_version)};\n"
-    )
-    concatenated_js = version_bootstrap + ";\n".join(raw_js_parts)
+    # 3. Concatenar scripts locales antes de comprimirlos para mejorar el ratio.
+    concatenated_js = ";\n".join(js_parts)
     raw_js_size = len(concatenated_js.encode("utf-8"))
 
     # 4. Eliminar comentarios de forma segura
@@ -630,10 +562,9 @@ def build_standalone_html(mode: str = "prod", force_fallback: bool = False, verb
     b64_js, gzip_bytes, b64_bytes = compress_js_to_gzip_base64(clean_js)
 
     # 6. Limpiar e integrar en HTML
-    html_cleaned = re.sub(r'<link[^>]*href=["\']css/styles\.css["\'][^>]*>', '', raw_html)
-    html_cleaned = re.sub(r'<script[^>]*src=["\']js/[^"\']+["\'][^>]*></script>', '', html_cleaned)
-    html_cleaned = re.sub(r'<!--\s*Estilos visuales[^>]*-->', '', html_cleaned)
-    html_cleaned = re.sub(r'<!--\s*Scripts de la aplicación[^>]*-->', '', html_cleaned)
+    html_cleaned = raw_html
+    for tag in css_tags + js_tags:
+        html_cleaned = html_cleaned.replace(tag, '', 1)
 
     min_html_base = minify_html(html_cleaned, mode=mode)
     min_html_size = len(min_html_base.encode("utf-8"))
@@ -659,20 +590,24 @@ def build_standalone_html(mode: str = "prod", force_fallback: bool = False, verb
 
     elapsed_time = (time.time() - start_time) * 1000
     total_raw_size = raw_html_size + raw_css_size + raw_js_size
-    total_reduction_pct = ((total_raw_size - final_size) / total_raw_size) * 100
+    total_reduction_pct = ((total_raw_size - final_size) / total_raw_size) * 100 if total_raw_size else 0
 
     # 9. Informe detallado de compresión
     print("\n" + "=" * 70)
-    print(f"✨ ZeroChat Standalone Bundle ('{os.path.basename(output_path)}') generado con éxito")
+    print(f"✨ Bundle autónomo ('{os.path.basename(output_path)}') generado con éxito")
     print("=" * 70)
     print(f"⚙️  Modo: {mode.upper()} | Compresión: Gzip Level 9 (Base64 Stream) | Motor CSS: {css_engine}")
     print(f"⏱️  Tiempo de compilación: {elapsed_time:.1f} ms")
     print("-" * 70)
-    print(f"  • HTML Markup:       {raw_html_size:>8,} bytes  ➜  {min_html_size:>8,} bytes  ({(1 - min_html_size/raw_html_size)*100:>5.1f}% reducción)")
-    print(f"  • CSS Styles:        {raw_css_size:>8,} bytes  ➜  {min_css_size:>8,} bytes  ({(1 - min_css_size/raw_css_size)*100:>5.1f}% reducción)")
+    html_reduction = (1 - min_html_size / raw_html_size) * 100 if raw_html_size else 0
+    css_reduction = (1 - min_css_size / raw_css_size) * 100 if raw_css_size else 0
+    js_reduction = (1 - clean_js_size / raw_js_size) * 100 if raw_js_size else 0
+    gzip_reduction = (1 - gzip_bytes / clean_js_size) * 100 if clean_js_size else 0
+    print(f"  • HTML Markup:       {raw_html_size:>8,} bytes  ➜  {min_html_size:>8,} bytes  ({html_reduction:>5.1f}% reducción)")
+    print(f"  • CSS Styles:        {raw_css_size:>8,} bytes  ➜  {min_css_size:>8,} bytes  ({css_reduction:>5.1f}% reducción)")
     print(f"  • JS Concatenado:    {raw_js_size:>8,} bytes")
-    print(f"  • JS Sin Comentarios:{clean_js_size:>8,} bytes  ({(1 - clean_js_size/raw_js_size)*100:>5.1f}% reducción)")
-    print(f"  • JS Gzip (L9):      {gzip_bytes:>8,} bytes  ({(1 - gzip_bytes/clean_js_size)*100:>5.1f}% compresión)")
+    print(f"  • JS Sin Comentarios:{clean_js_size:>8,} bytes  ({js_reduction:>5.1f}% reducción)")
+    print(f"  • JS Gzip (L9):      {gzip_bytes:>8,} bytes  ({gzip_reduction:>5.1f}% compresión)")
     print(f"  • JS Base64 Payload: {b64_bytes:>8,} bytes")
     print("-" * 70)
     print(f"📦 TAMAÑO TOTAL RAW:   {total_raw_size:>8,} bytes ({total_raw_size/1024:.1f} KB)")
@@ -685,18 +620,15 @@ def build_standalone_html(mode: str = "prod", force_fallback: bool = False, verb
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Compilador y empaquetador profesional autónomo para ZeroChat con compresión Gzip Base64."
+        description="Empaqueta un HTML y sus recursos locales en un HTML autónomo con Gzip/Base64."
     )
+    parser.add_argument("input", help="Ruta del HTML base que declara los recursos que se incorporarán.")
+    parser.add_argument("output", help="Ruta del HTML autónomo que se generará.")
     parser.add_argument(
         "--mode",
         choices=["prod", "dev"],
         default="prod",
         help="Modo de compilación: 'prod' o 'dev'."
-    )
-    parser.add_argument(
-        "--output", "-o",
-        default=None,
-        help="Ruta del archivo de salida (por defecto: 'zerochat.html' en la raíz)."
     )
     parser.add_argument(
         "--fallback-only",
@@ -711,10 +643,11 @@ def main() -> None:
 
     args = parser.parse_args()
     success = build_standalone_html(
+        input_file=args.input,
+        output_file=args.output,
         mode=args.mode,
         force_fallback=args.fallback_only,
-        verbose=args.verbose,
-        output_file=args.output
+        verbose=args.verbose
     )
     sys.exit(0 if success else 1)
 

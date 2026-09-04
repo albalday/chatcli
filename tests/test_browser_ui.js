@@ -3,6 +3,32 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const { chromium } = require('playwright');
 
+test('Browser UI - index.html declara el mismo runtime que se distribuye', async () => {
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const page = await browser.newPage();
+    const consoleErrors = [];
+    page.on('console', msg => {
+      if (msg.type() === 'error' && !msg.text().includes('favicon')) {
+        consoleErrors.push(msg.text());
+      }
+    });
+    page.on('pageerror', err => consoleErrors.push(err.message));
+
+    await page.goto('file://' + path.resolve(__dirname, '../index.html'), { waitUntil: 'load' });
+
+    assert.equal(consoleErrors.length, 0, 'No debe haber errores de consola: ' + consoleErrors.join(' | '));
+    const runtime = await page.evaluate(() => ({
+      chatIcons: typeof window.ChatIcons?.get === 'function',
+      iconStyles: getComputedStyle(document.querySelector('.ui-icon')).display
+    }));
+    assert.equal(runtime.chatIcons, true, 'El HTML base debe cargar el módulo de iconos usado por la aplicación');
+    assert.equal(runtime.iconStyles, 'block', 'El HTML base debe cargar los estilos de iconos');
+  } finally {
+    await browser.close();
+  }
+});
+
 test('Browser UI - Carga limpia del bundle zerochat.html sin errores de consola', async () => {
   const browser = await chromium.launch({ headless: true });
   try {
@@ -580,30 +606,65 @@ test('Browser UI - Fase 6: Modales <dialog> Modernos con Blur y Tarjetas de Herr
     const isSecondTabActive = await tabButtons[1].evaluate(el => el.classList.contains('active'));
     assert.ok(isSecondTabActive, 'Hacer click en la pestaña debe marcarla como .active');
 
-    // 2b. Validar que Guardar Perfil (#btn-save-profile) persiste la configuración activa sin cerrar el modal
+    // 2b. El mantenedor de perfiles es independiente de la configuración general.
     await tabButtons[0].click();
-    await page.fill('#setting-profile-name', 'Perfil Temporal Playwright');
+    const connectionTab = await page.evaluate(() => ({
+      hasActiveProfile: !!document.getElementById('settings-active-profile-name'),
+      hasConnectionInputs: !!document.querySelector('#settings-dialog #setting-api-url'),
+      hasManageButton: !!document.getElementById('btn-manage-profiles')
+    }));
+    assert.ok(connectionTab.hasActiveProfile, 'La pestaña Conexión debe mostrar el perfil activo');
+    assert.equal(connectionTab.hasConnectionInputs, false, 'La pestaña Conexión no debe editar datos de perfil');
+    assert.ok(connectionTab.hasManageButton, 'La pestaña Conexión debe enlazar al mantenedor de perfiles');
+
+    await page.click('#btn-manage-profiles');
+    await page.waitForFunction(() => document.getElementById('profiles-dialog')?.open);
+    page.once('dialog', dialog => dialog.accept('Perfil Temporal Playwright'));
+    await page.click('#btn-new-profile');
     await page.fill('#setting-api-url', 'http://playwright-test:1234/v1');
     await page.click('#btn-save-profile');
 
     const profileSaveResult = await page.evaluate(() => {
-      const dialog = document.getElementById('settings-dialog');
+      const dialog = document.getElementById('profiles-dialog');
       const feedback = document.getElementById('profile-action-feedback');
-      const loadedCfg = window.ChatStorage?.loadConfig ? window.ChatStorage.loadConfig() : null;
+      const profile = window.ChatProfileRepository?.findByName?.('Perfil Temporal Playwright');
+      const runtime = window.ChatConfig?.getActive?.();
       return {
         isOpen: dialog.open,
         feedbackVisible: feedback && feedback.style.display !== 'none',
-        savedUrl: loadedCfg?.apiUrl,
-        savedProfile: loadedCfg?.activeProfileName
+        savedUrl: profile?.settings?.apiUrl,
+        runtimeUrl: runtime?.apiUrl
       };
     });
 
-    assert.ok(profileSaveResult.isOpen, 'Guardar el perfil NO debe cerrar el diálogo modal');
-    assert.ok(profileSaveResult.feedbackVisible, 'Debe mostrar retroalimentación de guardado de perfil');
-    assert.equal(profileSaveResult.savedUrl, 'http://playwright-test:1234/v1', 'Debe persistir inmediatamente apiUrl en Storage');
-    assert.equal(profileSaveResult.savedProfile, 'Perfil Temporal Playwright', 'Debe persistir el perfil activo en Storage');
+    assert.equal(profileSaveResult.isOpen, false, 'Guardar el perfil debe cerrar el mantenedor');
+    assert.equal(profileSaveResult.savedUrl, 'http://playwright-test:1234/v1', 'Debe persistir el perfil en su repositorio');
+    assert.equal(profileSaveResult.runtimeUrl, 'http://playwright-test:1234/v1', 'El perfil guardado debe quedar activo por defecto');
 
-    // 3. Cerrar el modal con el botón de cerrar (sin dar a Guardar general)
+    // Renombrar el perfil activo actualiza el mismo registro y recarga sus datos.
+    await page.click('#btn-manage-profiles');
+    await page.waitForFunction(() => document.getElementById('profiles-dialog')?.open);
+    await page.selectOption('#profile-select-helper', 'profile:local');
+    await page.fill('#setting-profile-name', 'Local chat renombrado');
+    await page.fill('#setting-api-url', 'http://active-profile-test:1234/v1');
+    await page.click('#btn-save-profile');
+    const renamedActiveResult = await page.evaluate(() => {
+      const profiles = window.ChatProfileRepository?.list?.() || [];
+      const runtime = window.ChatConfig?.getActive?.();
+      return {
+        renamedCount: profiles.filter(profile => profile.name === 'Local chat renombrado').length,
+        oldNameExists: profiles.some(profile => profile.name === 'Local chat'),
+        runtimeName: runtime?.activeProfile?.name,
+        runtimeUrl: runtime?.apiUrl
+      };
+    });
+    assert.equal(renamedActiveResult.renamedCount, 1, 'Renombrar no debe duplicar el perfil');
+    assert.equal(renamedActiveResult.oldNameExists, false, 'El nombre anterior debe desaparecer del selector');
+    assert.equal(renamedActiveResult.runtimeName, 'Local chat renombrado', 'El perfil activo debe reflejar el nuevo nombre');
+    assert.equal(renamedActiveResult.runtimeUrl, 'http://active-profile-test:1234/v1', 'Los cambios del perfil activo deben recargarse');
+
+    // 3. Cerrar ambos modales sin guardar la configuración general.
+    await page.waitForFunction(() => !document.getElementById('profiles-dialog')?.open);
     await page.click('#btn-close-settings');
     await page.waitForFunction(() => !document.getElementById('settings-dialog')?.open);
     const isClosed = await page.$eval('#settings-dialog', el => !el.open);

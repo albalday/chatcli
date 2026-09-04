@@ -25,7 +25,7 @@ test('UISettings - applyTheme actualiza data-theme y botones activos', () => {
 
   const themeDark = UISettings.applyTheme(elements, appConfig, 'dark');
   assert.equal(themeDark, 'dark');
-  assert.equal(appConfig.theme, 'dark');
+  assert.equal(appConfig.theme, 'light');
   assert.equal(btnDark.className, 'active');
   assert.equal(btnLight.className, '');
 
@@ -60,6 +60,7 @@ test('UISettings - applyProfileToForm rellena los inputs de configuración', () 
     settingModel: { value: '' },
     modelSelectHelper: { value: '' },
     settingSystemPrompt: { value: '' },
+    settingSystemDataPrompt: { value: '' },
     settingTemperature: { value: '' },
     temperatureVal: { textContent: '' },
     settingEnableRawLogs: { checked: false },
@@ -72,6 +73,7 @@ test('UISettings - applyProfileToForm rellena los inputs de configuración', () 
     apiKey: 'sk-ant-test',
     model: 'claude-3-7-sonnet',
     systemPrompt: 'Eres un asistente experto.',
+    systemDataPrompt: 'Formato ZeroChat.',
     temperature: '0.2',
     enableRawLogs: true,
     sendDateTime: true
@@ -84,21 +86,15 @@ test('UISettings - applyProfileToForm rellena los inputs de configuración', () 
   assert.equal(elements.settingApiKey.value, 'sk-ant-test');
   assert.equal(elements.settingModel.value, 'claude-3-7-sonnet');
   assert.equal(elements.settingSystemPrompt.value, 'Eres un asistente experto.');
+  assert.equal(elements.settingSystemDataPrompt.value, 'Formato ZeroChat.');
   assert.equal(elements.settingTemperature.value, '0.2');
   assert.equal(elements.temperatureVal.textContent, '0.2');
   assert.equal(elements.settingEnableRawLogs.checked, true);
   assert.equal(elements.settingSendDateTime.checked, true);
 });
 
-test('UISettings - handleSaveProfile guarda el perfil y la configuración activa sin cerrar el modal', () => {
+test('UISettings - handleSaveProfile delega el guardado al editor sin mutar la configuración activa', () => {
   let profileSaved = null;
-  let configSaved = null;
-  let populatedWith = null;
-
-  globalThis.Storage = {
-    saveProfile: (name, data) => { profileSaved = { name, data }; },
-    saveConfig: (cfg) => { configSaved = cfg; }
-  };
 
   const elements = {
     settingProfileName: { value: 'Perfil Ollama Rápido' },
@@ -120,27 +116,16 @@ test('UISettings - handleSaveProfile guarda el perfil y la configuración activa
     language: 'es'
   };
 
-  const populateProfileSelector = (name) => {
-    populatedWith = name;
-  };
-
-  const saved = UISettings.handleSaveProfile(elements, appConfig, populateProfileSelector);
+  const saved = UISettings.handleSaveProfile(elements, appConfig, (name, data) => { profileSaved = { name, data }; });
 
   assert.ok(saved, 'Debe retornar la configuración guardada');
   assert.equal(saved.activeProfileName, 'Perfil Ollama Rápido');
   assert.equal(saved.apiUrl, 'http://localhost:11434');
   assert.equal(saved.model, 'llama3.2:latest');
 
-  assert.ok(profileSaved, 'Debe haber llamado a Storage.saveProfile');
+  assert.ok(profileSaved, 'Debe delegar el guardado en el repositorio de perfiles');
   assert.equal(profileSaved.name, 'Perfil Ollama Rápido');
   assert.equal(profileSaved.data.apiUrl, 'http://localhost:11434');
 
-  assert.ok(configSaved, 'Debe haber llamado a Storage.saveConfig para persistir inmediatamente');
-  assert.equal(configSaved.activeProfileName, 'Perfil Ollama Rápido');
-  assert.equal(configSaved.apiUrl, 'http://localhost:11434');
-
-  assert.equal(populatedWith, 'Perfil Ollama Rápido', 'Debe actualizar el selector de perfiles');
   assert.equal(elements.profileActionFeedback.style.display, 'block');
-
-  delete globalThis.Storage;
 });

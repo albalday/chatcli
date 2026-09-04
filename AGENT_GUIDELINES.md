@@ -16,7 +16,7 @@ ZeroChat utiliza una **arquitectura modular dual**:
    - Generado mediante el script compilador `bundle.py`.
 
 > [!IMPORTANT]
-> **NUNCA** edites `zerochat.html` directamente. Todos los cambios de lógica, interfaz o estilos deben realizarse en `js/`, `css/` o `index.html` y posteriormente recompilar `zerochat.html` ejecutando `python3 bundle.py`.
+> **NUNCA** edites `zerochat.html` directamente. Todos los cambios de lógica, interfaz o estilos deben realizarse en `js/`, `css/` o `index.html` y posteriormente recompilar `zerochat.html` ejecutando `python3 bundle.py index.html zerochat.html`.
 
 ---
 
@@ -30,7 +30,7 @@ flowchart TD
     B --> C{¿Pasaron los Tests?}
     C -- No --> D[Corregir Código y Reintentar Tests]
     D --> B
-    C -- Sí --> E[3. Recompilar Bundle: python3 bundle.py]
+    C -- Sí --> E[3. Recompilar Bundle: python3 bundle.py index.html zerochat.html]
     E --> F[4. Actualizar Documentación si procede]
     F --> G[5. Hacer Commit en Git en la Rama 'dev']
 ```
@@ -59,10 +59,10 @@ Una vez que los tests pasen correctamente, se debe actualizar la distribución e
 
 ### Comando de Compilación:
 ```bash
-python3 bundle.py
+python3 bundle.py index.html zerochat.html
 ```
 
-El script verificará la integridad del JavaScript, minificará el CSS, eliminará comentarios, comprimirá el código con `Gzip (Level 9)` y generará el archivo único `zerochat.html`.
+El script detecta las hojas de estilo y scripts locales declarados por el HTML base, preserva su orden, verifica la integridad del JavaScript, minifica el CSS, elimina comentarios, comprime el código con `Gzip (Level 9)` y genera el archivo de salida indicado.
 
 ---
 
@@ -109,4 +109,3 @@ Si los cambios afectan a:
 - Flujos de trabajo, comandos o reglas para agentes ➜ Actualizar `AGENT_GUIDELINES.md`.
 - Iniciativas de calidad o mejoras técnicas pendientes ➜ Actualizar `ROADMAP.md`.
 - Comentarios JSDoc / API en módulos ➜ Actualizar los comentarios del código fuente.
-
