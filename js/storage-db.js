@@ -13,14 +13,14 @@
   'use strict';
 
   const DB_NAME = 'ZeroChatDB';
-  const DB_VERSION = 3;
+  const DB_VERSION = 4;
   const STORES = Object.freeze({
     conversations: 'conversations',
     messages: 'messages',
     attachments: 'attachments',
     ragBranches: 'rag_branches',
     ragDocuments: 'rag_documents',
-    ragFiles: 'rag_files',
+    ragImages: 'rag_images',
     ragChunks: 'rag_chunks',
     ragMeta: 'rag_meta'
   });
@@ -81,10 +81,15 @@
     createIndex(store, 'by_branchId', 'branchId', { unique: false });
     createIndex(store, 'by_createdAt', 'createdAt', { unique: false });
 
-    if (!db.objectStoreNames.contains(STORES.ragFiles)) {
-      store = db.createObjectStore(STORES.ragFiles, { keyPath: 'documentId' });
+    // La versión anterior almacenaba archivos fuente completos en rag_files.
+    // El RAG solo conserva su representación consultable y las imágenes extraídas.
+    if (db.objectStoreNames.contains('rag_files')) {
+      db.deleteObjectStore('rag_files');
+    }
+    if (!db.objectStoreNames.contains(STORES.ragImages)) {
+      store = db.createObjectStore(STORES.ragImages, { keyPath: 'documentId' });
     } else {
-      store = transaction.objectStore(STORES.ragFiles);
+      store = transaction.objectStore(STORES.ragImages);
     }
     createIndex(store, 'by_branchId', 'branchId', { unique: false });
 

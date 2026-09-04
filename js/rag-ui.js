@@ -315,7 +315,6 @@
         btnExport.textContent = 'Exportando 0%...';
       }
       const { blob, filename } = await storage().exportBranchBlob(branchId, {
-        includeSources: false,
         compress: true,
         onProgress: ({ current, total, percent }) => {
           if (btnExport) btnExport.textContent = `Exportando ${percent}% (${current}/${total})...`;

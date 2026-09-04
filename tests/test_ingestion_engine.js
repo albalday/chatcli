@@ -220,7 +220,7 @@ trailer
     title: 'test-img.pdf',
     fileType: 'pdf',
     chunks: [{ order: 0, title: 'Frag 1', content: docResult.text }]
-  }, null, docResult.images);
+  }, docResult.images);
 
   const imagesFromStorage = await RagStorage.getDocumentImages(savedDoc.id);
   assert.strictEqual(imagesFromStorage.length, 1);

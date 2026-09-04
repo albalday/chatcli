@@ -1,6 +1,6 @@
 /**
  * IndexedDB persistence for the ZeroChat local knowledge base.
- * Documents, source files and retrieval chunks are stored independently in
+ * Documents, extracted images and retrieval chunks are stored independently in
  * ZeroChatDB. Search indexes are derived data and never the source of truth.
  */
 (function (root, factory) {
@@ -14,10 +14,10 @@
 
   const STORES = Database ? Database.STORES : {
     ragBranches: 'rag_branches', ragDocuments: 'rag_documents',
-    ragFiles: 'rag_files', ragChunks: 'rag_chunks', ragMeta: 'rag_meta'
+    ragImages: 'rag_images', ragChunks: 'rag_chunks', ragMeta: 'rag_meta'
   };
   const memory = {
-    branches: new Map(), documents: new Map(), files: new Map(), chunks: new Map(), meta: new Map()
+    branches: new Map(), documents: new Map(), images: new Map(), chunks: new Map(), meta: new Map()
   };
 
   class RagStorageError extends Error {
@@ -42,49 +42,6 @@
 
   function isQuotaError(error) {
     return Boolean(error && (error.name === 'QuotaExceededError' || error.name === 'NS_ERROR_DOM_QUOTA_REACHED' || error.code === 22 || error.code === 1014));
-  }
-
-  function bytesToBase64(bytes) {
-    if (typeof Buffer !== 'undefined') return Buffer.from(bytes).toString('base64');
-    let binary = '';
-    const size = 0x8000;
-    for (let offset = 0; offset < bytes.length; offset += size) {
-      binary += String.fromCharCode(...bytes.subarray(offset, offset + size));
-    }
-    return btoa(binary);
-  }
-
-  function base64ToBytes(value) {
-    if (typeof Buffer !== 'undefined') return new Uint8Array(Buffer.from(value, 'base64'));
-    const binary = atob(value);
-    const bytes = new Uint8Array(binary.length);
-    for (let index = 0; index < binary.length; index++) bytes[index] = binary.charCodeAt(index);
-    return bytes;
-  }
-
-  async function serializeSource(source, mimeType) {
-    if (source === null || source === undefined) return null;
-    let bytes;
-    let type = mimeType || '';
-    if (typeof Blob !== 'undefined' && source instanceof Blob) {
-      bytes = new Uint8Array(await source.arrayBuffer());
-      type = source.type || type;
-    } else if (source instanceof ArrayBuffer) {
-      bytes = new Uint8Array(source);
-    } else if (ArrayBuffer.isView(source)) {
-      bytes = new Uint8Array(source.buffer, source.byteOffset, source.byteLength);
-    } else {
-      bytes = new TextEncoder().encode(String(source));
-      type = type || 'text/plain';
-    }
-    return { mimeType: type, base64: bytesToBase64(bytes) };
-  }
-
-  function deserializeSource(source) {
-    if (!source) return null;
-    if (typeof source.base64 !== 'string') throw new ValidationError('El archivo de respaldo contiene una fuente inválida.');
-    const bytes = base64ToBytes(source.base64);
-    return typeof Blob !== 'undefined' ? new Blob([bytes], { type: String(source.mimeType || '') }) : bytes;
   }
 
   async function openDatabase() {
@@ -282,38 +239,37 @@
       for (const doc of docs) await deleteDocument(doc.id);
       return { success: true, deletedBranchId: id, deletedDocumentsCount: docs.length };
     }
-    const tx = db.transaction([STORES.ragBranches, STORES.ragDocuments, STORES.ragFiles, STORES.ragChunks], 'readwrite');
+    const tx = db.transaction([STORES.ragBranches, STORES.ragDocuments, STORES.ragImages, STORES.ragChunks], 'readwrite');
     tx.objectStore(STORES.ragBranches).delete(id);
     await Promise.all([
       deleteByIndex(tx.objectStore(STORES.ragDocuments), 'by_branchId', id),
-      deleteByIndex(tx.objectStore(STORES.ragFiles), 'by_branchId', id),
+      deleteByIndex(tx.objectStore(STORES.ragImages), 'by_branchId', id),
       deleteByIndex(tx.objectStore(STORES.ragChunks), 'by_branchId', id)
     ]);
     await transactionDone(tx);
     return { success: true, deletedBranchId: id, deletedDocumentsCount: docs.length };
   }
 
-  async function saveDocument(data, sourceFile = null, images = []) {
+  async function saveDocument(data, images = []) {
     const docImages = Array.isArray(images) ? images : [];
     const { document, chunks } = validateDocument({ ...data, imageCount: docImages.length });
     if (!(await getBranchById(document.branchId))) throw new NotFoundError(`No existe la rama ${document.branchId}.`);
     const db = await openDatabase();
     if (!db) {
       memory.documents.set(document.id, document);
-      if (sourceFile !== null && sourceFile !== undefined || docImages.length > 0) {
-        memory.files.set(document.id, { documentId: document.id, branchId: document.branchId, blob: sourceFile, images: docImages });
+      if (docImages.length > 0) {
+        memory.images.set(document.id, { documentId: document.id, branchId: document.branchId, images: docImages });
       }
       chunks.forEach(chunk => memory.chunks.set(chunk.id, chunk));
       return { ...document };
     }
     try {
-      const tx = db.transaction([STORES.ragDocuments, STORES.ragFiles, STORES.ragChunks], 'readwrite');
+      const tx = db.transaction([STORES.ragDocuments, STORES.ragImages, STORES.ragChunks], 'readwrite');
       tx.objectStore(STORES.ragDocuments).add(document);
-      if (sourceFile !== null && sourceFile !== undefined || docImages.length > 0) {
-        tx.objectStore(STORES.ragFiles).put({
+      if (docImages.length > 0) {
+        tx.objectStore(STORES.ragImages).put({
           documentId: document.id,
           branchId: document.branchId,
-          blob: sourceFile,
           images: docImages
         });
       }
@@ -331,11 +287,11 @@
     if (!documentId) return [];
     const db = await openDatabase();
     if (!db) {
-      const rec = memory.files.get(String(documentId));
+      const rec = memory.images.get(String(documentId));
       return rec?.images || [];
     }
-    const tx = db.transaction(STORES.ragFiles, 'readonly');
-    const rec = await requestResult(tx.objectStore(STORES.ragFiles).get(String(documentId)));
+    const tx = db.transaction(STORES.ragImages, 'readonly');
+    const rec = await requestResult(tx.objectStore(STORES.ragImages).get(String(documentId)));
     return rec?.images || [];
   }
 
@@ -428,26 +384,18 @@
     return null;
   }
 
-  async function getSourceFile(documentId) {
-    const db = await openDatabase();
-    if (!db) return memory.files.get(documentId)?.blob || null;
-    const tx = db.transaction(STORES.ragFiles, 'readonly');
-    const record = await requestResult(tx.objectStore(STORES.ragFiles).get(String(documentId)));
-    return record ? record.blob : null;
-  }
-
   async function deleteDocument(id) {
     const document = await getDocumentById(id);
     if (!document) return false;
     const db = await openDatabase();
     if (!db) {
-      memory.documents.delete(id); memory.files.delete(id);
+      memory.documents.delete(id); memory.images.delete(id);
       for (const [chunkId, chunk] of memory.chunks) if (chunk.documentId === id) memory.chunks.delete(chunkId);
       return true;
     }
-    const tx = db.transaction([STORES.ragDocuments, STORES.ragFiles, STORES.ragChunks], 'readwrite');
+    const tx = db.transaction([STORES.ragDocuments, STORES.ragImages, STORES.ragChunks], 'readwrite');
     tx.objectStore(STORES.ragDocuments).delete(id);
-    tx.objectStore(STORES.ragFiles).delete(id);
+    tx.objectStore(STORES.ragImages).delete(id);
     await deleteByIndex(tx.objectStore(STORES.ragChunks), 'by_documentId', id);
     await transactionDone(tx);
     return true;
@@ -471,7 +419,7 @@
       Object.values(memory).forEach(store => store.clear());
       return true;
     }
-    const names = [STORES.ragBranches, STORES.ragDocuments, STORES.ragFiles, STORES.ragChunks, STORES.ragMeta];
+    const names = [STORES.ragBranches, STORES.ragDocuments, STORES.ragImages, STORES.ragChunks, STORES.ragMeta];
     const tx = db.transaction(names, 'readwrite');
     names.forEach(name => tx.objectStore(name).clear());
     await transactionDone(tx);
@@ -482,7 +430,6 @@
     const branch = await getBranchById(branchId);
     if (!branch) throw new NotFoundError(`No existe la rama ${branchId}.`);
     const documents = await getDocumentsByBranch(branchId);
-    const includeSources = options.includeSources !== false;
     const onProgress = typeof options.onProgress === 'function' ? options.onProgress : null;
     const total = documents.length;
     let current = 0;
@@ -490,9 +437,6 @@
     for (const document of documents) {
       const chunks = await getChunksByDocument(document.id);
       const images = await getDocumentImages(document.id);
-      const source = includeSources
-        ? await serializeSource(await getSourceFile(document.id), document.mimeType)
-        : null;
       exportedDocuments.push({
         id: document.id,
         title: document.title,
@@ -500,7 +444,6 @@
         mimeType: document.mimeType,
         fileSize: document.fileSize,
         imageCount: document.imageCount || (images ? images.length : 0),
-        source,
         images: (images && images.length > 0) ? images : undefined,
         chunks: chunks.map(chunk => ({
           order: chunk.order,
@@ -520,7 +463,7 @@
     }
     return {
       schema: 'zerochat-knowledge',
-      version: 1,
+      version: 2,
       exportedAt: new Date().toISOString(),
       branch: { name: branch.name, description: branch.description, language: branch.language },
       documents: exportedDocuments
@@ -535,7 +478,6 @@
       .replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'conocimiento';
 
     const compress = options.compress !== false && typeof CompressionStream !== 'undefined';
-    const includeSources = Boolean(options.includeSources);
     const onProgress = typeof options.onProgress === 'function' ? options.onProgress : null;
     const total = documents.length;
     let current = 0;
@@ -550,7 +492,7 @@
 
       const headerObj = {
         schema: 'zerochat-knowledge',
-        version: 1,
+        version: 2,
         exportedAt: new Date().toISOString(),
         branch: { name: branch.name, description: branch.description, language: branch.language }
       };
@@ -561,9 +503,6 @@
       for (const document of documents) {
         const chunks = await getChunksByDocument(document.id);
         const images = await getDocumentImages(document.id);
-        const source = includeSources
-          ? await serializeSource(await getSourceFile(document.id), document.mimeType)
-          : null;
         const docRecord = {
           id: document.id,
           title: document.title,
@@ -571,7 +510,6 @@
           mimeType: document.mimeType,
           fileSize: document.fileSize,
           imageCount: document.imageCount || (images ? images.length : 0),
-          source,
           images: (images && images.length > 0) ? images : undefined,
           chunks: chunks.map(chunk => ({
             order: chunk.order,
@@ -604,7 +542,7 @@
       };
     }
 
-    const backup = await exportBranch(branchId, { includeSources, onProgress });
+    const backup = await exportBranch(branchId, { onProgress });
     const jsonStr = JSON.stringify(backup);
     const plainBlob = new Blob([jsonStr], { type: 'application/json' });
     return {
@@ -620,7 +558,7 @@
       try { data = JSON.parse(data); }
       catch (error) { throw new ValidationError('El respaldo no contiene JSON válido.', { error }); }
     }
-    if (!data || data.schema !== 'zerochat-knowledge' || data.version !== 1 || !data.branch || !Array.isArray(data.documents)) {
+    if (!data || data.schema !== 'zerochat-knowledge' || data.version !== 2 || !data.branch || !Array.isArray(data.documents)) {
       throw new ValidationError('Formato de respaldo de conocimiento no compatible.');
     }
     const branch = await createBranch(data.branch);
@@ -655,7 +593,7 @@
           fileSize: document.fileSize,
           imageCount: document.imageCount || (document.images ? document.images.length : 0),
           chunks: remappedChunks
-        }, deserializeSource(document.source), document.images || []);
+        }, document.images || []);
         current++;
         if (typeof onProgress === 'function') {
           onProgress({ current, total, percent: Math.round((current / total) * 100), docTitle: document.title });
@@ -674,12 +612,12 @@
   return {
     createBranch, getBranches, getBranchById, updateBranch, deleteBranch,
     saveDocument, getDocumentsByBranch, getDocumentById,
-    getChunksByBranch, getChunksByDocument, getChunkById, getSourceFile, deleteDocument,
+    getChunksByBranch, getChunksByDocument, getChunkById, deleteDocument,
     getDocumentImages, getDocumentImage,
     getStorageEstimate, requestPersistentStorage, clearAllData, exportBranch, exportBranchBlob, importBranch, openDatabase,
     RagStorageError, ValidationError, QuotaExceededError, NotFoundError,
     DB_NAME: Database?.DB_NAME || 'ZeroChatDB', DB_VERSION: Database?.DB_VERSION || 2,
     STORE_BRANCHES: STORES.ragBranches, STORE_DOCUMENTS: STORES.ragDocuments,
-    STORE_FILES: STORES.ragFiles, STORE_CHUNKS: STORES.ragChunks
+    STORE_IMAGES: STORES.ragImages, STORE_CHUNKS: STORES.ragChunks
   };
 });

@@ -6,10 +6,10 @@ beforeEach(async () => RagStorage.clearAllData());
 
 test('RagStorage - usa el esquema RAG unificado de ZeroChatDB', () => {
   assert.equal(RagStorage.DB_NAME, 'ZeroChatDB');
-  assert.equal(RagStorage.DB_VERSION, 3);
+  assert.equal(RagStorage.DB_VERSION, 4);
   assert.equal(RagStorage.STORE_BRANCHES, 'rag_branches');
   assert.equal(RagStorage.STORE_DOCUMENTS, 'rag_documents');
-  assert.equal(RagStorage.STORE_FILES, 'rag_files');
+  assert.equal(RagStorage.STORE_IMAGES, 'rag_images');
   assert.equal(RagStorage.STORE_CHUNKS, 'rag_chunks');
 });
 
@@ -24,26 +24,24 @@ test('RagStorage - CRUD de ramas', async () => {
   assert.equal(updated.description, 'Documentación técnica');
 });
 
-test('RagStorage - guarda metadatos, archivo original y chunks por separado', async () => {
+test('RagStorage - guarda metadatos y chunks por separado sin archivo fuente', async () => {
   const branch = await RagStorage.createBranch('Arquitectura');
-  const source = new Uint8Array([37, 80, 68, 70]);
   const document = await RagStorage.saveDocument({
     branchId: branch.id,
     title: 'manual.pdf',
     fileType: 'pdf',
     mimeType: 'application/pdf',
-    fileSize: source.byteLength,
+    fileSize: 4,
     chunks: [
       { title: 'CPU', content: 'Instalación del procesador LGA1155.', pageStart: 1, pageEnd: 2 },
       { title: 'RAM', content: 'Configuración de memoria DDR3.', pageStart: 3, pageEnd: 3 }
     ]
-  }, source);
+  });
 
   const stored = await RagStorage.getDocumentById(document.id);
   assert.equal(stored.chunkCount, 2);
   assert.equal(stored.imageCount, 0);
   assert.equal(stored.chunks, undefined);
-  assert.deepEqual(await RagStorage.getSourceFile(document.id), source);
 
   const chunks = await RagStorage.getChunksByDocument(document.id);
   assert.equal(chunks.length, 2);
@@ -56,7 +54,7 @@ test('RagStorage - guarda el número de imágenes como metadato del documento', 
   const branch = await RagStorage.createBranch('Imágenes');
   const document = await RagStorage.saveDocument({
     branchId: branch.id, title: 'informe.pdf', fileType: 'pdf', chunks: [{ content: 'Informe con gráfico.' }]
-  }, null, [{ id: 'img_1' }, { id: 'img_2' }]);
+  }, [{ id: 'img_1' }, { id: 'img_2' }]);
 
   assert.equal(document.imageCount, 2);
   assert.equal((await RagStorage.getDocumentById(document.id)).imageCount, 2);
@@ -96,12 +94,12 @@ test('RagStorage - exporta e importa únicamente el formato actual', async () =>
     mimeType: 'text/plain',
     fileSize: 5,
     chunks: [{ title: 'Nota', content: 'cinco' }]
-  }, 'cinco');
+  });
 
   const backup = await RagStorage.exportBranch(branch.id);
   assert.equal(backup.schema, 'zerochat-knowledge');
-  assert.equal(backup.version, 1);
-  assert.equal(backup.documents[0].source.base64, 'Y2luY28=');
+  assert.equal(backup.version, 2);
+  assert.equal(backup.documents[0].source, undefined);
 
   await RagStorage.clearAllData();
   const restoredBranch = await RagStorage.importBranch(JSON.stringify(backup));
@@ -109,7 +107,6 @@ test('RagStorage - exporta e importa únicamente el formato actual', async () =>
   assert.equal(restoredBranch.name, 'Respaldo');
   assert.equal(restoredDocuments.length, 1);
   assert.equal((await RagStorage.getChunksByDocument(restoredDocuments[0].id))[0].content, 'cinco');
-  assert.equal(await (await RagStorage.getSourceFile(restoredDocuments[0].id)).text(), 'cinco');
 
   await assert.rejects(
     () => RagStorage.importBranch({ schema: 'unsupported-format', version: 99, branch: {}, documents: [] }),
@@ -159,7 +156,7 @@ test('RagStorage - exporta e importa información de imágenes y reasigna refere
     chunks: [
       { order: 0, title: 'Sección con gráfico', content: 'Aquí está el balance: ![Balance](rag-image://doc_original:img_1)' }
     ]
-  }, null, [
+  }, [
     { id: 'img_1', page: 1, mimeType: 'image/jpeg', dataUrl: 'data:image/jpeg;base64,1234', label: 'Balance' }
   ]);
 

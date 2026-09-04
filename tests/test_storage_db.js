@@ -19,29 +19,26 @@ test('ZeroChatDB - crea el esquema compartido completo', async () => {
 
   const tx = db.transaction([
     Database.STORES.ragDocuments,
-    Database.STORES.ragFiles,
+    Database.STORES.ragImages,
     Database.STORES.ragChunks
   ], 'readonly');
   assert.ok(tx.objectStore(Database.STORES.ragDocuments).indexNames.contains('by_branchId'));
-  assert.ok(tx.objectStore(Database.STORES.ragFiles).indexNames.contains('by_branchId'));
+  assert.ok(tx.objectStore(Database.STORES.ragImages).indexNames.contains('by_branchId'));
   assert.ok(tx.objectStore(Database.STORES.ragChunks).indexNames.contains('by_documentId'));
 });
 
-test('ZeroChatDB - conserva Blob, metadatos y chunks en almacenes separados', async () => {
+test('ZeroChatDB - conserva imágenes, metadatos y chunks en almacenes separados', async () => {
   const branch = await RagStorage.createBranch('Persistencia real');
-  const source = new Blob(['contenido original'], { type: 'text/plain' });
   const document = await RagStorage.saveDocument({
     branchId: branch.id,
-    title: 'original.txt',
-    fileType: 'txt',
-    mimeType: 'text/plain',
-    fileSize: source.size,
+    title: 'informe.pdf',
+    fileType: 'pdf',
+    mimeType: 'application/pdf',
+    fileSize: 123,
     chunks: [{ title: 'Fragmento', content: 'contenido original' }]
-  }, source);
+  }, [{ id: 'img_1', dataUrl: 'data:image/jpeg;base64,123' }]);
 
-  const restored = await RagStorage.getSourceFile(document.id);
-  assert.ok(restored instanceof Blob);
-  assert.equal(await restored.text(), 'contenido original');
+  assert.equal((await RagStorage.getDocumentImages(document.id))[0].id, 'img_1');
   assert.equal((await RagStorage.getDocumentsByBranch(branch.id))[0].chunkCount, 1);
   assert.equal((await RagStorage.getChunksByDocument(document.id))[0].content, 'contenido original');
 });
@@ -53,12 +50,12 @@ test('ZeroChatDB - elimina en cascada toda una rama', async () => {
     title: 'descartable.md',
     fileType: 'md',
     chunks: [{ content: '# Temporal' }]
-  }, new Blob(['# Temporal'], { type: 'text/markdown' }));
+  });
 
   await RagStorage.deleteBranch(branch.id);
 
   assert.equal(await RagStorage.getBranchById(branch.id), null);
   assert.equal(await RagStorage.getDocumentById(document.id), null);
-  assert.equal(await RagStorage.getSourceFile(document.id), null);
+  assert.deepEqual(await RagStorage.getDocumentImages(document.id), []);
   assert.deepEqual(await RagStorage.getChunksByBranch(branch.id), []);
 });

@@ -216,7 +216,7 @@
           id: documentId,
           branchId, title: fileName, fileType, mimeType: file?.type || '',
           fileSize: Number(file?.size) || preparedText.length, chunks
-        }, file, images);
+        }, images);
         if (index?.invalidateBranch) index.invalidateBranch(branchId);
         result.processed++;
         result.documents.push(document);
