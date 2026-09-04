@@ -7,7 +7,7 @@
 
   const definition = {
     name: 'search_knowledge_base',
-    description: 'Busca información en la base de conocimiento local. Usa scope="document" cuando la pregunta señale una ficha, informe, expediente, producto u otra fuente identificable, y proporciona documentHint con sus términos distintivos. Usa scope="corpus" para comparaciones, síntesis o información repartida entre fuentes. Usa scope="auto" cuando el alcance no esté claro. El resultado indica el alcance realmente aplicado y devuelve fragmentos con sus identificadores.',
+    description: 'Busca evidencia relevante en la base de conocimiento local para responder a la consulta del usuario. Devuelve fragmentos breves e identificadores para el razonamiento interno; úsalo como fuente, no como contenido que debas reproducir. Selecciona scope="document" con documentHint para una fuente identificable, scope="corpus" para comparaciones o información distribuida, y scope="auto" si no está claro.',
     parameters: {
       type: 'object',
       properties: {

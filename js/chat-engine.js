@@ -221,8 +221,8 @@
         toolsGuide = getToolsSystemPromptGuide(appConfig, lang);
       } else {
         toolsGuide = (lang === 'en')
-          ? `*Workflow instruction:* Once you receive tool results in the conversation, synthesize the findings and write a comprehensive, well-structured final answer to the user, citing sources. Do not stop without providing a complete summary.`
-          : `*Instrucción de flujo:* Una vez recibidos los resultados de las herramientas en la conversación, sintetiza los hallazgos y redacta una respuesta final completa, bien estructurada y detallada para el usuario, citando las fuentes consultadas. No finalices la respuesta sin proporcionar el resumen completo.`;
+          ? `*Workflow instruction:* After using tools, provide a final answer to the user, not a consultation log. Answer their question first and use tool results only as evidence. Do not show raw tool output.`
+          : `*Instrucción de flujo:* Tras usar herramientas, entrega una respuesta final al usuario, no un registro de la consulta. Responde primero a su pregunta y usa los resultados solo como evidencia. No muestres la salida bruta de herramientas.`;
       }
     }
 
@@ -234,8 +234,8 @@
 
     if (activeBranchId || (Array.isArray(activeBranchIds) && activeBranchIds.length > 0)) {
       const ragInstruction = (lang === 'en')
-        ? `*Knowledge Base active:* Use 'search_knowledge_base' and 'read_knowledge_chunk' to consult the user's private local documents before answering related questions. Use 'list_documents' only when you explicitly need a complete inventory.`
-        : `*Base de Conocimiento activa:* Usa 'search_knowledge_base' y 'read_knowledge_chunk' para consultar los documentos privados locales antes de responder preguntas relacionadas. Usa 'list_documents' solo cuando necesites explícitamente un inventario completo.`;
+        ? `*Knowledge Base active:* Follow the document-consultation protocol above. Use 'list_documents' only when you explicitly need a complete inventory.`
+        : `*Base de Conocimiento activa:* Sigue el protocolo de consulta documental anterior. Usa 'list_documents' solo cuando necesites explícitamente un inventario completo.`;
       toolsGuide = toolsGuide ? `${toolsGuide}\n\n${ragInstruction}` : ragInstruction;
     }
 

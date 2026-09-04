@@ -453,8 +453,8 @@
       if (guides.length === 0) return '';
 
       return isEs
-        ? `\n\n[HERRAMIENTAS Y FUNCIONES DISPONIBLES]:\nPuedes utilizar las siguientes herramientas cuando sea necesario para responder con precisión:\n${guides.join('\n')}\n*Instrucción de flujo:* Una vez recibidos los resultados de las herramientas en la conversación, sintetiza los hallazgos y redacta una respuesta final completa, bien estructurada y detallada para el usuario, citando las fuentes consultadas. No finalices la respuesta sin proporcionar el resumen completo.`
-        : `\n\n[AVAILABLE TOOLS AND FUNCTIONS]:\nYou can use the following tools when needed to answer accurately:\n${guides.join('\n')}\n*Workflow instruction:* Once tool results are received, synthesize the findings and write a complete, well-structured, detailed final answer for the user, citing consulted sources. Do not end the response without providing the full summary.`;
+        ? `\n\n[HERRAMIENTAS Y FUNCIONES DISPONIBLES]:\nPuedes utilizar las siguientes herramientas cuando sea necesario para responder con precisión:\n${guides.join('\n')}\n*Instrucción de flujo:* Tras usar herramientas, entrega una respuesta final al usuario, no un registro de la consulta. Responde primero a su pregunta y usa los resultados solo como evidencia. No muestres la salida bruta de herramientas.`
+        : `\n\n[AVAILABLE TOOLS AND FUNCTIONS]:\nYou can use the following tools when needed to answer accurately:\n${guides.join('\n')}\n*Workflow instruction:* After using tools, provide a final answer to the user, not a consultation log. Answer their question first and use tool results only as evidence. Do not show raw tool output.`;
     }
 
     /**

@@ -7,7 +7,7 @@
 
   const definition = {
     name: 'read_knowledge_chunk',
-    description: 'Lee el texto completo de un fragmento obtenido previamente con search_knowledge_base.',
+    description: 'Lee el contenido completo de un fragmento localizado previamente para resolver una duda concreta necesaria para la respuesta. Úsalo como evidencia interna; después sintetiza y responde, sin copiar el fragmento completo salvo petición explícita del usuario.',
     parameters: {
       type: 'object',
       properties: { chunkId: { type: 'string', description: 'Identificador exacto del fragmento (chunkId).' } },
