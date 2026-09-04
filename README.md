@@ -42,7 +42,7 @@ npm run test:browser    # suite visual de Chromium/Playwright
 npm run build
 ```
 
-`npm run build` genera el bundle de Orama para navegador y después reconstruye `zerochat.html`. También puede reconstruirse únicamente el HTML con `python3 bundle.py` cuando el vendor ya está actualizado.
+`npm run build` genera el bundle de Orama para navegador y después reconstruye `zerochat.html`. También puede reconstruirse únicamente el HTML con `python3 bundle.py index.html zerochat.html` cuando el vendor ya está actualizado. El empaquetador toma como fuente de verdad las etiquetas locales `<link rel="stylesheet">` y `<script src>` del HTML de entrada, por lo que puede reutilizarse con cualquier par de rutas de entrada y salida.
 
 ### Abrir el mismo proyecto en otro ordenador
 

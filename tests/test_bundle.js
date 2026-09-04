@@ -9,10 +9,11 @@ const ROOT_DIR = path.resolve(__dirname, '..');
 const TEST_PROD_PATH = path.join(__dirname, 'tmp_test_prod.html');
 const TEST_FALLBACK_PATH = path.join(__dirname, 'tmp_test_fallback.html');
 const TEST_DEV_PATH = path.join(__dirname, 'tmp_test_dev.html');
+const TEST_GENERIC_DIR = path.join(__dirname, 'tmp_bundle_generic');
 
 test('Bundler - Generación en modo Producción (Gzip Base64 Level 9)', () => {
   try {
-    const stdout = execSync(`python3 bundle.py --mode=prod -o "${TEST_PROD_PATH}"`, { cwd: ROOT_DIR, encoding: 'utf-8' });
+    const stdout = execSync(`python3 bundle.py index.html "${TEST_PROD_PATH}" --mode=prod`, { cwd: ROOT_DIR, encoding: 'utf-8' });
     assert.ok(stdout.includes("generado con éxito"));
     assert.ok(fs.existsSync(TEST_PROD_PATH));
 
@@ -68,7 +69,7 @@ test('Bundler - Generación en modo Producción (Gzip Base64 Level 9)', () => {
 
 test('Bundler - Generación en modo Fallback Puro (Python Fallback CSS)', () => {
   try {
-    const stdout = execSync(`python3 bundle.py --fallback-only -o "${TEST_FALLBACK_PATH}"`, { cwd: ROOT_DIR, encoding: 'utf-8' });
+    const stdout = execSync(`python3 bundle.py index.html "${TEST_FALLBACK_PATH}" --fallback-only`, { cwd: ROOT_DIR, encoding: 'utf-8' });
     assert.ok(stdout.includes('Python Fallback'));
     assert.ok(fs.existsSync(TEST_FALLBACK_PATH));
 
@@ -91,7 +92,7 @@ test('Bundler - Generación en modo Fallback Puro (Python Fallback CSS)', () => 
 
 test('Bundler - Generación en modo Desarrollo (--mode=dev)', () => {
   try {
-    const stdout = execSync(`python3 bundle.py --mode=dev -o "${TEST_DEV_PATH}"`, { cwd: ROOT_DIR, encoding: 'utf-8' });
+    const stdout = execSync(`python3 bundle.py index.html "${TEST_DEV_PATH}" --mode=dev`, { cwd: ROOT_DIR, encoding: 'utf-8' });
     assert.ok(stdout.includes('Modo: DEV'));
     assert.ok(fs.existsSync(TEST_DEV_PATH));
 
@@ -100,5 +101,31 @@ test('Bundler - Generación en modo Desarrollo (--mode=dev)', () => {
     assert.ok(content.includes('id="compressed-js"'));
   } finally {
     if (fs.existsSync(TEST_DEV_PATH)) fs.unlinkSync(TEST_DEV_PATH);
+  }
+});
+
+test('Bundler - Detecta recursos locales desde cualquier HTML de entrada', () => {
+  const sourcePath = path.join(TEST_GENERIC_DIR, 'pages', 'app.html');
+  const outputPath = path.join(TEST_GENERIC_DIR, 'dist', 'portable.html');
+  try {
+    fs.mkdirSync(path.join(TEST_GENERIC_DIR, 'pages', 'assets'), { recursive: true });
+    fs.mkdirSync(path.join(TEST_GENERIC_DIR, 'dist'), { recursive: true });
+    fs.writeFileSync(path.join(TEST_GENERIC_DIR, 'pages', 'assets', 'base.css'), 'body { color: red; }');
+    fs.writeFileSync(path.join(TEST_GENERIC_DIR, 'pages', 'assets', 'app.css'), '@import "base.css";\nmain { display: grid; }');
+    fs.writeFileSync(path.join(TEST_GENERIC_DIR, 'pages', 'assets', 'first.js'), 'globalThis.bundleOrder = ["first"];');
+    fs.writeFileSync(path.join(TEST_GENERIC_DIR, 'pages', 'assets', 'second.js'), 'globalThis.bundleOrder.push("second");');
+    fs.writeFileSync(sourcePath, `<!DOCTYPE html><html><head><link rel="stylesheet" href="assets/app.css"></head><body><main>OK</main><script src="assets/first.js"></script><script src="assets/second.js"></script></body></html>`);
+
+    execSync(`python3 bundle.py "${sourcePath}" "${outputPath}" --fallback-only`, { cwd: ROOT_DIR, encoding: 'utf-8' });
+    const content = fs.readFileSync(outputPath, 'utf-8');
+    assert.equal(/<link[^>]*href=["']assets\/app\.css/i.test(content), false);
+    assert.equal(/<script[^>]*src=["']assets\//i.test(content), false);
+    assert.ok(content.includes('body{color:red}'));
+
+    const match = content.match(/<script[^>]*id=["']compressed-js["'][^>]*>([\s\S]*?)<\/script>/i);
+    const js = zlib.gunzipSync(Buffer.from(match[1].trim(), 'base64')).toString('utf-8');
+    assert.ok(js.indexOf('bundleOrder = ["first"]') < js.indexOf('bundleOrder.push("second")'));
+  } finally {
+    fs.rmSync(TEST_GENERIC_DIR, { recursive: true, force: true });
   }
 });
