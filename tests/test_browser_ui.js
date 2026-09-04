@@ -1164,6 +1164,10 @@ test('Browser UI - Iconos Fase 5: Iconos Vectoriales SVG en Modales, Pestañas, 
     await page.click('#rag-modal-tabs-nav [data-rag-tab="tab-rag-manage"]');
     await page.waitForSelector('#rag-branch-details-card');
 
+    // Verificar que el textbox en la pestaña de documentos fue eliminado para ganar espacio
+    const workspaceHasTextbox = await page.$eval('#rag-manage-workspace', el => !!el.querySelector('.rag-workspace-summary'));
+    assert.equal(workspaceHasTextbox, false, 'El workspace de documentos no debe tener el textbox de resumen para ganar espacio');
+
     // Pulsar Nueva rama y rellenar campos en pantalla
     await page.click('#btn-rag-new-branch');
     await page.fill('#rag-branch-name-input', 'Rama Playwright');
@@ -1184,6 +1188,17 @@ test('Browser UI - Iconos Fase 5: Iconos Vectoriales SVG en Modales, Pestañas, 
     // Verificar que tras guardar vuelve a ser "Nueva rama"
     const btnTextAfterSave = await page.$eval('#btn-rag-new-branch', el => el.textContent.trim());
     assert.equal(btnTextAfterSave, 'Nueva rama', 'Tras guardar el botón debe volver a ser "Nueva rama"');
+
+    // Ahora que la rama existe y está seleccionada en Documentos, verificar el resumen en el pie del modal
+    const footerSummary = await page.evaluate(() => {
+      const el = document.getElementById('rag-branch-summary-footer');
+      return {
+        text: el?.textContent?.trim() || '',
+        display: el ? window.getComputedStyle(el).display : 'none'
+      };
+    });
+    assert.ok(footerSummary.text.includes('Esta rama contiene'), 'El pie del modal debe contener el resumen "Esta rama contiene"');
+    assert.notEqual(footerSummary.display, 'none', 'El resumen en el pie del modal debe ser visible en la pestaña Documentos');
 
     const createdBranch = await page.evaluate(async () => {
       const branches = await window.ChatRagStorage.getBranches();

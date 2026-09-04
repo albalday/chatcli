@@ -179,6 +179,28 @@
     return `<div class="rag-ingestion-global-progress"><div><strong>Carga global: ${finished} de ${total}</strong><span>${status}</span></div><progress max="100" value="${overallPercent}"></progress><span>${overallPercent}%</span></div>`;
   }
 
+  function syncFooterSummaryVisibility(isManage) {
+    const el = document.getElementById('rag-branch-summary-footer');
+    const sep = document.getElementById('rag-footer-separator');
+    const active = typeof isManage === 'boolean'
+      ? isManage
+      : !!document.querySelector('#rag-modal-tabs-nav [data-rag-tab="tab-rag-manage"]')?.classList.contains('active');
+    const hasText = !!(el && el.textContent.trim());
+    if (el) el.style.display = (active && hasText) ? '' : 'none';
+    if (sep) sep.style.display = (active && hasText) ? '' : 'none';
+  }
+
+  function updateBranchSummaryFooter(summaryText) {
+    const el = document.getElementById('rag-branch-summary-footer');
+    if (!el) return;
+    if (summaryText) {
+      el.innerHTML = `Esta rama contiene <strong>${escapeHtml(summaryText)}</strong>.`;
+    } else {
+      el.innerHTML = '';
+    }
+    syncFooterSummaryVisibility();
+  }
+
   async function renderWorkspace(branchId) {
     if (typeof document === 'undefined') return;
     await updateBranchFields(branchId);
@@ -186,6 +208,7 @@
     if (!workspace) return;
     if (!branchId) {
       workspace.innerHTML = '<div class="rag-empty-state">Escribe un nombre arriba y pulsa "Crear rama" para empezar.</div>';
+      updateBranchSummaryFooter('');
       return;
     }
     const documents = await storage().getDocumentsByBranch(branchId);
@@ -193,8 +216,8 @@
       documentCount: documents.length,
       totalBytes: documents.reduce((sum, document) => sum + (Number(document.fileSize) || 0), 0)
     });
+    updateBranchSummaryFooter(branchSummary);
     workspace.innerHTML = `
-      <div class="rag-workspace-summary">Esta rama contiene <strong>${escapeHtml(branchSummary)}</strong>.</div>
       <label class="rag-dropzone" id="rag-dropzone">
         <strong>Arrastra o selecciona archivos</strong>
         <span>PDF, Markdown o texto · guardado privado en IndexedDB</span>
@@ -552,6 +575,7 @@
       if (activeBtn) {
         navButtons.forEach(item => item.classList.toggle('active', item === activeBtn));
         document.querySelectorAll('#rag-modal .modal-tab-pane').forEach(pane => pane.classList.toggle('active', pane.id === activeBtn.dataset.ragTab));
+        syncFooterSummaryVisibility(activeBtn.dataset.ragTab === 'tab-rag-manage');
         if (activeBtn.dataset.ragTab === 'tab-rag-manage') await renderManageTab();
       }
       modal?.showModal();
@@ -592,7 +616,9 @@
     document.querySelectorAll('[data-rag-tab]').forEach(button => button.addEventListener('click', async () => {
       document.querySelectorAll('[data-rag-tab]').forEach(item => item.classList.toggle('active', item === button));
       document.querySelectorAll('#rag-modal .modal-tab-pane').forEach(pane => pane.classList.toggle('active', pane.id === button.dataset.ragTab));
-      if (button.dataset.ragTab === 'tab-rag-manage') await renderManageTab();
+      const isManage = button.dataset.ragTab === 'tab-rag-manage';
+      syncFooterSummaryVisibility(isManage);
+      if (isManage) await renderManageTab();
     }));
     updateToolbarStatus();
   }

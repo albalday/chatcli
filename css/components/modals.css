@@ -816,8 +816,7 @@ input:checked + .slider:before {
 }
 .rag-branch-select-card.active { border-color: var(--primary-color); background: var(--primary-light); }
 .rag-branch-select-card .toggle-card-info { display: grid; gap: 0.2rem; }
-.rag-branch-metrics, .rag-workspace-summary { color: var(--text-muted); font-size: 0.78rem; }
-.rag-workspace-summary { padding: 0.65rem 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: var(--bg-surface); }
+.rag-branch-metrics { color: var(--text-muted); font-size: 0.78rem; }
 
 .rag-manage-toolbar {
   display: flex;
@@ -881,7 +880,11 @@ input:checked + .slider:before {
 .rag-ingestion-global-progress progress { width: 100%; }
 .rag-ingestion-progress-recent { display: grid; gap: 0.5rem; }
 .rag-empty-state { padding: 2rem; text-align: center; color: var(--text-muted); }
-.rag-storage-quota-info { font-size: 0.75rem; color: var(--text-muted); }
+.modal-footer-info { display: flex; align-items: center; gap: 0.55rem; flex-wrap: wrap; font-size: 0.75rem; color: var(--text-muted); }
+.rag-branch-summary-footer { font-size: 0.75rem; color: var(--text-muted); }
+.rag-branch-summary-footer strong { color: var(--text-main, currentColor); font-weight: 600; }
+.rag-footer-separator { color: var(--text-muted); opacity: 0.6; }
+.rag-storage-quota-info { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.75rem; color: var(--text-muted); }
 .rag-help-container { display: grid; gap: 1rem; }
 
 /* Mantener Documentos y Ayuda en la misma escala tipográfica que Activar. */
