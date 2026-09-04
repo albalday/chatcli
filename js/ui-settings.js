@@ -274,31 +274,15 @@
 
   function openSettingsModal(elements, appConfig, callbacks = {}) {
     if (!elements || !elements.settingsDialog) return;
-    const activeProfileName = appConfig?.activeProfile?.id || appConfig?.activeProfileName || '';
-
-    if (typeof callbacks.populateProfileSelector === 'function') {
-      callbacks.populateProfileSelector(activeProfileName);
+    if (elements.settingsActiveProfileName) {
+      elements.settingsActiveProfileName.textContent = appConfig?.activeProfile?.name || t('connection_no_active_profile');
     }
-
-    if (elements.settingApiType) {
-      elements.settingApiType.value = appConfig?.apiType || 'openai';
-    }
-    if (elements.settingApiUrl) elements.settingApiUrl.value = appConfig?.apiUrl || 'http://localhost:1234/v1';
-    if (elements.settingApiKey) elements.settingApiKey.value = appConfig?.apiKey || '';
-    if (elements.settingModel) elements.settingModel.value = appConfig?.model || '';
     if (elements.settingSystemPrompt) elements.settingSystemPrompt.value = appConfig?.systemPrompt || '';
     if (elements.settingTemperature) elements.settingTemperature.value = appConfig?.temperature || '0.7';
     if (elements.temperatureVal) elements.temperatureVal.textContent = appConfig?.temperature || '0.7';
 
     applyTheme(elements, appConfig, appConfig?.theme || 'light');
     applyLanguage(elements, appConfig, appConfig?.language || 'es', callbacks);
-
-    if (elements.serverQueryStatus) elements.serverQueryStatus.style.display = 'none';
-    if (elements.profileActionFeedback) elements.profileActionFeedback.style.display = 'none';
-
-    if (typeof callbacks.loadCachedModels === 'function') {
-      callbacks.loadCachedModels();
-    }
 
     if (elements.agentToolsContainer) {
       renderAgentToolsUI(elements.agentToolsContainer, appConfig?.enabledTools || {});

@@ -140,6 +140,7 @@
       currentModelName: document.getElementById('current-model-name'),
       btnClearChat: document.getElementById('btn-clear-chat'),
       btnOpenSettings: document.getElementById('btn-open-settings'),
+      btnOpenProfiles: document.getElementById('btn-open-profiles'),
       btnLangQuick: document.getElementById('btn-lang-quick'),
       currentLangLabel: document.getElementById('current-lang-label'),
       messagesList: document.getElementById('messages-list'),
@@ -197,12 +198,18 @@
 
       // Modal de Configuración
       settingsDialog: document.getElementById('settings-dialog'),
+      settingsActiveProfileName: document.getElementById('settings-active-profile-name'),
       settingsForm: document.getElementById('settings-form'),
       btnCloseSettings: document.getElementById('btn-close-settings'),
       btnCancelSettings: document.getElementById('btn-cancel-settings'),
       btnResetSettings: document.getElementById('btn-reset-settings'),
       btnClearAllData: document.getElementById('btn-clear-all-data'),
       btnToggleKey: document.getElementById('btn-toggle-key'),
+      profilesDialog: document.getElementById('profiles-dialog'),
+      profilesForm: document.getElementById('profiles-form'),
+      btnManageProfiles: document.getElementById('btn-manage-profiles'),
+      btnCloseProfiles: document.getElementById('btn-close-profiles'),
+      btnCancelProfiles: document.getElementById('btn-cancel-profiles'),
       settingProfileName: document.getElementById('setting-profile-name'),
       profileSelectHelper: document.getElementById('profile-select-helper'),
       profileDatalist: document.getElementById('profile-datalist'),
@@ -486,6 +493,9 @@
     if (elements.currentProfileName) {
       const activeProf = config.activeProfile?.name || 'Configuración actual';
       elements.currentProfileName.textContent = activeProf;
+    }
+    if (elements.settingsActiveProfileName) {
+      elements.settingsActiveProfileName.textContent = config.activeProfile?.name || t('connection_no_active_profile');
     }
     if (elements.currentServerUrl) {
       elements.currentServerUrl.textContent = config.apiUrl || 'http://localhost:1234/v1';
@@ -1128,14 +1138,20 @@
   }
 
   function handleSaveProfile() {
-    const draft = gatherCurrentFormConfig();
-    const name = String(draft.activeProfileName || '').trim();
+    const name = String(elements.settingProfileName?.value || '').trim();
     if (!name || !Profiles.save) return;
     const existing = Profiles.findByName ? Profiles.findByName(name) : null;
+    const baseSettings = existing?.settings || getRuntimeConfig();
     const saved = Profiles.save({
       id: existing?.id || `profile:${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       name,
-      settings: draft
+      settings: {
+        ...baseSettings,
+        apiType: elements.settingApiType?.value || baseSettings.apiType,
+        apiUrl: elements.settingApiUrl?.value.trim() || baseSettings.apiUrl,
+        apiKey: elements.settingApiKey?.value.trim() || '',
+        model: elements.settingModel?.value.trim() || ''
+      }
     });
     populateProfileSelector(saved.id);
     showProfileFeedback(t('msg_profile_saved', { name }) || `Perfil "${name}" guardado con éxito.`, 'success');
@@ -1159,6 +1175,24 @@
         loadCachedModels,
         updateReasoningUI
       });
+    }
+  }
+
+  function openProfilesModal() {
+    if (!elements.profilesDialog) return;
+    const activeId = getRuntimeConfig().activeProfile?.id || '';
+    populateProfileSelector(activeId);
+    const activeProfile = Profiles.get?.(activeId);
+    applyProfileToForm(activeProfile?.settings || getRuntimeConfig());
+    if (elements.serverQueryStatus) elements.serverQueryStatus.style.display = 'none';
+    if (elements.profileActionFeedback) elements.profileActionFeedback.style.display = 'none';
+    if (typeof loadCachedModels === 'function') loadCachedModels();
+    if (typeof elements.profilesDialog.showModal === 'function') elements.profilesDialog.showModal();
+  }
+
+  function closeProfilesModal() {
+    if (elements.profilesDialog?.open && typeof elements.profilesDialog.close === 'function') {
+      elements.profilesDialog.close();
     }
   }
 
@@ -1733,14 +1767,19 @@
     if (elements.btnOpenSettings) {
       elements.btnOpenSettings.addEventListener('click', openSettingsModal);
     }
+    if (elements.btnOpenProfiles) {
+      elements.btnOpenProfiles.addEventListener('click', openProfilesModal);
+    }
     if (elements.badgeProfile) {
-      elements.badgeProfile.addEventListener('click', openSettingsModal);
+      elements.badgeProfile.addEventListener('click', (event) => {
+        if (event.target !== elements.activeProfileSelect) openProfilesModal();
+      });
     }
     if (elements.badgeServer) {
-      elements.badgeServer.addEventListener('click', openSettingsModal);
+      elements.badgeServer.addEventListener('click', openProfilesModal);
     }
     if (elements.badgeModel) {
-      elements.badgeModel.addEventListener('click', openSettingsModal);
+      elements.badgeModel.addEventListener('click', openProfilesModal);
     }
 
     // Barra Lateral de Chats (Sidebar)
@@ -1918,6 +1957,20 @@
     elements.btnResetSettings.addEventListener('click', handleResetSettings);
     if (elements.btnClearAllData) {
       elements.btnClearAllData.addEventListener('click', handleClearAllData);
+    }
+    if (elements.btnManageProfiles) {
+      elements.btnManageProfiles.addEventListener('click', openProfilesModal);
+    }
+    if (elements.btnCloseProfiles) {
+      elements.btnCloseProfiles.addEventListener('click', closeProfilesModal);
+    }
+    if (elements.btnCancelProfiles) {
+      elements.btnCancelProfiles.addEventListener('click', closeProfilesModal);
+    }
+    if (elements.profilesDialog) {
+      elements.profilesDialog.addEventListener('click', function (e) {
+        if (e.target === elements.profilesDialog) closeProfilesModal();
+      });
     }
 
     if (elements.profileSelectHelper) {

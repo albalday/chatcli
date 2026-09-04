@@ -606,14 +606,25 @@ test('Browser UI - Fase 6: Modales <dialog> Modernos con Blur y Tarjetas de Herr
     const isSecondTabActive = await tabButtons[1].evaluate(el => el.classList.contains('active'));
     assert.ok(isSecondTabActive, 'Hacer click en la pestaña debe marcarla como .active');
 
-    // 2b. Guardar perfil modifica el catálogo, no la configuración operativa.
+    // 2b. El mantenedor de perfiles es independiente de la configuración general.
     await tabButtons[0].click();
+    const connectionTab = await page.evaluate(() => ({
+      hasActiveProfile: !!document.getElementById('settings-active-profile-name'),
+      hasConnectionInputs: !!document.querySelector('#settings-dialog #setting-api-url'),
+      hasManageButton: !!document.getElementById('btn-manage-profiles')
+    }));
+    assert.ok(connectionTab.hasActiveProfile, 'La pestaña Conexión debe mostrar el perfil activo');
+    assert.equal(connectionTab.hasConnectionInputs, false, 'La pestaña Conexión no debe editar datos de perfil');
+    assert.ok(connectionTab.hasManageButton, 'La pestaña Conexión debe enlazar al mantenedor de perfiles');
+
+    await page.click('#btn-manage-profiles');
+    await page.waitForFunction(() => document.getElementById('profiles-dialog')?.open);
     await page.fill('#setting-profile-name', 'Perfil Temporal Playwright');
     await page.fill('#setting-api-url', 'http://playwright-test:1234/v1');
     await page.click('#btn-save-profile');
 
     const profileSaveResult = await page.evaluate(() => {
-      const dialog = document.getElementById('settings-dialog');
+      const dialog = document.getElementById('profiles-dialog');
       const feedback = document.getElementById('profile-action-feedback');
       const profile = window.ChatProfileRepository?.findByName?.('Perfil Temporal Playwright');
       const runtime = window.ChatConfig?.getActive?.();
@@ -625,12 +636,14 @@ test('Browser UI - Fase 6: Modales <dialog> Modernos con Blur y Tarjetas de Herr
       };
     });
 
-    assert.ok(profileSaveResult.isOpen, 'Guardar el perfil NO debe cerrar el diálogo modal');
+    assert.ok(profileSaveResult.isOpen, 'Guardar el perfil NO debe cerrar el mantenedor');
     assert.ok(profileSaveResult.feedbackVisible, 'Debe mostrar retroalimentación de guardado de perfil');
     assert.equal(profileSaveResult.savedUrl, 'http://playwright-test:1234/v1', 'Debe persistir el perfil en su repositorio');
     assert.notEqual(profileSaveResult.runtimeUrl, 'http://playwright-test:1234/v1', 'Guardar un perfil no debe activar sus datos');
 
-    // 3. Cerrar el modal con el botón de cerrar (sin dar a Guardar general)
+    // 3. Cerrar ambos modales sin guardar la configuración general.
+    await page.click('#btn-close-profiles');
+    await page.waitForFunction(() => !document.getElementById('profiles-dialog')?.open);
     await page.click('#btn-close-settings');
     await page.waitForFunction(() => !document.getElementById('settings-dialog')?.open);
     const isClosed = await page.$eval('#settings-dialog', el => !el.open);

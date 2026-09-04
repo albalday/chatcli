@@ -407,6 +407,35 @@ input:checked + .slider:before {
   align-items: center;
 }
 
+.connection-active-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.65rem;
+  padding: 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface-subtle);
+}
+
+.connection-active-card strong {
+  font-size: 1.05rem;
+  color: var(--text-main);
+}
+
+.connection-active-label {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.connection-active-card p {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
 /* Tarjeta enmarcada para visualizar y agrupar los parámetros del perfil */
 .profile-values-card {
   background-color: var(--bg-app);
