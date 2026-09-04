@@ -34,3 +34,11 @@ test('I18n - Traducciones del conocimiento local', () => {
   assert.ok(I18n.t('rag_help_storage_desc').includes('Orama'));
   assert.match(I18n.t('rag_help_llm_desc'), /low temperature/);
 });
+
+test('I18n - Título de la aplicación solo contiene ZeroChat y la versión', () => {
+  I18n.setLanguage('es', false);
+  assert.match(I18n.t('app_title'), /^ZeroChat v[^\s-]+$/);
+
+  I18n.setLanguage('en', false);
+  assert.match(I18n.t('app_title'), /^ZeroChat v[^\s-]+$/);
+});

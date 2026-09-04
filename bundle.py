@@ -23,6 +23,7 @@ Características principales:
 import argparse
 import base64
 import gzip
+import json
 import os
 import re
 import subprocess
@@ -141,6 +142,26 @@ def read_css_with_imports(css_path: str, import_stack: Tuple[str, ...] = ()) -> 
         return f"@media {media_query}{{{imported_css}}}" if media_query else imported_css
 
     return CSS_IMPORT_RE.sub(replace_import, css)
+
+
+def read_project_version(document_dir: str, raw_html: str = "") -> str:
+    """Lee la versión declarada del proyecto (package.json o título de index.html)."""
+    package_path = os.path.join(document_dir, "package.json")
+    try:
+        with open(package_path, "r", encoding="utf-8") as f:
+            version = json.load(f).get("version")
+        if isinstance(version, str) and version.strip():
+            return version.strip()
+    except (OSError, json.JSONDecodeError, AttributeError):
+        pass
+
+    # Intentar extraer desde la etiqueta <title>ZeroChat X.Y.Z</title>
+    if raw_html:
+        m = re.search(r'<title>\s*ZeroChat\s+v?([0-9]+\.[0-9]+(?:\.[0-9]+)?)\s*</title>', raw_html, re.IGNORECASE)
+        if m:
+            return m.group(1).strip()
+
+    return "dev"
 
 
 def minify_html(html: str, mode: str = "prod") -> str:
@@ -551,7 +572,9 @@ def build_standalone_html(input_file: str, output_file: str, mode: str = "prod",
     min_css_size = len(css_min.encode("utf-8"))
 
     # 3. Concatenar scripts locales antes de comprimirlos para mejorar el ratio.
-    concatenated_js = ";\n".join(js_parts)
+    project_version = read_project_version(document_dir, raw_html)
+    version_bootstrap = f"globalThis.__ZEROCHAT_VERSION__ = {json.dumps(project_version)};\n"
+    concatenated_js = version_bootstrap + ";\n".join(js_parts)
     raw_js_size = len(concatenated_js.encode("utf-8"))
 
     # 4. Eliminar comentarios de forma segura
