@@ -190,11 +190,14 @@
     if (sep) sep.style.display = (active && hasText) ? '' : 'none';
   }
 
-  function updateBranchSummaryFooter(summaryText) {
+  function updateBranchSummaryFooter(metrics) {
     const el = document.getElementById('rag-branch-summary-footer');
     if (!el) return;
-    if (summaryText) {
-      el.innerHTML = `Esta rama contiene <strong>${escapeHtml(summaryText)}</strong>.`;
+    if (metrics) {
+      const count = Number(metrics.documentCount) || 0;
+      const docsStr = `${count} documento${count === 1 ? '' : 's'}`;
+      const bytesStr = formatBytes(metrics.totalBytes || 0);
+      el.innerHTML = `Esta rama cargó <strong>${escapeHtml(docsStr)} de ${escapeHtml(bytesStr)}</strong>.`;
     } else {
       el.innerHTML = '';
     }
@@ -208,15 +211,15 @@
     if (!workspace) return;
     if (!branchId) {
       workspace.innerHTML = '<div class="rag-empty-state">Escribe un nombre arriba y pulsa "Crear rama" para empezar.</div>';
-      updateBranchSummaryFooter('');
+      updateBranchSummaryFooter(null);
       return;
     }
     const documents = await storage().getDocumentsByBranch(branchId);
-    const branchSummary = formatBranchMetrics({
+    const branchMetrics = {
       documentCount: documents.length,
       totalBytes: documents.reduce((sum, document) => sum + (Number(document.fileSize) || 0), 0)
-    });
-    updateBranchSummaryFooter(branchSummary);
+    };
+    updateBranchSummaryFooter(branchMetrics);
     workspace.innerHTML = `
       <label class="rag-dropzone" id="rag-dropzone">
         <strong>Arrastra o selecciona archivos</strong>

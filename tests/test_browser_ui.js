@@ -1197,7 +1197,8 @@ test('Browser UI - Iconos Fase 5: Iconos Vectoriales SVG en Modales, Pestañas, 
         display: el ? window.getComputedStyle(el).display : 'none'
       };
     });
-    assert.ok(footerSummary.text.includes('Esta rama contiene'), 'El pie del modal debe contener el resumen "Esta rama contiene"');
+    assert.ok(footerSummary.text.includes('Esta rama cargó'), 'El pie del modal debe contener el resumen "Esta rama cargó"');
+    assert.ok(footerSummary.text.includes('documentos de'), 'El pie del modal debe indicar "documentos de"');
     assert.notEqual(footerSummary.display, 'none', 'El resumen en el pie del modal debe ser visible en la pestaña Documentos');
 
     const createdBranch = await page.evaluate(async () => {
