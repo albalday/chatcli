@@ -227,9 +227,9 @@
       apiType: elements?.settingApiType ? elements.settingApiType.value : (appConfig?.apiType || 'openai'),
       apiKey: elements?.settingApiKey ? elements.settingApiKey.value.trim() : '',
       model: selectedModel,
-      systemPrompt: elements?.settingSystemPrompt ? elements.settingSystemPrompt.value.trim() : '',
+      systemPrompt: appConfig?.systemPrompt || '',
       systemDataPrompt: elements?.settingSystemDataPrompt ? elements.settingSystemDataPrompt.value.trim() : (appConfig?.systemDataPrompt || ''),
-      temperature: elements?.settingTemperature ? elements.settingTemperature.value : '0.7',
+      temperature: appConfig?.temperature || '0.7',
       reasoningEffort: appConfig?.reasoningEffort || 'none',
       modelReasoningConfig: appConfig?.modelReasoningConfig || null,
       theme: appConfig?.theme || 'light',
@@ -284,10 +284,7 @@
     if (elements.settingsActiveProfileName) {
       elements.settingsActiveProfileName.textContent = appConfig?.activeProfile?.name || t('connection_no_active_profile');
     }
-    if (elements.settingSystemPrompt) elements.settingSystemPrompt.value = appConfig?.systemPrompt || '';
     if (elements.settingSystemDataPrompt) elements.settingSystemDataPrompt.value = appConfig?.systemDataPrompt || '';
-    if (elements.settingTemperature) elements.settingTemperature.value = appConfig?.temperature || '0.7';
-    if (elements.temperatureVal) elements.temperatureVal.textContent = appConfig?.temperature || '0.7';
 
     applyTheme(elements, appConfig, appConfig?.theme || 'light');
     applyLanguage(elements, appConfig, appConfig?.language || 'es', callbacks);
@@ -330,10 +327,7 @@
       if (elements.settingApiUrl) elements.settingApiUrl.value = defaults.apiUrl;
       if (elements.settingApiKey) elements.settingApiKey.value = defaults.apiKey;
       if (elements.settingModel) elements.settingModel.value = defaults.model;
-      if (elements.settingSystemPrompt) elements.settingSystemPrompt.value = '';
       if (elements.settingSystemDataPrompt) elements.settingSystemDataPrompt.value = defaults.systemDataPrompt || '';
-      if (elements.settingTemperature) elements.settingTemperature.value = defaults.temperature;
-      if (elements.temperatureVal) elements.temperatureVal.textContent = defaults.temperature;
 
       applyTheme(elements, null, defaults.theme || 'light');
       applyLanguage(elements, null, defaults.language || 'es');

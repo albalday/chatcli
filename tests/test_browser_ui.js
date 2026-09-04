@@ -637,12 +637,13 @@ test('Browser UI - Fase 6: Modales <dialog> Modernos con Blur y Tarjetas de Herr
       };
     });
 
-    assert.ok(profileSaveResult.isOpen, 'Guardar el perfil NO debe cerrar el mantenedor');
-    assert.ok(profileSaveResult.feedbackVisible, 'Debe mostrar retroalimentación de guardado de perfil');
+    assert.equal(profileSaveResult.isOpen, false, 'Guardar el perfil debe cerrar el mantenedor');
     assert.equal(profileSaveResult.savedUrl, 'http://playwright-test:1234/v1', 'Debe persistir el perfil en su repositorio');
-    assert.notEqual(profileSaveResult.runtimeUrl, 'http://playwright-test:1234/v1', 'Guardar un perfil no debe activar sus datos');
+    assert.equal(profileSaveResult.runtimeUrl, 'http://playwright-test:1234/v1', 'El perfil guardado debe quedar activo por defecto');
 
     // Renombrar el perfil activo actualiza el mismo registro y recarga sus datos.
+    await page.click('#btn-manage-profiles');
+    await page.waitForFunction(() => document.getElementById('profiles-dialog')?.open);
     await page.selectOption('#profile-select-helper', 'profile:local');
     await page.fill('#setting-profile-name', 'Local chat renombrado');
     await page.fill('#setting-api-url', 'http://active-profile-test:1234/v1');
@@ -663,7 +664,6 @@ test('Browser UI - Fase 6: Modales <dialog> Modernos con Blur y Tarjetas de Herr
     assert.equal(renamedActiveResult.runtimeUrl, 'http://active-profile-test:1234/v1', 'Los cambios del perfil activo deben recargarse');
 
     // 3. Cerrar ambos modales sin guardar la configuración general.
-    await page.click('#btn-close-profiles');
     await page.waitForFunction(() => !document.getElementById('profiles-dialog')?.open);
     await page.click('#btn-close-settings');
     await page.waitForFunction(() => !document.getElementById('settings-dialog')?.open);

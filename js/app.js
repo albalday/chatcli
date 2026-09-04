@@ -1155,12 +1155,12 @@
 
   function handleSaveProfile() {
     const name = String(elements.settingProfileName?.value || '').trim();
-    if (!name || !Profiles.save) return;
+    if (!name || !Profiles.save) return false;
     const selected = Profiles.get?.(elements.profileSelectHelper?.value || '') || null;
     const sameName = Profiles.findByName?.(name) || null;
     if (selected && sameName && sameName.id !== selected.id) {
       showProfileFeedback(t('err_profile_name_exists', { name }) || `Ya existe un perfil llamado "${name}".`, 'error');
-      return;
+      return false;
     }
     // El selector mantiene la identidad del perfil en edición, incluso si se renombra.
     const existing = selected || sameName;
@@ -1174,16 +1174,36 @@
         apiType: elements.settingApiType?.value || baseSettings.apiType,
         apiUrl: elements.settingApiUrl?.value.trim() || baseSettings.apiUrl,
         apiKey: elements.settingApiKey?.value.trim() || '',
-        model: elements.settingModel?.value.trim() || ''
+        model: elements.settingModel?.value.trim() || '',
+        systemPrompt: elements.settingSystemPrompt?.value.trim() || '',
+        temperature: elements.settingTemperature?.value || baseSettings.temperature || '0.7'
       }
     });
     populateProfileSelector(saved.id);
-    if (getRuntimeConfig().activeProfile?.id === saved.id && Config.activateProfile) {
-      Config.activateProfile(saved.id);
-    } else {
-      updateUIFromConfig();
-    }
+    setSelectedProfileAsDefault(saved);
     showProfileFeedback(t('msg_profile_saved', { name }) || `Perfil "${name}" guardado con éxito.`, 'success');
+    return true;
+  }
+
+  function activateProfileTab(tabBtn) {
+    const targetPane = document.getElementById(tabBtn?.getAttribute('data-profile-tab'));
+    if (!targetPane) return;
+    const isNameTab = targetPane.id === 'profile-tab-name-pane';
+    elements.profileTabs.forEach(button => {
+      const active = button === tabBtn;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-selected', String(active));
+    });
+    elements.profilePanes.forEach(pane => pane.classList.toggle('active', pane === targetPane));
+    [elements.btnNewProfile, elements.btnCloneProfile].forEach(button => {
+      if (button) button.disabled = !isNameTab;
+    });
+  }
+
+  function setSelectedProfileAsDefault(profile) {
+    if (!profile || !Config.activateProfile) return;
+    Config.activateProfile(profile.id);
+    updateUIFromConfig();
   }
 
   function handleDeleteProfile() {
@@ -1217,6 +1237,7 @@
     });
     populateProfileSelector(saved.id);
     applyProfileToForm(saved.settings);
+    setSelectedProfileAsDefault(saved);
     return saved;
   }
 
@@ -1257,6 +1278,7 @@
     applyProfileToForm(activeProfile?.settings || getRuntimeConfig());
     if (elements.serverQueryStatus) elements.serverQueryStatus.style.display = 'none';
     if (elements.profileActionFeedback) elements.profileActionFeedback.style.display = 'none';
+    activateProfileTab(document.getElementById('profile-tab-name'));
     if (typeof loadCachedModels === 'function') loadCachedModels();
     if (typeof elements.profilesDialog.showModal === 'function') elements.profilesDialog.showModal();
   }
@@ -2056,6 +2078,7 @@
           elements.settingProfileDescription.value = profile.description || '';
         }
         applyProfileToForm(profile.settings);
+        setSelectedProfileAsDefault(profile);
       });
     }
 
@@ -2073,6 +2096,7 @@
             if (elements.settingProfileDescription) {
               elements.settingProfileDescription.value = profile.description || '';
             }
+            setSelectedProfileAsDefault(profile);
           }
         }
       });
@@ -2081,7 +2105,7 @@
     if (elements.btnSaveProfile) {
       elements.btnSaveProfile.addEventListener('click', (e) => {
         e.preventDefault();
-        handleSaveProfile();
+        if (handleSaveProfile()) closeProfilesModal();
       });
     }
 
@@ -2184,14 +2208,7 @@
       elements.profileTabs.forEach(tabBtn => {
         tabBtn.addEventListener('click', function (e) {
           e.preventDefault();
-          const targetPane = document.getElementById(tabBtn.getAttribute('data-profile-tab'));
-          if (!targetPane) return;
-          elements.profileTabs.forEach(button => {
-            const active = button === tabBtn;
-            button.classList.toggle('active', active);
-            button.setAttribute('aria-selected', String(active));
-          });
-          elements.profilePanes.forEach(pane => pane.classList.toggle('active', pane === targetPane));
+          activateProfileTab(tabBtn);
         });
       });
     }

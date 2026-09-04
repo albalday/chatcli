@@ -466,10 +466,9 @@ input:checked + .slider:before {
   gap: 0.75rem;
 }
 
-.profile-name-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
+.btn-profile-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .profile-actions-footer .footer-actions-left,
