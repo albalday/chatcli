@@ -382,6 +382,19 @@
           </div>
 
           <div class="form-field">
+            <label for="setting-system-data-prompt">
+              <strong data-i18n="field_system_data_prompt">Perfil del sistema · datos ZeroChat</strong>
+              <span class="label-hint" data-i18n="field_system_data_prompt_hint">Instrucciones internas de ZeroChat. Es mejor no modificarlas salvo que sepas exactamente lo que haces.</span>
+            </label>
+            <textarea
+              id="setting-system-data-prompt"
+              rows="5"
+              data-i18n-placeholder="field_system_data_prompt_placeholder"
+              placeholder="Instrucciones internas de ZeroChat..."
+            ></textarea>
+          </div>
+
+          <div class="form-field">
             <label for="setting-temperature">
               <strong><span data-i18n="field_temperature">Temperatura</span>: <span id="temperature-val">0.7</span></strong>
               <span class="label-hint" data-i18n="field_temperature_hint">Controla la creatividad de las respuestas (0 = determinista/preciso, 1 = creativo).</span>
@@ -549,27 +562,46 @@
       </div>
       <button id="btn-close-profiles" type="button" class="btn-close" data-i18n-aria="modal_close_aria" aria-label="Cerrar modal"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
     </div>
+    <div class="modal-tabs-nav profile-tabs-nav" role="tablist" aria-label="Secciones del perfil">
+      <button type="button" id="profile-tab-name" class="modal-tab-btn active" role="tab" aria-selected="true" aria-controls="profile-tab-name-pane" data-profile-tab="profile-tab-name-pane"><span data-i18n="profile_tab_name">Nombre</span></button>
+      <button type="button" id="profile-tab-settings" class="modal-tab-btn" role="tab" aria-selected="false" aria-controls="profile-tab-settings-pane" data-profile-tab="profile-tab-settings-pane"><span data-i18n="profile_tab_settings">Configuración</span></button>
+    </div>
     <form id="profiles-form" class="settings-form-wrapper">
       <div class="modal-body">
-        <div class="form-field profile-selection-field" style="margin-bottom: 0.85rem;">
+        <div id="profile-tab-name-pane" class="modal-tab-pane active" role="tabpanel" aria-labelledby="profile-tab-name">
+        <div class="form-field profile-selection-field">
           <label for="profile-select-helper"><strong data-i18n="field_profile">Perfil de Conexión / Servidor</strong></label>
           <div class="combobox-wrapper profile-combobox-wrapper">
             <select id="profile-select-helper" class="combobox-select-helper" title="Seleccionar perfil existente" style="flex: 1; max-width: 100%;"><option value="" disabled selected data-i18n="profile_select_default">▾ Elegir perfil guardado...</option></select>
             <datalist id="profile-datalist"></datalist>
-            <button type="button" id="btn-save-profile" class="btn-profile-action btn-save-profile btn-icon-only" data-i18n-title="btn_save_profile_title" title="Guardar todos los valores actuales en este perfil"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg></button>
-            <button type="button" id="btn-delete-profile" class="btn-profile-action btn-delete-profile btn-icon-only" data-i18n-title="btn_delete_profile_title" title="Eliminar el perfil seleccionado"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>
           </div>
           <div id="profile-action-feedback" class="server-query-status" style="display: none;"></div>
         </div>
-        <div class="profile-values-card">
           <div class="form-field"><label for="setting-profile-name"><strong data-i18n="field_profile_name_label">Nombre del Perfil</strong></label><input type="text" id="setting-profile-name" list="profile-datalist" data-i18n-placeholder="field_profile_placeholder" placeholder="Nombre del perfil (ej: LM Studio, Ollama, OpenRouter...)" autocomplete="off"></div>
+          <div class="form-field"><label for="setting-profile-description"><strong data-i18n="field_profile_description_label">Descripción</strong></label><textarea id="setting-profile-description" rows="3" data-i18n-placeholder="field_profile_description_placeholder" placeholder="Describe brevemente este perfil..."></textarea></div>
+          <div class="profile-name-actions">
+            <button type="button" id="btn-new-profile" class="btn-profile-action btn-secondary" data-i18n-title="btn_new_profile_title" title="Crear un perfil nuevo"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"></path></svg><span data-i18n="btn_new_profile">Nuevo</span></button>
+            <button type="button" id="btn-clone-profile" class="btn-profile-action btn-secondary" data-i18n-title="btn_clone_profile_title" title="Clonar el perfil seleccionado"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="10" height="10" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg><span data-i18n="btn_clone_profile">Clonar</span></button>
+          </div>
+        </div>
+        <div id="profile-tab-settings-pane" class="modal-tab-pane" role="tabpanel" aria-labelledby="profile-tab-settings">
+        <div class="profile-values-card">
           <div class="form-field"><label for="setting-api-type"><strong data-i18n="field_api_type">Tipo de Interfaz / Protocolo</strong></label><select id="setting-api-type" class="combobox-select-helper" style="width: 100%; max-width: 100%;"><option value="openai" selected>OpenAI / LM Studio / LocalAI / vLLM (/v1)</option><option value="ollama">Ollama (/api/tags)</option><option value="openrouter">OpenRouter (/api/v1)</option><option value="claude">Anthropic Claude (/v1)</option><option value="gemini">Google Gemini (OpenAI compat)</option></select></div>
           <div class="form-field"><label for="setting-api-url"><strong data-i18n="field_api_url">URL del Servidor / Endpoint de Chat</strong></label><div class="input-with-button-wrapper"><input type="url" id="setting-api-url" placeholder="http://localhost:1234/v1" required><button type="button" id="btn-query-server" class="btn-query-server" data-i18n-title="btn_query_title" title="Consultar modelos disponibles y capacidades de la API en el servidor"><svg class="query-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="2" x2="16.65" y2="16.65"></line></svg><span class="query-btn-text" data-i18n="btn_query_text">Query</span></button></div><div id="server-query-status" class="server-query-status" style="display: none;"></div></div>
           <div class="form-field"><label for="setting-api-key"><strong data-i18n="field_api_key">Clave de API (API Key)</strong><span class="label-hint" data-i18n="field_api_key_hint">Opcional si usas un servidor local (LM Studio / Ollama / LocalAI).</span></label><div class="input-password-wrapper"><input type="password" id="setting-api-key" placeholder="sk-..." autocomplete="off"><button type="button" id="btn-toggle-key" class="btn-toggle-visibility" data-i18n-title="btn_toggle_key_title" title="Mostrar/Ocultar clave"><svg class="ui-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg></button></div></div>
           <div class="form-field" style="margin-bottom: 0;"><label for="setting-model"><strong data-i18n="field_model">Nombre del Modelo</strong><span class="label-hint" data-i18n="field_model_hint">Selecciona de la lista del servidor o escribe cualquier nombre personalizado.</span></label><div class="combobox-wrapper"><input type="text" id="setting-model" list="model-datalist" data-i18n-placeholder="field_model_placeholder" placeholder="Escribe o pulsa Query para consultar modelos..." autocomplete="off"><select id="model-select-helper" class="combobox-select-helper" title="Seleccionar modelo de la lista"><option value="" disabled selected data-i18n="model_select_default">▾ Elegir modelo detectado...</option></select><datalist id="model-datalist"></datalist></div></div>
         </div>
+        </div>
       </div>
-      <div class="modal-footer"><div class="footer-actions-left"></div><div class="footer-actions-right"><button type="button" id="btn-cancel-profiles" class="btn-secondary" data-i18n="btn_close">Cerrar</button></div></div>
+      <div class="modal-footer profile-actions-footer">
+        <div class="footer-actions-left">
+          <button type="button" id="btn-delete-profile" class="btn-profile-action btn-delete-profile" data-i18n-title="btn_delete_profile_title" title="Eliminar el perfil seleccionado"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg><span data-i18n="btn_delete_profile">Borrar</span></button>
+        </div>
+        <div class="footer-actions-right">
+          <button type="button" id="btn-cancel-profiles" class="btn-secondary" data-i18n="btn_close">Cerrar</button>
+          <button type="button" id="btn-save-profile" class="btn-profile-action btn-save-profile" data-i18n-title="btn_save_profile_title" title="Guardar todos los valores actuales en este perfil"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg><span data-i18n="btn_save_profile">Guardar</span></button>
+        </div>
+      </div>
     </form>
   </dialog>
 

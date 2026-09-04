@@ -62,6 +62,7 @@
     apiKey: '',
     model: '',
     systemPrompt: '',
+    systemDataPrompt: '',
     temperature: '0.7',
     reasoningEffort: 'none',
     theme: 'light',
@@ -211,8 +212,13 @@
       btnCloseProfiles: document.getElementById('btn-close-profiles'),
       btnCancelProfiles: document.getElementById('btn-cancel-profiles'),
       settingProfileName: document.getElementById('setting-profile-name'),
+      settingProfileDescription: document.getElementById('setting-profile-description'),
       profileSelectHelper: document.getElementById('profile-select-helper'),
       profileDatalist: document.getElementById('profile-datalist'),
+      profileTabs: document.querySelectorAll('#profiles-dialog [data-profile-tab]'),
+      profilePanes: document.querySelectorAll('#profiles-dialog .modal-tab-pane'),
+      btnNewProfile: document.getElementById('btn-new-profile'),
+      btnCloneProfile: document.getElementById('btn-clone-profile'),
       btnSaveProfile: document.getElementById('btn-save-profile'),
       btnDeleteProfile: document.getElementById('btn-delete-profile'),
       profileActionFeedback: document.getElementById('profile-action-feedback'),
@@ -225,6 +231,7 @@
       modelDatalist: document.getElementById('model-datalist'),
       modelSelectHelper: document.getElementById('model-select-helper'),
       settingSystemPrompt: document.getElementById('setting-system-prompt'),
+      settingSystemDataPrompt: document.getElementById('setting-system-data-prompt'),
       settingTemperature: document.getElementById('setting-temperature'),
       temperatureVal: document.getElementById('temperature-val'),
       themeButtons: document.querySelectorAll('.btn-theme-toggle'),
@@ -264,6 +271,11 @@
     return Engine.getToolsSystemPromptGuide ? Engine.getToolsSystemPromptGuide(appConfig, appConfig.language || 'es') : '';
   }
 
+  function getConfiguredSystemPrompt(config = appConfig) {
+    if (Engine.getConfiguredSystemPrompt) return Engine.getConfiguredSystemPrompt(config);
+    return [config.systemPrompt, config.systemDataPrompt].map(value => String(value || '').trim()).filter(Boolean).join('\n\n');
+  }
+
   function buildEffectiveMessages(options = {}) {
     if (Engine.buildEffectiveMessages) {
       return Engine.buildEffectiveMessages(chatHistory, appConfig, {
@@ -298,7 +310,7 @@
 
   function createInitialChatHistory() {
     return [
-      { id: 'system_root', role: 'system', content: appConfig.systemPrompt || '' }
+      { id: 'system_root', role: 'system', content: getConfiguredSystemPrompt() }
     ];
   }
 
@@ -1082,6 +1094,10 @@
       const selected = profiles.find(profile => profile.id === selectedProfileName);
       elements.settingProfileName.value = selected?.name || '';
     }
+    if (elements.settingProfileDescription) {
+      const selected = profiles.find(profile => profile.id === selectedProfileName);
+      elements.settingProfileDescription.value = selected?.description || '';
+    }
   }
 
   function renderAgentToolsUI(container, currentEnabledTools = {}) {
@@ -1121,7 +1137,7 @@
     const savedConfig = Config.updateRuntime ? Config.updateRuntime(newConfig) : newConfig;
 
     if (chatHistory.length > 0 && chatHistory[0].role === 'system') {
-      chatHistory[0].content = appConfig.systemPrompt || '';
+      chatHistory[0].content = getConfiguredSystemPrompt(savedConfig);
     }
 
     updateUIFromConfig();
@@ -1140,11 +1156,19 @@
   function handleSaveProfile() {
     const name = String(elements.settingProfileName?.value || '').trim();
     if (!name || !Profiles.save) return;
-    const existing = Profiles.findByName ? Profiles.findByName(name) : null;
+    const selected = Profiles.get?.(elements.profileSelectHelper?.value || '') || null;
+    const sameName = Profiles.findByName?.(name) || null;
+    if (selected && sameName && sameName.id !== selected.id) {
+      showProfileFeedback(t('err_profile_name_exists', { name }) || `Ya existe un perfil llamado "${name}".`, 'error');
+      return;
+    }
+    // El selector mantiene la identidad del perfil en edición, incluso si se renombra.
+    const existing = selected || sameName;
     const baseSettings = existing?.settings || getRuntimeConfig();
     const saved = Profiles.save({
       id: existing?.id || `profile:${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       name,
+      description: elements.settingProfileDescription?.value.trim() || '',
       settings: {
         ...baseSettings,
         apiType: elements.settingApiType?.value || baseSettings.apiType,
@@ -1154,6 +1178,11 @@
       }
     });
     populateProfileSelector(saved.id);
+    if (getRuntimeConfig().activeProfile?.id === saved.id && Config.activateProfile) {
+      Config.activateProfile(saved.id);
+    } else {
+      updateUIFromConfig();
+    }
     showProfileFeedback(t('msg_profile_saved', { name }) || `Perfil "${name}" guardado con éxito.`, 'success');
   }
 
@@ -1166,6 +1195,48 @@
       showProfileFeedback(t('msg_profile_deleted', { name: profile.name }) || `Perfil "${profile.name}" eliminado.`, 'success');
       updateUIFromConfig();
     }
+  }
+
+  function requestNewProfileName(message) {
+    const name = String(prompt(message) || '').trim();
+    if (!name) return null;
+    if (Profiles.findByName?.(name)) {
+      showProfileFeedback(t('err_profile_name_exists', { name }) || `Ya existe un perfil llamado "${name}".`, 'error');
+      return null;
+    }
+    return name;
+  }
+
+  function saveProfileRecord(name, settings, description = '') {
+    if (!Profiles.save) return null;
+    const saved = Profiles.save({
+      id: `profile:${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      name,
+      description,
+      settings
+    });
+    populateProfileSelector(saved.id);
+    applyProfileToForm(saved.settings);
+    return saved;
+  }
+
+  function handleNewProfile() {
+    const name = requestNewProfileName(t('prompt_new_profile_name') || 'Nombre del nuevo perfil:');
+    if (!name) return;
+    const saved = saveProfileRecord(name, Profiles.NEW_PROFILE_SETTINGS || { apiType: 'openai', apiUrl: '', apiKey: '', model: '' });
+    if (saved) showProfileFeedback(t('msg_profile_created', { name }) || `Perfil "${name}" creado.`, 'success');
+  }
+
+  function handleCloneProfile() {
+    const source = Profiles.get?.(elements.profileSelectHelper?.value || '');
+    if (!source) {
+      showProfileFeedback(t('err_profile_select_to_clone') || 'Selecciona un perfil para clonarlo.', 'error');
+      return;
+    }
+    const name = requestNewProfileName(t('prompt_clone_profile_name', { name: source.name }) || `Nombre de la copia de "${source.name}":`);
+    if (!name) return;
+    const saved = saveProfileRecord(name, source.settings, source.description || '');
+    if (saved) showProfileFeedback(t('msg_profile_cloned', { name }) || `Perfil clonado como "${name}".`, 'success');
   }
 
   function openSettingsModal() {
@@ -1327,7 +1398,7 @@
 
     currentSessionId = targetConv.id;
     chatHistory = targetConv.history && targetConv.history.length > 0 ? [...targetConv.history] : [
-      { id: 'system_root', role: 'system', content: appConfig.systemPrompt || '' }
+      { id: 'system_root', role: 'system', content: getConfiguredSystemPrompt() }
     ];
 
     renderSessionMessages(chatHistory);
@@ -1981,6 +2052,9 @@
         if (elements.settingProfileName) {
           elements.settingProfileName.value = profile.name;
         }
+        if (elements.settingProfileDescription) {
+          elements.settingProfileDescription.value = profile.description || '';
+        }
         applyProfileToForm(profile.settings);
       });
     }
@@ -1996,6 +2070,9 @@
             if (elements.profileSelectHelper) {
               elements.profileSelectHelper.value = profile.id;
             }
+            if (elements.settingProfileDescription) {
+              elements.settingProfileDescription.value = profile.description || '';
+            }
           }
         }
       });
@@ -2006,6 +2083,14 @@
         e.preventDefault();
         handleSaveProfile();
       });
+    }
+
+    if (elements.btnNewProfile) {
+      elements.btnNewProfile.addEventListener('click', handleNewProfile);
+    }
+
+    if (elements.btnCloneProfile) {
+      elements.btnCloneProfile.addEventListener('click', handleCloneProfile);
     }
 
     if (elements.btnDeleteProfile) {
@@ -2091,6 +2176,22 @@
           if (targetPane) {
             targetPane.classList.add('active');
           }
+        });
+      });
+    }
+
+    if (elements.profileTabs && elements.profileTabs.length > 0) {
+      elements.profileTabs.forEach(tabBtn => {
+        tabBtn.addEventListener('click', function (e) {
+          e.preventDefault();
+          const targetPane = document.getElementById(tabBtn.getAttribute('data-profile-tab'));
+          if (!targetPane) return;
+          elements.profileTabs.forEach(button => {
+            const active = button === tabBtn;
+            button.classList.toggle('active', active);
+            button.setAttribute('aria-selected', String(active));
+          });
+          elements.profilePanes.forEach(pane => pane.classList.toggle('active', pane === targetPane));
         });
       });
     }

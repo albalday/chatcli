@@ -88,6 +88,13 @@
     return '';
   }
 
+  function getConfiguredSystemPrompt(appConfig = {}) {
+    return [appConfig.systemPrompt, appConfig.systemDataPrompt]
+      .map(value => String(value || '').trim())
+      .filter(Boolean)
+      .join('\n\n');
+  }
+
   /**
    * Inyecta el cursor de streaming dentro del HTML de forma semánticamente correcta.
    * @param {string} html - HTML renderizado del turno en curso.
@@ -180,9 +187,7 @@
       }
     });
 
-    let activePrompt = (appConfig.systemPrompt && appConfig.systemPrompt.trim() !== '')
-      ? appConfig.systemPrompt.trim()
-      : '';
+    let activePrompt = getConfiguredSystemPrompt(appConfig);
 
     // Inyección de la instrucción compacta de conocimiento local.
     const ragContext = options.currentRagSystemContext || appConfig.currentRagSystemContext || '';
@@ -196,11 +201,6 @@
       const dateAnchor = getDailyDateAnchor(lang);
       activePrompt = activePrompt ? (dateAnchor + '\n\n' + activePrompt) : dateAnchor;
     }
-
-    const formatDirective = (lang === 'en')
-      ? '[Format: Always use standard Markdown and plain text. Never use LaTeX syntax or delimiters ($ or $$); write all math, formulas, and numbers directly using readable plain text with standard symbols (+, -, ×, /, =).]'
-      : '[Formato: Usa siempre Markdown estándar y texto plano. Nunca uses sintaxis ni delimitadores LaTeX ($ o $$); escribe las matemáticas, fórmulas y números directamente en texto legible con símbolos estándar (+, -, ×, /, =).]';
-    activePrompt = activePrompt ? (activePrompt + '\n\n' + formatDirective) : formatDirective;
 
     const isToolsEnabled = options.enableTools !== undefined
       ? Boolean(options.enableTools)
@@ -813,6 +813,7 @@
 
   return {
     getDailyDateAnchor,
+    getConfiguredSystemPrompt,
     getToolsSystemPromptGuide,
     injectStreamingCursor,
     buildEffectiveMessages,

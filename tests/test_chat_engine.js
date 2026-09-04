@@ -63,6 +63,7 @@ test('ChatEngine - buildEffectiveMessages inyecta fecha, RAG y formatea mensajes
 
   const appConfig = {
     systemPrompt: 'Eres un asistente experto.',
+    systemDataPrompt: '[Formato: Usa siempre Markdown estándar y texto plano.]',
     language: 'es',
     sendDateTime: true,
     activeRagBranchId: 'branch_123',
@@ -80,6 +81,7 @@ test('ChatEngine - buildEffectiveMessages inyecta fecha, RAG y formatea mensajes
   assert.ok(messages[0].content.includes('Fecha actual:'));
   assert.ok(messages[0].content.includes('Formato: Usa siempre Markdown estándar'));
   assert.ok(messages[0].content.includes('Eres un asistente experto.'));
+  assert.ok(messages[0].content.includes('[Formato: Usa siempre Markdown estándar y texto plano.]'));
   assert.ok(messages[0].content.includes('Base de Conocimiento activa'));
   assert.ok(messages[0].content.includes("list_documents' solo cuando necesites explícitamente un inventario completo"));
 

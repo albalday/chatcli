@@ -27,10 +27,16 @@
     return `profile:${encodeURIComponent(String(name || '').trim())}`;
   }
 
+  const NEW_PROFILE_SETTINGS = Object.freeze({
+    apiUrl: '', apiType: 'openai', apiKey: '', model: '', systemPrompt: '',
+    temperature: '0.7', reasoningEffort: 'none', modelReasoningConfig: null,
+    enabledTools: { execute_javascript: true, search_web: true, fetch_web_page: true, download_pdf: true, render_chart: true },
+    enableRawLogs: false, sendDateTime: true
+  });
+
   const DEFAULT_PROFILES = Object.freeze([
     { id: 'profile:local', name: 'Local chat', settings: { apiUrl: 'http://localhost:1234/v1', apiType: 'openai', apiKey: '', model: 'google/gemma-4-26b-a4b-qat', systemPrompt: '', temperature: '0.7', reasoningEffort: 'none', modelReasoningConfig: null, enabledTools: { execute_javascript: true, search_web: true, fetch_web_page: true, download_pdf: true, render_chart: true }, enableRawLogs: false, sendDateTime: true } },
-    { id: 'profile:remote', name: 'Remoto chat', settings: { apiUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', apiType: 'gemini', apiKey: '', model: 'gemini-3.6-flash', systemPrompt: '', temperature: '0.7', reasoningEffort: 'none', modelReasoningConfig: null, enabledTools: { execute_javascript: true, search_web: true, fetch_web_page: true, download_pdf: true, render_chart: true }, enableRawLogs: false, sendDateTime: true } },
-    { id: 'profile:new', name: 'Nuevo', settings: { apiUrl: '', apiType: 'openai', apiKey: '', model: '', systemPrompt: '', temperature: '0.7', reasoningEffort: 'none', modelReasoningConfig: null, enabledTools: { execute_javascript: true, search_web: true, fetch_web_page: true, download_pdf: true, render_chart: true }, enableRawLogs: false, sendDateTime: true } }
+    { id: 'profile:remote', name: 'Remoto chat', settings: { apiUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', apiType: 'gemini', apiKey: '', model: 'gemini-3.6-flash', systemPrompt: '', temperature: '0.7', reasoningEffort: 'none', modelReasoningConfig: null, enabledTools: { execute_javascript: true, search_web: true, fetch_web_page: true, download_pdf: true, render_chart: true }, enableRawLogs: false, sendDateTime: true } }
   ]);
 
   function normalizeSettings(source = {}) {
@@ -47,6 +53,7 @@
     return {
       id: String(record.id || createId(name)),
       name,
+      description: String(record.description || '').trim(),
       schemaVersion: SCHEMA_VERSION,
       version: Number.isInteger(record.version) && record.version > 0 ? record.version : 1,
       updatedAt: Number(record.updatedAt) || Date.now(),
@@ -126,5 +133,5 @@
   }
 
   const defaultRepository = createRepository();
-  return { STORAGE_KEY, SCHEMA_VERSION, PROFILE_FIELDS, DEFAULT_PROFILES: clone(DEFAULT_PROFILES), createRepository, ...defaultRepository };
+  return { STORAGE_KEY, SCHEMA_VERSION, PROFILE_FIELDS, NEW_PROFILE_SETTINGS: clone(NEW_PROFILE_SETTINGS), DEFAULT_PROFILES: clone(DEFAULT_PROFILES), createRepository, ...defaultRepository };
 }));

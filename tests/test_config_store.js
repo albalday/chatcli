@@ -36,6 +36,7 @@ test('ChatConfig - migra la configuración efectiva y registra el perfil aplicad
   assert.equal(config.theme, 'light');
   assert.equal(config.language, 'es');
   assert.equal(config.activeProfile.name, 'Servidor Oficina');
+  assert.ok(config.systemDataPrompt.includes('Formato:'), 'Debe conservar las instrucciones de datos de ZeroChat');
   assert.deepEqual(config.activeRagBranchIds, []);
   assert.equal(getPersisted().activeProfileName, undefined);
 });
@@ -53,6 +54,7 @@ test('ChatConfig - activar perfil reemplaza campos de perfil y conserva preferen
   assert.equal(config.theme, 'dark');
   assert.deepEqual(config.activeRagBranchIds, ['rag-a', 'rag-b']);
   assert.equal(config.activeProfile.version, 3);
+  assert.ok(config.systemDataPrompt.includes('Formato:'), 'Cambiar de perfil no debe perder las instrucciones de datos');
 });
 
 test('ChatConfig - snapshots no permiten mutar el estado interno', () => {

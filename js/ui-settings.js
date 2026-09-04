@@ -119,6 +119,9 @@
     if (elements?.settingSystemPrompt) {
       elements.settingSystemPrompt.setAttribute('placeholder', t('field_system_prompt_placeholder'));
     }
+    if (elements?.settingSystemDataPrompt) {
+      elements.settingSystemDataPrompt.setAttribute('placeholder', t('field_system_data_prompt_placeholder'));
+    }
     return target;
   }
 
@@ -190,6 +193,9 @@
     if (elements.settingSystemPrompt && profileData.systemPrompt !== undefined) {
       elements.settingSystemPrompt.value = profileData.systemPrompt;
     }
+    if (elements.settingSystemDataPrompt && profileData.systemDataPrompt !== undefined) {
+      elements.settingSystemDataPrompt.value = profileData.systemDataPrompt;
+    }
     if (elements.settingTemperature && profileData.temperature !== undefined) {
       elements.settingTemperature.value = profileData.temperature;
       if (elements.temperatureVal) {
@@ -222,6 +228,7 @@
       apiKey: elements?.settingApiKey ? elements.settingApiKey.value.trim() : '',
       model: selectedModel,
       systemPrompt: elements?.settingSystemPrompt ? elements.settingSystemPrompt.value.trim() : '',
+      systemDataPrompt: elements?.settingSystemDataPrompt ? elements.settingSystemDataPrompt.value.trim() : (appConfig?.systemDataPrompt || ''),
       temperature: elements?.settingTemperature ? elements.settingTemperature.value : '0.7',
       reasoningEffort: appConfig?.reasoningEffort || 'none',
       modelReasoningConfig: appConfig?.modelReasoningConfig || null,
@@ -278,6 +285,7 @@
       elements.settingsActiveProfileName.textContent = appConfig?.activeProfile?.name || t('connection_no_active_profile');
     }
     if (elements.settingSystemPrompt) elements.settingSystemPrompt.value = appConfig?.systemPrompt || '';
+    if (elements.settingSystemDataPrompt) elements.settingSystemDataPrompt.value = appConfig?.systemDataPrompt || '';
     if (elements.settingTemperature) elements.settingTemperature.value = appConfig?.temperature || '0.7';
     if (elements.temperatureVal) elements.temperatureVal.textContent = appConfig?.temperature || '0.7';
 
@@ -323,6 +331,7 @@
       if (elements.settingApiKey) elements.settingApiKey.value = defaults.apiKey;
       if (elements.settingModel) elements.settingModel.value = defaults.model;
       if (elements.settingSystemPrompt) elements.settingSystemPrompt.value = '';
+      if (elements.settingSystemDataPrompt) elements.settingSystemDataPrompt.value = defaults.systemDataPrompt || '';
       if (elements.settingTemperature) elements.settingTemperature.value = defaults.temperature;
       if (elements.temperatureVal) elements.temperatureVal.textContent = defaults.temperature;
 

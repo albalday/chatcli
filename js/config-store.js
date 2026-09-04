@@ -13,11 +13,12 @@
 
   const SCHEMA_VERSION = 2;
   const PROFILE_FIELDS = Profiles?.PROFILE_FIELDS || [];
+  const DEFAULT_SYSTEM_DATA_PROMPT = '[Formato: Usa siempre Markdown estándar y texto plano. Nunca uses sintaxis ni delimitadores LaTeX ($ o $$); escribe las matemáticas, fórmulas y números directamente en texto legible con símbolos estándar (+, -, ×, /, =).]';
   const DEFAULTS = Object.freeze({
     schemaVersion: SCHEMA_VERSION,
     activeProfile: null,
     apiUrl: 'http://localhost:1234/v1', apiType: 'openai', apiKey: '', model: '',
-    systemPrompt: '', temperature: '0.7', reasoningEffort: 'none',
+    systemPrompt: '', systemDataPrompt: DEFAULT_SYSTEM_DATA_PROMPT, temperature: '0.7', reasoningEffort: 'none',
     modelReasoningConfig: null,
     enabledTools: { execute_javascript: true, search_web: true, fetch_web_page: true, download_pdf: true, render_chart: true },
     enableRawLogs: false, sendDateTime: true,
@@ -46,6 +47,7 @@
     next.apiKey = String(next.apiKey || '').trim();
     next.model = String(next.model || '').trim();
     next.systemPrompt = String(next.systemPrompt || '').trim();
+    next.systemDataPrompt = String(next.systemDataPrompt || '').trim();
     next.temperature = String(next.temperature ?? DEFAULTS.temperature);
     next.reasoningEffort = ['off', 'none'].includes(String(next.reasoningEffort).toLowerCase()) ? 'none' : String(next.reasoningEffort || 'none');
     next.theme = next.theme === 'dark' ? 'dark' : 'light';
@@ -130,5 +132,5 @@
   }
 
   const defaultStore = createConfigStore();
-  return { SCHEMA_VERSION, DEFAULTS: clone(DEFAULTS), normalize, createConfigStore, ...defaultStore };
+  return { SCHEMA_VERSION, DEFAULT_SYSTEM_DATA_PROMPT, DEFAULTS: clone(DEFAULTS), normalize, createConfigStore, ...defaultStore };
 }));

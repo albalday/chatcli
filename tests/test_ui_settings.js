@@ -60,6 +60,7 @@ test('UISettings - applyProfileToForm rellena los inputs de configuración', () 
     settingModel: { value: '' },
     modelSelectHelper: { value: '' },
     settingSystemPrompt: { value: '' },
+    settingSystemDataPrompt: { value: '' },
     settingTemperature: { value: '' },
     temperatureVal: { textContent: '' },
     settingEnableRawLogs: { checked: false },
@@ -72,6 +73,7 @@ test('UISettings - applyProfileToForm rellena los inputs de configuración', () 
     apiKey: 'sk-ant-test',
     model: 'claude-3-7-sonnet',
     systemPrompt: 'Eres un asistente experto.',
+    systemDataPrompt: 'Formato ZeroChat.',
     temperature: '0.2',
     enableRawLogs: true,
     sendDateTime: true
@@ -84,6 +86,7 @@ test('UISettings - applyProfileToForm rellena los inputs de configuración', () 
   assert.equal(elements.settingApiKey.value, 'sk-ant-test');
   assert.equal(elements.settingModel.value, 'claude-3-7-sonnet');
   assert.equal(elements.settingSystemPrompt.value, 'Eres un asistente experto.');
+  assert.equal(elements.settingSystemDataPrompt.value, 'Formato ZeroChat.');
   assert.equal(elements.settingTemperature.value, '0.2');
   assert.equal(elements.temperatureVal.textContent, '0.2');
   assert.equal(elements.settingEnableRawLogs.checked, true);

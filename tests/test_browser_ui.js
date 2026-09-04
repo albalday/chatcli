@@ -619,7 +619,8 @@ test('Browser UI - Fase 6: Modales <dialog> Modernos con Blur y Tarjetas de Herr
 
     await page.click('#btn-manage-profiles');
     await page.waitForFunction(() => document.getElementById('profiles-dialog')?.open);
-    await page.fill('#setting-profile-name', 'Perfil Temporal Playwright');
+    page.once('dialog', dialog => dialog.accept('Perfil Temporal Playwright'));
+    await page.click('#btn-new-profile');
     await page.fill('#setting-api-url', 'http://playwright-test:1234/v1');
     await page.click('#btn-save-profile');
 
@@ -640,6 +641,26 @@ test('Browser UI - Fase 6: Modales <dialog> Modernos con Blur y Tarjetas de Herr
     assert.ok(profileSaveResult.feedbackVisible, 'Debe mostrar retroalimentación de guardado de perfil');
     assert.equal(profileSaveResult.savedUrl, 'http://playwright-test:1234/v1', 'Debe persistir el perfil en su repositorio');
     assert.notEqual(profileSaveResult.runtimeUrl, 'http://playwright-test:1234/v1', 'Guardar un perfil no debe activar sus datos');
+
+    // Renombrar el perfil activo actualiza el mismo registro y recarga sus datos.
+    await page.selectOption('#profile-select-helper', 'profile:local');
+    await page.fill('#setting-profile-name', 'Local chat renombrado');
+    await page.fill('#setting-api-url', 'http://active-profile-test:1234/v1');
+    await page.click('#btn-save-profile');
+    const renamedActiveResult = await page.evaluate(() => {
+      const profiles = window.ChatProfileRepository?.list?.() || [];
+      const runtime = window.ChatConfig?.getActive?.();
+      return {
+        renamedCount: profiles.filter(profile => profile.name === 'Local chat renombrado').length,
+        oldNameExists: profiles.some(profile => profile.name === 'Local chat'),
+        runtimeName: runtime?.activeProfile?.name,
+        runtimeUrl: runtime?.apiUrl
+      };
+    });
+    assert.equal(renamedActiveResult.renamedCount, 1, 'Renombrar no debe duplicar el perfil');
+    assert.equal(renamedActiveResult.oldNameExists, false, 'El nombre anterior debe desaparecer del selector');
+    assert.equal(renamedActiveResult.runtimeName, 'Local chat renombrado', 'El perfil activo debe reflejar el nuevo nombre');
+    assert.equal(renamedActiveResult.runtimeUrl, 'http://active-profile-test:1234/v1', 'Los cambios del perfil activo deben recargarse');
 
     // 3. Cerrar ambos modales sin guardar la configuración general.
     await page.click('#btn-close-profiles');
