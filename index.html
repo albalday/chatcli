@@ -778,11 +778,8 @@
           </div>
           <div class="rag-manage-toolbar-actions">
             <button type="button" id="btn-rag-new-branch" class="btn-primary">
-              <svg class="ui-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <line x1="12" y1="5" x2="12" y2="19"></line>
-                <line x1="5" y1="12" x2="19" y2="12"></line>
-              </svg>
-              <span data-i18n="rag_new_branch">Nueva rama</span>
+              <span id="rag-new-branch-icon"><svg class="ui-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></span>
+              <span id="rag-new-branch-text" data-i18n="rag_new_branch">Nueva rama</span>
             </button>
             <button type="button" id="btn-rag-edit-branch" class="btn-secondary" data-i18n-title="rag_edit_branch">
               <svg class="ui-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -828,20 +825,7 @@
               <input type="text" id="rag-branch-desc-input" data-i18n-placeholder="rag_branch_desc_placeholder" placeholder="Descripción sobre el contenido de esta rama" autocomplete="off">
             </div>
           </div>
-          <div class="rag-branch-details-actions">
-            <button type="button" id="btn-rag-save-branch" class="btn-primary">
-              <svg class="ui-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
-                <polyline points="17 21 17 13 7 13 7 21"></polyline>
-                <polyline points="7 3 7 8 15 8"></polyline>
-              </svg>
-              <span id="rag-save-branch-text" data-i18n="rag_save_branch">Guardar rama</span>
-            </button>
-            <button type="button" id="btn-rag-cancel-branch" class="btn-secondary" style="display: none;">
-              <span data-i18n="btn_cancel">Cancelar</span>
-            </button>
-            <div id="rag-branch-feedback" class="server-query-status" style="display: none;"></div>
-          </div>
+          <div id="rag-branch-feedback" class="server-query-status" style="display: none; margin-top: 0.5rem;"></div>
         </div>
         <div id="rag-manage-workspace" class="rag-manage-workspace"></div>
       </div>

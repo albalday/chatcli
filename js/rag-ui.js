@@ -41,8 +41,6 @@
     return '';
   }
 
-  let isCreatingBranch = false;
-
   async function getBranchMetrics(branches) {
     const metrics = await Promise.all((branches || []).map(async branch => {
       const documents = await storage().getDocumentsByBranch(branch.id);
@@ -254,38 +252,87 @@
     await renderWorkspace(selected);
   }
 
+  const SVG_PLUS = `<svg class="ui-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>`;
+  const SVG_SAVE = `<svg class="ui-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>`;
+
+  let isCreatingBranch = false;
+  let loadedBranchName = '';
+  let loadedBranchDesc = '';
+  let currentButtonMode = 'new';
+
+  function setNewBranchButtonMode(mode) {
+    currentButtonMode = mode;
+    const btn = document.getElementById('btn-rag-new-branch');
+    const icon = document.getElementById('rag-new-branch-icon');
+    const text = document.getElementById('rag-new-branch-text');
+    if (!btn || !text) return;
+
+    if (mode === 'save') {
+      if (icon) icon.innerHTML = SVG_SAVE;
+      text.textContent = t('rag_btn_save') || 'Guardar';
+      btn.setAttribute('title', t('rag_btn_save') || 'Guardar');
+    } else {
+      if (icon) icon.innerHTML = SVG_PLUS;
+      text.textContent = t('rag_new_branch') || 'Nueva rama';
+      btn.setAttribute('title', t('rag_new_branch') || 'Nueva rama');
+    }
+  }
+
+  function checkBranchInputsChanged() {
+    const nameInput = document.getElementById('rag-branch-name-input');
+    const descInput = document.getElementById('rag-branch-desc-input');
+    const currentName = nameInput?.value?.trim() || '';
+    const currentDesc = descInput?.value?.trim() || '';
+
+    if (isCreatingBranch) {
+      setNewBranchButtonMode('save');
+      return;
+    }
+
+    const hasChanged = currentName !== loadedBranchName.trim() || currentDesc !== (loadedBranchDesc || '').trim();
+    setNewBranchButtonMode(hasChanged ? 'save' : 'new');
+  }
+
   async function updateBranchFields(branchId) {
     if (typeof document === 'undefined') return;
     const nameInput = document.getElementById('rag-branch-name-input');
     const descInput = document.getElementById('rag-branch-desc-input');
-    const saveText = document.getElementById('rag-save-branch-text');
-    const cancelBtn = document.getElementById('btn-rag-cancel-branch');
     const feedback = document.getElementById('rag-branch-feedback');
     if (feedback) feedback.style.display = 'none';
 
     if (!branchId) {
       isCreatingBranch = true;
+      loadedBranchName = '';
+      loadedBranchDesc = '';
       if (nameInput) nameInput.value = '';
       if (descInput) descInput.value = '';
-      if (saveText) saveText.textContent = t('rag_create_branch') || 'Crear rama';
-      if (cancelBtn) cancelBtn.style.display = 'none';
+      setNewBranchButtonMode('new');
       return;
     }
 
     isCreatingBranch = false;
     const branch = await storage().getBranchById(branchId);
-    if (nameInput) nameInput.value = branch?.name || '';
-    if (descInput) descInput.value = branch?.description || '';
-    if (saveText) saveText.textContent = t('rag_save_branch') || 'Guardar rama';
-    if (cancelBtn) cancelBtn.style.display = 'none';
+    loadedBranchName = branch?.name || '';
+    loadedBranchDesc = branch?.description || '';
+    if (nameInput) nameInput.value = loadedBranchName;
+    if (descInput) descInput.value = loadedBranchDesc;
+    setNewBranchButtonMode('new');
+  }
+
+  async function handleNewBranchButtonClick() {
+    if (currentButtonMode === 'save') {
+      await saveOrUpdateBranch();
+    } else {
+      prepareNewBranch();
+    }
   }
 
   function prepareNewBranch() {
     isCreatingBranch = true;
+    loadedBranchName = '';
+    loadedBranchDesc = '';
     const nameInput = document.getElementById('rag-branch-name-input');
     const descInput = document.getElementById('rag-branch-desc-input');
-    const saveText = document.getElementById('rag-save-branch-text');
-    const cancelBtn = document.getElementById('btn-rag-cancel-branch');
     const feedback = document.getElementById('rag-branch-feedback');
     if (feedback) feedback.style.display = 'none';
 
@@ -294,14 +341,7 @@
       nameInput.focus();
     }
     if (descInput) descInput.value = '';
-    if (saveText) saveText.textContent = t('rag_create_branch') || 'Crear rama';
-    if (cancelBtn) cancelBtn.style.display = 'inline-flex';
-  }
-
-  async function cancelNewBranch() {
-    isCreatingBranch = false;
-    const select = document.getElementById('rag-manage-branch-select');
-    await updateBranchFields(select?.value);
+    setNewBranchButtonMode('save');
   }
 
   function showBranchFeedback(msg, type = 'success') {
@@ -332,6 +372,7 @@
       isCreatingBranch = false;
       await renderManageTab(branch.id);
       await renderActiveTab();
+      setNewBranchButtonMode('new');
       showBranchFeedback(t('rag_branch_created', { name }) || `Rama "${name}" creada con éxito.`, 'success');
     } else {
       const select = document.getElementById('rag-manage-branch-select');
@@ -341,12 +382,16 @@
         isCreatingBranch = false;
         await renderManageTab(branch.id);
         await renderActiveTab();
+        setNewBranchButtonMode('new');
         showBranchFeedback(t('rag_branch_created', { name }) || `Rama "${name}" creada con éxito.`, 'success');
         return;
       }
       await storage().updateBranch(id, { name, description });
+      loadedBranchName = name;
+      loadedBranchDesc = description;
       await renderManageTab(id);
       await renderActiveTab();
+      setNewBranchButtonMode('new');
       showBranchFeedback(t('rag_branch_updated', { name }) || `Rama "${name}" guardada con éxito.`, 'success');
     }
   }
@@ -519,10 +564,11 @@
       setActiveBranchIds(branches.map(b => b.id));
       await renderActiveTab();
     });
-    document.getElementById('btn-rag-new-branch')?.addEventListener('click', prepareNewBranch);
+    document.getElementById('btn-rag-new-branch')?.addEventListener('click', handleNewBranchButtonClick);
     document.getElementById('btn-rag-edit-branch')?.addEventListener('click', editBranch);
-    document.getElementById('btn-rag-save-branch')?.addEventListener('click', saveOrUpdateBranch);
-    document.getElementById('btn-rag-cancel-branch')?.addEventListener('click', cancelNewBranch);
+
+    document.getElementById('rag-branch-name-input')?.addEventListener('input', checkBranchInputsChanged);
+    document.getElementById('rag-branch-desc-input')?.addEventListener('input', checkBranchInputsChanged);
 
     const handleBranchKeyEnter = (e) => {
       if (e.key === 'Enter') {

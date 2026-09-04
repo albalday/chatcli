@@ -1168,12 +1168,22 @@ test('Browser UI - Iconos Fase 5: Iconos Vectoriales SVG en Modales, Pestañas, 
     await page.click('#btn-rag-new-branch');
     await page.fill('#rag-branch-name-input', 'Rama Playwright');
     await page.fill('#rag-branch-desc-input', 'Descripción de prueba Playwright');
-    await page.click('#btn-rag-save-branch');
+
+    // Verificar que el botón cambia a Guardar
+    const saveBtnTextAfterType = await page.$eval('#btn-rag-new-branch', el => el.textContent.trim());
+    assert.equal(saveBtnTextAfterType, 'Guardar', 'Al detectar cambios el botón de nueva rama debe cambiar a Guardar');
+
+    // Pulsar el botón Guardar
+    await page.click('#btn-rag-new-branch');
 
     await page.waitForFunction(() => {
       const select = document.getElementById('rag-manage-branch-select');
       return select && Array.from(select.options).some(opt => opt.text.includes('Rama Playwright'));
     });
+
+    // Verificar que tras guardar vuelve a ser "Nueva rama"
+    const btnTextAfterSave = await page.$eval('#btn-rag-new-branch', el => el.textContent.trim());
+    assert.equal(btnTextAfterSave, 'Nueva rama', 'Tras guardar el botón debe volver a ser "Nueva rama"');
 
     const createdBranch = await page.evaluate(async () => {
       const branches = await window.ChatRagStorage.getBranches();
@@ -1184,9 +1194,12 @@ test('Browser UI - Iconos Fase 5: Iconos Vectoriales SVG en Modales, Pestañas, 
     assert.equal(createdBranch.description, 'Descripción de prueba Playwright', 'La descripción debe haberse guardado');
     assert.equal(dialogTriggered, false, 'No debe haberse disparado ningún diálogo prompt() nativo');
 
-    // Modificar descripción en pantalla y guardar cambios
+    // Modificar descripción en pantalla y verificar que cambia a Guardar
     await page.fill('#rag-branch-desc-input', 'Descripción editada sin prompts');
-    await page.click('#btn-rag-save-branch');
+    const editBtnText = await page.$eval('#btn-rag-new-branch', el => el.textContent.trim());
+    assert.equal(editBtnText, 'Guardar', 'Al modificar la descripción el botón debe cambiar a Guardar');
+
+    await page.click('#btn-rag-new-branch');
 
     await page.waitForFunction(async (branchId) => {
       const b = await window.ChatRagStorage.getBranchById(branchId);
@@ -1199,6 +1212,9 @@ test('Browser UI - Iconos Fase 5: Iconos Vectoriales SVG en Modales, Pestañas, 
 
     assert.equal(updatedBranch.description, 'Descripción editada sin prompts', 'La modificación debe haberse guardado');
     assert.equal(dialogTriggered, false, 'No debe haberse mostrado ningún diálogo emergente bloqueante');
+
+    const btnTextFinal = await page.$eval('#btn-rag-new-branch', el => el.textContent.trim());
+    assert.equal(btnTextFinal, 'Nueva rama', 'Tras guardar la modificación el botón debe volver a ser "Nueva rama"');
 
     await page.click('#btn-close-rag');
   } finally {
