@@ -71,6 +71,47 @@ test('AgentRuntime - Tool call normal con resolución y respuesta final', async 
   assert.equal(result.history.length, 3); // user, assistant(call), tool(res)
 });
 
+test('AgentRuntime - serializa el resultado para el modelo a través del contrato de la tool', async () => {
+  const registry = new ToolRegistry();
+  registry.registerTool(new Tool({
+    name: 'contract_serialized_result',
+    description: 'Devuelve un resultado con una representación específica para el modelo.',
+    parameters: { type: 'object', properties: { value: { type: 'string' } } },
+    execute: async ({ value }) => ({ internalValue: value }),
+    result: {
+      toModel: (args, result, outcome) => `modelo:${args.value}:${result.internalValue}:${outcome.ok}`
+    }
+  }));
+
+  let step = 0;
+  const mockApi = {
+    streamChatCompletion: async (params) => {
+      step++;
+      if (step === 1) {
+        return {
+          accumulatedText: '',
+          toolCalls: [{
+            id: 'call_contract_serialized_result',
+            function: { name: 'contract_serialized_result', arguments: '{"value":"hola"}' }
+          }]
+        };
+      }
+
+      const toolMessage = params.messages.find(message => message.role === 'tool');
+      assert.equal(toolMessage.content, 'modelo:hola:hola:true');
+      return { accumulatedText: 'Resultado recibido.', toolCalls: [] };
+    }
+  };
+
+  const result = await new AgentRuntime({ registry }).execute({
+    api: mockApi,
+    messages: [{ role: 'user', content: 'Prueba el contrato.' }]
+  });
+
+  assert.equal(result.status, 'completed');
+  assert.equal(result.history.find(message => message.role === 'tool').content, 'modelo:hola:hola:true');
+});
+
 test('AgentRuntime - Múltiples pasos agénticos secuenciales', async () => {
   const registry = new ToolRegistry();
   registry.registerTool(new Tool({

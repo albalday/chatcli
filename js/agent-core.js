@@ -1047,9 +1047,10 @@
 
           let toolResponseContent = '';
           if (execResult.success && execResult.result !== undefined) {
-            toolResponseContent = typeof execResult.result === 'object'
-              ? JSON.stringify(execResult.result)
-              : String(execResult.result);
+            const serialized = execResult.tool.serializeResultForModel(execResult.args, execResult.result, execResult.outcome);
+            toolResponseContent = typeof serialized === 'string'
+              ? serialized
+              : JSON.stringify(serialized);
           } else {
             toolResponseContent = JSON.stringify({
               success: false,
