@@ -385,14 +385,24 @@
     return null;
   }
 
-  function handleClearAllData() {
+  async function handleClearAllData() {
     if (!confirm(t('confirm_clear_all_data'))) return;
     const Storage = getStorage();
+    let cleared = true;
     if (Storage?.clearAllStorage) {
-      Storage.clearAllStorage();
+      try {
+        cleared = await Storage.clearAllStorage();
+      } catch (error) {
+        console.warn('No se pudieron borrar todos los datos locales:', error);
+        cleared = false;
+      }
     } else {
       try { localStorage.clear(); } catch (e) {}
       try { sessionStorage.clear(); } catch (e) {}
+    }
+    if (cleared === false) {
+      alert('No se pudo borrar el historial de chats. Revisa la consola para más detalles.');
+      return;
     }
     if (typeof window !== 'undefined' && window.location) {
       window.location.reload();

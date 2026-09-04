@@ -449,7 +449,7 @@
     return JSON.parse(JSON.stringify(DEFAULT_PROFILES));
   }
 
-  function clearAllStorage() {
+  async function clearAllStorage() {
     if (hasLocalStorage) {
       try {
         const keysToRemove = [];
@@ -487,6 +487,10 @@
     memoryStorage.clear();
     memoryConversations.clear();
     memoryMessages.clear();
+
+    // Las conversaciones se guardan en IndexedDB, no en localStorage. Esperar a
+    // que se complete el borrado evita que reaparezcan tras la recarga.
+    return deleteAllConversations();
   }
 
   // ==========================================================================
