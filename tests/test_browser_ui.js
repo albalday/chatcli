@@ -621,6 +621,7 @@ test('Browser UI - Fase 6: Modales <dialog> Modernos con Blur y Tarjetas de Herr
     await page.waitForFunction(() => document.getElementById('profiles-dialog')?.open);
     page.once('dialog', dialog => dialog.accept('Perfil Temporal Playwright'));
     await page.click('#btn-new-profile');
+    await page.click('#profile-tab-settings');
     await page.fill('#setting-api-url', 'http://playwright-test:1234/v1');
     await page.click('#btn-save-profile');
 
@@ -646,6 +647,7 @@ test('Browser UI - Fase 6: Modales <dialog> Modernos con Blur y Tarjetas de Herr
     await page.waitForFunction(() => document.getElementById('profiles-dialog')?.open);
     await page.selectOption('#profile-select-helper', 'profile:local');
     await page.fill('#setting-profile-name', 'Local chat renombrado');
+    await page.click('#profile-tab-settings');
     await page.fill('#setting-api-url', 'http://active-profile-test:1234/v1');
     await page.click('#btn-save-profile');
     const renamedActiveResult = await page.evaluate(() => {
@@ -1154,6 +1156,49 @@ test('Browser UI - Iconos Fase 5: Iconos Vectoriales SVG en Modales, Pestañas, 
     assert.ok(ragIcons.hasExportBranchSvg, 'El botón de respaldar rama debe tener icono SVG');
     assert.ok(ragIcons.hasImportBranchSvg, 'El botón de importar rama debe tener icono SVG');
     assert.ok(ragIcons.hasQuotaSvg, 'El indicador de cuota debe tener icono SVG');
+
+    // Verificación de gestión de ramas con campos en pantalla (sin ventanas prompt nativas)
+    let dialogTriggered = false;
+    page.on('dialog', () => { dialogTriggered = true; });
+
+    await page.click('#rag-modal-tabs-nav [data-rag-tab="tab-rag-manage"]');
+    await page.waitForSelector('#rag-branch-details-card');
+
+    // Pulsar Nueva rama y rellenar campos en pantalla
+    await page.click('#btn-rag-new-branch');
+    await page.fill('#rag-branch-name-input', 'Rama Playwright');
+    await page.fill('#rag-branch-desc-input', 'Descripción de prueba Playwright');
+    await page.click('#btn-rag-save-branch');
+
+    await page.waitForFunction(() => {
+      const select = document.getElementById('rag-manage-branch-select');
+      return select && Array.from(select.options).some(opt => opt.text.includes('Rama Playwright'));
+    });
+
+    const createdBranch = await page.evaluate(async () => {
+      const branches = await window.ChatRagStorage.getBranches();
+      return branches.find(b => b.name === 'Rama Playwright');
+    });
+
+    assert.ok(createdBranch, 'La rama debe haberse creado en IndexedDB');
+    assert.equal(createdBranch.description, 'Descripción de prueba Playwright', 'La descripción debe haberse guardado');
+    assert.equal(dialogTriggered, false, 'No debe haberse disparado ningún diálogo prompt() nativo');
+
+    // Modificar descripción en pantalla y guardar cambios
+    await page.fill('#rag-branch-desc-input', 'Descripción editada sin prompts');
+    await page.click('#btn-rag-save-branch');
+
+    await page.waitForFunction(async (branchId) => {
+      const b = await window.ChatRagStorage.getBranchById(branchId);
+      return b && b.description === 'Descripción editada sin prompts';
+    }, createdBranch.id);
+
+    const updatedBranch = await page.evaluate(async (branchId) => {
+      return await window.ChatRagStorage.getBranchById(branchId);
+    }, createdBranch.id);
+
+    assert.equal(updatedBranch.description, 'Descripción editada sin prompts', 'La modificación debe haberse guardado');
+    assert.equal(dialogTriggered, false, 'No debe haberse mostrado ningún diálogo emergente bloqueante');
 
     await page.click('#btn-close-rag');
   } finally {

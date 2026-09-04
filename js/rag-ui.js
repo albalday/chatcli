@@ -34,6 +34,15 @@
     return `${(bytes / Math.pow(1024, exponent)).toFixed(exponent ? 1 : 0)} ${units[exponent]}`;
   }
 
+  function t(key, params) {
+    if (typeof window !== 'undefined' && window.ChatI18n?.t) {
+      return window.ChatI18n.t(key, params);
+    }
+    return '';
+  }
+
+  let isCreatingBranch = false;
+
   async function getBranchMetrics(branches) {
     const metrics = await Promise.all((branches || []).map(async branch => {
       const documents = await storage().getDocumentsByBranch(branch.id);
@@ -174,10 +183,11 @@
 
   async function renderWorkspace(branchId) {
     if (typeof document === 'undefined') return;
+    await updateBranchFields(branchId);
     const workspace = document.getElementById('rag-manage-workspace');
     if (!workspace) return;
     if (!branchId) {
-      workspace.innerHTML = '<div class="rag-empty-state">Crea una rama para añadir documentos.</div>';
+      workspace.innerHTML = '<div class="rag-empty-state">Escribe un nombre arriba y pulsa "Crear rama" para empezar.</div>';
       return;
     }
     const documents = await storage().getDocumentsByBranch(branchId);
@@ -244,25 +254,109 @@
     await renderWorkspace(selected);
   }
 
-  async function createBranch() {
-    const name = prompt('Nombre de la nueva rama:');
-    if (!name?.trim()) return;
-    const description = prompt('Descripción opcional:') || '';
-    const branch = await storage().createBranch(name.trim(), description.trim());
-    await renderManageTab(branch.id);
-    await renderActiveTab();
+  async function updateBranchFields(branchId) {
+    if (typeof document === 'undefined') return;
+    const nameInput = document.getElementById('rag-branch-name-input');
+    const descInput = document.getElementById('rag-branch-desc-input');
+    const saveText = document.getElementById('rag-save-branch-text');
+    const cancelBtn = document.getElementById('btn-rag-cancel-branch');
+    const feedback = document.getElementById('rag-branch-feedback');
+    if (feedback) feedback.style.display = 'none';
+
+    if (!branchId) {
+      isCreatingBranch = true;
+      if (nameInput) nameInput.value = '';
+      if (descInput) descInput.value = '';
+      if (saveText) saveText.textContent = t('rag_create_branch') || 'Crear rama';
+      if (cancelBtn) cancelBtn.style.display = 'none';
+      return;
+    }
+
+    isCreatingBranch = false;
+    const branch = await storage().getBranchById(branchId);
+    if (nameInput) nameInput.value = branch?.name || '';
+    if (descInput) descInput.value = branch?.description || '';
+    if (saveText) saveText.textContent = t('rag_save_branch') || 'Guardar rama';
+    if (cancelBtn) cancelBtn.style.display = 'none';
   }
 
-  async function editBranch() {
+  function prepareNewBranch() {
+    isCreatingBranch = true;
+    const nameInput = document.getElementById('rag-branch-name-input');
+    const descInput = document.getElementById('rag-branch-desc-input');
+    const saveText = document.getElementById('rag-save-branch-text');
+    const cancelBtn = document.getElementById('btn-rag-cancel-branch');
+    const feedback = document.getElementById('rag-branch-feedback');
+    if (feedback) feedback.style.display = 'none';
+
+    if (nameInput) {
+      nameInput.value = '';
+      nameInput.focus();
+    }
+    if (descInput) descInput.value = '';
+    if (saveText) saveText.textContent = t('rag_create_branch') || 'Crear rama';
+    if (cancelBtn) cancelBtn.style.display = 'inline-flex';
+  }
+
+  async function cancelNewBranch() {
+    isCreatingBranch = false;
     const select = document.getElementById('rag-manage-branch-select');
-    const branch = await storage().getBranchById(select?.value);
-    if (!branch) return;
-    const name = prompt('Nombre de la rama:', branch.name);
-    if (!name?.trim()) return;
-    const description = prompt('Descripción:', branch.description) ?? branch.description;
-    await storage().updateBranch(branch.id, { name: name.trim(), description: description.trim() });
-    await renderManageTab(branch.id);
-    await renderActiveTab();
+    await updateBranchFields(select?.value);
+  }
+
+  function showBranchFeedback(msg, type = 'success') {
+    const el = document.getElementById('rag-branch-feedback');
+    if (!el) return;
+    el.style.display = 'block';
+    el.className = `server-query-status status-${type}`;
+    el.textContent = msg;
+    setTimeout(() => {
+      if (el) el.style.display = 'none';
+    }, 4000);
+  }
+
+  async function saveOrUpdateBranch() {
+    const nameInput = document.getElementById('rag-branch-name-input');
+    const descInput = document.getElementById('rag-branch-desc-input');
+    const name = nameInput?.value?.trim();
+    const description = descInput?.value?.trim() || '';
+
+    if (!name) {
+      showBranchFeedback(t('rag_branch_name_empty') || 'Por favor, escribe un nombre para la rama.', 'error');
+      nameInput?.focus();
+      return;
+    }
+
+    if (isCreatingBranch) {
+      const branch = await storage().createBranch(name, description);
+      isCreatingBranch = false;
+      await renderManageTab(branch.id);
+      await renderActiveTab();
+      showBranchFeedback(t('rag_branch_created', { name }) || `Rama "${name}" creada con éxito.`, 'success');
+    } else {
+      const select = document.getElementById('rag-manage-branch-select');
+      const id = select?.value;
+      if (!id) {
+        const branch = await storage().createBranch(name, description);
+        isCreatingBranch = false;
+        await renderManageTab(branch.id);
+        await renderActiveTab();
+        showBranchFeedback(t('rag_branch_created', { name }) || `Rama "${name}" creada con éxito.`, 'success');
+        return;
+      }
+      await storage().updateBranch(id, { name, description });
+      await renderManageTab(id);
+      await renderActiveTab();
+      showBranchFeedback(t('rag_branch_updated', { name }) || `Rama "${name}" guardada con éxito.`, 'success');
+    }
+  }
+
+  function editBranch() {
+    const nameInput = document.getElementById('rag-branch-name-input');
+    if (nameInput) {
+      nameInput.focus();
+      nameInput.select();
+    }
   }
 
   async function deleteBranch() {
@@ -425,8 +519,20 @@
       setActiveBranchIds(branches.map(b => b.id));
       await renderActiveTab();
     });
-    document.getElementById('btn-rag-new-branch')?.addEventListener('click', createBranch);
+    document.getElementById('btn-rag-new-branch')?.addEventListener('click', prepareNewBranch);
     document.getElementById('btn-rag-edit-branch')?.addEventListener('click', editBranch);
+    document.getElementById('btn-rag-save-branch')?.addEventListener('click', saveOrUpdateBranch);
+    document.getElementById('btn-rag-cancel-branch')?.addEventListener('click', cancelNewBranch);
+
+    const handleBranchKeyEnter = (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        saveOrUpdateBranch();
+      }
+    };
+    document.getElementById('rag-branch-name-input')?.addEventListener('keydown', handleBranchKeyEnter);
+    document.getElementById('rag-branch-desc-input')?.addEventListener('keydown', handleBranchKeyEnter);
+
     document.getElementById('btn-rag-delete-branch')?.addEventListener('click', deleteBranch);
     document.getElementById('btn-rag-export-branch')?.addEventListener('click', () => exportBranch().catch(error => alert(error.message)));
     const importInput = document.getElementById('rag-import-input');

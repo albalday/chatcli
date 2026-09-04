@@ -828,6 +828,33 @@ input:checked + .slider:before {
 }
 .rag-manage-branch-field { flex: 1; margin: 0; }
 .rag-manage-toolbar-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+
+.rag-branch-details-card {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.85rem;
+  margin-bottom: 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+}
+.rag-branch-fields-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.5fr;
+  gap: 0.75rem;
+}
+@media (max-width: 640px) {
+  .rag-branch-fields-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.rag-branch-details-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
 .rag-manage-workspace { display: grid; gap: 1rem; }
 
 .rag-dropzone {
