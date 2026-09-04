@@ -20,8 +20,8 @@
     if (typeof window !== 'undefined') return window.ChatRagIndex;
     try { return require('./rag-index.js'); } catch (_) { return null; }
   }
-  function configStorage() {
-    return typeof window !== 'undefined' ? window.ChatStorage : null;
+  function runtimeConfig() {
+    return typeof window !== 'undefined' ? window.ChatConfig : null;
   }
   function escapeHtml(value) {
     const markdown = typeof window !== 'undefined' ? window.ChatMarkdown : null;
@@ -69,9 +69,9 @@
   function setActiveBranchIds(ids) {
     const list = Array.isArray(ids) ? ids : (ids ? [ids] : []);
     activeBranchIds = new Set(list.map(id => String(id || '').trim()).filter(Boolean));
-    const store = configStorage();
-    if (store?.saveConfig) {
-      store.saveConfig({
+    const config = runtimeConfig();
+    if (config?.updateGeneral) {
+      config.updateGeneral({
         activeRagBranchIds: Array.from(activeBranchIds),
         activeRagBranchId: getActiveBranchId()
       });
@@ -398,7 +398,7 @@
   function initRagUI() {
     if (initialized || typeof document === 'undefined') return;
     initialized = true;
-    const cfg = configStorage()?.loadConfig?.() || {};
+    const cfg = runtimeConfig()?.getActive?.() || {};
     if (Array.isArray(cfg.activeRagBranchIds) && cfg.activeRagBranchIds.length > 0) {
       activeBranchIds = new Set(cfg.activeRagBranchIds.map(String).filter(Boolean));
     } else if (cfg.activeRagBranchId) {

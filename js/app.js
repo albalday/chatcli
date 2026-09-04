@@ -40,6 +40,8 @@
   const UIInspector = window.ChatUIInspector || {};
   const UISidebar = window.ChatUISidebar || {};
   const UISettings = window.ChatUISettings || {};
+  const Config = window.ChatConfig || {};
+  const Profiles = window.ChatProfileRepository || {};
 
   function t(key, params) {
     if (I18n.t) return I18n.t(key, params);
@@ -54,7 +56,7 @@
   }
 
   // Estado de la aplicación
-  let appConfig = Storage.loadConfig ? Storage.loadConfig() : {
+  const fallbackConfig = {
     apiUrl: 'http://localhost:1234/v1',
     apiType: 'openai',
     apiKey: '',
@@ -77,9 +79,19 @@
     activeRagBranchId: ''
   };
 
-  if (typeof window !== 'undefined') {
-    window.appConfig = appConfig;
+  if (Config.initialize) Config.initialize();
+
+  function getRuntimeConfig() {
+    return Config.getActive ? Config.getActive() : { ...fallbackConfig };
   }
+
+  // Transitional read-through facade for legacy helpers inside this module.
+  // It owns no data: every read is resolved from the canonical runtime store.
+  const appConfig = new Proxy({}, {
+    get: (_target, key) => getRuntimeConfig()[key],
+    ownKeys: () => Reflect.ownKeys(getRuntimeConfig()),
+    getOwnPropertyDescriptor: (_target, key) => ({ enumerable: true, configurable: true, value: getRuntimeConfig()[key] })
+  });
 
   let currentRagSystemContext = '';
   let chatHistory = [];
@@ -390,7 +402,9 @@
 
   function selectReasoningLevel(level) {
     if (UIReasoning.selectReasoningLevel) {
-      UIReasoning.selectReasoningLevel(elements, appConfig, level);
+      UIReasoning.selectReasoningLevel(elements, getRuntimeConfig(), level, (reasoningEffort) => {
+        if (Config.updateRuntime) Config.updateRuntime({ reasoningEffort });
+      });
     }
   }
 
@@ -440,17 +454,15 @@
   }
 
   function syncDebugMessagesState(enabled, persist = true) {
-    appConfig.enableDebugMessages = Boolean(enabled);
+    const value = Boolean(enabled);
     if (elements.chkEnableDebugMessages) {
-      elements.chkEnableDebugMessages.checked = appConfig.enableDebugMessages;
+      elements.chkEnableDebugMessages.checked = value;
     }
     if (elements.debugMessagesStatusBadge) {
-      elements.debugMessagesStatusBadge.textContent = appConfig.enableDebugMessages ? 'ON' : 'OFF';
-      elements.debugMessagesStatusBadge.className = 'debug-status-pill ' + (appConfig.enableDebugMessages ? 'on' : 'off');
+      elements.debugMessagesStatusBadge.textContent = value ? 'ON' : 'OFF';
+      elements.debugMessagesStatusBadge.className = 'debug-status-pill ' + (value ? 'on' : 'off');
     }
-    if (persist && Storage.saveConfig) {
-      Storage.saveConfig(appConfig);
-    }
+    if (persist && Config.updateGeneral) Config.updateGeneral({ enableDebugMessages: value });
   }
 
   function openDebugInterceptorModal({ endpoint, headers, payload }) {
@@ -466,40 +478,41 @@
   }
 
   function updateUIFromConfig() {
-    if (elements.activeProfileSelect && Storage.getProfiles) {
-      const active = (Storage.getActiveProfileName ? Storage.getActiveProfileName() : appConfig.activeProfileName) || 'Local chat';
-      elements.activeProfileSelect.innerHTML = Object.keys(Storage.getProfiles()).map(name => `<option value="${Markdown.escapeHtml(name)}"${name === active ? ' selected' : ''}>${Markdown.escapeHtml(name)}</option>`).join('');
+    const config = getRuntimeConfig();
+    if (elements.activeProfileSelect && Profiles.list) {
+      const active = config.activeProfile?.id || '';
+      elements.activeProfileSelect.innerHTML = Profiles.list().map(profile => `<option value="${Markdown.escapeHtml(profile.id)}"${profile.id === active ? ' selected' : ''}>${Markdown.escapeHtml(profile.name)}</option>`).join('');
     }
     if (elements.currentProfileName) {
-      const activeProf = (Storage.getActiveProfileName ? Storage.getActiveProfileName() : appConfig.activeProfileName) || appConfig.activeProfileName || 'Local chat';
+      const activeProf = config.activeProfile?.name || 'Configuración actual';
       elements.currentProfileName.textContent = activeProf;
     }
     if (elements.currentServerUrl) {
-      elements.currentServerUrl.textContent = appConfig.apiUrl || 'http://localhost:1234/v1';
+      elements.currentServerUrl.textContent = config.apiUrl || 'http://localhost:1234/v1';
     }
     if (elements.currentModelName) {
-      elements.currentModelName.textContent = appConfig.model ? appConfig.model : t('no_model');
+      elements.currentModelName.textContent = config.model ? config.model : t('no_model');
     }
     if (elements.settingApiType) {
-      elements.settingApiType.value = appConfig.apiType || 'openai';
+      elements.settingApiType.value = config.apiType || 'openai';
     }
     if (elements.settingApiUrl) {
-      elements.settingApiUrl.value = appConfig.apiUrl || 'http://localhost:1234/v1';
+      elements.settingApiUrl.value = config.apiUrl || 'http://localhost:1234/v1';
     }
     if (elements.settingApiKey) {
-      elements.settingApiKey.value = appConfig.apiKey || '';
+      elements.settingApiKey.value = config.apiKey || '';
     }
     if (elements.settingModel) {
-      elements.settingModel.value = appConfig.model || '';
+      elements.settingModel.value = config.model || '';
     }
-    if (elements.modelSelectHelper && appConfig.model) {
-      elements.modelSelectHelper.value = appConfig.model;
+    if (elements.modelSelectHelper && config.model) {
+      elements.modelSelectHelper.value = config.model;
     }
-    updateReasoningUI(appConfig.reasoningEffort || 'none');
-    applyTheme(appConfig.theme || 'light');
-    applyLanguage(appConfig.language || 'es');
+    updateReasoningUI(config.reasoningEffort || 'none');
+    applyTheme(config.theme || 'light');
+    applyLanguage(config.language || 'es');
 
-    const isRawEnabled = appConfig.enableRawLogs === true;
+    const isRawEnabled = config.enableRawLogs === true;
     if (elements.chkEnableRaw) {
       elements.chkEnableRaw.checked = isRawEnabled;
     }
@@ -511,7 +524,7 @@
       elements.settingEnableRawLogs.checked = isRawEnabled;
     }
 
-    syncDebugMessagesState(appConfig.enableDebugMessages, false);
+    syncDebugMessagesState(config.enableDebugMessages, false);
     updateConnectionTokensBadge(null);
   }
 
@@ -802,6 +815,9 @@
     const rawText = elements.userInput.value.trim();
     const currentFiles = Attachments.getFiles ? Attachments.getFiles() : [];
     if ((!rawText && currentFiles.length === 0) || isGenerating) return;
+    // One immutable snapshot per turn prevents profile changes from modifying
+    // an in-flight request.
+    const runtimeConfig = getRuntimeConfig();
 
     const { fullPrompt, displayText, imageAttachments } = Attachments.buildAttachmentsPayload
       ? Attachments.buildAttachmentsPayload(rawText, currentFiles)
@@ -838,14 +854,14 @@
       return;
     }
 
-    if (!appConfig.model || appConfig.model.trim() === '') {
+    if (!runtimeConfig.model || runtimeConfig.model.trim() === '') {
       row.classList.add('message-error');
       content.innerHTML = `
         <div style="display:flex; align-items:flex-start; gap:0.5rem;">
           <span>⚠️</span>
           <div>
             <strong>${t('err_no_model_title')}</strong>
-            <p style="margin-top: 0.25rem;">${t('err_no_model_desc', { url: appConfig.apiUrl })}</p>
+            <p style="margin-top: 0.25rem;">${t('err_no_model_desc', { url: runtimeConfig.apiUrl })}</p>
           </div>
         </div>
       `;
@@ -877,13 +893,10 @@
       updateConnectionTokensBadge(stats);
     }
 
-    // Sincronizar dinámicamente las ramas locales activas.
-    const activeRagBranchIds = (typeof window !== 'undefined' && window.ChatRagUI && window.ChatRagUI.getActiveBranchIds)
-      ? window.ChatRagUI.getActiveBranchIds()
-      : (appConfig.activeRagBranchIds || (Storage.loadConfig ? Storage.loadConfig()?.activeRagBranchIds : []) || (appConfig.activeRagBranchId ? [appConfig.activeRagBranchId] : []));
-    appConfig.activeRagBranchIds = activeRagBranchIds;
-    const activeRagBranchId = activeRagBranchIds[0] || (typeof window !== 'undefined' && window.ChatRagUI && window.ChatRagUI.getActiveBranchId ? window.ChatRagUI.getActiveBranchId() : (appConfig.activeRagBranchId || ''));
-    appConfig.activeRagBranchId = activeRagBranchId;
+    const activeRagBranchIds = Array.isArray(runtimeConfig.activeRagBranchIds)
+      ? runtimeConfig.activeRagBranchIds
+      : (runtimeConfig.activeRagBranchId ? [runtimeConfig.activeRagBranchId] : []);
+    const activeRagBranchId = activeRagBranchIds[0] || runtimeConfig.activeRagBranchId || '';
 
     // Cargar únicamente la instrucción compacta de las ramas activas.
     if (activeRagBranchIds.length > 0 && window.ChatRagService && window.ChatRagService.buildRagSystemContext) {
@@ -899,14 +912,14 @@
 
     const runner = window.ChatEngine || Engine;
     const loopResult = await runner.executeAgentTurnLoop({
-      apiUrl: appConfig.apiUrl,
-      apiType: appConfig.apiType,
-      apiKey: appConfig.apiKey,
-      model: appConfig.model,
-      temperature: appConfig.temperature,
-      reasoningEffort: appConfig.reasoningEffort || 'none',
+      apiUrl: runtimeConfig.apiUrl,
+      apiType: runtimeConfig.apiType,
+      apiKey: runtimeConfig.apiKey,
+      model: runtimeConfig.model,
+      temperature: runtimeConfig.temperature,
+      reasoningEffort: runtimeConfig.reasoningEffort || 'none',
       chatHistory: chatHistory,
-      appConfig: appConfig,
+      appConfig: runtimeConfig,
       assistantMsgId: assistantMsgId,
       activeRagBranchId: activeRagBranchId,
       activeRagBranchIds: activeRagBranchIds,
@@ -914,7 +927,7 @@
       signal: currentAbortController.signal,
       container: content,
 
-      onBeforeRequest: appConfig.enableDebugMessages ? async function ({ endpoint, headers, payload }) {
+      onBeforeRequest: runtimeConfig.enableDebugMessages ? async function ({ endpoint, headers, payload }) {
         return await openDebugInterceptorModal({ endpoint, headers, payload });
       } : null,
 
@@ -1030,26 +1043,25 @@
    * Puebla el combobox auxiliar y el datalist con todos los perfiles disponibles.
    */
   function populateProfileSelector(selectedProfileName) {
-    if (!Storage.getProfiles) return;
-    const profiles = Storage.getProfiles();
-    const profileNames = Object.keys(profiles);
+    if (!Profiles.list) return;
+    const profiles = Profiles.list();
 
     if (elements.profileDatalist) {
       elements.profileDatalist.innerHTML = '';
-      profileNames.forEach(name => {
+      profiles.forEach(profile => {
         const opt = document.createElement('option');
-        opt.value = name;
+        opt.value = profile.name;
         elements.profileDatalist.appendChild(opt);
       });
     }
 
     if (elements.profileSelectHelper) {
       elements.profileSelectHelper.innerHTML = `<option value="" disabled data-i18n="profile_select_default">▾ Elegir perfil guardado...</option>`;
-      profileNames.forEach(name => {
+      profiles.forEach(profile => {
         const opt = document.createElement('option');
-        opt.value = name;
-        opt.textContent = name;
-        if (name === selectedProfileName) {
+        opt.value = profile.id;
+        opt.textContent = profile.name;
+        if (profile.id === selectedProfileName) {
           opt.selected = true;
         }
         elements.profileSelectHelper.appendChild(opt);
@@ -1057,7 +1069,8 @@
     }
 
     if (elements.settingProfileName) {
-      elements.settingProfileName.value = selectedProfileName || '';
+      const selected = profiles.find(profile => profile.id === selectedProfileName);
+      elements.settingProfileName.value = selected?.name || '';
     }
   }
 
@@ -1095,11 +1108,7 @@
 
   function saveCurrentSettings(closeModal = true) {
     const newConfig = gatherCurrentFormConfig();
-
-    if (Storage.saveConfig) {
-      Storage.saveConfig(newConfig);
-    }
-    appConfig = newConfig;
+    const savedConfig = Config.updateRuntime ? Config.updateRuntime(newConfig) : newConfig;
 
     if (chatHistory.length > 0 && chatHistory[0].role === 'system') {
       chatHistory[0].content = appConfig.systemPrompt || '';
@@ -1108,29 +1117,44 @@
     updateUIFromConfig();
 
     if (typeof populateProfileSelector === 'function') {
-      populateProfileSelector(newConfig.activeProfileName);
+      populateProfileSelector(savedConfig.activeProfile?.id || '');
     }
 
     if (closeModal) {
       closeSettingsModal();
     } else {
-      showProfileFeedback(t('msg_profile_saved', { name: newConfig.activeProfileName }) || `Perfil "${newConfig.activeProfileName}" guardado con éxito.`, 'success');
+      showProfileFeedback(t('msg_profile_saved', { name: savedConfig.activeProfile?.name || 'actual' }) || 'Configuración actualizada.', 'success');
     }
   }
 
   function handleSaveProfile() {
-    saveCurrentSettings(false);
+    const draft = gatherCurrentFormConfig();
+    const name = String(draft.activeProfileName || '').trim();
+    if (!name || !Profiles.save) return;
+    const existing = Profiles.findByName ? Profiles.findByName(name) : null;
+    const saved = Profiles.save({
+      id: existing?.id || `profile:${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      name,
+      settings: draft
+    });
+    populateProfileSelector(saved.id);
+    showProfileFeedback(t('msg_profile_saved', { name }) || `Perfil "${name}" guardado con éxito.`, 'success');
   }
 
   function handleDeleteProfile() {
-    if (UISettings.handleDeleteProfile) {
-      UISettings.handleDeleteProfile(elements, populateProfileSelector, applyProfileToForm);
+    const id = elements.profileSelectHelper?.value || '';
+    const profile = Profiles.get ? Profiles.get(id) : null;
+    if (!profile || !confirm(t('confirm_delete_profile', { name: profile.name }))) return;
+    if (Profiles.remove?.(profile.id)) {
+      populateProfileSelector('');
+      showProfileFeedback(t('msg_profile_deleted', { name: profile.name }) || `Perfil "${profile.name}" eliminado.`, 'success');
+      updateUIFromConfig();
     }
   }
 
   function openSettingsModal() {
     if (UISettings.openSettingsModal) {
-      UISettings.openSettingsModal(elements, appConfig, {
+      UISettings.openSettingsModal(elements, getRuntimeConfig(), {
         populateProfileSelector,
         loadCachedModels,
         updateReasoningUI
@@ -1700,8 +1724,9 @@
     // Botón rápido de Idioma en la barra superior
     if (elements.btnLangQuick) {
       elements.btnLangQuick.addEventListener('click', () => {
-        const nextLang = (appConfig.language === 'en') ? 'es' : 'en';
+        const nextLang = (getRuntimeConfig().language === 'en') ? 'es' : 'en';
         applyLanguage(nextLang);
+        if (Config.updateGeneral) Config.updateGeneral({ language: nextLang });
       });
     }
 
@@ -1724,18 +1749,8 @@
     }
     if (elements.activeProfileSelect) {
       elements.activeProfileSelect.addEventListener('change', function () {
-        const profile = Storage.getProfile ? Storage.getProfile(this.value) : null;
-        if (!profile) return;
-        appConfig = {
-          ...appConfig,
-          ...profile,
-          activeProfileName: this.value,
-          reasoningEffort: profile.reasoningEffort || 'none',
-          modelReasoningConfig: profile.modelReasoningConfig || null
-        };
-        if (Storage.setActiveProfileName) Storage.setActiveProfileName(this.value);
-        if (Storage.saveConfig) Storage.saveConfig(appConfig);
-        updateUIFromConfig();
+        if (!this.value || !Config.activateProfile) return;
+        Config.activateProfile(this.value);
       });
     }
     if (elements.btnCloseSidebar) {
@@ -1838,7 +1853,7 @@
     }
 
     function syncRawLogsState(enabled) {
-      appConfig.enableRawLogs = Boolean(enabled);
+      const value = Boolean(enabled);
       if (Debug.setRawLogsEnabled) Debug.setRawLogsEnabled(enabled);
       if (elements.chkEnableRaw) elements.chkEnableRaw.checked = enabled;
       if (elements.settingEnableRawLogs) elements.settingEnableRawLogs.checked = enabled;
@@ -1846,7 +1861,7 @@
         elements.rawStatusBadge.className = enabled ? 'raw-status-badge active' : 'raw-status-badge';
         elements.rawStatusBadge.textContent = enabled ? t('raw_status_active') : t('raw_status_inactive');
       }
-      if (Storage.saveConfig) Storage.saveConfig(appConfig);
+      if (Config.updateRuntime) Config.updateRuntime({ enableRawLogs: value });
     }
 
     if (elements.chkEnableRaw) {
@@ -1907,17 +1922,13 @@
 
     if (elements.profileSelectHelper) {
       elements.profileSelectHelper.addEventListener('change', function () {
-        const selectedName = this.value;
-        if (!selectedName) return;
+        const selectedId = this.value;
+        const profile = Profiles.get ? Profiles.get(selectedId) : null;
+        if (!profile) return;
         if (elements.settingProfileName) {
-          elements.settingProfileName.value = selectedName;
+          elements.settingProfileName.value = profile.name;
         }
-        if (Storage.getProfile) {
-          const prof = Storage.getProfile(selectedName);
-          if (prof) {
-            applyProfileToForm(prof);
-          }
-        }
+        applyProfileToForm(profile.settings);
       });
     }
 
@@ -1925,12 +1936,12 @@
       elements.settingProfileName.addEventListener('change', function () {
         const typedName = this.value.trim();
         if (!typedName) return;
-        if (Storage.getProfile) {
-          const prof = Storage.getProfile(typedName);
-          if (prof) {
-            applyProfileToForm(prof);
+        if (Profiles.findByName) {
+          const profile = Profiles.findByName(typedName);
+          if (profile) {
+            applyProfileToForm(profile.settings);
             if (elements.profileSelectHelper) {
-              elements.profileSelectHelper.value = typedName;
+              elements.profileSelectHelper.value = profile.id;
             }
           }
         }
@@ -2038,9 +2049,7 @@
           e.stopPropagation();
           const targetTheme = btn.getAttribute('data-theme') || 'light';
           applyTheme(targetTheme);
-          if (Storage.saveConfig) {
-            Storage.saveConfig({ theme: targetTheme });
-          }
+          if (Config.updateGeneral) Config.updateGeneral({ theme: targetTheme });
         });
       });
     }
@@ -2052,6 +2061,7 @@
           e.stopPropagation();
           const targetLang = btn.getAttribute('data-lang') || 'es';
           applyLanguage(targetLang);
+          if (Config.updateGeneral) Config.updateGeneral({ language: targetLang });
         });
       });
     }
@@ -2079,10 +2089,7 @@
     if (Debug.setRawLogsEnabled) Debug.setRawLogsEnabled(appConfig.enableRawLogs);
 
     if (State.setState) {
-      State.setState({
-        config: appConfig,
-        sessions: { activeId: currentSessionId, list: savedSessions }
-      });
+      State.setState({ sessions: { activeId: currentSessionId, list: savedSessions } });
     }
 
     if (State.subscribe) {
@@ -2090,6 +2097,12 @@
         isGenerating = Boolean(streamingState.isGenerating);
         if (elements.btnSend) elements.btnSend.disabled = isGenerating;
         if (elements.btnStopStream) elements.btnStopStream.style.display = isGenerating ? 'inline-flex' : 'none';
+      });
+    }
+
+    if (Config.subscribe) {
+      Config.subscribe((nextConfig) => {
+        updateUIFromConfig();
       });
     }
 

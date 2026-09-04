@@ -297,6 +297,30 @@
     return true;
   }
 
+  // Runtime configuration v2 is deliberately stored separately from the
+  // versioned profile catalogue. The legacy functions below remain available
+  // solely while consumers are migrated incrementally.
+  function loadRuntimeConfigV2() {
+    const raw = getStorageItem('runtime_config_v2');
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+        ? JSON.parse(JSON.stringify(parsed))
+        : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function saveRuntimeConfigV2(config) {
+    if (!config || typeof config !== 'object' || Array.isArray(config)) {
+      throw new Error('La configuración operativa debe ser un objeto.');
+    }
+    setStorageItem('runtime_config_v2', JSON.stringify(config));
+    return true;
+  }
+
   function loadConfig() {
     const activeProfileName = getActiveProfileName();
     const profiles = getProfiles();
@@ -866,6 +890,8 @@
     deleteCookie: deleteStorageItem,
     loadConfig,
     saveConfig,
+    loadRuntimeConfigV2,
+    saveRuntimeConfigV2,
     resetConfigToDefaults,
     getDefaultConfig,
     getDefaultProfiles,

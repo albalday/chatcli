@@ -204,7 +204,7 @@
 
     const isToolsEnabled = options.enableTools !== undefined
       ? Boolean(options.enableTools)
-      : (appConfig.enableAgentJs !== false || appConfig.enableAgentWeb !== false || appConfig.enableAgentSearch !== false || appConfig.enableAgentChart !== false || Boolean(appConfig.activeRagBranchId));
+      : Boolean(appConfig.enabledTools && Object.values(appConfig.enabledTools).some(value => value !== false));
 
     // Consultar si el modelo soporta llamadas a herramientas nativas
     const API = getAPI();
@@ -227,13 +227,10 @@
     }
 
     // Directiva proactiva de Base de Conocimiento activa
-    const activeBranchIds = options.activeRagBranchIds ||
-      (options.activeRagBranchId ? [options.activeRagBranchId] : []) ||
-      (typeof window !== 'undefined' && window.ChatRagUI && window.ChatRagUI.getActiveBranchIds ? window.ChatRagUI.getActiveBranchIds() : []) ||
-      (appConfig.activeRagBranchIds || (appConfig.activeRagBranchId ? [appConfig.activeRagBranchId] : []));
-    const activeBranchId = options.activeRagBranchId || (Array.isArray(activeBranchIds) ? activeBranchIds[0] : '') ||
-      (typeof window !== 'undefined' && window.ChatRagUI && window.ChatRagUI.getActiveBranchId ? window.ChatRagUI.getActiveBranchId() : '') ||
-      (appConfig.activeRagBranchId || '');
+    const activeBranchIds = Array.isArray(options.activeRagBranchIds)
+      ? options.activeRagBranchIds
+      : (options.activeRagBranchId ? [options.activeRagBranchId] : (appConfig.activeRagBranchIds || (appConfig.activeRagBranchId ? [appConfig.activeRagBranchId] : [])));
+    const activeBranchId = options.activeRagBranchId || (Array.isArray(activeBranchIds) ? activeBranchIds[0] : '') || (appConfig.activeRagBranchId || '');
 
     if (activeBranchId || (Array.isArray(activeBranchIds) && activeBranchIds.length > 0)) {
       const ragInstruction = (lang === 'en')

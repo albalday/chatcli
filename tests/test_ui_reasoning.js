@@ -64,7 +64,7 @@ test('UIReasoning - renderReasoningMenuOptions crea botones interactivos', () =>
   assert.equal(selectedLevel, 'medium');
 });
 
-test('UIReasoning - selectReasoningLevel normaliza y actualiza appConfig', () => {
+test('UIReasoning - selectReasoningLevel normaliza y emite la intención sin mutar configuración', () => {
   const appConfig = { reasoningEffort: 'none' };
   const labelEl = { textContent: '' };
   const btnEl = {
@@ -87,7 +87,7 @@ test('UIReasoning - selectReasoningLevel normaliza y actualiza appConfig', () =>
     callbackCalledWith = norm;
   });
 
-  assert.equal(appConfig.reasoningEffort, 'high');
+  assert.equal(appConfig.reasoningEffort, 'none');
   assert.equal(callbackCalledWith, 'high');
   assert.equal(labelEl.textContent, 'High');
   assert.ok(btnEl.classList.classes.has('active'));

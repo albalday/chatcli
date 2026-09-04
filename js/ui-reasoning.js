@@ -169,13 +169,6 @@
   function selectReasoningLevel(elements, appConfig, level, onLevelChanged) {
     let norm = String(level).trim();
     if (norm.toLowerCase() === 'off') norm = 'none';
-    if (appConfig) {
-      appConfig.reasoningEffort = norm;
-    }
-    const Storage = getStorage();
-    if (Storage?.saveConfig) {
-      Storage.saveConfig({ reasoningEffort: norm });
-    }
     updateReasoningUI(elements, norm);
     closeReasoningMenu(elements);
     if (typeof onLevelChanged === 'function') {

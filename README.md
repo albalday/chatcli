@@ -20,6 +20,7 @@ Puedes respaldar y restaurar cada rama de conocimiento desde la interfaz. La lis
 
 - Conversaciones, adjuntos y conocimiento se guardan localmente en IndexedDB.
 - La configuración de conexión se guarda localmente en el navegador.
+- La configuración operativa activa es única: interfaz y ejecución consultan el mismo estado. Los perfiles se guardan aparte, con versión propia, y sólo copian sus valores a esa configuración al activarse.
 - Los documentos solo salen del navegador si el usuario los adjunta expresamente a una conversación o su contenido se incorpora a una petición del modelo.
 - Orama funciona localmente y su índice puede reconstruirse desde los fragmentos persistidos.
 

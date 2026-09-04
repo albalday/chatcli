@@ -64,8 +64,6 @@
     const doc = (typeof document !== 'undefined') ? document : null;
     const root = doc ? doc.documentElement : null;
     const effective = (theme === 'dark') ? 'dark' : 'light';
-    if (appConfig) appConfig.theme = effective;
-
     if (root) {
       if (effective === 'dark') {
         root.setAttribute('data-theme', 'dark');
@@ -88,17 +86,10 @@
 
   function applyLanguage(elements, appConfig, lang, callbacks = {}) {
     const target = (lang === 'en') ? 'en' : 'es';
-    if (appConfig) appConfig.language = target;
-
     const I18n = getI18n();
     if (I18n?.setLanguage) {
       I18n.setLanguage(target, true);
     }
-    const Storage = getStorage();
-    if (Storage?.saveConfig) {
-      Storage.saveConfig({ language: target });
-    }
-
     if (elements?.currentLangLabel) {
       elements.currentLangLabel.textContent = target.toUpperCase();
     }
@@ -114,7 +105,7 @@
     }
 
     if (elements?.currentProfileName) {
-      const activeProf = (Storage?.getActiveProfileName ? Storage.getActiveProfileName() : appConfig?.activeProfileName) || appConfig?.activeProfileName || 'Local chat';
+      const activeProf = appConfig?.activeProfile?.name || appConfig?.activeProfileName || 'Local chat';
       elements.currentProfileName.textContent = activeProf;
     }
     if (elements?.currentModelName) {
@@ -221,7 +212,7 @@
       ? elements.settingProfileName.value.trim()
       : ((elements?.profileSelectHelper && elements.profileSelectHelper.value)
         ? elements.profileSelectHelper.value
-        : (appConfig?.activeProfileName || 'Local chat'));
+        : (appConfig?.activeProfile?.name || 'Local chat'));
     const selectedModel = elements?.settingModel ? elements.settingModel.value.trim() : '';
 
     return {
@@ -257,24 +248,15 @@
     }, 4000);
   }
 
-  function handleSaveProfile(elements, appConfig, populateProfileSelector) {
+  function handleSaveProfile(elements, appConfig, saveProfile) {
     const currentConfig = gatherCurrentFormConfig(elements, appConfig);
     const name = currentConfig.activeProfileName || 'Local chat';
-    const Storage = getStorage();
-    if (Storage?.saveProfile) {
-      Storage.saveProfile(name, currentConfig);
-    }
-    if (Storage?.saveConfig) {
-      Storage.saveConfig(currentConfig);
-    }
-    if (typeof populateProfileSelector === 'function') {
-      populateProfileSelector(name);
-    }
+    if (typeof saveProfile === 'function') saveProfile(name, currentConfig);
     showProfileFeedback(elements, t('msg_profile_saved', { name }) || `Perfil "${name}" guardado con éxito.`, 'success');
     return currentConfig;
   }
 
-  function handleDeleteProfile(elements, populateProfileSelector, applyProfile) {
+  function handleDeleteProfile(elements, removeProfile) {
     const name = (elements?.settingProfileName && elements.settingProfileName.value.trim())
       ? elements.settingProfileName.value.trim()
       : ((elements?.profileSelectHelper && elements.profileSelectHelper.value)
@@ -285,25 +267,14 @@
     const confirmMsg = t('confirm_delete_profile', { name }) || `¿Estás seguro de que deseas eliminar el perfil "${name}"?`;
     if (!confirm(confirmMsg)) return;
 
-    const Storage = getStorage();
-    if (Storage?.deleteProfile) {
-      Storage.deleteProfile(name);
-      const newActive = Storage.getActiveProfileName ? Storage.getActiveProfileName() : 'Local chat';
-      if (typeof populateProfileSelector === 'function') {
-        populateProfileSelector(newActive);
-      }
-      const newProfileData = Storage.getProfile ? Storage.getProfile(newActive) : null;
-      if (newProfileData && typeof applyProfile === 'function') {
-        applyProfile(newProfileData);
-      }
+    if (typeof removeProfile === 'function' && removeProfile(name)) {
       showProfileFeedback(elements, t('msg_profile_deleted', { name }) || `Perfil "${name}" eliminado.`, 'success');
     }
   }
 
   function openSettingsModal(elements, appConfig, callbacks = {}) {
     if (!elements || !elements.settingsDialog) return;
-    const Storage = getStorage();
-    const activeProfileName = (Storage?.getActiveProfileName ? Storage.getActiveProfileName() : appConfig?.activeProfileName) || 'Local chat';
+    const activeProfileName = appConfig?.activeProfile?.id || appConfig?.activeProfileName || '';
 
     if (typeof callbacks.populateProfileSelector === 'function') {
       callbacks.populateProfileSelector(activeProfileName);
