@@ -1,2 +1,4 @@
 .gh/
 node_modules/
+tmp_*
+tests/tmp_*

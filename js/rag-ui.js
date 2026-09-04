@@ -54,7 +54,7 @@
 
   function formatBranchMetrics(metrics) {
     const count = Number(metrics?.documentCount) || 0;
-    return `${count} documento${count === 1 ? '' : 's'} · ${formatBytes(metrics?.totalBytes || 0)}`;
+    return `${count} documento${count === 1 ? '' : 's'} de ${formatBytes(metrics?.totalBytes || 0)}`;
   }
 
   function formatDocumentMetrics(document) {
@@ -153,7 +153,7 @@
       const metrics = branchMetrics.get(branch.id);
       return `
       <button type="button" class="setting-toggle-card rag-branch-select-card${isActive ? ' active' : ''}" data-branch-id="${escapeHtml(branch.id)}">
-        <span class="toggle-card-info"><strong>${escapeHtml(branch.name)}</strong><span class="toggle-card-desc">${escapeHtml(branch.description || 'Sin descripción')}</span><span class="rag-branch-metrics">${escapeHtml(formatBranchMetrics(metrics))}</span></span>
+        <span class="toggle-card-info"><strong>${escapeHtml(branch.name)}</strong><span class="toggle-card-desc">${escapeHtml(branch.description || 'Sin descripción')}</span><span class="rag-branch-metrics">Esta rama cargó ${escapeHtml(formatBranchMetrics(metrics))}</span></span>
         <span class="rag-branch-badge-status">${isActive ? '✓ Activa' : '+ Activar'}</span>
       </button>`;
     }).join('');
@@ -194,10 +194,7 @@
     const el = document.getElementById('rag-branch-summary-footer');
     if (!el) return;
     if (metrics) {
-      const count = Number(metrics.documentCount) || 0;
-      const docsStr = `${count} documento${count === 1 ? '' : 's'}`;
-      const bytesStr = formatBytes(metrics.totalBytes || 0);
-      el.innerHTML = `Esta rama cargó <strong>${escapeHtml(docsStr)} de ${escapeHtml(bytesStr)}</strong>.`;
+      el.innerHTML = `Esta rama cargó <strong>${escapeHtml(formatBranchMetrics(metrics))}</strong>.`;
     } else {
       el.innerHTML = '';
     }

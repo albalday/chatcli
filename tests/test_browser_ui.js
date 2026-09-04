@@ -1230,7 +1230,11 @@ test('Browser UI - Iconos Fase 5: Iconos Vectoriales SVG en Modales, Pestañas, 
     assert.equal(dialogTriggered, false, 'No debe haberse mostrado ningún diálogo emergente bloqueante');
 
     const btnTextFinal = await page.$eval('#btn-rag-new-branch', el => el.textContent.trim());
-    assert.equal(btnTextFinal, 'Nueva rama', 'Tras guardar la modificación el botón debe volver a ser "Nueva rama"');
+    // Verificar que en la pestaña Activar el resumen de cada rama también dice "Esta rama cargó"
+    await page.click('#rag-modal-tabs-nav [data-rag-tab="tab-rag-active"]');
+    const activeBranchMetricsText = await page.$eval('.rag-branch-select-card .rag-branch-metrics', el => el.textContent.trim());
+    assert.ok(activeBranchMetricsText.includes('Esta rama cargó'), 'El resumen de cada rama en la pestaña Activar debe decir "Esta rama cargó"');
+    assert.ok(activeBranchMetricsText.includes('documentos de'), 'El resumen de cada rama en la pestaña Activar debe usar "documentos de"');
 
     await page.click('#btn-close-rag');
   } finally {
