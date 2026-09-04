@@ -36,7 +36,7 @@
 
   const DEFAULT_PROFILES = Object.freeze([
     { id: 'profile:local', name: 'Local chat', settings: { apiUrl: 'http://localhost:1234/v1', apiType: 'openai', apiKey: '', model: 'google/gemma-4-26b-a4b-qat', systemPrompt: '', temperature: '0.7', reasoningEffort: 'none', modelReasoningConfig: null, enabledTools: { execute_javascript: true, search_web: true, fetch_web_page: true, download_pdf: true, render_chart: true }, enableRawLogs: false, sendDateTime: true } },
-    { id: 'profile:remote', name: 'Remoto chat', settings: { apiUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', apiType: 'gemini', apiKey: '', model: 'gemini-3.6-flash', systemPrompt: '', temperature: '0.7', reasoningEffort: 'none', modelReasoningConfig: null, enabledTools: { execute_javascript: true, search_web: true, fetch_web_page: true, download_pdf: true, render_chart: true }, enableRawLogs: false, sendDateTime: true } }
+    { id: 'profile:remote', name: 'Remoto chat', settings: { apiUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', apiType: 'gemini', apiKey: '', model: 'gemini-3.8-flash', systemPrompt: '', temperature: '0.7', reasoningEffort: 'none', modelReasoningConfig: null, enabledTools: { execute_javascript: true, search_web: true, fetch_web_page: true, download_pdf: true, render_chart: true }, enableRawLogs: false, sendDateTime: true } }
   ]);
 
   function normalizeSettings(source = {}) {
