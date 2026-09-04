@@ -3,6 +3,32 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const { chromium } = require('playwright');
 
+test('Browser UI - index.html declara el mismo runtime que se distribuye', async () => {
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const page = await browser.newPage();
+    const consoleErrors = [];
+    page.on('console', msg => {
+      if (msg.type() === 'error' && !msg.text().includes('favicon')) {
+        consoleErrors.push(msg.text());
+      }
+    });
+    page.on('pageerror', err => consoleErrors.push(err.message));
+
+    await page.goto('file://' + path.resolve(__dirname, '../index.html'), { waitUntil: 'load' });
+
+    assert.equal(consoleErrors.length, 0, 'No debe haber errores de consola: ' + consoleErrors.join(' | '));
+    const runtime = await page.evaluate(() => ({
+      chatIcons: typeof window.ChatIcons?.get === 'function',
+      iconStyles: getComputedStyle(document.querySelector('.ui-icon')).display
+    }));
+    assert.equal(runtime.chatIcons, true, 'El HTML base debe cargar el módulo de iconos usado por la aplicación');
+    assert.equal(runtime.iconStyles, 'block', 'El HTML base debe cargar los estilos de iconos');
+  } finally {
+    await browser.close();
+  }
+});
+
 test('Browser UI - Carga limpia del bundle zerochat.html sin errores de consola', async () => {
   const browser = await chromium.launch({ headless: true });
   try {
