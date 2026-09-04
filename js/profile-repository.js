@@ -24,8 +24,14 @@
   }
 
   function createId(name) {
-    return `legacy:${encodeURIComponent(String(name || '').trim())}`;
+    return `profile:${encodeURIComponent(String(name || '').trim())}`;
   }
+
+  const DEFAULT_PROFILES = Object.freeze([
+    { id: 'profile:local', name: 'Local chat', settings: { apiUrl: 'http://localhost:1234/v1', apiType: 'openai', apiKey: '', model: 'google/gemma-4-26b-a4b-qat', systemPrompt: '', temperature: '0.7', reasoningEffort: 'none', modelReasoningConfig: null, enabledTools: { execute_javascript: true, search_web: true, fetch_web_page: true, download_pdf: true, render_chart: true }, enableRawLogs: false, sendDateTime: true } },
+    { id: 'profile:remote', name: 'Remoto chat', settings: { apiUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', apiType: 'gemini', apiKey: '', model: 'gemini-3.6-flash', systemPrompt: '', temperature: '0.7', reasoningEffort: 'none', modelReasoningConfig: null, enabledTools: { execute_javascript: true, search_web: true, fetch_web_page: true, download_pdf: true, render_chart: true }, enableRawLogs: false, sendDateTime: true } },
+    { id: 'profile:new', name: 'Nuevo', settings: { apiUrl: '', apiType: 'openai', apiKey: '', model: '', systemPrompt: '', temperature: '0.7', reasoningEffort: 'none', modelReasoningConfig: null, enabledTools: { execute_javascript: true, search_web: true, fetch_web_page: true, download_pdf: true, render_chart: true }, enableRawLogs: false, sendDateTime: true } }
+  ]);
 
   function normalizeSettings(source = {}) {
     const settings = {};
@@ -73,10 +79,7 @@
       const existing = readDocument();
       if (existing) return clone(existing);
 
-      const legacyProfiles = storage?.getProfiles ? storage.getProfiles() : {};
-      const profiles = Object.keys(legacyProfiles || {}).map(name => normalizeRecord({
-        id: createId(name), name, settings: legacyProfiles[name], version: 1
-      }));
+      const profiles = DEFAULT_PROFILES.map(normalizeRecord);
       const document = { schemaVersion: SCHEMA_VERSION, profiles };
       writeDocument(document);
       return clone(document);
@@ -123,5 +126,5 @@
   }
 
   const defaultRepository = createRepository();
-  return { STORAGE_KEY, SCHEMA_VERSION, PROFILE_FIELDS, createRepository, ...defaultRepository };
+  return { STORAGE_KEY, SCHEMA_VERSION, PROFILE_FIELDS, DEFAULT_PROFILES: clone(DEFAULT_PROFILES), createRepository, ...defaultRepository };
 }));

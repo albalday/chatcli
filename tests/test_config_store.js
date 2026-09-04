@@ -17,13 +17,12 @@ function createFixture() {
   const storage = {
     loadRuntimeConfigV2: () => persisted,
     saveRuntimeConfigV2: value => { persisted = JSON.parse(JSON.stringify(value)); },
-    loadConfig: () => ({ theme: 'dark', language: 'en', activeProfileName: 'Servidor Oficina', activeRagBranchIds: ['rag-a'] }),
-    getActiveProfileName: () => 'Servidor Oficina'
   };
   const profiles = {
     PROFILE_FIELDS: require('../js/profile-repository.js').PROFILE_FIELDS,
     initialize: () => {},
     findByName: name => name === profile.name ? profile : null,
+    list: () => [profile],
     get: id => id === profile.id ? profile : null
   };
   return { store: ChatConfig.createConfigStore({ state: State.createStore(), storage, profiles }), getPersisted: () => persisted };
@@ -34,10 +33,10 @@ test('ChatConfig - migra la configuración efectiva y registra el perfil aplicad
   const config = store.initialize();
 
   assert.equal(config.schemaVersion, 2);
-  assert.equal(config.theme, 'dark');
-  assert.equal(config.language, 'en');
+  assert.equal(config.theme, 'light');
+  assert.equal(config.language, 'es');
   assert.equal(config.activeProfile.name, 'Servidor Oficina');
-  assert.deepEqual(config.activeRagBranchIds, ['rag-a']);
+  assert.deepEqual(config.activeRagBranchIds, []);
   assert.equal(getPersisted().activeProfileName, undefined);
 });
 

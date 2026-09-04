@@ -11,22 +11,16 @@ function createStorage(legacyProfiles = {}) {
   };
 }
 
-test('ProfileRepository - migra perfiles heredados a un catálogo versionado', () => {
-  const storage = createStorage({
-    'Servidor Oficina': {
-      apiUrl: 'http://office.test/v1', model: 'qwen', theme: 'dark',
-      enabledTools: { search_web: false }
-    }
-  });
+test('ProfileRepository - inicializa un catálogo versionado con perfiles semilla', () => {
+  const storage = createStorage();
   const repository = Profiles.createRepository(storage);
 
   const profiles = repository.list();
-  assert.equal(profiles.length, 1);
-  assert.equal(profiles[0].name, 'Servidor Oficina');
+  assert.equal(profiles.length, 3);
+  assert.equal(profiles[0].name, 'Local chat');
   assert.equal(profiles[0].schemaVersion, 1);
-  assert.equal(profiles[0].settings.apiUrl, 'http://office.test/v1');
-  assert.equal(profiles[0].settings.theme, undefined);
-  assert.equal(profiles[0].settings.enabledTools.search_web, false);
+  assert.equal(profiles[0].settings.apiUrl, 'http://localhost:1234/v1');
+  assert.equal(profiles[0].settings.enabledTools.search_web, true);
 });
 
 test('ProfileRepository - guarda versiones sin exponer referencias mutables', () => {

@@ -1175,7 +1175,7 @@
 
   function handleResetSettings() {
     if (UISettings.handleResetSettings) {
-      UISettings.handleResetSettings(elements);
+      UISettings.handleResetSettings(elements, Config.DEFAULTS || getRuntimeConfig());
     }
   }
 

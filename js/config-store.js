@@ -87,10 +87,8 @@
       const stored = storage?.loadRuntimeConfigV2?.();
       if (stored) return commit(stored);
 
-      const legacy = storage?.loadConfig ? storage.loadConfig() : DEFAULTS;
-      const activeName = legacy.activeProfileName || storage?.getActiveProfileName?.() || '';
-      const activeProfile = profiles?.findByName?.(activeName) || null;
-      return commit({ ...legacy, activeProfile: activeProfile ? profileMetadata(activeProfile) : null });
+      const initialProfile = profiles?.list?.()[0] || null;
+      return initialProfile ? activateProfile(initialProfile.id) : commit(DEFAULTS);
     }
 
     function getActive() {

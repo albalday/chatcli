@@ -332,10 +332,8 @@
     }
   }
 
-  function handleResetSettings(elements) {
-    const Storage = getStorage();
-    if (Storage?.getDefaultConfig) {
-      const defaults = Storage.getDefaultConfig();
+  function handleResetSettings(elements, defaults = {}) {
+    if (defaults && typeof defaults === 'object') {
       if (elements.settingApiType) elements.settingApiType.value = defaults.apiType || 'openai';
       if (elements.settingApiUrl) elements.settingApiUrl.value = defaults.apiUrl;
       if (elements.settingApiKey) elements.settingApiKey.value = defaults.apiKey;
@@ -353,7 +351,7 @@
       if (elements.settingSendDateTime) elements.settingSendDateTime.checked = defaults.sendDateTime !== false;
       return defaults;
     }
-    return null;
+    return defaults;
   }
 
   async function handleClearAllData() {
