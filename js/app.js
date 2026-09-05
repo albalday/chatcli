@@ -663,17 +663,64 @@
   // Renderizado de Mensajes con Acciones y Estadísticas
   // ==========================================================================
 
+  function extractBaseId(id) {
+    if (!id || typeof id !== 'string') return '';
+    return id.replace(/(?:_turn_\d+_(?:assistant|tool.*)|_final)$/, '');
+  }
+
   function removeMessage(wrapper) {
     if (!wrapper) return;
-    const msgId = wrapper.getAttribute('data-msg-id');
+    const msgId = wrapper.getAttribute('data-msg-id') || '';
+    const baseId = wrapper.getAttribute('data-base-id') || extractBaseId(msgId);
+    const rawMsgIds = wrapper.getAttribute('data-msg-ids') || '';
+    const explicitIds = rawMsgIds ? rawMsgIds.split(',').filter(Boolean) : [];
+
     wrapper.remove();
 
-    if (msgId) {
+    if (explicitIds.length > 0 || baseId || msgId) {
       const initialCount = chatHistory.length;
-      chatHistory = chatHistory.filter(m => m.id !== msgId && (!m.id || !m.id.startsWith(`${msgId}_turn_`)));
+      const engine = window.ChatEngine || (typeof ChatEngine !== 'undefined' ? ChatEngine : null);
+      if (engine && typeof engine.removeTurnFromHistory === 'function') {
+        chatHistory = engine.removeTurnFromHistory(chatHistory, { msgId, baseId, explicitIds });
+      } else {
+        const idSet = new Set(explicitIds);
+        if (msgId) idSet.add(msgId);
+        if (baseId) idSet.add(baseId);
+        const delToolCalls = new Set();
+        chatHistory.forEach(m => {
+          if (!m) return;
+          const mid = m.id;
+          const match = (mid && (idSet.has(mid) || (baseId && (mid === baseId || mid.startsWith(`${baseId}_`))) || (msgId && (mid === msgId || mid.startsWith(`${msgId}_`)))));
+          if (match) {
+            if (m.role === 'assistant' && Array.isArray(m.tool_calls)) {
+              m.tool_calls.forEach(tc => { if (tc?.id) delToolCalls.add(tc.id); });
+            }
+            if (m.role === 'tool' && m.tool_call_id) delToolCalls.add(m.tool_call_id);
+          }
+        });
+        const unorphaned = chatHistory.filter(m => {
+          if (!m) return false;
+          const mid = m.id;
+          if (mid && (idSet.has(mid) || (baseId && (mid === baseId || mid.startsWith(`${baseId}_`))) || (msgId && (mid === msgId || mid.startsWith(`${msgId}_`))))) return false;
+          if (m.role === 'tool' && m.tool_call_id && delToolCalls.has(m.tool_call_id)) return false;
+          return true;
+        });
+        chatHistory = [];
+        for (let i = 0; i < unorphaned.length; i++) {
+          const c = unorphaned[i];
+          if (c && c.role === 'tool') {
+            const prev = chatHistory.length > 0 ? chatHistory[chatHistory.length - 1] : null;
+            const ok = prev && prev.role === 'assistant' && Array.isArray(prev.tool_calls) &&
+              prev.tool_calls.some(tc => tc && (tc.id === c.tool_call_id || (tc.function && tc.function.name === c.name)));
+            if (ok) chatHistory.push(c);
+          } else {
+            chatHistory.push(c);
+          }
+        }
+      }
       const removedCount = initialCount - chatHistory.length;
       if (removedCount > 0 && typeof addDebugLog === 'function') {
-        addDebugLog('system', t('msg_deleted_log', { id: msgId, count: removedCount }));
+        addDebugLog('system', t('msg_deleted_log', { id: msgId || baseId, count: removedCount }));
       }
     }
 
@@ -771,11 +818,14 @@
   }
 
   function createAssistantMessagePlaceholder(existingMsgId) {
-    const msgId = existingMsgId || ('msg_ast_' + Date.now() + '_' + Math.random().toString(36).substr(2, 7));
+    const rawId = existingMsgId || ('msg_ast_' + Date.now() + '_' + Math.random().toString(36).substr(2, 7));
+    const baseId = extractBaseId(rawId) || rawId;
+    const msgId = existingMsgId ? rawId : baseId;
 
     const wrapper = document.createElement('div');
     wrapper.className = 'message-wrapper assistant';
     wrapper.setAttribute('data-msg-id', msgId);
+    wrapper.setAttribute('data-base-id', baseId);
 
     const row = document.createElement('div');
     row.className = 'message-row assistant';
@@ -1602,11 +1652,36 @@
         const firstAssistantId = msg.id || ('msg_ast_' + Date.now());
 
         while (i < validMessages.length && validMessages[i].role !== 'user') {
-          assistantGroup.push(validMessages[i]);
+          const item = validMessages[i];
+          if (item && !item.id) {
+            item.id = 'msg_ast_' + Date.now() + '_' + Math.random().toString(36).substr(2, 7);
+          }
+          assistantGroup.push(item);
           i++;
         }
 
-        const { content, actions, btnCopy } = createAssistantMessagePlaceholder(firstAssistantId);
+        const groupMsgIds = assistantGroup.map(m => m.id).filter(Boolean);
+        let groupBaseId = '';
+        for (const item of assistantGroup) {
+          if (item.id) {
+            const base = extractBaseId(item.id);
+            if (base && base !== item.id) {
+              groupBaseId = base;
+              break;
+            }
+          }
+        }
+        if (!groupBaseId && assistantGroup.length > 0 && assistantGroup[0].id) {
+          groupBaseId = extractBaseId(assistantGroup[0].id) || assistantGroup[0].id;
+        }
+
+        const { wrapper, content, actions, btnCopy } = createAssistantMessagePlaceholder(groupBaseId || firstAssistantId);
+        if (groupBaseId) {
+          wrapper.setAttribute('data-base-id', groupBaseId);
+        }
+        if (groupMsgIds.length > 0) {
+          wrapper.setAttribute('data-msg-ids', groupMsgIds.join(','));
+        }
         content.innerHTML = ''; // Limpiar el cursor inicial de streaming
 
         let fullAssistantMarkdown = '';

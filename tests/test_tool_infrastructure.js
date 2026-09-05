@@ -54,3 +54,11 @@ test('Tool infrastructure - el ejecutor entrega el contexto estándar a la tool'
   assert.equal(result.result.language, 'en');
   assert.equal(result.result.hasSandbox, true);
 });
+
+test('Tool infrastructure - registra read_knowledge_image solo con RAG activo', () => {
+  const tool = AgentCore.registry.getTool('read_knowledge_image');
+  assert.ok(tool);
+  assert.equal(tool.isAvailable({}), false);
+  assert.equal(tool.isAvailable({ activeRagBranchId: 'branch_1' }), true);
+  assert.match(tool.description, /visión nativa/);
+});

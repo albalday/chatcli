@@ -1371,3 +1371,86 @@ test('Fase 6: Verificación global de iconos SVG, accesibilidad y auditoría res
     await browser.close();
   }
 });
+
+test('Browser UI - Borrado de respuesta de asistente con tools elimina completamente las respuestas de tools y sanea chatHistory', async () => {
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const page = await browser.newPage();
+    const filePath = 'file://' + path.resolve(__dirname, '../index.html');
+    await page.goto(filePath, { waitUntil: 'load' });
+
+    const result = await page.evaluate(async () => {
+      const sessionId = 'test_session_delete_tools_' + Date.now();
+      const baseId = 'msg_ast_interactive_test';
+      const history = [
+        { id: 'usr_msg_1', role: 'user', content: '¿Qué hora es?' },
+        {
+          id: `${baseId}_turn_0_assistant`,
+          role: 'assistant',
+          content: null,
+          tool_calls: [{ id: 'call_time_ui', type: 'function', function: { name: 'get_current_datetime', arguments: '{}' } }]
+        },
+        {
+          id: `${baseId}_turn_0_tool_call_time_ui`,
+          role: 'tool',
+          tool_call_id: 'call_time_ui',
+          name: 'get_current_datetime',
+          content: '{"datetime":"2026-09-05T12:00:00Z"}'
+        },
+        {
+          id: `${baseId}_final`,
+          role: 'assistant',
+          content: 'Son exactamente las 12:00 UTC.'
+        }
+      ];
+
+      // Guardar conversación en el almacenamiento
+      await window.ChatStorage.saveConversation({ id: sessionId, title: 'Test Delete Tools' }, history);
+
+      // Cargar la conversación en la UI
+      await window.ChatApp.switchToSession(sessionId);
+
+      // Esperar renderizado
+      await new Promise(r => setTimeout(r, 100));
+      const assistantWrapper = document.querySelector('.message-wrapper.assistant');
+      const deleteBtn = assistantWrapper?.querySelector('.btn-delete');
+
+      const beforeDelete = {
+        hasAssistantWrapper: !!assistantWrapper,
+        hasDeleteBtn: !!deleteBtn,
+        initialHistoryCount: window.chatHistory ? window.chatHistory.length : -1
+      };
+
+      if (deleteBtn) {
+        deleteBtn.click();
+      }
+
+      // Esperar microtask / actualización de storage
+      await new Promise(r => setTimeout(r, 100));
+
+      const loadedAfter = await window.ChatStorage.getConversation(sessionId);
+      const afterHistory = loadedAfter ? loadedAfter.history : [];
+      const remainingWrappers = document.querySelectorAll('.message-wrapper');
+
+      return {
+        beforeDelete,
+        remainingWrappersCount: remainingWrappers.length,
+        hasAssistantWrapperAfter: !!document.querySelector('.message-wrapper.assistant'),
+        afterHistoryLength: afterHistory.length,
+        toolCountAfter: afterHistory.filter(m => m.role === 'tool').length,
+        assistantCountAfter: afterHistory.filter(m => m.role === 'assistant').length,
+        userCountAfter: afterHistory.filter(m => m.role === 'user').length
+      };
+    });
+
+    assert.ok(result.beforeDelete.hasAssistantWrapper, 'El asistente con tools debe renderizarse inicialmente');
+    assert.ok(result.beforeDelete.hasDeleteBtn, 'El botón de eliminar respuesta debe existir');
+    assert.equal(result.hasAssistantWrapperAfter, false, 'El wrapper del asistente debe haber desaparecido del DOM');
+    assert.equal(result.toolCountAfter, 0, 'No deben quedar respuestas de tool en el historial persistido');
+    assert.equal(result.assistantCountAfter, 0, 'No deben quedar mensajes de asistente de la respuesta eliminada');
+    assert.equal(result.userCountAfter, 1, 'Debe permanecer el mensaje de usuario');
+  } finally {
+    await browser.close();
+  }
+});
+

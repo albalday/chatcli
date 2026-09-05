@@ -8,6 +8,12 @@
 })(typeof self !== 'undefined' ? self : this, function (RagStorage, RagIndex) {
   'use strict';
 
+  function getFileParser() {
+    if (typeof window !== 'undefined' && window.ChatFileParser) return window.ChatFileParser;
+    if (typeof require !== 'undefined') { try { return require('./file-parser.js'); } catch (_) {} }
+    return null;
+  }
+
   function parseArguments(rawArgs) {
     if (!rawArgs) return {};
     if (typeof rawArgs === 'object') return rawArgs;
@@ -107,7 +113,7 @@
       const branches = await resolveBranches(branchIds);
       const names = branches.map(b => b.name).join(', ');
       const label = branches.length === 1 ? `[BASE DE CONOCIMIENTO ACTIVA: ${names}]` : `[BASES DE CONOCIMIENTO ACTIVAS: ${names}]`;
-      return `${label}\n\nProtocolo de consulta documental:\n- Inicia siempre buscando con search_knowledge_base usando términos breves y clave; no concatenes frases largas.\n- Si la consulta alude a un documento concreto o filtro (ej: "AMD_2015_10K.pdf"), indícalo en documentHint y busca directamente sin consultar antes list_documents.\n- Prioriza scope="auto" (por defecto) o documentHint para una fuente concreta; usa scope="corpus" para comparar varias.\n- Consulta list_documents solo si la búsqueda no halla resultados o desconoces las fuentes disponibles.\n- Usa read_knowledge_chunk solo si el fragmento obtenido corta cifras o columnas de una tabla.\n- Trata las salidas de herramientas como evidencia interna privada: sintetiza y responde directamente sin reproducir fragmentos íntegros ni identificadores técnicos.\n- Las imágenes del documento se identifican como ![descripción](rag-image://docId:imgId). Si el usuario pide imágenes, busca términos como "imagen", "diagrama" o "rag-image" e incluye estas referencias íntegras en tu respuesta.\n- Si la evidencia es insuficiente o no hallas datos concluyentes, indícalo con precisión y concluye; no inventes ni divagues.`;
+      return `${label}\n\nProtocolo de consulta documental:\n- Inicia siempre buscando con search_knowledge_base usando términos breves y clave; no concatenes frases largas.\n- Si la consulta alude a un documento concreto o filtro (ej: "AMD_2015_10K.pdf"), indícalo en documentHint y busca directamente sin consultar antes list_documents.\n- Prioriza scope="auto" (por defecto) o documentHint para una fuente concreta; usa scope="corpus" para comparar varias.\n- Consulta list_documents solo si la búsqueda no halla resultados o desconoces las fuentes disponibles.\n- Usa read_knowledge_chunk si el fragmento corta cifras, columnas de una tabla o una referencia de imagen que necesites localizar y contextualizar.\n- Trata las salidas de herramientas como evidencia interna privada: sintetiza y responde directamente sin reproducir fragmentos íntegros ni identificadores técnicos.\n- Las imágenes del documento se identifican como ![descripción](rag-image://docId:imgId). Si una imagen puede aportar información relevante y tienes visión nativa, usa read_knowledge_image con su referencia completa para inspeccionarla antes de responder; solicita solo las necesarias. Si el usuario pide imágenes, busca términos como "imagen", "diagrama" o "rag-image" e incluye estas referencias íntegras en tu respuesta.\n- Si la evidencia es insuficiente o no hallas datos concluyentes, indícalo con precisión y concluye; no inventes ni divagues.`;
     } catch (_) {
       return '';
     }
@@ -301,10 +307,50 @@
     }
   }
 
+  function parseImageReference(value) {
+    const match = String(value || '').trim().match(/^rag-image:\/\/([^:\s]+):([^\s:]+)$/i);
+    return match ? { documentId: match[1], imageId: match[2] } : null;
+  }
+
+  async function readKnowledgeImage(branchIds, rawArgs) {
+    const args = parseArguments(rawArgs);
+    const imageRef = String(args.imageRef || '').trim();
+    const reference = parseImageReference(imageRef);
+    if (!reference) return { success: false, error: 'imageRef debe ser una referencia rag-image://docId:imgId válida.' };
+
+    try {
+      const branches = await resolveBranches(branchIds);
+      const document = await RagStorage.getDocumentById(reference.documentId);
+      if (!document || !branches.some(branch => branch.id === document.branchId)) {
+        return { success: false, error: `La imagen solicitada no pertenece a las ramas activas.` };
+      }
+      const image = await RagStorage.getDocumentImage(reference.documentId, reference.imageId);
+      if (!image?.dataUrl) return { success: false, error: `No existe una imagen utilizable para ${imageRef}.` };
+
+      const fileParser = getFileParser();
+      const dataUrl = image.isCmyk && fileParser?.convertCmykDataUrlToRgb
+        ? fileParser.convertCmykDataUrlToRgb(image.dataUrl)
+        : image.dataUrl;
+      return {
+        success: true,
+        imageRef,
+        documentId: document.id,
+        documentTitle: document.title,
+        page: Number.isFinite(image.page) ? image.page : null,
+        label: String(image.label || ''),
+        mimeType: String(image.mimeType || ''),
+        dataUrl
+      };
+    } catch (error) {
+      return { success: false, error: error.message || String(error) };
+    }
+  }
+
   return {
     parseArguments, normalizeBranchIds, resolveBranches,
     normalizeDocumentReference, documentReferenceTokens, selectDocumentCandidate,
     buildRagSystemContext, injectRagContext,
-    listDocuments, searchKnowledgeBase, readKnowledgeChunk
+    listDocuments, searchKnowledgeBase, readKnowledgeChunk, readKnowledgeImage,
+    parseImageReference
   };
 });

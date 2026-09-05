@@ -280,6 +280,7 @@
       tools.push(createBuiltinTool('list_documents', 'ChatBuiltinListDocumentsTool', './tools/builtin/list-documents.tool.js'));
       tools.push(createBuiltinTool('search_knowledge_base', 'ChatBuiltinSearchKnowledgeBaseTool', './tools/builtin/search-knowledge-base.tool.js'));
       tools.push(createBuiltinTool('read_knowledge_chunk', 'ChatBuiltinReadKnowledgeChunkTool', './tools/builtin/read-knowledge-chunk.tool.js'));
+      tools.push(createBuiltinTool('read_knowledge_image', 'ChatBuiltinReadKnowledgeImageTool', './tools/builtin/read-knowledge-image.tool.js'));
 
       return tools;
     }

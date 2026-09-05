@@ -24,6 +24,8 @@ test('RagService - inyecta solo instrucciones compactas', async () => {
   assert.match(context, /Operaciones/);
   assert.match(context, /search_knowledge_base/);
   assert.match(context, /list_documents/);
+  assert.match(context, /read_knowledge_image/);
+  assert.match(context, /visión nativa/);
   assert.doesNotMatch(context, /Kubernetes|PostgreSQL/);
   assert.match(await RagService.injectRagContext('Responde brevemente.', branch.id), /Responde brevemente/);
 });
@@ -56,6 +58,36 @@ test('RagService - impide leer chunks de una rama distinta', async () => {
   const read = await RagService.readKnowledgeChunk(foreign.id, { chunkId: search.matches[0].chunkId });
   assert.equal(read.success, false);
   assert.match(read.error, /ramas activas/);
+});
+
+test('RagService - recupera una imagen solo desde una rama activa', async () => {
+  const { branch } = await seed();
+  const document = await RagStorage.saveDocument({
+    branchId: branch.id, title: 'diagrama.md', fileType: 'md',
+    chunks: [{ content: '![Diagrama](rag-image://__DOC_ID__:img_1)' }]
+  }, [{ id: 'img_1', page: 2, label: 'Diagrama', mimeType: 'image/png', dataUrl: 'data:image/png;base64,AA==' }]);
+
+  const result = await RagService.readKnowledgeImage(branch.id, { imageRef: `rag-image://${document.id}:img_1` });
+  assert.equal(result.success, true);
+  assert.equal(result.documentTitle, 'diagrama.md');
+  assert.equal(result.page, 2);
+  assert.equal(result.dataUrl, 'data:image/png;base64,AA==');
+
+  const foreign = await RagStorage.createBranch('Ajena');
+  const rejected = await RagService.readKnowledgeImage(foreign.id, { imageRef: result.imageRef });
+  assert.equal(rejected.success, false);
+  assert.match(rejected.error, /ramas activas/);
+});
+
+test('RagService - valida referencias e imágenes inexistentes', async () => {
+  const { branch, document } = await seed();
+  const invalid = await RagService.readKnowledgeImage(branch.id, { imageRef: 'imagen.png' });
+  assert.equal(invalid.success, false);
+  assert.match(invalid.error, /imageRef/);
+
+  const missing = await RagService.readKnowledgeImage(branch.id, { imageRef: `rag-image://${document.id}:img_404` });
+  assert.equal(missing.success, false);
+  assert.match(missing.error, /No existe/);
 });
 
 test('RagService - soporta múltiples ramas activas simultáneamente', async () => {

@@ -121,6 +121,101 @@
   }
 
   /**
+   * Extrae el identificador base de un mensaje eliminando sufijos de turnos internos o finalización.
+   * @param {string} id - Identificador del mensaje (ej: 'asst_123_turn_0_assistant', 'asst_123_final').
+   * @returns {string} - Identificador base (ej: 'asst_123').
+   */
+  function extractBaseId(id) {
+    if (!id || typeof id !== 'string') return '';
+    return id.replace(/(?:_turn_\d+_(?:assistant|tool.*)|_final)$/, '');
+  }
+
+  /**
+   * Elimina completamente un turno del historial de chat, asegurando que:
+   * 1. Se eliminen todos los mensajes del turno (asistente, herramientas y síntesis final).
+   * 2. Se eliminen todas las respuestas de herramientas asociadas a las llamadas de ese turno.
+   * 3. No queden mensajes 'tool' huérfanos sin llamada previa en el historial.
+   *
+   * @param {Array} chatHistory - Historial actual de mensajes.
+   * @param {Object} options - Parámetros de identificación del turno a eliminar.
+   * @param {string} [options.msgId] - ID principal o data-msg-id del contenedor.
+   * @param {string} [options.baseId] - Prefijo base del turno (ej: 'msg_ast_123').
+   * @param {Array<string>|Set<string>} [options.explicitIds] - Lista de IDs exactos pertenecientes al turno.
+   * @returns {Array} - Nuevo historial filtrado y saneado sin turnos ni respuestas huérfanas.
+   */
+  function removeTurnFromHistory(chatHistory = [], options = {}) {
+    if (!Array.isArray(chatHistory) || chatHistory.length === 0) return [];
+
+    const msgId = options.msgId || '';
+    const baseId = options.baseId || extractBaseId(msgId);
+    const explicitIds = new Set(
+      Array.isArray(options.explicitIds)
+        ? options.explicitIds
+        : (options.explicitIds instanceof Set ? options.explicitIds : [])
+    );
+    if (msgId) explicitIds.add(msgId);
+    if (baseId) explicitIds.add(baseId);
+
+    // Conjunto de tool_call_ids generados en los mensajes eliminados
+    const deletedToolCallIds = new Set();
+
+    const isTargetMessage = (m) => {
+      if (!m) return false;
+      const mid = m.id;
+      if (mid) {
+        if (explicitIds.has(mid)) return true;
+        if (baseId && (mid === baseId || mid.startsWith(`${baseId}_`))) return true;
+        if (msgId && (mid === msgId || mid.startsWith(`${msgId}_`))) return true;
+      }
+      return false;
+    };
+
+    // Primera pasada: identificar mensajes objetivo y recolectar IDs de tool_calls
+    chatHistory.forEach(m => {
+      if (m && isTargetMessage(m)) {
+        if (m.role === 'assistant' && Array.isArray(m.tool_calls)) {
+          m.tool_calls.forEach(tc => {
+            if (tc && tc.id) deletedToolCallIds.add(tc.id);
+          });
+        }
+        if (m.role === 'tool' && m.tool_call_id) {
+          deletedToolCallIds.add(m.tool_call_id);
+        }
+      }
+    });
+
+    // Filtrar mensajes que coincidan directamente o por su tool_call_id
+    const filtered = chatHistory.filter(m => {
+      if (!m) return false;
+      if (isTargetMessage(m)) return false;
+      if (m.role === 'tool' && m.tool_call_id && deletedToolCallIds.has(m.tool_call_id)) {
+        return false;
+      }
+      return true;
+    });
+
+    // Segunda pasada: sanear cualquier mensaje 'tool' que haya quedado huérfano
+    // (en APIs estándar como OpenAI/Claude/Gemini, un mensaje 'tool' DEBE ir precedido por un 'assistant' con matching tool_call)
+    const sanitized = [];
+    for (let i = 0; i < filtered.length; i++) {
+      const current = filtered[i];
+      if (current && current.role === 'tool') {
+        const prev = sanitized.length > 0 ? sanitized[sanitized.length - 1] : null;
+        const hasMatchingCall = prev && prev.role === 'assistant' && Array.isArray(prev.tool_calls) &&
+          prev.tool_calls.some(tc => tc && (tc.id === current.tool_call_id || (tc.function && tc.function.name === current.name)));
+        if (hasMatchingCall) {
+          sanitized.push(current);
+        }
+        // Si no tiene asistente previo válido con el tool_call_id, se descarta
+      } else {
+        sanitized.push(current);
+      }
+    }
+
+    return sanitized;
+  }
+
+  /**
    * Construye el array de mensajes normalizado y enriquecido para la API de inferencia.
    * @param {Array} chatHistory - Historial de mensajes de la conversación.
    * @param {Object} appConfig - Configuración activa de la aplicación.
@@ -189,6 +284,22 @@
           name: toolName,
           content: toolContent
         });
+
+        // La imagen recuperada por RAG se entrega como evidencia visual en el
+        // siguiente turno de inferencia, sin convertirla en un mensaje visible
+        // ni en texto/base64 dentro del resultado de la herramienta.
+        const image = Array.isArray(m.images) ? m.images.find(item => item?.dataUrl) : null;
+        if (toolName === 'read_knowledge_image' && image) {
+          const provenance = [image.imageRef, image.documentTitle, image.page ? `página ${image.page}` : '']
+            .filter(Boolean).join(' · ');
+          messages.push({
+            role: 'user',
+            content: [
+              { type: 'text', text: `Evidencia visual recuperada por read_knowledge_image${provenance ? `: ${provenance}` : '.'}` },
+              { type: 'image_url', image_url: { url: image.dataUrl } }
+            ]
+          });
+        }
       } else if (m.role === 'system') {
         messages.push({ role: 'system', content: m.content || '' });
       }
@@ -498,7 +609,7 @@
           });
 
           const isRagActive = Boolean(resolvedActiveRagBranchId || (resolvedActiveRagBranchIds && resolvedActiveRagBranchIds.length > 0));
-          const isRagUsed = isRagActive || chatHistory.some(m => m.name === 'search_knowledge_base' || m.name === 'read_knowledge_chunk' || m.name === 'list_documents');
+          const isRagUsed = isRagActive || chatHistory.some(m => m.name === 'search_knowledge_base' || m.name === 'read_knowledge_chunk' || m.name === 'read_knowledge_image' || m.name === 'list_documents');
 
           const synthPrompt = isRagUsed
             ? (isEn
@@ -567,7 +678,7 @@
         // Si aún no hay texto tras síntesis forzada, compilar resultados de herramientas o indicar falta de datos
         if (!currentTurnText || currentTurnText.trim() === '') {
           const isRagActive = Boolean(resolvedActiveRagBranchId || (resolvedActiveRagBranchIds && resolvedActiveRagBranchIds.length > 0));
-          const isRagUsed = isRagActive || chatHistory.some(m => m.name === 'search_knowledge_base' || m.name === 'read_knowledge_chunk' || m.name === 'list_documents');
+          const isRagUsed = isRagActive || chatHistory.some(m => m.name === 'search_knowledge_base' || m.name === 'read_knowledge_chunk' || m.name === 'read_knowledge_image' || m.name === 'list_documents');
           const isEn = appConfig.language === 'en';
 
           if (isRagUsed) {
@@ -719,13 +830,22 @@
         tool_calls: [tc]
       });
 
-      chatHistory.push({
+      const toolMessage = {
         id: `${assistantMsgId}_turn_${turnIndex}_tool_${tc.id || 'res'}`,
         role: 'tool',
         tool_call_id: tc.id || `call_${Date.now()}`,
         name: rawFuncName,
         content: toolExecRes.resultText
-      });
+      };
+      if (rawFuncName === 'read_knowledge_image' && toolExecRes.result?.success && toolExecRes.result.dataUrl) {
+        toolMessage.images = [{
+          dataUrl: toolExecRes.result.dataUrl,
+          imageRef: toolExecRes.result.imageRef,
+          documentTitle: toolExecRes.result.documentTitle,
+          page: toolExecRes.result.page
+        }];
+      }
+      chatHistory.push(toolMessage);
 
       accumulatedConversationMarkdown += (currentTurnText ? currentTurnText + '\n\n' : '') + (toolExecRes.markdownBlock || '') + '\n\n';
 
@@ -752,7 +872,7 @@
       });
 
       const isRagActive = Boolean(resolvedActiveRagBranchId || (resolvedActiveRagBranchIds && resolvedActiveRagBranchIds.length > 0));
-      const isRagUsed = isRagActive || chatHistory.some(m => m.name === 'search_knowledge_base' || m.name === 'read_knowledge_chunk' || m.name === 'list_documents');
+      const isRagUsed = isRagActive || chatHistory.some(m => m.name === 'search_knowledge_base' || m.name === 'read_knowledge_chunk' || m.name === 'read_knowledge_image' || m.name === 'list_documents');
 
       const synthPrompt = isRagUsed
         ? (isEn
@@ -857,6 +977,8 @@
     getToolsSystemPromptGuide,
     injectStreamingCursor,
     buildEffectiveMessages,
-    executeAgentTurnLoop
+    executeAgentTurnLoop,
+    extractBaseId,
+    removeTurnFromHistory
   };
 });

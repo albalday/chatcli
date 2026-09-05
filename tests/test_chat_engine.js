@@ -14,6 +14,29 @@ const assert = require('node:assert/strict');
 
 // Importar ChatEngine y dependencias
 const ChatEngine = require('../js/chat-engine.js');
+
+test('ChatEngine - adjunta una imagen RAG como evidencia multimodal tras su resultado', () => {
+  const messages = ChatEngine.buildEffectiveMessages([
+    { role: 'assistant', content: null, tool_calls: [{ id: 'call_image', type: 'function', function: { name: 'read_knowledge_image', arguments: '{}' } }] },
+    { role: 'tool', tool_call_id: 'call_image', name: 'read_knowledge_image', content: 'Imagen recuperada.', images: [{ dataUrl: 'data:image/png;base64,AA==', imageRef: 'rag-image://doc_1:img_1', documentTitle: 'diagrama.md', page: 2 }] }
+  ], { sendDateTime: false }, { enableTools: false });
+
+  const toolIndex = messages.findIndex(message => message.role === 'tool' && message.name === 'read_knowledge_image');
+  assert.ok(toolIndex >= 0);
+  const visual = messages[toolIndex + 1];
+  assert.equal(visual.role, 'user');
+  assert.equal(visual.content[1].type, 'image_url');
+  assert.equal(visual.content[1].image_url.url, 'data:image/png;base64,AA==');
+  assert.match(visual.content[0].text, /rag-image:\/\/doc_1:img_1/);
+});
+
+test('ChatEngine - no crea evidencia visual para resultados de herramienta sin imagen', () => {
+  const messages = ChatEngine.buildEffectiveMessages([
+    { role: 'assistant', content: null, tool_calls: [{ id: 'call_image', type: 'function', function: { name: 'read_knowledge_image', arguments: '{}' } }] },
+    { role: 'tool', tool_call_id: 'call_image', name: 'read_knowledge_image', content: 'Error.' }
+  ], { sendDateTime: false }, { enableTools: false });
+  assert.equal(messages.filter(message => Array.isArray(message.content)).length, 0);
+});
 const ChatAPI = require('../js/api.js');
 const ChatAgentCore = require('../js/agent-core.js');
 
@@ -300,4 +323,174 @@ test('ChatEngine - executeAgentTurnLoop limpia el cursor inicial del contenedor 
 
   ChatAPI.streamChatCompletion = originalStream;
   delete global.document;
+});
+
+test('ChatEngine - extractBaseId extrae limpiamente el id base eliminando sufijos de turnos internos y final', () => {
+  assert.equal(ChatEngine.extractBaseId('msg_ast_123_turn_0_assistant'), 'msg_ast_123');
+  assert.equal(ChatEngine.extractBaseId('msg_ast_123_turn_0_tool_call_1'), 'msg_ast_123');
+  assert.equal(ChatEngine.extractBaseId('msg_ast_123_turn_5_tool_res'), 'msg_ast_123');
+  assert.equal(ChatEngine.extractBaseId('msg_ast_123_final'), 'msg_ast_123');
+  assert.equal(ChatEngine.extractBaseId('msg_ast_123'), 'msg_ast_123');
+  assert.equal(ChatEngine.extractBaseId('msg_usr_456'), 'msg_usr_456');
+  assert.equal(ChatEngine.extractBaseId(''), '');
+  assert.equal(ChatEngine.extractBaseId(null), '');
+});
+
+test('ChatEngine - removeTurnFromHistory elimina todos los mensajes del turno asistente incluyendo tools', () => {
+  const baseId = 'msg_ast_turn_test';
+  const history = [
+    { id: 'usr_1', role: 'user', content: '¿Qué hora es?' },
+    {
+      id: `${baseId}_turn_0_assistant`,
+      role: 'assistant',
+      content: null,
+      tool_calls: [{ id: 'call_time_1', type: 'function', function: { name: 'get_current_datetime', arguments: '{}' } }]
+    },
+    {
+      id: `${baseId}_turn_0_tool_call_time_1`,
+      role: 'tool',
+      tool_call_id: 'call_time_1',
+      name: 'get_current_datetime',
+      content: '{"datetime":"2026-09-05T12:00:00Z"}'
+    },
+    {
+      id: `${baseId}_final`,
+      role: 'assistant',
+      content: 'Son las 12:00:00 UTC.'
+    }
+  ];
+
+  const updated = ChatEngine.removeTurnFromHistory(history, { msgId: baseId, baseId });
+  assert.equal(updated.length, 1, 'Debe quedar únicamente el mensaje del usuario');
+  assert.equal(updated[0].id, 'usr_1');
+  assert.equal(updated.some(m => m.role === 'tool'), false, 'No deben quedar respuestas de tools');
+  assert.equal(updated.some(m => m.role === 'assistant'), false, 'No debe quedar ningún turno de asistente');
+});
+
+test('ChatEngine - removeTurnFromHistory elimina múltiples llamadas sucesivas a herramientas', () => {
+  const baseId = 'msg_multi_tools';
+  const history = [
+    { id: 'usr_1', role: 'user', content: 'Calcula y grafica' },
+    {
+      id: `${baseId}_turn_0_assistant`,
+      role: 'assistant',
+      content: null,
+      tool_calls: [{ id: 'call_calc', type: 'function', function: { name: 'execute_javascript', arguments: '{"code":"2+2"}' } }]
+    },
+    {
+      id: `${baseId}_turn_0_tool_call_calc`,
+      role: 'tool',
+      tool_call_id: 'call_calc',
+      name: 'execute_javascript',
+      content: '{"result":4}'
+    },
+    {
+      id: `${baseId}_turn_1_assistant`,
+      role: 'assistant',
+      content: null,
+      tool_calls: [{ id: 'call_chart', type: 'function', function: { name: 'render_chart', arguments: '{"data":[4]}' } }]
+    },
+    {
+      id: `${baseId}_turn_1_tool_call_chart`,
+      role: 'tool',
+      tool_call_id: 'call_chart',
+      name: 'render_chart',
+      content: '{"rendered":true}'
+    },
+    {
+      id: `${baseId}_final`,
+      role: 'assistant',
+      content: 'El resultado es 4 y se ha graficado.'
+    }
+  ];
+
+  const updated = ChatEngine.removeTurnFromHistory(history, { msgId: baseId, baseId });
+  assert.equal(updated.length, 1);
+  assert.equal(updated[0].id, 'usr_1');
+  assert.equal(updated.filter(m => m.role === 'tool').length, 0, 'Todas las respuestas de tool deben eliminarse');
+});
+
+test('ChatEngine - removeTurnFromHistory elimina respuestas de herramientas con explicitIds y sanea huérfanos', () => {
+  const history = [
+    { id: 'usr_1', role: 'user', content: 'Pregunta' },
+    {
+      id: 'legacy_asst_call',
+      role: 'assistant',
+      content: null,
+      tool_calls: [{ id: 'legacy_call_id', type: 'function', function: { name: 'search_web', arguments: '{"query":"noticias"}' } }]
+    },
+    {
+      id: 'legacy_tool_res',
+      role: 'tool',
+      tool_call_id: 'legacy_call_id',
+      name: 'search_web',
+      content: 'Noticias del día'
+    },
+    {
+      id: 'legacy_asst_final',
+      role: 'assistant',
+      content: 'Aquí están las noticias.'
+    }
+  ];
+
+  // Simulación de sesión restaurada con IDs heterogéneos pasados en explicitIds
+  const updated = ChatEngine.removeTurnFromHistory(history, {
+    explicitIds: ['legacy_asst_call', 'legacy_tool_res', 'legacy_asst_final']
+  });
+
+  assert.equal(updated.length, 1);
+  assert.equal(updated[0].id, 'usr_1');
+});
+
+test('ChatEngine - la siguiente petición tras borrar respuesta con tools no incluye ningún tool ni turno huérfano', () => {
+  const baseId = 'turn_with_tools_deleted';
+  const chatHistory = [
+    { id: 'u1', role: 'user', content: '¿Qué temperatura hace?' },
+    {
+      id: `${baseId}_turn_0_assistant`,
+      role: 'assistant',
+      content: null,
+      tool_calls: [{ id: 'call_temp', type: 'function', function: { name: 'get_temp', arguments: '{}' } }]
+    },
+    {
+      id: `${baseId}_turn_0_tool_call_temp`,
+      role: 'tool',
+      tool_call_id: 'call_temp',
+      name: 'get_temp',
+      content: '22C'
+    },
+    {
+      id: `${baseId}_final`,
+      role: 'assistant',
+      content: 'La temperatura es de 22C.'
+    }
+  ];
+
+  // 1. Borrar la respuesta del asistente (con todas sus herramientas)
+  const cleanedHistory = ChatEngine.removeTurnFromHistory(chatHistory, { msgId: baseId, baseId });
+
+  // 2. El usuario envía una siguiente petición
+  cleanedHistory.push({
+    id: 'u2',
+    role: 'user',
+    content: 'Ahora dime la hora'
+  });
+
+  // 3. ChatEngine construye los mensajes efectivos para la API de inferencia
+  const effective = ChatEngine.buildEffectiveMessages(cleanedHistory, {
+    apiUrl: 'http://localhost:1234/v1',
+    model: 'test-model'
+  });
+
+  // 4. Validar que no haya ningún residuo de tool de la petición eliminada
+  const toolMessages = effective.filter(m => m.role === 'tool');
+  assert.equal(toolMessages.length, 0, 'No debe haber ningún mensaje de rol "tool" en la siguiente petición');
+
+  const assistantWithTools = effective.filter(m => m.role === 'assistant' && Array.isArray(m.tool_calls) && m.tool_calls.length > 0);
+  assert.equal(assistantWithTools.length, 0, 'No debe haber ningún asistente con tool_calls de la petición eliminada');
+
+  const userMessages = effective.filter(m => m.role === 'user');
+  assert.equal(userMessages.length, 2, 'Deben conservarse los mensajes de usuario válidos');
+  assert.equal(userMessages[0].content, '¿Qué temperatura hace?');
+  assert.ok(userMessages[1].content.includes('Ahora dime la hora'));
 });
