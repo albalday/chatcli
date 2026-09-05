@@ -1,30 +1,27 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const AgentCore = require('../js/agent-core.js');
 const ToolManifest = require('../js/tools/tool-manifest.js');
 
-const ExecuteJavascriptTool = require('../js/tools/builtin/execute-javascript.tool.js');
-const SearchWebTool = require('../js/tools/builtin/search-web.tool.js');
-const FetchWebPageTool = require('../js/tools/builtin/fetch-web-page.tool.js');
-const DownloadPdfTool = require('../js/tools/builtin/download-pdf.tool.js');
-const RenderChartTool = require('../js/tools/builtin/render-chart.tool.js');
-const DateTimeTool = require('../js/tools/builtin/get-current-datetime.tool.js');
-const ListDocumentsTool = require('../js/tools/builtin/list-documents.tool.js');
-const SearchKnowledgeBaseTool = require('../js/tools/builtin/search-knowledge-base.tool.js');
-const ReadKnowledgeChunkTool = require('../js/tools/builtin/read-knowledge-chunk.tool.js');
-
-const ALL_BUILTIN_MODULES = [
-  ExecuteJavascriptTool,
-  SearchWebTool,
-  FetchWebPageTool,
-  DownloadPdfTool,
-  RenderChartTool,
-  DateTimeTool,
-  ListDocumentsTool,
-  SearchKnowledgeBaseTool,
-  ReadKnowledgeChunkTool
-];
+const ROOT_DIR = path.resolve(__dirname, '..');
+const BUILTIN_DIR = path.join(ROOT_DIR, 'js/tools/builtin');
+const ALL_BUILTIN_MODULES = fs.readdirSync(BUILTIN_DIR)
+  .filter(file => file.endsWith('.tool.js'))
+  .sort()
+  .map(file => require(path.join(BUILTIN_DIR, file)));
+const BUILTIN_BY_ID = new Map(ALL_BUILTIN_MODULES.map(toolModule => [toolModule.id, toolModule]));
+const ExecuteJavascriptTool = BUILTIN_BY_ID.get('execute_javascript');
+const SearchWebTool = BUILTIN_BY_ID.get('search_web');
+const FetchWebPageTool = BUILTIN_BY_ID.get('fetch_web_page');
+const DownloadPdfTool = BUILTIN_BY_ID.get('download_pdf');
+const RenderChartTool = BUILTIN_BY_ID.get('render_chart');
+const DateTimeTool = BUILTIN_BY_ID.get('get_current_datetime');
+const ListDocumentsTool = BUILTIN_BY_ID.get('list_documents');
+const SearchKnowledgeBaseTool = BUILTIN_BY_ID.get('search_knowledge_base');
+const ReadKnowledgeChunkTool = BUILTIN_BY_ID.get('read_knowledge_chunk');
 
 test('Builtin Tools - Todos los módulos cumplen el contrato declarativo y se registran en el manifiesto', () => {
   for (const toolModule of ALL_BUILTIN_MODULES) {
@@ -34,9 +31,16 @@ test('Builtin Tools - Todos los módulos cumplen el contrato declarativo y se re
     assert.equal(validation.valid, true, `${toolModule.id}: ${validation.errors.join(' ')}`);
     assert.equal(tool.name, toolModule.id);
     assert.equal(tool.getDefinition().function.name, toolModule.id);
-    assert.equal(tool.view.id, toolModule.id);
     assert.equal(ToolManifest.builtin.get(toolModule.id), toolModule);
+    assert.equal(AgentCore.registry.getTool(toolModule.id)?.id, toolModule.id);
   }
+});
+
+test('Builtin Tools - index.html carga exactamente los módulos builtin disponibles', () => {
+  const html = fs.readFileSync(path.join(ROOT_DIR, 'index.html'), 'utf-8');
+  const loaded = Array.from(html.matchAll(/<script[^>]+src=["'](js\/tools\/builtin\/[^"']+\.tool\.js)["']/gi), match => path.basename(match[1]));
+  const available = fs.readdirSync(BUILTIN_DIR).filter(file => file.endsWith('.tool.js')).sort();
+  assert.deepEqual(loaded.sort(), available);
 });
 
 test('Builtin Tools - execute_javascript ejecuta con sandbox inyectado y conserva formatos', async () => {

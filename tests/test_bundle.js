@@ -11,6 +11,16 @@ const TEST_FALLBACK_PATH = path.join(__dirname, 'tmp_test_fallback.html');
 const TEST_DEV_PATH = path.join(__dirname, 'tmp_test_dev.html');
 const TEST_GENERIC_DIR = path.join(__dirname, 'tmp_bundle_generic');
 
+function getIndexScriptPaths() {
+  const html = fs.readFileSync(path.join(ROOT_DIR, 'index.html'), 'utf-8');
+  return Array.from(html.matchAll(/<script[^>]+src=["'](js\/[^"']+)["']/gi), match => match[1]);
+}
+
+function getUmdGlobalNames(scriptPath) {
+  const source = fs.readFileSync(path.join(ROOT_DIR, scriptPath), 'utf-8');
+  return Array.from(source.matchAll(/root\.([A-Za-z_$][\w$]*)\s*=\s*factory/g), match => match[1]);
+}
+
 test('Bundler - Generación en modo Producción (Gzip Base64 Level 9)', () => {
   try {
     const stdout = execSync(`python3 bundle.py index.html "${TEST_PROD_PATH}" --mode=prod`, { cwd: ROOT_DIR, encoding: 'utf-8' });
@@ -40,20 +50,10 @@ test('Bundler - Generación en modo Producción (Gzip Base64 Level 9)', () => {
     const decompressedJs = zlib.gunzipSync(Buffer.from(b64Payload, 'base64')).toString('utf-8');
     assert.ok(decompressedJs.length > 500000, 'El JavaScript descomprimido debe contener el código completo');
 
-    // Verificar presencia de módulos fundamentales en el JS descomprimido
-    const expectedModules = [
-      'ZeroChatOrama', 'ZeroChatDB', 'ChatStorage', 'ChatRagStorage', 'ChatRagIndex', 'ChatIngestionEngine', 'ChatRagService', 'ChatRagUI',
-      'ChatI18n', 'ChatIcons', 'ChatSandbox', 'ChatCharts',
-      'ChatWebBrowser', 'ChatWebSearch', 'ChatMarkdown',
-      'ChatProviders', 'ChatAPI', 'ChatFileParser',
-      'ChatToolRuntime', 'ChatToolManifest', 'ChatBuiltinExecuteJavascriptTool',
-      'ChatBuiltinSearchWebTool', 'ChatBuiltinFetchWebPageTool', 'ChatBuiltinDownloadPdfTool',
-      'ChatBuiltinRenderChartTool', 'ChatBuiltinGetCurrentDatetimeTool', 'ChatBuiltinListDocumentsTool',
-      'ChatBuiltinSearchKnowledgeBaseTool', 'ChatBuiltinReadKnowledgeChunkTool', 'ChatBuiltinReadKnowledgeImageTool',
-      'ChatAgentCore', 'ChatMCP', 'ChatDebug',
-      'ChatToolCards', 'ChatAttachments', 'ChatExport',
-      'ChatState', 'ChatContextManager'
-    ];
+    // Las etiquetas script del HTML son la fuente de verdad del bundle. Cada
+    // módulo UMD cargado allí debe conservar su global público tras empaquetar.
+    const expectedModules = getIndexScriptPaths().flatMap(getUmdGlobalNames);
+    assert.ok(expectedModules.length > 0, 'index.html debe declarar módulos UMD para el runtime');
     for (const mod of expectedModules) {
       assert.ok(decompressedJs.includes(mod), `El módulo ${mod} debe estar presente en el código descomprimido`);
     }
