@@ -188,6 +188,12 @@
         elements.temperatureVal.textContent = profileData.temperature;
       }
     }
+    if (elements.settingMaxAgentTurns && profileData.maxAgentTurns !== undefined) {
+      elements.settingMaxAgentTurns.value = profileData.maxAgentTurns;
+      if (elements.maxAgentTurnsVal) {
+        elements.maxAgentTurnsVal.textContent = profileData.maxAgentTurns;
+      }
+    }
     if (elements.agentToolsContainer) {
       renderAgentToolsUI(elements.agentToolsContainer, profileData.enabledTools || {});
     }
@@ -217,6 +223,7 @@
       systemDataPrompt: elements?.settingSystemDataPrompt ? elements.settingSystemDataPrompt.value.trim() : (appConfig?.systemDataPrompt || ''),
       temperature: appConfig?.temperature || '0.7',
       reasoningEffort: appConfig?.reasoningEffort || 'none',
+      maxAgentTurns: elements?.settingMaxAgentTurns ? Number(elements.settingMaxAgentTurns.value) : (appConfig?.maxAgentTurns || 15),
       modelReasoningConfig: appConfig?.modelReasoningConfig || null,
       theme: appConfig?.theme || 'light',
       language: appConfig?.language || 'es',

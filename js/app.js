@@ -234,6 +234,8 @@
       settingSystemDataPrompt: document.getElementById('setting-system-data-prompt'),
       settingTemperature: document.getElementById('setting-temperature'),
       temperatureVal: document.getElementById('temperature-val'),
+      settingMaxAgentTurns: document.getElementById('setting-max-agent-turns'),
+      maxAgentTurnsVal: document.getElementById('max-agent-turns-val'),
       themeButtons: document.querySelectorAll('.btn-theme-toggle'),
       langButtons: document.querySelectorAll('.btn-lang-toggle'),
       modalTabs: document.querySelectorAll('#settings-dialog .modal-tabs-nav .modal-tab-btn'),
@@ -990,6 +992,7 @@
       model: runtimeConfig.model,
       temperature: runtimeConfig.temperature,
       reasoningEffort: runtimeConfig.reasoningEffort || 'none',
+      maxAgentTurns: runtimeConfig.maxAgentTurns ? Number(runtimeConfig.maxAgentTurns) : 15,
       chatHistory: chatHistory,
       appConfig: runtimeConfig,
       assistantMsgId: assistantMsgId,
@@ -1226,7 +1229,8 @@
         apiKey: elements.settingApiKey?.value.trim() || '',
         model: elements.settingModel?.value.trim() || '',
         systemPrompt: elements.settingSystemPrompt?.value.trim() || '',
-        temperature: elements.settingTemperature?.value || baseSettings.temperature || '0.7'
+        temperature: elements.settingTemperature?.value || baseSettings.temperature || '0.7',
+        maxAgentTurns: elements.settingMaxAgentTurns?.value ? Number(elements.settingMaxAgentTurns.value) : (baseSettings.maxAgentTurns || 15)
       }
     });
     populateProfileSelector(saved.id);
@@ -2315,6 +2319,12 @@
     elements.settingTemperature.addEventListener('input', function (e) {
       elements.temperatureVal.textContent = e.target.value;
     });
+
+    if (elements.settingMaxAgentTurns && elements.maxAgentTurnsVal) {
+      elements.settingMaxAgentTurns.addEventListener('input', function (e) {
+        elements.maxAgentTurnsVal.textContent = e.target.value;
+      });
+    }
 
     elements.btnToggleKey.addEventListener('click', function () {
       const isPass = elements.settingApiKey.type === 'password';

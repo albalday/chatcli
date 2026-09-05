@@ -337,3 +337,68 @@ test('AgentRuntime - Auto-síntesis cuando el modelo finaliza con texto vacío t
   assert.equal(synthRequested, true);
   assert.equal(result.finalText, 'El precio actual de la acción es $215.4.');
 });
+
+test('AgentRuntime - Ejecución de múltiples tool calls simultáneas en el mismo turno', async () => {
+  const registry = new ToolRegistry();
+  const executedCalls = [];
+
+  registry.registerTool(new Tool({
+    name: 'fetch_metric_a',
+    execute: async (args) => {
+      executedCalls.push({ tool: 'a', args });
+      return { value: 100 };
+    }
+  }));
+
+  registry.registerTool(new Tool({
+    name: 'fetch_metric_b',
+    execute: async (args) => {
+      executedCalls.push({ tool: 'b', args });
+      return { value: 200 };
+    }
+  }));
+
+  let stepCount = 0;
+  const mockApi = {
+    streamChatCompletion: async (params) => {
+      stepCount++;
+      if (stepCount === 1) {
+        return {
+          accumulatedText: '',
+          toolCalls: [
+            { id: 'call_1', function: { name: 'fetch_metric_a', arguments: '{"year":2019}' } },
+            { id: 'call_2', function: { name: 'fetch_metric_b', arguments: '{"year":2020}' } }
+          ],
+          stats: { tokens: 15 }
+        };
+      }
+      // Paso 2: El modelo recibe ambas respuestas y sintetiza
+      assert.equal(params.messages.length, 4); // user, assistant(with 2 tool_calls), tool1, tool2
+      assert.equal(params.messages[1].role, 'assistant');
+      assert.equal(params.messages[1].tool_calls.length, 2);
+      assert.equal(params.messages[2].role, 'tool');
+      assert.equal(params.messages[2].tool_call_id, 'call_1');
+      assert.equal(params.messages[3].role, 'tool');
+      assert.equal(params.messages[3].tool_call_id, 'call_2');
+
+      return {
+        accumulatedText: 'Métricas recuperadas: 100 y 200.',
+        toolCalls: [],
+        stats: { tokens: 25 }
+      };
+    }
+  };
+
+  const runtime = new AgentRuntime({ registry });
+  const result = await runtime.execute({
+    api: mockApi,
+    messages: [{ role: 'user', content: 'Dame métricas A y B' }]
+  });
+
+  assert.equal(result.success, true);
+  assert.equal(executedCalls.length, 2);
+  assert.deepEqual(executedCalls[0], { tool: 'a', args: { year: 2019 } });
+  assert.deepEqual(executedCalls[1], { tool: 'b', args: { year: 2020 } });
+  assert.equal(result.toolExecutions.length, 2);
+  assert.equal(result.finalText, 'Métricas recuperadas: 100 y 200.');
+});

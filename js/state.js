@@ -50,6 +50,7 @@
         systemPrompt: '',
         temperature: '0.7',
         reasoningEffort: 'none',
+        maxAgentTurns: 15,
         theme: 'light',
         language: 'es',
         enabledTools: {

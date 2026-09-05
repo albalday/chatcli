@@ -7,11 +7,20 @@
 
   const definition = {
     name: 'read_knowledge_chunk',
-    description: 'Lee el contenido completo de un fragmento localizado previamente para resolver una duda concreta necesaria para la respuesta. Úsalo como evidencia interna; después sintetiza y responde, sin copiar el fragmento completo salvo petición explícita del usuario.',
+    description: 'Lee el contenido completo de uno o varios fragmentos contiguos o complementarios localizados previamente. Admite chunkId para un fragmento o chunkIds (lista de identificadores) para recuperar varios a la vez (máximo 5) en un solo turno. Úsalo como evidencia interna; después sintetiza y responde.',
     parameters: {
       type: 'object',
-      properties: { chunkId: { type: 'string', description: 'Identificador exacto del fragmento (chunkId).' } },
-      required: ['chunkId']
+      properties: {
+        chunkIds: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Lista de identificadores de fragmentos a leer simultáneamente en un solo turno (máximo 5).'
+        },
+        chunkId: {
+          type: 'string',
+          description: 'Identificador único de fragmento (chunkId). Se admite como alternativa o complemento a chunkIds.'
+        }
+      }
     }
   };
 
@@ -46,7 +55,13 @@
     const spinner = ui?.SPINNER_SVG || '';
     const chevron = ui?.CHEVRON_SVG || '';
     const title = t('tool_rag_read_title') || 'Fragmento de conocimiento';
-    const loading = t('tool_rag_read_loading', { chunkId: Markdown.escapeHtml(args?.chunkId || '') }) || `Leyendo ${Markdown.escapeHtml(args?.chunkId || '')}...`;
+    const ids = Array.isArray(args?.chunkIds) && args.chunkIds.length > 0
+      ? args.chunkIds
+      : (args?.chunkId ? [args.chunkId] : []);
+    const targetLabel = ids.length > 1
+      ? `${ids.length} fragmentos`
+      : (ids[0] || '');
+    const loading = t('tool_rag_read_loading', { chunkId: Markdown.escapeHtml(targetLabel) }) || `Leyendo ${Markdown.escapeHtml(targetLabel)}...`;
     const retrieving = t('tool_rag_read_retrieving') || 'Recuperando texto desde IndexedDB...';
     card.innerHTML = `<div class="tool-execution-card rag-execution-card collapsed"><div class="tool-card-header"><div class="tool-card-title"><span>${DOC_ICON_SVG}</span><span>${title}</span></div><div class="tool-card-header-actions"><span class="tool-card-badge status-loading">${spinner} <span>${loading}</span></span><button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Expandir'}">${chevron}</button></div></div><div class="tool-card-collapsible-body"><div class="tool-card-result"><div class="tool-loading-placeholder">${spinner} <span>${retrieving}</span></div></div></div></div>`;
     return card;
@@ -60,14 +75,16 @@
     const success = result?.success !== false && !result?.error;
     const content = result?.content || result?.error || '';
     const badge = card.querySelector('.tool-card-badge');
-    const retrievedLabel = t('tool_rag_read_retrieved', { chars: content.length }) || `Fragmento recuperado (${content.length} caracteres)`;
+    const count = result?.count || (result?.chunkIds?.length) || 1;
+    const countLabel = count > 1 ? `${count} fragmentos recuperados` : 'Fragmento recuperado';
+    const retrievedLabel = t('tool_rag_read_retrieved', { chars: content.length }) || `${countLabel} (${content.length} caracteres)`;
     const notFoundLabel = result?.error || t('tool_rag_read_not_found') || 'No encontrado';
     if (badge) {
       badge.className = `tool-card-badge ${success ? 'status-success' : 'status-error'}`;
       badge.innerHTML = success ? `${checkSvg} <span>${retrievedLabel}</span>` : `${errorSvg} <span>${notFoundLabel}</span>`;
     }
     const body = card.querySelector('.tool-card-result');
-    if (body) body.innerHTML = `<pre class="tool-result-pre"><code>${Markdown.escapeHtml(content.slice(0, 2500))}${content.length > 2500 ? '\n…' : ''}</code></pre>`;
+    if (body) body.innerHTML = `<pre class="tool-result-pre"><code>${Markdown.escapeHtml(content.slice(0, 3000))}${content.length > 3000 ? '\n…' : ''}</code></pre>`;
   }
   function renderHistoricalCard(args, message, ui) {
     const card = createLiveCard(args, ui); if (!card) return null;
@@ -91,11 +108,17 @@
       },
       result: {
         toModel: (_args, result) => result?.content || JSON.stringify(result || {}),
-        toMarkdown: args => `> 📄 **read_knowledge_chunk** (${args.chunkId || ''})\n\n`
+        toMarkdown: (args, result) => {
+          const ids = result?.chunkIds || (args?.chunkIds) || [args?.chunkId || ''];
+          return `> 📄 **read_knowledge_chunk** (${ids.join(', ')})\n\n`;
+        }
       },
-      formatter: (args, result) => result.success
-        ? `> 📄 **read_knowledge_chunk** (${result.chunkId})\n> \`\`\`text\n> ${String(result.content).split('\n').join('\n> ')}\n> \`\`\``
-        : `> 📄 **read_knowledge_chunk** (${args.chunkId || ''})\n> ❌ ${result.error || 'Error'}`,
+      formatter: (args, result) => {
+        const ids = result?.chunkIds || (args?.chunkIds) || [args?.chunkId || ''];
+        return result.success
+          ? `> 📄 **read_knowledge_chunk** (${ids.join(', ')})\n> \`\`\`text\n> ${String(result.content).split('\n').join('\n> ')}\n> \`\`\``
+          : `> 📄 **read_knowledge_chunk** (${ids.join(', ')})\n> ❌ ${result.error || 'Error'}`;
+      },
       view: { id: definition.name, createLiveCard, updateLiveCard, renderHistoricalCard }
     });
   }

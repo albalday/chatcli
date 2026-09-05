@@ -128,6 +128,11 @@
     }
   }
 
+  const COMMON_STOPWORDS = new Set([
+    'of', 'the', 'in', 'and', 'to', 'for', 'with', 'on', 'at', 'from', 'by', 'an', 'a',
+    'de', 'la', 'el', 'los', 'las', 'en', 'y', 'del', 'al', 'por', 'con', 'para'
+  ]);
+
   function prepareSearchQuery(rawQuery) {
     if (!rawQuery) return { cleanedTerm: '', tolerance: 0 };
     // 1. Eliminar extensiones de archivo que solo añaden ruido (.pdf, .txt, etc.)
@@ -140,14 +145,19 @@
     cleaned = cleaned.replace(/["'()[\]{}#*:;]/g, ' ');
     cleaned = cleaned.replace(/\s+/g, ' ').trim();
 
-    // 5. Tolerancia inteligente:
+    // 5. Filtrar palabras vacías (stopwords) comunes cuando hay múltiples términos
+    const tokens = cleaned.split(/\s+/).filter(Boolean);
+    const nonStopTokens = tokens.filter(t => !COMMON_STOPWORDS.has(t.toLowerCase()));
+    const effectiveTokens = (tokens.length > 2 && nonStopTokens.length > 0) ? nonStopTokens : tokens;
+    const finalTerm = effectiveTokens.join(' ');
+
+    // 6. Tolerancia inteligente:
     // Si contiene tokens cortos (<= 3 caracteres como "3M", "AMD", "Q1", "SEC"), usar tolerance 0
     // para evitar falsos positivos por distancia Levenshtein (ej. "3M" <-> "TM" o "PM")
-    const tokens = cleaned.split(/\s+/).filter(Boolean);
-    const hasShortToken = tokens.some(t => t.length > 0 && t.length <= 3);
+    const hasShortToken = effectiveTokens.some(t => t.length > 0 && t.length <= 3);
     const tolerance = hasShortToken ? 0 : 1;
 
-    return { cleanedTerm: cleaned || String(rawQuery).trim(), tolerance };
+    return { cleanedTerm: finalTerm || String(rawQuery).trim(), tolerance };
   }
 
   async function searchIndex(db, term, options = {}) {

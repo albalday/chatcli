@@ -63,6 +63,8 @@ test('UISettings - applyProfileToForm rellena los inputs de configuración', () 
     settingSystemDataPrompt: { value: '' },
     settingTemperature: { value: '' },
     temperatureVal: { textContent: '' },
+    settingMaxAgentTurns: { value: '' },
+    maxAgentTurnsVal: { textContent: '' },
     settingEnableRawLogs: { checked: false },
     settingSendDateTime: { checked: false }
   };
@@ -75,6 +77,7 @@ test('UISettings - applyProfileToForm rellena los inputs de configuración', () 
     systemPrompt: 'Eres un asistente experto.',
     systemDataPrompt: 'Formato ZeroChat.',
     temperature: '0.2',
+    maxAgentTurns: 22,
     enableRawLogs: true,
     sendDateTime: true
   };
@@ -89,8 +92,20 @@ test('UISettings - applyProfileToForm rellena los inputs de configuración', () 
   assert.equal(elements.settingSystemDataPrompt.value, 'Formato ZeroChat.');
   assert.equal(elements.settingTemperature.value, '0.2');
   assert.equal(elements.temperatureVal.textContent, '0.2');
+  assert.equal(elements.settingMaxAgentTurns.value, 22);
+  assert.equal(elements.maxAgentTurnsVal.textContent, 22);
   assert.equal(elements.settingEnableRawLogs.checked, true);
   assert.equal(elements.settingSendDateTime.checked, true);
+});
+
+test('UISettings - gatherCurrentFormConfig extrae maxAgentTurns correctamente', () => {
+  const elements = {
+    settingModel: { value: 'gpt-4o' },
+    settingMaxAgentTurns: { value: '25' }
+  };
+  const appConfig = { maxAgentTurns: 15 };
+  const config = UISettings.gatherCurrentFormConfig(elements, appConfig);
+  assert.equal(config.maxAgentTurns, 25);
 });
 
 test('UISettings - handleSaveProfile delega el guardado al editor sin mutar la configuración activa', () => {

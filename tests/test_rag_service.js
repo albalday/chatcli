@@ -43,6 +43,58 @@ test('RagService - lista, busca y lee chunks', async () => {
   const read = await RagService.readKnowledgeChunk(branch.id, { chunkId });
   assert.equal(read.success, true);
   assert.match(read.content, /PostgreSQL/);
+  assert.equal(read.totalChunks, 2);
+  assert.equal(read.order, 1);
+  assert.equal(read.prevChunkId, `${document.id}:chunk:0`);
+  assert.equal(read.nextChunkId, null);
+});
+
+test('RagService - lee múltiples fragmentos simultáneamente con metadatos de continuidad', async () => {
+  const { branch, document } = await seed();
+  const id0 = `${document.id}:chunk:0`;
+  const id1 = `${document.id}:chunk:1`;
+
+  // Lectura múltiple mediante array chunkIds
+  const multiRead = await RagService.readKnowledgeChunk(branch.id, { chunkIds: [id0, id1] });
+  assert.equal(multiRead.success, true);
+  assert.equal(multiRead.count, 2);
+  assert.equal(multiRead.items.length, 2);
+  assert.equal(multiRead.items[0].order, 0);
+  assert.equal(multiRead.items[0].prevChunkId, null);
+  assert.equal(multiRead.items[0].nextChunkId, id1);
+  assert.equal(multiRead.items[1].order, 1);
+  assert.equal(multiRead.items[1].prevChunkId, id0);
+  assert.equal(multiRead.items[1].nextChunkId, null);
+  assert.match(multiRead.content, /Kubernetes/);
+  assert.match(multiRead.content, /PostgreSQL/);
+
+  // Lectura con string separado por comas
+  const commaRead = await RagService.readKnowledgeChunk(branch.id, { chunkIds: `${id0}, ${id1}` });
+  assert.equal(commaRead.success, true);
+  assert.equal(commaRead.count, 2);
+});
+
+test('RagService - search_knowledge_base preserva saltos de línea y estructura de tablas en snippets', async () => {
+  const branch = await RagStorage.createBranch('Finanzas', 'Informes 10-K');
+  const tableContent = [
+    'Consolidated Statements of Income',
+    'Fiscal Years Ended January 31, 2020 | 2019 | 2018',
+    'Total revenues: 523964 | 514405 | 500343',
+    'Operating income: 20568 | 21957 | 20437'
+  ].join('\n');
+
+  await RagStorage.saveDocument({
+    branchId: branch.id, title: 'WMT_2020_10K.pdf', fileType: 'pdf',
+    chunks: [{ title: 'P&L Statement', content: tableContent }]
+  });
+
+  const search = await RagService.searchKnowledgeBase(branch.id, { query: 'Operating income', tolerance: 0 });
+  assert.equal(search.success, true);
+  assert.ok(search.matches.length >= 1);
+  const snippet = search.matches[0].snippet;
+  assert.ok(snippet.includes('\n'), 'El snippet debe preservar los saltos de línea de la tabla');
+  assert.match(snippet, /Total revenues: 523964/);
+  assert.match(snippet, /Operating income: 20568/);
 });
 
 test('RagService - valida rama, consulta y chunk', async () => {

@@ -678,7 +678,7 @@
     constructor(options = {}) {
       this.registry = options.registry || new ToolRegistry();
       this.executor = options.executor || new ToolExecutor(this.registry);
-      this.maxSteps = options.maxSteps || options.maxTurns || 15;
+      this.maxSteps = options.maxSteps || options.maxTurns || (options.appConfig && options.appConfig.maxAgentTurns) || (options.config && options.config.maxAgentTurns) || 15;
       this.timeoutMs = options.timeoutMs || 0; // 0 = sin límite global de tiempo
       this.stepTimeoutMs = options.stepTimeoutMs || 60000; // 60s por paso
       this.maxRetries = options.maxRetries !== undefined ? options.maxRetries : 1;
@@ -983,18 +983,19 @@
             break;
           }
 
-          // Caso B: Llamada a herramienta detectada
-          const primaryCall = stepToolCalls[0];
-          const callFingerprint = this.getToolCallFingerprint(primaryCall);
-          const identicalCount = toolCallSignatures.filter(sig => sig === callFingerprint).length;
+          // Caso B: Llamadas a herramientas detectadas (soporte para llamadas individuales y en paralelo)
+          const currentSignatures = stepToolCalls.map(tc => this.getToolCallFingerprint(tc));
+          const allRepeated = currentSignatures.length > 0 && currentSignatures.every(sig => {
+            return toolCallSignatures.filter(s => s === sig).length >= loopThreshold;
+          });
 
           // Detección y protección contra bucles infinitos
-          if (identicalCount >= loopThreshold) {
+          if (allRepeated) {
             status = 'loop_detected';
             if (callbacks.onLoopDetected) {
-              callbacks.onLoopDetected(primaryCall, identicalCount + 1, stepIndex);
+              callbacks.onLoopDetected(stepToolCalls[0], loopThreshold + 1, stepIndex);
             }
-            const loopWarning = `\n\n> ⚠️ *[Protección de Bucle Infinito]*: La herramienta \`${primaryCall.function?.name}\` ha sido invocada repetidamente (${identicalCount + 1} veces) con los mismos parámetros. Deteniendo ciclo de ejecución.`;
+            const loopWarning = `\n\n> ⚠️ *[Protección de Bucle Infinito]*: Se han detectado llamadas a herramientas invocadas repetidamente (${loopThreshold + 1} veces) con los mismos parámetros. Deteniendo ciclo de ejecución.`;
             currentStepText = (currentStepText || '') + loopWarning;
             finalAccumulatedText = currentStepText;
 
@@ -1027,81 +1028,96 @@
             }
             break;
           }
-          toolCallSignatures.push(callFingerprint);
-
-          // Iniciar ejecución de la herramienta con soporte de reintentos
-          if (callbacks.onToolStart) {
-            const toolInstance = this.registry.getTool(primaryCall.function?.name);
-            callbacks.onToolStart(primaryCall, toolInstance, stepIndex);
+          for (const sig of currentSignatures) {
+            toolCallSignatures.push(sig);
           }
 
-          const execResult = await this.executeToolWithRetries(
-            primaryCall,
-            { signal: combinedSignal, ...params },
-            maxRetries,
-            (tc, attempt, total, err) => {
-              if (callbacks.onRetry) {
-                callbacks.onRetry(tc, attempt, total, err, stepIndex);
+          const executedToolMessages = [];
+          const stepExecResults = [];
+
+          for (let i = 0; i < stepToolCalls.length; i++) {
+            if (combinedSignal.aborted) break;
+            const call = stepToolCalls[i];
+
+            if (callbacks.onToolStart) {
+              const toolInstance = this.registry.getTool(call.function?.name);
+              callbacks.onToolStart(call, toolInstance, stepIndex);
+            }
+
+            const execResult = await this.executeToolWithRetries(
+              call,
+              { signal: combinedSignal, ...params },
+              maxRetries,
+              (tc, attempt, total, err) => {
+                if (callbacks.onRetry) {
+                  callbacks.onRetry(tc, attempt, total, err, stepIndex);
+                }
+              }
+            );
+            stepExecResults.push(execResult);
+
+            let toolResponseContent = '';
+            if (execResult.success && execResult.result !== undefined) {
+              const serialized = execResult.tool.serializeResultForModel(execResult.args, execResult.result, execResult.outcome);
+              toolResponseContent = typeof serialized === 'string'
+                ? serialized
+                : JSON.stringify(serialized);
+            } else {
+              toolResponseContent = JSON.stringify({
+                success: false,
+                error: execResult.error || 'Error desconocido ejecutando la herramienta.'
+              });
+              if (callbacks.onToolError) {
+                callbacks.onToolError(call, execResult.error, stepIndex);
               }
             }
-          );
 
-          let toolResponseContent = '';
-          if (execResult.success && execResult.result !== undefined) {
-            const serialized = execResult.tool.serializeResultForModel(execResult.args, execResult.result, execResult.outcome);
-            toolResponseContent = typeof serialized === 'string'
-              ? serialized
-              : JSON.stringify(serialized);
-          } else {
-            toolResponseContent = JSON.stringify({
-              success: false,
-              error: execResult.error || 'Error desconocido ejecutando la herramienta.'
-            });
-            if (callbacks.onToolError) {
-              callbacks.onToolError(primaryCall, execResult.error, stepIndex);
+            if (callbacks.onToolComplete) {
+              callbacks.onToolComplete(call, execResult, toolResponseContent, stepIndex);
             }
-          }
 
-          if (callbacks.onToolComplete) {
-            callbacks.onToolComplete(primaryCall, execResult, toolResponseContent, stepIndex);
-          }
+            toolExecutions.push({
+              step: stepIndex,
+              toolName: call.function?.name || 'tool',
+              args: execResult.args || call.function?.arguments,
+              result: execResult.result,
+              success: execResult.success,
+              executionTimeMs: execResult.executionTimeMs || 0,
+              error: execResult.error || null
+            });
 
-          toolExecutions.push({
-            step: stepIndex,
-            toolName: primaryCall.function?.name || 'tool',
-            args: execResult.args || primaryCall.function?.arguments,
-            result: execResult.result,
-            success: execResult.success,
-            executionTimeMs: execResult.executionTimeMs || 0,
-            error: execResult.error || null
-          });
+            executedToolMessages.push({
+              id: `msg_turn_${stepIndex}_tool_${call.id || i}_${Date.now()}`,
+              role: 'tool',
+              tool_call_id: call.id || `call_${Date.now()}_${i}`,
+              name: call.function?.name || 'tool',
+              content: toolResponseContent
+            });
+          }
 
           // Actualizar historial asegurando el emparejamiento estricto assistant(tool_calls) <-> tool(results)
           const assistantMsg = {
             id: `msg_turn_${stepIndex}_assistant`,
             role: 'assistant',
             content: currentStepText || null,
-            tool_calls: [primaryCall]
-          };
-
-          const toolMsg = {
-            id: `msg_turn_${stepIndex}_tool_${primaryCall.id || 'res'}`,
-            role: 'tool',
-            tool_call_id: primaryCall.id || `call_${Date.now()}`,
-            name: primaryCall.function?.name || 'tool',
-            content: toolResponseContent
+            tool_calls: stepToolCalls
           };
 
           workingMessages.push(assistantMsg);
-          workingMessages.push(toolMsg);
+          for (const tMsg of executedToolMessages) {
+            workingMessages.push(tMsg);
+          }
 
           if (callbacks.onStepDone) {
             callbacks.onStepDone(stepIndex, {
               type: 'tool_execution',
-              toolCall: primaryCall,
-              execResult,
+              toolCall: stepToolCalls[0],
+              toolCalls: stepToolCalls,
+              execResult: stepExecResults[0],
+              execResults: stepExecResults,
               assistantMsg,
-              toolMsg
+              toolMsg: executedToolMessages[0],
+              toolMsgs: executedToolMessages
             });
           }
 

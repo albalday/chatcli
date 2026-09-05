@@ -19,6 +19,7 @@
     activeProfile: null,
     apiUrl: 'http://localhost:1234/v1', apiType: 'openai', apiKey: '', model: '',
     systemPrompt: '', systemDataPrompt: DEFAULT_SYSTEM_DATA_PROMPT, temperature: '0.7', reasoningEffort: 'none',
+    maxAgentTurns: 15,
     modelReasoningConfig: null,
     enabledTools: { execute_javascript: true, search_web: true, fetch_web_page: true, download_pdf: true, render_chart: true },
     enableRawLogs: false, sendDateTime: true,
@@ -50,6 +51,8 @@
     next.systemDataPrompt = String(next.systemDataPrompt || '').trim();
     next.temperature = String(next.temperature ?? DEFAULTS.temperature);
     next.reasoningEffort = ['off', 'none'].includes(String(next.reasoningEffort).toLowerCase()) ? 'none' : String(next.reasoningEffort || 'none');
+    const parsedTurns = Number(next.maxAgentTurns);
+    next.maxAgentTurns = Number.isInteger(parsedTurns) && parsedTurns >= 1 ? Math.min(50, Math.max(1, parsedTurns)) : 15;
     next.theme = next.theme === 'dark' ? 'dark' : 'light';
     next.language = next.language === 'en' ? 'en' : 'es';
     next.enabledTools = next.enabledTools && typeof next.enabledTools === 'object' ? clone(next.enabledTools) : clone(DEFAULTS.enabledTools);

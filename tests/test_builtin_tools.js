@@ -183,6 +183,27 @@ test('Builtin Tools - RAG tools consumen el servicio inyectado y propagan rama a
   ]);
 });
 
+test('Builtin Tools - read_knowledge_chunk declara parámetros para múltiples fragmentos', async () => {
+  const properties = ReadKnowledgeChunkTool.definition.parameters.properties;
+  assert.equal(properties.chunkId.type, 'string');
+  assert.equal(properties.chunkIds.type, 'array');
+  assert.equal(properties.chunkIds.items.type, 'string');
+
+  const calls = [];
+  const ragService = {
+    readKnowledgeChunk: async (branchId, args) => {
+      calls.push({ branchId, args });
+      return { success: true, count: 2, chunkIds: args.chunkIds, content: 'Contenido múltiple' };
+    }
+  };
+  const context = { config: { activeRagBranchId: 'branch-1' }, services: { ragService } };
+  const tool = ReadKnowledgeChunkTool.createTool(AgentCore.Tool);
+  const res = await tool.execute({ chunkIds: ['chunk-1', 'chunk-2'] }, context);
+  assert.equal(res.success, true);
+  assert.equal(res.content, 'Contenido múltiple');
+  assert.deepEqual(calls[0].args, { chunkIds: ['chunk-1', 'chunk-2'] });
+});
+
 test('Builtin Tools - search_knowledge_base declara los alcances de recuperación', () => {
   const properties = SearchKnowledgeBaseTool.definition.parameters.properties;
   assert.deepEqual(properties.scope.enum, ['auto', 'document', 'corpus']);

@@ -470,7 +470,7 @@
       return { success: false, error: err };
     }
 
-    const maxAgentTurns = params.maxAgentTurns || 15;
+    const maxAgentTurns = params.maxAgentTurns || appConfig.maxAgentTurns || 15;
     const toolCallSignatures = [];
     let turnIndex = 0;
     let accumulatedConversationMarkdown = '';
@@ -723,19 +723,26 @@
         };
       }
 
-      // CASO B: Procesar llamada a herramienta
-      const tc = turnToolCalls[0];
-      const rawFuncName = tc.function?.name || '';
-      const normName = API.normalizeToolName ? API.normalizeToolName(rawFuncName) : rawFuncName.toLowerCase().replace(/_/g, '');
+      // CASO B: Procesar llamadas a herramientas (soporte para llamadas individuales y en paralelo)
+      const currentSignatures = turnToolCalls.map(tc => {
+        const rawFuncName = tc.function?.name || '';
+        const normName = API.normalizeToolName ? API.normalizeToolName(rawFuncName) : rawFuncName.toLowerCase().replace(/_/g, '');
+        const argsStr = typeof tc.function?.arguments === 'object'
+          ? JSON.stringify(tc.function.arguments)
+          : String(tc.function?.arguments || '').trim();
+        return `${normName}:${argsStr}`;
+      });
 
-      // Protección contra Bucles Infinitos (repetición idéntica de llamada)
-      const callFingerprint = `${normName}:${typeof tc.function.arguments === 'object' ? JSON.stringify(tc.function.arguments) : String(tc.function.arguments || '').trim()}`;
-      const identicalCount = toolCallSignatures.filter(sig => sig === callFingerprint).length;
-      if (identicalCount >= 2) {
+      // Protección contra Bucles Infinitos (repetición idéntica de llamadas)
+      const allRepeated = currentSignatures.length > 0 && currentSignatures.every(sig => {
+        return toolCallSignatures.filter(s => s === sig).length >= 2;
+      });
+
+      if (allRepeated) {
         if (typeof onLog === 'function') {
-          onLog('error', `[Protección Bucle Infinito]: Herramienta '${normName}' invocada repetidamente con los mismos argumentos. Interrumpiendo ciclo agéntico.`);
+          onLog('error', '[Protección Bucle Infinito]: Herramientas invocadas repetidamente con los mismos argumentos. Interrumpiendo ciclo agéntico.');
         }
-        const loopWarning = `\n\n> ⚠️ *[Protección de Bucle Infinito]*: La herramienta \`${normName}\` fue invocada repetidamente con los mismos parámetros sin progreso. Se finaliza la iteración.`;
+        const loopWarning = `\n\n> ⚠️ *[Protección de Bucle Infinito]*: Las herramientas fueron invocadas repetidamente con los mismos parámetros sin progreso. Se finaliza la iteración.`;
         currentTurnText = (currentTurnText || '') + loopWarning;
         if (turnBlock) {
           turnBlock.innerHTML = parseMd(currentTurnText);
@@ -760,7 +767,9 @@
           chatHistory
         };
       }
-      toolCallSignatures.push(callFingerprint);
+      for (const sig of currentSignatures) {
+        toolCallSignatures.push(sig);
+      }
 
       // Limpiar llamadas a herramientas emitidas accidentalmente como texto crudo
       const trimmedAcc = (currentTurnText || '').trim();
@@ -790,64 +799,79 @@
         turnBlock.remove();
       }
 
-      if (typeof onToolCallStart === 'function') {
-        onToolCallStart({ turnIndex, toolCall: tc });
-      }
+      const executedResults = [];
+      for (let i = 0; i < turnToolCalls.length; i++) {
+        if (signal && signal.aborted) break;
+        const tc = turnToolCalls[i];
+        const rawFuncName = tc.function?.name || '';
 
-      // Ejecución de la herramienta mediante ChatAgentCore.dispatchToolCall
-      let toolExecRes = null;
-      if (AgentCore && AgentCore.dispatchToolCall) {
-        toolExecRes = await AgentCore.dispatchToolCall(tc, {
-          container: container,
-          onLog: onLog,
-          attachListeners: attachEvts,
-          scrollToBottom: scrollFn,
-          language: appConfig.language || 'es',
-          signal: signal,
-          activeRagBranchId: resolvedActiveRagBranchId,
-          activeRagBranchIds: resolvedActiveRagBranchIds
-        });
-      } else {
-        toolExecRes = {
-          success: false,
-          resultText: 'Error: Módulo de ejecución de herramientas no disponible.',
-          markdownBlock: `> ❌ **${rawFuncName}**: Módulo de ejecución no disponible.`
-        };
-      }
+        if (typeof onToolCallStart === 'function') {
+          onToolCallStart({ turnIndex, toolCall: tc, toolIndex: i, totalTools: turnToolCalls.length });
+        }
 
-      if (typeof onToolCallEnd === 'function') {
-        onToolCallEnd({ turnIndex, toolCall: tc, result: toolExecRes });
+        let toolExecRes = null;
+        if (AgentCore && AgentCore.dispatchToolCall) {
+          toolExecRes = await AgentCore.dispatchToolCall(tc, {
+            container: container,
+            onLog: onLog,
+            attachListeners: attachEvts,
+            scrollToBottom: scrollFn,
+            language: appConfig.language || 'es',
+            signal: signal,
+            activeRagBranchId: resolvedActiveRagBranchId,
+            activeRagBranchIds: resolvedActiveRagBranchIds
+          });
+        } else {
+          toolExecRes = {
+            success: false,
+            resultText: 'Error: Módulo de ejecución de herramientas no disponible.',
+            markdownBlock: `> ❌ **${rawFuncName}**: Módulo de ejecución no disponible.`
+          };
+        }
+
+        if (typeof onToolCallEnd === 'function') {
+          onToolCallEnd({ turnIndex, toolCall: tc, result: toolExecRes, toolIndex: i, totalTools: turnToolCalls.length });
+        }
+        executedResults.push({ tc, toolExecRes, rawFuncName, index: i });
       }
 
       if (turnFinalStats && typeof onStats === 'function') onStats(turnFinalStats);
       scrollFn();
 
-      // Guardar turno del asistente y turno de la herramienta
+      // Guardar turno del asistente con la lista completa de tool_calls
       chatHistory.push({
         id: `${assistantMsgId}_turn_${turnIndex}_assistant`,
         role: 'assistant',
         content: currentTurnText || null,
-        tool_calls: [tc]
+        tool_calls: turnToolCalls
       });
 
-      const toolMessage = {
-        id: `${assistantMsgId}_turn_${turnIndex}_tool_${tc.id || 'res'}`,
-        role: 'tool',
-        tool_call_id: tc.id || `call_${Date.now()}`,
-        name: rawFuncName,
-        content: toolExecRes.resultText
-      };
-      if (rawFuncName === 'read_knowledge_image' && toolExecRes.result?.success && toolExecRes.result.dataUrl) {
-        toolMessage.images = [{
-          dataUrl: toolExecRes.result.dataUrl,
-          imageRef: toolExecRes.result.imageRef,
-          documentTitle: toolExecRes.result.documentTitle,
-          page: toolExecRes.result.page
-        }];
+      // Guardar respuesta de cada herramienta ejecutada
+      let combinedMarkdownBlocks = '';
+      for (const item of executedResults) {
+        const { tc, toolExecRes, rawFuncName, index } = item;
+        const toolMessage = {
+          id: `${assistantMsgId}_turn_${turnIndex}_tool_${tc.id || index}_${Date.now()}`,
+          role: 'tool',
+          tool_call_id: tc.id || `call_${Date.now()}_${index}`,
+          name: rawFuncName,
+          content: toolExecRes.resultText
+        };
+        if (rawFuncName === 'read_knowledge_image' && toolExecRes.result?.success && toolExecRes.result.dataUrl) {
+          toolMessage.images = [{
+            dataUrl: toolExecRes.result.dataUrl,
+            imageRef: toolExecRes.result.imageRef,
+            documentTitle: toolExecRes.result.documentTitle,
+            page: toolExecRes.result.page
+          }];
+        }
+        chatHistory.push(toolMessage);
+        if (toolExecRes.markdownBlock) {
+          combinedMarkdownBlocks += (combinedMarkdownBlocks ? '\n\n' : '') + toolExecRes.markdownBlock;
+        }
       }
-      chatHistory.push(toolMessage);
 
-      accumulatedConversationMarkdown += (currentTurnText ? currentTurnText + '\n\n' : '') + (toolExecRes.markdownBlock || '') + '\n\n';
+      accumulatedConversationMarkdown += (currentTurnText ? currentTurnText + '\n\n' : '') + combinedMarkdownBlocks + '\n\n';
 
       turnIndex++;
     }

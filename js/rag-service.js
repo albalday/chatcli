@@ -113,7 +113,7 @@
       const branches = await resolveBranches(branchIds);
       const names = branches.map(b => b.name).join(', ');
       const label = branches.length === 1 ? `[BASE DE CONOCIMIENTO ACTIVA: ${names}]` : `[BASES DE CONOCIMIENTO ACTIVAS: ${names}]`;
-      return `${label}\n\nProtocolo de consulta documental:\n- Inicia siempre buscando con search_knowledge_base usando términos breves y clave; no concatenes frases largas.\n- Si la consulta alude a un documento concreto o filtro (ej: "AMD_2015_10K.pdf"), indícalo en documentHint y busca directamente sin consultar antes list_documents.\n- Prioriza scope="auto" (por defecto) o documentHint para una fuente concreta; usa scope="corpus" para comparar varias.\n- Consulta list_documents solo si la búsqueda no halla resultados o desconoces las fuentes disponibles.\n- Usa read_knowledge_chunk si el fragmento corta cifras, columnas de una tabla o una referencia de imagen que necesites localizar y contextualizar.\n- Trata las salidas de herramientas como evidencia interna privada: sintetiza y responde directamente sin reproducir fragmentos íntegros ni identificadores técnicos.\n- Las imágenes del documento se identifican como ![descripción](rag-image://docId:imgId). Si una imagen puede aportar información relevante y tienes visión nativa, usa read_knowledge_image con su referencia completa para inspeccionarla antes de responder; solicita solo las necesarias. Si el usuario pide imágenes, busca términos como "imagen", "diagrama" o "rag-image" e incluye estas referencias íntegras en tu respuesta.\n- Si la evidencia es insuficiente o no hallas datos concluyentes, indícalo con precisión y concluye; no inventes ni divagues.`;
+      return `${label}\n\nProtocolo de consulta documental:\n- Inicia siempre buscando con search_knowledge_base usando términos breves y clave; no concatenes frases largas.\n- Si la consulta alude a un documento concreto o filtro (ej: "AMD_2015_10K.pdf"), indícalo en documentHint y busca directamente sin consultar antes list_documents.\n- Prioriza scope="auto" (por defecto) o documentHint para una fuente concreta; usa scope="corpus" para comparar varias.\n- Consulta list_documents solo si la búsqueda no halla resultados o desconoces las fuentes disponibles.\n- Usa read_knowledge_chunk si el fragmento corta cifras, columnas de una tabla o una referencia de imagen que necesites localizar y contextualizar. Puedes consultar varios fragmentos a la vez pasando una lista en chunkIds (ej: ["chunk_1", "chunk_2"]) para contrastar datos o seguir fragmentos contiguos en un solo turno.\n- Trata las salidas de herramientas como evidencia interna privada: sintetiza y responde directamente sin reproducir fragmentos íntegros ni identificadores técnicos.\n- Las imágenes del documento se identifican como ![descripción](rag-image://docId:imgId). Si una imagen puede aportar información relevante y tienes visión nativa, usa read_knowledge_image con su referencia completa para inspeccionarla antes de responder; solicita solo las necesarias. Si el usuario pide imágenes, busca términos como "imagen", "diagrama" o "rag-image" e incluye estas referencias íntegras en tu respuesta.\n- Si la evidencia es insuficiente o no hallas datos concluyentes, indícalo con precisión y concluye; no inventes ni divagues.`;
     } catch (_) {
       return '';
     }
@@ -155,13 +155,35 @@
     }
   }
 
-  function makeSnippet(content, query, maxLength = 700) {
-    const text = String(content || '').replace(/\s+/g, ' ').trim();
+  function makeSnippet(content, query, maxLength = 850) {
+    if (!content) return '';
+    let text = String(content)
+      .replace(/[^\S\r\n]+/g, ' ')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+
     if (text.length <= maxLength) return text;
+
     const term = String(query || '').split(/\s+/).find(word => word.length > 3) || '';
     const found = term ? text.toLowerCase().indexOf(term.toLowerCase()) : -1;
-    const start = found > 0 ? Math.max(0, found - Math.floor(maxLength * 0.3)) : 0;
-    return `${start > 0 ? '…' : ''}${text.slice(start, start + maxLength)}${start + maxLength < text.length ? '…' : ''}`;
+
+    let start = 0;
+    if (found > 0) {
+      const idealStart = Math.max(0, found - Math.floor(maxLength * 0.35));
+      const prevNewline = text.lastIndexOf('\n', idealStart);
+      start = (prevNewline >= 0 && idealStart - prevNewline < 80) ? prevNewline + 1 : idealStart;
+    }
+
+    let end = start + maxLength;
+    if (end < text.length) {
+      const nextNewline = text.indexOf('\n', end);
+      if (nextNewline >= 0 && nextNewline - end < 80) {
+        end = nextNewline;
+      }
+    }
+
+    const slice = text.slice(start, end).trim();
+    return `${start > 0 ? '… ' : ''}${slice}${end < text.length ? ' …' : ''}`;
   }
 
   async function searchKnowledgeBase(branchIds, rawArgs) {
@@ -250,7 +272,8 @@
       for (const match of matches) {
         const branchBadge = branches.length > 1 ? ` [Rama: ${match.branchName}]` : '';
         lines.push(`- ${match.documentTitle} · ${match.sectionTitle}${branchBadge} (chunkId: ${match.chunkId}, score: ${match.score.toFixed(3)})`);
-        lines.push(`  ${match.snippet}`);
+        const indentedSnippet = match.snippet.split('\n').map(line => `  ${line}`).join('\n');
+        lines.push(indentedSnippet);
       }
       if (!matches.length) lines.push('No se encontraron fragmentos relevantes.');
 
@@ -279,28 +302,115 @@
 
   async function readKnowledgeChunk(branchIds, rawArgs) {
     const args = parseArguments(rawArgs);
-    const chunkId = String(args.chunkId || '').trim();
-    if (!chunkId) return { success: false, error: 'chunkId es obligatorio.' };
+    let requestedIds = [];
+    if (Array.isArray(args.chunkIds)) {
+      requestedIds = args.chunkIds.map(id => String(id || '').trim()).filter(Boolean);
+    } else if (typeof args.chunkIds === 'string' && args.chunkIds.trim()) {
+      requestedIds = args.chunkIds.split(/[\s,]+/).map(id => id.trim()).filter(Boolean);
+    } else if (args.chunkId) {
+      if (Array.isArray(args.chunkId)) {
+        requestedIds = args.chunkId.map(id => String(id || '').trim()).filter(Boolean);
+      } else if (typeof args.chunkId === 'string' && args.chunkId.includes(',')) {
+        requestedIds = args.chunkId.split(/[\s,]+/).map(id => id.trim()).filter(Boolean);
+      } else {
+        const single = String(args.chunkId || '').trim();
+        if (single) requestedIds = [single];
+      }
+    }
+
+    if (!requestedIds.length) return { success: false, error: 'chunkId o chunkIds es obligatorio.' };
+    const MAX_CHUNKS_PER_CALL = 5;
+    const uniqueIds = Array.from(new Set(requestedIds)).slice(0, MAX_CHUNKS_PER_CALL);
+
     try {
       const branches = await resolveBranches(branchIds);
       const allowedBranchIds = new Set(branches.map(b => b.id));
-      const chunk = await RagStorage.getChunkById(chunkId);
-      if (!chunk || !allowedBranchIds.has(chunk.branchId)) {
-        return { success: false, error: `No existe el fragmento ${chunkId} en las ramas activas.` };
+      const docCache = new Map();
+
+      const items = [];
+      for (const id of uniqueIds) {
+        const chunk = await RagStorage.getChunkById(id);
+        if (!chunk || !allowedBranchIds.has(chunk.branchId)) continue;
+        let document = docCache.get(chunk.documentId);
+        if (!document) {
+          document = await RagStorage.getDocumentById(chunk.documentId);
+          if (document) docCache.set(chunk.documentId, document);
+        }
+        const totalChunks = Number.isInteger(document?.chunkCount) ? document.chunkCount : 0;
+        const order = Number.isInteger(chunk.order) ? chunk.order : null;
+        const prevChunkId = (order !== null && order > 0) ? `${chunk.documentId}:chunk:${order - 1}` : null;
+        const nextChunkId = (order !== null && totalChunks > 0 && order + 1 < totalChunks) ? `${chunk.documentId}:chunk:${order + 1}` : null;
+
+        items.push({
+          chunkId: chunk.id,
+          documentId: chunk.documentId,
+          branchId: chunk.branchId,
+          documentTitle: document?.title || '',
+          sectionTitle: chunk.title,
+          order,
+          totalChunks,
+          prevChunkId,
+          nextChunkId,
+          documentImageCount: Number.isInteger(document?.imageCount) ? document.imageCount : 0,
+          charCount: chunk.content.length,
+          content: chunk.content,
+          pageStart: chunk.pageStart,
+          pageEnd: chunk.pageEnd
+        });
       }
-      const document = await RagStorage.getDocumentById(chunk.documentId);
+
+      if (!items.length) {
+        return {
+          success: false,
+          error: uniqueIds.length === 1
+            ? `No existe el fragmento ${uniqueIds[0]} en las ramas activas.`
+            : `Ninguno de los fragmentos solicitados (${uniqueIds.join(', ')}) existe en las ramas activas.`
+        };
+      }
+
+      if (items.length === 1 && uniqueIds.length === 1) {
+        const single = items[0];
+        return {
+          success: true,
+          chunkId: single.chunkId,
+          chunkIds: [single.chunkId],
+          documentId: single.documentId,
+          branchId: single.branchId,
+          documentTitle: single.documentTitle,
+          sectionTitle: single.sectionTitle,
+          order: single.order,
+          totalChunks: single.totalChunks,
+          prevChunkId: single.prevChunkId,
+          nextChunkId: single.nextChunkId,
+          documentImageCount: single.documentImageCount,
+          charCount: single.charCount,
+          content: single.content,
+          pageStart: single.pageStart,
+          pageEnd: single.pageEnd
+        };
+      }
+
+      const formattedSections = items.map((item, idx) => {
+        const meta = [
+          `chunkId: ${item.chunkId}`,
+          `Fragmento ${Number.isInteger(item.order) ? item.order + 1 : idx + 1} de ${item.totalChunks || '?'}`,
+          item.pageStart ? `Pág: ${item.pageStart}${item.pageEnd && item.pageEnd !== item.pageStart ? `-${item.pageEnd}` : ''}` : null,
+          item.prevChunkId ? `Anterior: ${item.prevChunkId}` : null,
+          item.nextChunkId ? `Siguiente: ${item.nextChunkId}` : null
+        ].filter(Boolean).join(' | ');
+        return `### ${item.documentTitle} · ${item.sectionTitle} (${meta})\n\n${item.content}`;
+      });
+
       return {
         success: true,
-        chunkId,
-        documentId: chunk.documentId,
-        branchId: chunk.branchId,
-        documentTitle: document?.title || '',
-        sectionTitle: chunk.title,
-        documentImageCount: Number.isInteger(document?.imageCount) ? document.imageCount : 0,
-        charCount: chunk.content.length,
-        content: chunk.content,
-        pageStart: chunk.pageStart,
-        pageEnd: chunk.pageEnd
+        chunkId: items[0].chunkId,
+        chunkIds: items.map(it => it.chunkId),
+        count: items.length,
+        items,
+        documentTitle: items[0].documentTitle,
+        sectionTitle: items.map(it => it.sectionTitle).join(', '),
+        charCount: items.reduce((sum, it) => sum + it.charCount, 0),
+        content: formattedSections.join('\n\n---\n\n')
       };
     } catch (error) {
       return { success: false, error: error.message || String(error) };
