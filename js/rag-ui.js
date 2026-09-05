@@ -212,6 +212,15 @@
     return `<div class="rag-ingestion-global-progress"><div><strong>${escapeHtml(header)}</strong><span>${status}</span></div><progress max="100" value="${overallPercent}"></progress><span>${overallPercent}%</span></div>`;
   }
 
+  function ingestionResultMarkup(result) {
+    const processed = Number(result?.processed) || 0;
+    const failed = Number(result?.failed) || 0;
+    const total = Number(result?.total) || 0;
+    const header = t('rag_ingestion_complete', { processed, failed, total }) || `Ingesta completada: ${processed} indexados · ${failed} no indexados`;
+    const errors = Array.isArray(result?.errors) ? result.errors : [];
+    return `<div class="rag-ingestion-global-progress${failed ? ' error' : ''}"><div><strong>${escapeHtml(header)}</strong></div>${errors.length ? `<div class="rag-ingestion-progress-recent">${errors.map(error => `<div class="rag-ingestion-progress-item error"><strong>${escapeHtml(error.fileName)}</strong><span>${escapeHtml(error.error)}</span></div>`).join('')}</div>` : ''}</div>`;
+  }
+
   function syncFooterSummaryVisibility(isManage) {
     const el = document.getElementById('rag-branch-summary-footer');
     const sep = document.getElementById('rag-footer-separator');
@@ -236,7 +245,7 @@
     syncFooterSummaryVisibility();
   }
 
-  async function renderWorkspace(branchId) {
+  async function renderWorkspace(branchId, ingestionResult) {
     if (typeof document === 'undefined') return;
     await updateBranchFields(branchId);
     const workspace = document.getElementById('rag-manage-workspace');
@@ -278,6 +287,8 @@
 
     const input = document.getElementById('rag-file-input');
     const dropzone = document.getElementById('rag-dropzone');
+    const progress = document.getElementById('rag-ingestion-progress');
+    if (progress && ingestionResult) progress.innerHTML = ingestionResultMarkup(ingestionResult);
     const handleFiles = files => ingestFiles(Array.from(files || []), branchId);
     if (input) input.addEventListener('change', () => handleFiles(input.files));
     if (dropzone) {
@@ -299,14 +310,14 @@
     if (!files.length) return;
     const container = document.getElementById('rag-ingestion-progress');
     const events = new Map();
-    await ingestion().processDocumentQueue(files, branchId, event => {
+    const result = await ingestion().processDocumentQueue(files, branchId, event => {
       events.set(event.fileIndex, event);
       if (container) {
         const recentEvents = Array.from(events.values()).slice(-12).reverse();
         container.innerHTML = `${globalProgressMarkup(event)}<div class="rag-ingestion-progress-recent">${recentEvents.map(progressMarkup).join('')}</div>`;
       }
     });
-    await renderWorkspace(branchId);
+    await renderWorkspace(branchId, result);
     await updateQuota();
   }
 
@@ -708,6 +719,6 @@
     initRagUI, refresh, renderActiveTab, renderManageTab,
     getActiveBranchId, setActiveBranchId,
     getActiveBranchIds, setActiveBranchIds, toggleBranchActive, isBranchActive,
-    updateToolbarStatus, exportBranch, importBranchFile
+    updateToolbarStatus, exportBranch, importBranchFile, ingestionResultMarkup
   };
 });

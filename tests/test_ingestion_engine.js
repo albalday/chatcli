@@ -81,6 +81,38 @@ test('IngestionEngine - ingiere formatos de texto genéricos y rechaza binarios'
   assert.equal(found.hits[0].documentTitle, 'api.log');
 });
 
+test('IngestionEngine - indexa logs gzip y explica los comprimidos no compatibles', async () => {
+  const zlib = require('node:zlib');
+  const branch = await RagStorage.createBranch('Logs comprimidos');
+  const logText = '2026-09-05T10:00:00Z sshd[123]: Failed password for root from 10.0.0.1';
+  const gzipBytes = zlib.gzipSync(logText);
+  const gzipFile = {
+    name: 'auth.log.1.gz',
+    type: 'application/gzip',
+    size: gzipBytes.length,
+    arrayBuffer: async () => gzipBytes.buffer.slice(gzipBytes.byteOffset, gzipBytes.byteOffset + gzipBytes.byteLength)
+  };
+  const zipFile = {
+    name: 'logs.zip',
+    type: 'application/zip',
+    size: 4,
+    arrayBuffer: async () => new Uint8Array([0x50, 0x4B, 0x03, 0x04]).buffer
+  };
+
+  const result = await Ingestion.processDocumentQueue([gzipFile, zipFile], branch.id, null, { maxChars: 2000 });
+
+  assert.equal(result.processed, 1);
+  assert.equal(result.failed, 1);
+  assert.deepEqual(result.errors, [{ fileName: 'logs.zip', error: 'El archivo es un ZIP. Extrae los logs o usa archivos .gz individuales.' }]);
+  const documents = await RagStorage.getDocumentsByBranch(branch.id);
+  assert.equal(documents.length, 1);
+  assert.equal(documents[0].title, 'auth.log.1.gz');
+  const chunks = await RagStorage.getChunksByDocument(documents[0].id);
+  assert.match(chunks[0].content, /Failed password/);
+  const found = await RagIndex.searchBranch(branch.id, 'Failed password', { tolerance: 0 });
+  assert.equal(found.hits[0].documentTitle, 'auth.log.1.gz');
+});
+
 test('IngestionEngine & FileParser - extrae texto decodificando CMap ToUnicode y rangos', async () => {
   const FileParser = require('../js/file-parser.js');
   const pdfContent = `%PDF-1.4

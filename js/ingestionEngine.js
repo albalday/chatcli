@@ -60,7 +60,73 @@
         reader.readAsArrayBuffer(file);
       });
     }
-    throw new Error('No se pudo obtener el contenido binario del PDF.');
+    throw new Error('No se pudo obtener el contenido binario del archivo.');
+  }
+
+  const MAX_DECOMPRESSED_TEXT_BYTES = 50 * 1024 * 1024;
+
+  function archiveFormatFromName(fileName) {
+    const name = String(fileName || '').toLowerCase();
+    if (/\.(?:tar\.gz|tgz|tar\.bz2|tbz2|tar\.xz|txz|tar\.zst|tzst)$/.test(name)) return 'tar';
+    if (/\.zip$/.test(name)) return 'zip';
+    if (/\.(?:gz|gzip)$/.test(name)) return 'gzip';
+    if (/\.(?:bz2|xz|zst)$/.test(name)) return 'compressed';
+    return '';
+  }
+
+  function archiveFormatFromBytes(bytes) {
+    if (!bytes || bytes.length < 2) return '';
+    if (bytes[0] === 0x1F && bytes[1] === 0x8B) return 'gzip';
+    if (bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4B && [0x03, 0x05, 0x07].includes(bytes[2]) && [0x04, 0x06, 0x08].includes(bytes[3])) return 'zip';
+    if (bytes[0] === 0x42 && bytes[1] === 0x5A && bytes[2] === 0x68) return 'compressed';
+    if (bytes.length >= 6 && bytes[0] === 0xFD && bytes[1] === 0x37 && bytes[2] === 0x7A && bytes[3] === 0x58 && bytes[4] === 0x5A && bytes[5] === 0x00) return 'compressed';
+    if (bytes.length >= 4 && bytes[0] === 0x28 && bytes[1] === 0xB5 && bytes[2] === 0x2F && bytes[3] === 0xFD) return 'compressed';
+    return '';
+  }
+
+  async function getArchiveFormat(file) {
+    const byName = archiveFormatFromName(file?.name);
+    if (byName) return byName;
+    try {
+      const header = file?.slice ? file.slice(0, 16) : file;
+      const bytes = new Uint8Array(await toArrayBuffer(header));
+      return archiveFormatFromBytes(bytes);
+    } catch (_) {
+      return '';
+    }
+  }
+
+  async function readTextStream(stream, maxBytes = MAX_DECOMPRESSED_TEXT_BYTES) {
+    const reader = stream.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let total = 0;
+    let text = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel();
+        throw new Error(`El contenido descomprimido supera el límite de ${Math.round(maxBytes / 1024 / 1024)} MB.`);
+      }
+      text += decoder.decode(value, { stream: true });
+    }
+    return text + decoder.decode();
+  }
+
+  async function readGzipText(file, options = {}) {
+    if (typeof DecompressionStream === 'undefined' || typeof Blob === 'undefined') {
+      throw new Error('Este navegador no puede descomprimir archivos gzip.');
+    }
+    const bytes = await toArrayBuffer(file);
+    const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+    return readTextStream(stream, options.maxDecompressedBytes || MAX_DECOMPRESSED_TEXT_BYTES);
+  }
+
+  function unsupportedArchiveMessage(format) {
+    if (format === 'tar') return 'El archivo es un contenedor TAR comprimido. Extrae los logs o usa archivos .gz individuales.';
+    if (format === 'zip') return 'El archivo es un ZIP. Extrae los logs o usa archivos .gz individuales.';
+    return 'El archivo está comprimido en un formato no compatible. Extrae su contenido antes de indexarlo.';
   }
 
   async function extractTextFromPDF(file) {
@@ -71,6 +137,19 @@
   }
 
   async function extractDocumentContent(file, fileType) {
+    const archiveFormat = await getArchiveFormat(file);
+    if (archiveFormat && archiveFormat !== 'gzip') throw new Error(unsupportedArchiveMessage(archiveFormat));
+    if (archiveFormat === 'gzip') {
+      let rawText;
+      try {
+        rawText = await readGzipText(file);
+      } catch (error) {
+        if (String(error?.message || error).includes('navegador no puede')) throw error;
+        throw new Error('No se pudo descomprimir el archivo gzip. El archivo puede estar dañado.');
+      }
+      if (!isLikelyText(rawText)) throw new Error('El contenido del archivo gzip no parece contener texto legible.');
+      return { text: normalizeExtractedText(rawText), images: [] };
+    }
     if (fileType === 'pdf') {
       const bytes = await toArrayBuffer(file);
       const parser = getFileParser();
@@ -243,5 +322,5 @@
     return result;
   }
 
-  return { normalizeExtractedText, extractTextFromPlainText, extractTextFromPDF, detectSectionHeading, partitionTextIntoChunks, detectFileType, isLikelyText, processDocumentQueue };
+  return { normalizeExtractedText, extractTextFromPlainText, extractTextFromPDF, detectSectionHeading, partitionTextIntoChunks, detectFileType, isLikelyText, getArchiveFormat, readGzipText, processDocumentQueue };
 });

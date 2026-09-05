@@ -16,6 +16,19 @@ test('RagUI - exporta la superficie mínima', () => {
   assert.equal(typeof RagUI.isBranchActive, 'function');
   assert.equal(typeof RagUI.exportBranch, 'function');
   assert.equal(typeof RagUI.importBranchFile, 'function');
+  assert.equal(typeof RagUI.ingestionResultMarkup, 'function');
+});
+
+test('RagUI - conserva un resumen claro de archivos no indexados', () => {
+  const markup = RagUI.ingestionResultMarkup({
+    total: 2,
+    processed: 1,
+    failed: 1,
+    errors: [{ fileName: 'logs.zip', error: 'El archivo es un ZIP.' }]
+  });
+  assert.match(markup, /1 indexados · 1 no indexados/);
+  assert.match(markup, /logs\.zip/);
+  assert.match(markup, /El archivo es un ZIP/);
 });
 
 test('RagUI - gestiona la rama activa y multi-ramas', () => {
