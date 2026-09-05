@@ -10,7 +10,7 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: rag-image:; connect-src http: https: ws: wss: data: blob:; font-src 'self' data:; object-src 'none'; base-uri 'self';">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
   <meta name="description" content="ZeroChat - Cliente web universal, agente IA autónomo y RAG local en un solo archivo con cero instalación">
-  <title>ZeroChat v6.2.0</title>
+  <title>ZeroChat v6.3.0</title>
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
@@ -36,18 +36,15 @@
     </div>
 
     <div class="sidebar-footer">
-      <button type="button" id="btn-import-chat-file" class="btn-sidebar-footer" data-i18n-title="btn_import_chat_title" title="Importar conversación desde archivo JSON">
+      <button type="button" id="btn-import-chat-file" class="btn-sidebar-footer" data-i18n-title="btn_import_chat_title" data-i18n-aria="btn_import_chat" title="Importar conversación desde archivo JSON" aria-label="Importar">
         <svg class="ui-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-        <span data-i18n="btn_import_chat">Importar</span>
       </button>
       <input type="file" id="import-json-input" accept=".json" style="display: none;">
-      <button type="button" id="btn-open-export-modal" class="btn-sidebar-footer" data-i18n-title="btn_export_chat_title" title="Exportar conversación (Markdown, JSON, PDF)">
+      <button type="button" id="btn-open-export-modal" class="btn-sidebar-footer" data-i18n-title="btn_export_chat_title" data-i18n-aria="btn_export_all" title="Exportar conversación (Markdown, JSON, PDF)" aria-label="Exportar">
         <svg class="ui-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-        <span data-i18n="btn_export_all">Exportar</span>
       </button>
-      <button type="button" id="btn-delete-all-chats" class="btn-sidebar-footer btn-sidebar-danger" data-i18n-title="btn_delete_all_chats_title" title="Eliminar todas las conversaciones guardadas">
+      <button type="button" id="btn-delete-all-chats" class="btn-sidebar-footer btn-sidebar-danger" data-i18n-title="btn_delete_all_chats_title" data-i18n-aria="btn_delete_all_chats" title="Eliminar todas las conversaciones guardadas" aria-label="Borrar todos">
         <svg class="ui-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-        <span data-i18n="btn_delete_all_chats">Borrar todos</span>
       </button>
     </div>
   </aside>
@@ -247,16 +244,29 @@
       </div>
     </div>
 
-    <!-- Barra superior de depuración de mensajes (Debug messages) -->
+    <!-- Barra superior de controles de depuración (Debug messages y Log completo Raw) -->
     <div class="debug-controls-bar">
-      <div class="debug-toggle-wrapper">
-        <label class="switch switch-sm" data-i18n-title="debug_messages_toggle_title" title="Activar/Desactivar depuración interactiva de mensajes salientes">
-          <input type="checkbox" id="chk-enable-debug-messages">
-          <span class="slider"></span>
-        </label>
-        <span class="debug-toggle-label" data-i18n="debug_messages_toggle">Debug messages</span>
+      <div class="debug-control-group">
+        <div class="debug-toggle-wrapper">
+          <label class="switch switch-sm" data-i18n-title="debug_messages_toggle_title" title="Activar/Desactivar depuración interactiva de mensajes salientes">
+            <input type="checkbox" id="chk-enable-debug-messages">
+            <span class="slider"></span>
+          </label>
+          <span class="debug-toggle-label" data-i18n="debug_messages_toggle">Debug messages</span>
+        </div>
+        <span id="debug-messages-status-badge" class="debug-status-pill off">OFF</span>
       </div>
-      <span id="debug-messages-status-badge" class="debug-status-pill off">OFF</span>
+
+      <div class="debug-control-group">
+        <div class="debug-toggle-wrapper debug-raw-toggle-wrapper">
+          <label class="switch switch-sm" data-i18n-title="debug_raw_capture_title" title="Activar/Desactivar captura de tráfico Raw">
+            <input type="checkbox" id="chk-enable-raw">
+            <span class="slider"></span>
+          </label>
+          <span class="debug-toggle-label raw-toggle-label" data-i18n="raw_capture_label">Log completo Raw</span>
+        </div>
+        <span id="raw-status-badge" class="raw-status-badge">INACTIVO</span>
+      </div>
     </div>
 
     <!-- Pestañas de filtrado de logs -->
@@ -266,18 +276,6 @@
       <button type="button" class="debug-tab" data-debug-tab="tool" data-i18n="debug_tab_tool">Herramientas</button>
       <button type="button" class="debug-tab" data-debug-tab="network" data-i18n="debug_tab_network">Red</button>
       <button type="button" class="debug-tab" data-debug-tab="raw" data-i18n="debug_tab_raw">Raw</button>
-    </div>
-
-    <!-- Sub-barra de control de Raw -->
-    <div id="debug-raw-bar" class="debug-raw-bar" style="display: none;">
-      <div class="debug-raw-toggle-wrapper">
-        <label class="switch switch-sm" data-i18n-title="debug_raw_capture_title" title="Activar/Desactivar captura de tráfico Raw">
-          <input type="checkbox" id="chk-enable-raw">
-          <span class="slider"></span>
-        </label>
-        <span class="raw-toggle-label" data-i18n="raw_capture_label">Capturar tráfico crudo</span>
-      </div>
-      <span id="raw-status-badge" class="raw-status-badge">INACTIVO</span>
     </div>
 
     <!-- Contenedor del Log Monospace -->
@@ -785,8 +783,8 @@
         <div class="rag-active-tip-card">
           <span class="rag-active-tip-icon">💡</span>
           <div class="rag-active-tip-content">
-            <strong data-i18n="rag_active_tip_title">Recomendación para consultas:</strong>
-            <span data-i18n-html="rag_active_tip_desc">Para consultas y extracción de datos, usa una <strong>temperatura baja (0 a 0,2)</strong> en el chat: reduce la dispersión en las búsquedas y asegura respuestas más consistentes y directas.</span>
+            <strong data-i18n="rag_active_tip_title">Eficacia del RAG y modelo:</strong>
+            <span data-i18n-html="rag_active_tip_desc">La eficacia del RAG se basa en gran medida en la <strong>inteligencia, visión multimodal</strong> (para interpretar tablas, gráficos e imágenes) y la <strong>capacidad de razonamiento agéntico</strong> del modelo elegido: es clave para formular búsquedas precisas, examinar fragmentos contiguos y contrastar evidencias sin desorientarse.</span>
           </div>
         </div>
       </div>

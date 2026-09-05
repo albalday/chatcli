@@ -175,7 +175,6 @@
       debugTabs: document.querySelectorAll('.debug-tab'),
       chkEnableDebugMessages: document.getElementById('chk-enable-debug-messages'),
       debugMessagesStatusBadge: document.getElementById('debug-messages-status-badge'),
-      debugRawBar: document.getElementById('debug-raw-bar'),
       chkEnableRaw: document.getElementById('chk-enable-raw'),
       rawStatusBadge: document.getElementById('raw-status-badge'),
 

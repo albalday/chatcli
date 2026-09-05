@@ -225,10 +225,6 @@
     activeFilter = tabId;
     if (!dom.debugLogContent) return;
 
-    if (dom.debugRawBar) {
-      dom.debugRawBar.style.display = (tabId === 'raw') ? 'flex' : 'none';
-    }
-
     const entries = dom.debugLogContent.querySelectorAll('.debug-entry');
     entries.forEach(entry => {
       const type = entry.getAttribute('data-type');
