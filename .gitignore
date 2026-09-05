@@ -2,3 +2,4 @@
 node_modules/
 tmp_*
 tests/tmp_*
+.vscode/
