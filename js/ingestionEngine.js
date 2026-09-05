@@ -26,21 +26,25 @@
       .replace(/[ \t]+\n/g, '\n').replace(/\n{4,}/g, '\n\n\n').trim();
   }
 
-  async function extractTextFromPlainText(file) {
+  async function readPlainText(file) {
     if (!file) return '';
-    if (typeof file === 'string') return normalizeExtractedText(file);
-    if (typeof file.content === 'string') return normalizeExtractedText(file.content);
-    if (typeof Buffer !== 'undefined' && Buffer.isBuffer(file)) return normalizeExtractedText(file.toString('utf8'));
-    if (typeof file.text === 'function') return normalizeExtractedText(await file.text());
+    if (typeof file === 'string') return file;
+    if (typeof file.content === 'string') return file.content;
+    if (typeof Buffer !== 'undefined' && Buffer.isBuffer(file)) return file.toString('utf8');
+    if (typeof file.text === 'function') return file.text();
     if (typeof FileReader !== 'undefined') {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
-        reader.onload = () => resolve(normalizeExtractedText(reader.result));
+        reader.onload = () => resolve(String(reader.result || ''));
         reader.onerror = () => reject(reader.error || new Error('No se pudo leer el archivo.'));
         reader.readAsText(file, 'utf-8');
       });
     }
     throw new Error('No se pudo leer el archivo de texto.');
+  }
+
+  async function extractTextFromPlainText(file) {
+    return normalizeExtractedText(await readPlainText(file));
   }
 
   async function toArrayBuffer(file) {
@@ -106,8 +110,9 @@
       return { text: normalizeExtractedText(rawText), images };
     }
 
-    const text = await extractTextFromPlainText(file);
-    return { text: normalizeExtractedText(text), images: [] };
+    const rawText = await readPlainText(file);
+    if (!isLikelyText(rawText)) throw new Error('El archivo no parece contener texto legible.');
+    return { text: normalizeExtractedText(rawText), images: [] };
   }
 
   function detectSectionHeading(line) {
@@ -169,8 +174,15 @@
     const name = String(file?.name || '').toLowerCase();
     if (name.endsWith('.pdf') || file?.type === 'application/pdf') return 'pdf';
     if (name.endsWith('.md') || name.endsWith('.markdown') || file?.type === 'text/markdown') return 'md';
-    if (name.endsWith('.txt') || file?.type === 'text/plain') return 'txt';
-    return null;
+    if (/^(?:image|audio|video)\//i.test(String(file?.type || ''))) return null;
+    return 'txt';
+  }
+
+  function isLikelyText(value) {
+    const text = String(value || '');
+    if (!text || text.includes('\0')) return false;
+    const controls = (text.match(/[\x01-\x08\x0B\x0C\x0E-\x1F\x7F]/g) || []).length;
+    return controls <= Math.max(1, Math.floor(text.length * 0.01));
   }
 
   async function processDocumentQueue(files, branchId, onProgress, options = {}) {
@@ -198,7 +210,7 @@
       const fileName = file?.name || `documento_${fileIndex + 1}.txt`;
       const fileType = detectFileType(file);
       try {
-        if (!fileType) throw new Error('Tipo de archivo no soportado. Usa PDF, Markdown o TXT.');
+        if (!fileType) throw new Error('El archivo no parece contener texto legible.');
         emit(fileIndex, fileName, 'extracting', `Extrayendo texto de ${fileName}…`, 10);
         const { text: extracted, images } = await extractDocumentContent(file, fileType);
         if (!extracted) throw new Error('El archivo no contiene texto extraíble.');
@@ -207,7 +219,7 @@
         const documentId = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
           ? `doc_${crypto.randomUUID()}`
           : `doc_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-        const preparedText = extracted.replace(/__DOC_ID__/g, documentId);
+        const preparedText = extracted.replace(/rag-image:\/\/__DOC_ID__:/g, `rag-image://${documentId}:`);
 
         const chunks = partitionTextIntoChunks(preparedText, options);
         if (!chunks.length) throw new Error('No se pudieron generar fragmentos del documento.');
@@ -231,5 +243,5 @@
     return result;
   }
 
-  return { normalizeExtractedText, extractTextFromPlainText, extractTextFromPDF, detectSectionHeading, partitionTextIntoChunks, detectFileType, processDocumentQueue };
+  return { normalizeExtractedText, extractTextFromPlainText, extractTextFromPDF, detectSectionHeading, partitionTextIntoChunks, detectFileType, isLikelyText, processDocumentQueue };
 });

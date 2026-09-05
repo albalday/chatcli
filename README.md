@@ -12,7 +12,7 @@ ZeroChat es un cliente web universal de chat, agente IA y conocimiento local. La
 
 ## Conocimiento local
 
-La ingesta, el índice y la recuperación se realizan completamente en el navegador. No se usa un LLM durante la ingesta ni se solicita acceso persistente a carpetas. Los PDF formados solo por imágenes necesitan OCR previo.
+La ingesta, el índice y la recuperación se realizan completamente en el navegador. No se usa un LLM durante la ingesta ni se solicita acceso persistente a carpetas. Se pueden cargar PDF, Markdown y archivos de texto de cualquier extensión, como logs, código o configuraciones; los archivos binarios se rechazan. Los PDF formados solo por imágenes necesitan OCR previo.
 
 Puedes respaldar y restaurar cada rama de conocimiento desde la interfaz. La lista actual de herramientas y sus contratos está en [docs/TOOLS.md](docs/TOOLS.md).
 

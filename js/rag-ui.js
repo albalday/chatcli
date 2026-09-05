@@ -254,7 +254,7 @@
     };
     updateBranchSummaryFooter(branchMetrics);
     const dropzoneTitle = t('rag_dropzone_title') || 'Arrastra o selecciona archivos';
-    const dropzoneHint = t('rag_dropzone_hint') || 'PDF, Markdown o texto · guardado privado en IndexedDB';
+    const dropzoneHint = t('rag_dropzone_hint') || 'PDF o archivos de texto · guardado privado en IndexedDB';
     const deleteDocTitle = t('rag_delete_doc_title') || 'Eliminar documento';
     const emptyDocsText = t('rag_branch_empty_docs') || 'La rama todavía no contiene documentos.';
     const langLabel = formatBranchLanguage(branch?.language);
@@ -267,7 +267,7 @@
       <label class="rag-dropzone" id="rag-dropzone">
         <strong>${escapeHtml(dropzoneTitle)}</strong>
         <span>${escapeHtml(dropzoneHint)}</span>
-        <input id="rag-file-input" type="file" accept=".pdf,.txt,.md,.markdown,text/plain,text/markdown,application/pdf" multiple hidden>
+        <input id="rag-file-input" type="file" multiple hidden>
       </label>
       <div id="rag-ingestion-progress"></div>
       <div class="rag-documents-list">${documents.length ? documents.map(document => `

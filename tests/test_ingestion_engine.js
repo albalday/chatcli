@@ -14,7 +14,12 @@ test('IngestionEngine - normaliza y lee texto sin LLM', async () => {
   assert.equal(await Ingestion.extractTextFromPlainText({ content: '# Guía\nTexto' }), '# Guía\nTexto');
   assert.equal(Ingestion.detectFileType({ name: 'manual.PDF' }), 'pdf');
   assert.equal(Ingestion.detectFileType({ name: 'notas.md' }), 'md');
+  assert.equal(Ingestion.detectFileType({ name: 'servidor.log' }), 'txt');
+  assert.equal(Ingestion.detectFileType({ name: 'main.py' }), 'txt');
+  assert.equal(Ingestion.detectFileType({ name: 'Dockerfile' }), 'txt');
   assert.equal(Ingestion.detectFileType({ name: 'imagen.png', type: 'image/png' }), null);
+  assert.equal(Ingestion.isLikelyText('INFO servicio iniciado\n'), true);
+  assert.equal(Ingestion.isLikelyText('texto\0binario'), false);
 });
 
 test('IngestionEngine - genera chunks acotados con solapamiento y títulos', () => {
@@ -53,6 +58,27 @@ test('IngestionEngine - procesa cola, persiste e indexa sin cliente LLM', async 
   assert.equal(finalProgress.overallPercent, 100);
   const found = await RagIndex.searchBranch(branch.id, 'BGP', { tolerance: 0 });
   assert.equal(found.hits[0].documentTitle, 'uno.md');
+});
+
+test('IngestionEngine - ingiere formatos de texto genéricos y rechaza binarios', async () => {
+  const branch = await RagStorage.createBranch('Texto genérico');
+  const result = await Ingestion.processDocumentQueue([
+    { name: 'api.log', type: '', content: '2026-09-05 ERROR conexión rechazada', size: 38 },
+    { name: 'config.yaml', type: 'application/x-yaml', content: 'database:\n  host: localhost', size: 27 },
+    { name: 'main.py', type: 'text/x-python', content: 'def saludar():\n    return "__DOC_ID__"', size: 39 },
+    { name: 'datos.bin', type: 'application/octet-stream', content: 'texto\0binario', size: 14 }
+  ], branch.id, null, { maxChars: 2000 });
+
+  assert.equal(result.processed, 3);
+  assert.equal(result.failed, 1);
+  const documents = await RagStorage.getDocumentsByBranch(branch.id);
+  assert.deepEqual(documents.map(document => document.title).sort(), ['api.log', 'config.yaml', 'main.py']);
+  assert.ok(documents.every(document => document.fileType === 'txt'));
+  const sourceDocument = documents.find(document => document.title === 'main.py');
+  const sourceChunk = await RagStorage.getChunksByDocument(sourceDocument.id);
+  assert.match(sourceChunk[0].content, /    return "__DOC_ID__"/);
+  const found = await RagIndex.searchBranch(branch.id, 'conexión rechazada', { tolerance: 0 });
+  assert.equal(found.hits[0].documentTitle, 'api.log');
 });
 
 test('IngestionEngine & FileParser - extrae texto decodificando CMap ToUnicode y rangos', async () => {
