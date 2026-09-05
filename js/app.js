@@ -670,7 +670,7 @@
 
     if (msgId) {
       const initialCount = chatHistory.length;
-      chatHistory = chatHistory.filter(m => m.id !== msgId);
+      chatHistory = chatHistory.filter(m => m.id !== msgId && (!m.id || !m.id.startsWith(`${msgId}_turn_`)));
       const removedCount = initialCount - chatHistory.length;
       if (removedCount > 0 && typeof addDebugLog === 'function') {
         addDebugLog('system', t('msg_deleted_log', { id: msgId, count: removedCount }));

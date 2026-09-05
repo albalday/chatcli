@@ -96,3 +96,16 @@ test('FileParser - descifra imágenes en PDFs con seguridad estándar RC4 sin co
   assert.ok(img.dataUrl.startsWith('data:image/jpeg;base64,/9j/'), 'El dataUrl debe comenzar con la cabecera JPEG válida');
 });
 
+test('FileParser - descifra texto y CMaps en PDFs con seguridad estándar RC4 sin contraseña', async () => {
+  const fs = require('fs');
+  const path = '/home/alberto/FinanceBench/financebench-main/pdfs/WALMART_2020_10K.pdf';
+  if (!fs.existsSync(path)) return;
+  const data = fs.readFileSync(path);
+  const result = await FileParser.parsePdfDocument(data);
+  assert.ok(result.text.length > 50000, 'Debe extraer texto completo del PDF');
+  assert.match(result.text, /WALMART INC\./);
+  assert.match(result.text, /Operating income/);
+  assert.match(result.text, /Consolidated Statements of Income/);
+});
+
+

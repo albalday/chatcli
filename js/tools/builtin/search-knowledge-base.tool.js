@@ -7,7 +7,7 @@
 
   const definition = {
     name: 'search_knowledge_base',
-    description: 'Busca evidencia relevante en la base de conocimiento local para responder a la consulta del usuario. Devuelve fragmentos breves e identificadores para el razonamiento interno; úsalo como fuente, no como contenido que debas reproducir. Selecciona scope="document" con documentHint para una fuente identificable, scope="corpus" para comparaciones o información distribuida, y scope="auto" si no está claro.',
+    description: 'Busca fragmentos relevantes en la base de conocimiento. Usa scope="auto" (por defecto) para resolver la fuente automáticamente. Usa scope="document" y documentHint para concentrar en un archivo, o scope="corpus" para rastreo transversal.',
     parameters: {
       type: 'object',
       properties: {

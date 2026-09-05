@@ -62,6 +62,19 @@
     }) || `${count} documento${count === 1 ? '' : 's'} de ${bytes}`;
   }
 
+  function formatBranchLanguage(lang) {
+    const clean = String(lang || 'spanish').toLowerCase().trim();
+    const map = {
+      spanish: t('rag_lang_spanish') || 'Español',
+      english: t('rag_lang_english') || 'Inglés',
+      french: t('rag_lang_french') || 'Francés',
+      german: t('rag_lang_german') || 'Alemán',
+      italian: t('rag_lang_italian') || 'Italiano',
+      portuguese: t('rag_lang_portuguese') || 'Portugués'
+    };
+    return map[clean] || (clean.charAt(0).toUpperCase() + clean.slice(1));
+  }
+
   function formatDocumentMetrics(document) {
     const hasImageCount = Number.isInteger(document?.imageCount) && document.imageCount >= 0;
     let images;
@@ -169,9 +182,10 @@
       const loadedText = t('rag_branch_loaded', { summary: formatted }) || `Esta rama cargó ${formatted}`;
       const descText = branch.description || t('rag_branch_no_desc') || 'Sin descripción';
       const badgeText = isActive ? (t('rag_branch_active_badge') || '✓ Activa') : (t('rag_branch_activate_badge') || '+ Activar');
+      const langLabel = formatBranchLanguage(branch.language);
       return `
       <button type="button" class="setting-toggle-card rag-branch-select-card${isActive ? ' active' : ''}" data-branch-id="${escapeHtml(branch.id)}">
-        <span class="toggle-card-info"><strong>${escapeHtml(branch.name)}</strong><span class="toggle-card-desc">${escapeHtml(descText)}</span><span class="rag-branch-metrics">${escapeHtml(loadedText)}</span></span>
+        <span class="toggle-card-info"><strong>${escapeHtml(branch.name)}</strong><span class="toggle-card-desc">${escapeHtml(descText)}</span><span class="rag-branch-metrics">${escapeHtml(loadedText)} · 🌐 ${escapeHtml(langLabel)}</span></span>
         <span class="rag-branch-badge-status">${badgeText}</span>
       </button>`;
     }).join('');
@@ -233,6 +247,7 @@
       return;
     }
     const documents = await storage().getDocumentsByBranch(branchId);
+    const branch = await storage().getBranchById(branchId);
     const branchMetrics = {
       documentCount: documents.length,
       totalBytes: documents.reduce((sum, document) => sum + (Number(document.fileSize) || 0), 0)
@@ -242,8 +257,13 @@
     const dropzoneHint = t('rag_dropzone_hint') || 'PDF, Markdown o texto · guardado privado en IndexedDB';
     const deleteDocTitle = t('rag_delete_doc_title') || 'Eliminar documento';
     const emptyDocsText = t('rag_branch_empty_docs') || 'La rama todavía no contiene documentos.';
+    const langLabel = formatBranchLanguage(branch?.language);
 
     workspace.innerHTML = `
+      <div class="rag-workspace-header-bar" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; font-size: 0.85rem; color: var(--text-muted);">
+        <span>${escapeHtml(t('rag_branch_label') || 'Rama:')} <strong>${escapeHtml(branch?.name || '')}</strong></span>
+        <span>🌐 ${escapeHtml(t('rag_branch_lang') || 'Idioma de la documentación:')} <strong>${escapeHtml(langLabel)}</strong></span>
+      </div>
       <label class="rag-dropzone" id="rag-dropzone">
         <strong>${escapeHtml(dropzoneTitle)}</strong>
         <span>${escapeHtml(dropzoneHint)}</span>
@@ -308,6 +328,7 @@
   let isCreatingBranch = false;
   let loadedBranchName = '';
   let loadedBranchDesc = '';
+  let loadedBranchLang = 'spanish';
   let currentButtonMode = 'new';
 
   function setNewBranchButtonMode(mode) {
@@ -331,15 +352,19 @@
   function checkBranchInputsChanged() {
     const nameInput = document.getElementById('rag-branch-name-input');
     const descInput = document.getElementById('rag-branch-desc-input');
+    const langSelect = document.getElementById('rag-branch-lang-select');
     const currentName = nameInput?.value?.trim() || '';
     const currentDesc = descInput?.value?.trim() || '';
+    const currentLang = (langSelect?.value || 'spanish').trim().toLowerCase();
 
     if (isCreatingBranch) {
       setNewBranchButtonMode('save');
       return;
     }
 
-    const hasChanged = currentName !== loadedBranchName.trim() || currentDesc !== (loadedBranchDesc || '').trim();
+    const hasChanged = currentName !== loadedBranchName.trim() ||
+      currentDesc !== (loadedBranchDesc || '').trim() ||
+      currentLang !== (loadedBranchLang || 'spanish').trim().toLowerCase();
     setNewBranchButtonMode(hasChanged ? 'save' : 'new');
   }
 
@@ -347,6 +372,7 @@
     if (typeof document === 'undefined') return;
     const nameInput = document.getElementById('rag-branch-name-input');
     const descInput = document.getElementById('rag-branch-desc-input');
+    const langSelect = document.getElementById('rag-branch-lang-select');
     const feedback = document.getElementById('rag-branch-feedback');
     if (feedback) feedback.style.display = 'none';
 
@@ -354,8 +380,10 @@
       isCreatingBranch = true;
       loadedBranchName = '';
       loadedBranchDesc = '';
+      loadedBranchLang = 'spanish';
       if (nameInput) nameInput.value = '';
       if (descInput) descInput.value = '';
+      if (langSelect) langSelect.value = 'spanish';
       setNewBranchButtonMode('new');
       return;
     }
@@ -364,8 +392,10 @@
     const branch = await storage().getBranchById(branchId);
     loadedBranchName = branch?.name || '';
     loadedBranchDesc = branch?.description || '';
+    loadedBranchLang = branch?.language || 'spanish';
     if (nameInput) nameInput.value = loadedBranchName;
     if (descInput) descInput.value = loadedBranchDesc;
+    if (langSelect) langSelect.value = loadedBranchLang;
     setNewBranchButtonMode('new');
   }
 
@@ -381,8 +411,10 @@
     isCreatingBranch = true;
     loadedBranchName = '';
     loadedBranchDesc = '';
+    loadedBranchLang = 'spanish';
     const nameInput = document.getElementById('rag-branch-name-input');
     const descInput = document.getElementById('rag-branch-desc-input');
+    const langSelect = document.getElementById('rag-branch-lang-select');
     const feedback = document.getElementById('rag-branch-feedback');
     if (feedback) feedback.style.display = 'none';
 
@@ -391,6 +423,7 @@
       nameInput.focus();
     }
     if (descInput) descInput.value = '';
+    if (langSelect) langSelect.value = 'spanish';
     setNewBranchButtonMode('save');
   }
 
@@ -408,8 +441,10 @@
   async function saveOrUpdateBranch() {
     const nameInput = document.getElementById('rag-branch-name-input');
     const descInput = document.getElementById('rag-branch-desc-input');
+    const langSelect = document.getElementById('rag-branch-lang-select');
     const name = nameInput?.value?.trim();
     const description = descInput?.value?.trim() || '';
+    const language = (langSelect?.value || 'spanish').trim().toLowerCase();
 
     if (!name) {
       showBranchFeedback(t('rag_branch_name_empty') || 'Por favor, escribe un nombre para la rama.', 'error');
@@ -418,7 +453,7 @@
     }
 
     if (isCreatingBranch) {
-      const branch = await storage().createBranch(name, description);
+      const branch = await storage().createBranch({ name, description, language });
       isCreatingBranch = false;
       await renderManageTab(branch.id);
       await renderActiveTab();
@@ -428,7 +463,7 @@
       const select = document.getElementById('rag-manage-branch-select');
       const id = select?.value;
       if (!id) {
-        const branch = await storage().createBranch(name, description);
+        const branch = await storage().createBranch({ name, description, language });
         isCreatingBranch = false;
         await renderManageTab(branch.id);
         await renderActiveTab();
@@ -436,9 +471,11 @@
         showBranchFeedback(t('rag_branch_created', { name }) || `Rama "${name}" creada con éxito.`, 'success');
         return;
       }
-      await storage().updateBranch(id, { name, description });
+      await storage().updateBranch(id, { name, description, language });
+      indexer()?.invalidateBranch(id);
       loadedBranchName = name;
       loadedBranchDesc = description;
+      loadedBranchLang = language;
       await renderManageTab(id);
       await renderActiveTab();
       setNewBranchButtonMode('new');
@@ -624,6 +661,7 @@
 
     document.getElementById('rag-branch-name-input')?.addEventListener('input', checkBranchInputsChanged);
     document.getElementById('rag-branch-desc-input')?.addEventListener('input', checkBranchInputsChanged);
+    document.getElementById('rag-branch-lang-select')?.addEventListener('change', checkBranchInputsChanged);
 
     const handleBranchKeyEnter = (e) => {
       if (e.key === 'Enter') {

@@ -677,7 +677,7 @@
     constructor(options = {}) {
       this.registry = options.registry || new ToolRegistry();
       this.executor = options.executor || new ToolExecutor(this.registry);
-      this.maxSteps = options.maxSteps || options.maxTurns || 6;
+      this.maxSteps = options.maxSteps || options.maxTurns || 15;
       this.timeoutMs = options.timeoutMs || 0; // 0 = sin límite global de tiempo
       this.stepTimeoutMs = options.stepTimeoutMs || 60000; // 60s por paso
       this.maxRetries = options.maxRetries !== undefined ? options.maxRetries : 1;
@@ -1124,11 +1124,16 @@
         if (workingMessages.length > 0 && workingMessages[workingMessages.length - 1].role === 'tool' && autoSynthesize && !combinedSignal.aborted) {
           if (callbacks.onSynthesize) callbacks.onSynthesize(stepIndex);
           try {
+            const hasRagTool = workingMessages.some(m => m.name === 'search_knowledge_base' || m.name === 'read_knowledge_chunk' || m.name === 'list_documents');
+            const synthPrompt = hasRagTool
+              ? 'A partir de la información obtenida por las herramientas anteriores, responde directamente a mi consulta inicial. Si la información o datos solicitados no se han encontrado en los documentos consultados, indica claramente que no se han encontrado datos para responder a la pregunta, en lugar de hacer un resumen de todo o volcar los fragmentos consultados.'
+              : 'Por favor, proporciona un resumen final completo, estructurado y detallado respondiendo a mi consulta a partir de toda la información obtenida por las herramientas.';
+
             const synthMessages = [
               ...workingMessages,
               {
                 role: 'user',
-                content: 'Por favor, proporciona un resumen final completo, estructurado y detallado respondiendo a mi consulta a partir de toda la información obtenida por las herramientas.'
+                content: synthPrompt
               }
             ];
             const synthRes = await API.streamChatCompletion({
@@ -1157,12 +1162,17 @@
           } catch (e) {}
 
           if (!finalAccumulatedText || finalAccumulatedText.trim() === '') {
-            const toolContents = workingMessages
-              .filter(m => m.role === 'tool' && m.content)
-              .map(m => m.content)
-              .filter(Boolean);
-            if (toolContents.length > 0) {
-              finalAccumulatedText = '### Resumen de la Información Consultada\n\n' + toolContents.join('\n\n---\n\n');
+            const hasRagTool = workingMessages.some(m => m.name === 'search_knowledge_base' || m.name === 'read_knowledge_chunk' || m.name === 'list_documents');
+            if (hasRagTool) {
+              finalAccumulatedText = 'No se han encontrado datos en los documentos consultados para responder a la pregunta.';
+            } else {
+              const toolContents = workingMessages
+                .filter(m => m.role === 'tool' && m.content)
+                .map(m => m.content)
+                .filter(Boolean);
+              if (toolContents.length > 0) {
+                finalAccumulatedText = '### Resumen de la Información Consultada\n\n' + toolContents.join('\n\n---\n\n');
+              }
             }
           }
         }

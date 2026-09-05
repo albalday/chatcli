@@ -23,6 +23,7 @@ test('RagService - inyecta solo instrucciones compactas', async () => {
   const context = await RagService.buildRagSystemContext(branch.id);
   assert.match(context, /Operaciones/);
   assert.match(context, /search_knowledge_base/);
+  assert.match(context, /list_documents/);
   assert.doesNotMatch(context, /Kubernetes|PostgreSQL/);
   assert.match(await RagService.injectRagContext('Responde brevemente.', branch.id), /Responde brevemente/);
 });
@@ -142,6 +143,40 @@ test('RagService - scope auto resuelve empresa y ejercicio desde títulos Financ
   assert.equal(result.appliedScope, 'document');
   assert.equal(result.selectedDocument.documentId, target.id);
   assert.ok(result.matches.every(match => match.documentId === target.id));
+});
+
+test('RagService - documentHint resuelve exactamente sin contaminarse por años en la consulta', async () => {
+  const branch = await RagStorage.createBranch('WalmartFinance');
+  const w2018 = await RagStorage.saveDocument({
+    branchId: branch.id, title: 'WALMART_2018_10K.pdf',
+    chunks: [{ title: 'P&L 2018', content: 'Operating income 2018 was 20437.' }]
+  });
+  const w2019 = await RagStorage.saveDocument({
+    branchId: branch.id, title: 'WALMART_2019_10K.pdf',
+    chunks: [{ title: 'P&L 2019', content: 'Operating income 2019 was 21957.' }]
+  });
+  const w2020 = await RagStorage.saveDocument({
+    branchId: branch.id, title: 'WALMART_2020_10K.pdf',
+    chunks: [{ title: 'P&L 2020', content: 'Operating income 2020 was 20568. 2019 was 21957. 2018 was 20437.' }]
+  });
+  await RagStorage.saveDocument({
+    branchId: branch.id, title: 'PG_E_2023Q3_10Q.pdf',
+    chunks: [{ title: 'Instruments', content: 'Operating income revenues 2020 2019 2018.' }]
+  });
+
+  const result = await RagService.searchKnowledgeBase(branch.id, {
+    query: 'Consolidated Statements of Income Revenues Operating income Fiscal Year Ended January 31 2020 2019 2018',
+    scope: 'document',
+    documentHint: 'WALMART_2020_10K.pdf',
+    tolerance: 0
+  });
+
+  assert.equal(result.success, true);
+  assert.equal(result.requestedScope, 'document');
+  assert.equal(result.appliedScope, 'document');
+  assert.equal(result.selectedDocument.documentId, w2020.id);
+  assert.ok(result.matches.length >= 1);
+  assert.ok(result.matches.every(match => match.documentId === w2020.id));
 });
 
 test('RagService - usa corpus ante una referencia documental ambigua', async () => {

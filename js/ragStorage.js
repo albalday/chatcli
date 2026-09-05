@@ -172,8 +172,10 @@
     return [];
   }
 
-  async function createBranch(nameOrData, description = '') {
-    const input = typeof nameOrData === 'string' ? { name: nameOrData, description } : nameOrData;
+  async function createBranch(nameOrData, description = '', language = '') {
+    const input = typeof nameOrData === 'string'
+      ? { name: nameOrData, description, ...(language ? { language } : {}) }
+      : nameOrData;
     const branch = validateBranch(input);
     const db = await openDatabase();
     if (!db) { memory.branches.set(branch.id, branch); return { ...branch }; }

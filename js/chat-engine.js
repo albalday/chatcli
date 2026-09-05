@@ -352,7 +352,7 @@
       return { success: false, error: err };
     }
 
-    const maxAgentTurns = params.maxAgentTurns || 8;
+    const maxAgentTurns = params.maxAgentTurns || 15;
     const toolCallSignatures = [];
     let turnIndex = 0;
     let accumulatedConversationMarkdown = '';
@@ -490,11 +490,20 @@
             forceSystemPromptGuide: true
           });
 
+          const isRagActive = Boolean(resolvedActiveRagBranchId || (resolvedActiveRagBranchIds && resolvedActiveRagBranchIds.length > 0));
+          const isRagUsed = isRagActive || chatHistory.some(m => m.name === 'search_knowledge_base' || m.name === 'read_knowledge_chunk' || m.name === 'list_documents');
+
+          const synthPrompt = isRagUsed
+            ? (isEn
+                ? 'Based on the information gathered from the tools above, answer my initial question directly. If the requested information or data was not found in the consulted documents, clearly state that no data was found to answer the question, instead of summarizing or dumping the consulted fragments.'
+                : 'A partir de la información obtenida por las herramientas anteriores, responde directamente a mi consulta inicial. Si la información o datos solicitados no se han encontrado en los documentos consultados, indica claramente que no se han encontrado datos para responder a la pregunta, en lugar de hacer un resumen de todo o volcar los fragmentos consultados.')
+            : (isEn
+                ? 'Based on all the information gathered from the tools above, please write a comprehensive, detailed, and well-structured final answer to my initial question, organizing the findings clearly and citing sources.'
+                : 'A partir de toda la información obtenida por las herramientas anteriores, redacta ahora una respuesta final completa, detallada y bien estructurada para mi consulta inicial, organizando los hallazgos con claridad y citando las fuentes consultadas.');
+
           synthMessages.push({
             role: 'user',
-            content: isEn
-              ? 'Based on all the information gathered from the tools above, please write a comprehensive, detailed, and well-structured final answer to my initial question, organizing the findings clearly and citing sources.'
-              : 'A partir de toda la información obtenida por las herramientas anteriores, redacta ahora una respuesta final completa, detallada y bien estructurada para mi consulta inicial, organizando los hallazgos con claridad y citando las fuentes consultadas.'
+            content: synthPrompt
           });
 
           try {
@@ -548,18 +557,27 @@
           }
         }
 
-        // Si aún no hay texto tras síntesis forzada, compilar resultados de herramientas
+        // Si aún no hay texto tras síntesis forzada, compilar resultados de herramientas o indicar falta de datos
         if (!currentTurnText || currentTurnText.trim() === '') {
-          const toolResults = chatHistory
-            .filter(m => m.role === 'tool' && m.content)
-            .map(m => m.content)
-            .filter(Boolean);
+          const isRagActive = Boolean(resolvedActiveRagBranchId || (resolvedActiveRagBranchIds && resolvedActiveRagBranchIds.length > 0));
+          const isRagUsed = isRagActive || chatHistory.some(m => m.name === 'search_knowledge_base' || m.name === 'read_knowledge_chunk' || m.name === 'list_documents');
+          const isEn = appConfig.language === 'en';
 
-          if (toolResults.length > 0) {
-            const isEn = appConfig.language === 'en';
+          if (isRagUsed) {
             currentTurnText = isEn
-              ? '### Summary of Search Results\n\n' + toolResults.join('\n\n---\n\n')
-              : '### Resumen de la Información Consultada\n\n' + toolResults.join('\n\n---\n\n');
+              ? 'No data was found in the consulted documents to answer your question.'
+              : 'No se han encontrado datos en los documentos consultados para responder a la pregunta.';
+          } else {
+            const toolResults = chatHistory
+              .filter(m => m.role === 'tool' && m.content)
+              .map(m => m.content)
+              .filter(Boolean);
+
+            if (toolResults.length > 0) {
+              currentTurnText = isEn
+                ? '### Summary of Search Results\n\n' + toolResults.join('\n\n---\n\n')
+                : '### Resumen de la Información Consultada\n\n' + toolResults.join('\n\n---\n\n');
+            }
           }
         }
 
@@ -726,11 +744,20 @@
         forceSystemPromptGuide: true
       });
 
+      const isRagActive = Boolean(resolvedActiveRagBranchId || (resolvedActiveRagBranchIds && resolvedActiveRagBranchIds.length > 0));
+      const isRagUsed = isRagActive || chatHistory.some(m => m.name === 'search_knowledge_base' || m.name === 'read_knowledge_chunk' || m.name === 'list_documents');
+
+      const synthPrompt = isRagUsed
+        ? (isEn
+            ? 'Based on the information gathered from the tools above, answer my initial question directly. If the requested information or data was not found in the consulted documents, clearly state that no data was found to answer the question, instead of summarizing or dumping the consulted fragments.'
+            : 'A partir de la información obtenida por las herramientas anteriores, responde directamente a mi consulta inicial. Si la información o datos solicitados no se han encontrado en los documentos consultados, indica claramente que no se han encontrado datos para responder a la pregunta, en lugar de hacer un resumen de todo o volcar los fragmentos consultados.')
+        : (isEn
+            ? 'Based on all the information gathered from the tools above, please write a comprehensive, detailed, and well-structured final answer to my initial question, organizing the findings clearly and citing sources.'
+            : 'A partir de toda la información obtenida por las herramientas anteriores, redacta ahora una respuesta final completa, detallada y bien estructurada para mi consulta inicial, organizando los hallazgos con claridad y citando las fuentes consultadas.');
+
       synthMessages.push({
         role: 'user',
-        content: isEn
-          ? 'Based on all the information gathered from the tools above, please write a comprehensive, detailed, and well-structured final answer to my initial question, organizing the findings clearly and citing sources.'
-          : 'A partir de toda la información obtenida por las herramientas anteriores, redacta ahora una respuesta final completa, detallada y bien estructurada para mi consulta inicial, organizando los hallazgos con claridad y citando las fuentes consultadas.'
+        content: synthPrompt
       });
 
       try {
@@ -775,15 +802,21 @@
       }
 
       if (!finalSynthText || finalSynthText.trim() === '') {
-        const toolResults = chatHistory
-          .filter(m => m.role === 'tool' && m.content)
-          .map(m => m.content)
-          .filter(Boolean);
-
-        if (toolResults.length > 0) {
+        if (isRagUsed) {
           finalSynthText = isEn
-            ? '### Summary of Search Results\n\n' + toolResults.join('\n\n---\n\n')
-            : '### Resumen de la Información Consultada\n\n' + toolResults.join('\n\n---\n\n');
+            ? 'No data was found in the consulted documents to answer your question.'
+            : 'No se han encontrado datos en los documentos consultados para responder a la pregunta.';
+        } else {
+          const toolResults = chatHistory
+            .filter(m => m.role === 'tool' && m.content)
+            .map(m => m.content)
+            .filter(Boolean);
+
+          if (toolResults.length > 0) {
+            finalSynthText = isEn
+              ? '### Summary of Search Results\n\n' + toolResults.join('\n\n---\n\n')
+              : '### Resumen de la Información Consultada\n\n' + toolResults.join('\n\n---\n\n');
+          }
         }
       }
 

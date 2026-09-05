@@ -769,6 +769,13 @@
           <label><strong data-i18n="rag_available_branches">Ramas disponibles</strong><span class="label-hint" data-i18n="rag_available_branches_hint">Puedes activar una o varias ramas simultáneamente para búsquedas cruzadas.</span></label>
           <div id="rag-active-branch-list" class="rag-active-branch-list"></div>
         </div>
+        <div class="rag-active-tip-card">
+          <span class="rag-active-tip-icon">💡</span>
+          <div class="rag-active-tip-content">
+            <strong data-i18n="rag_active_tip_title">Recomendación para consultas:</strong>
+            <span data-i18n-html="rag_active_tip_desc">Para consultas y extracción de datos, usa una <strong>temperatura baja (0 a 0,2)</strong> en el chat: reduce la dispersión en las búsquedas y asegura respuestas más consistentes y directas.</span>
+          </div>
+        </div>
       </div>
       <div id="tab-rag-manage" class="modal-tab-pane">
         <div class="rag-manage-toolbar">
@@ -819,6 +826,17 @@
             <div class="form-field" style="margin-bottom: 0;">
               <label for="rag-branch-name-input"><strong data-i18n="rag_branch_name">Nombre de la rama:</strong></label>
               <input type="text" id="rag-branch-name-input" data-i18n-placeholder="rag_branch_name_placeholder" placeholder="Nombre de la rama (ej: Manuales)" autocomplete="off">
+            </div>
+            <div class="form-field" style="margin-bottom: 0;">
+              <label for="rag-branch-lang-select"><strong data-i18n="rag_branch_lang">Idioma de la documentación:</strong></label>
+              <select id="rag-branch-lang-select" class="combobox-select-helper">
+                <option value="spanish" selected data-i18n="rag_lang_spanish">Español</option>
+                <option value="english" data-i18n="rag_lang_english">Inglés</option>
+                <option value="french" data-i18n="rag_lang_french">Francés</option>
+                <option value="german" data-i18n="rag_lang_german">Alemán</option>
+                <option value="italian" data-i18n="rag_lang_italian">Italiano</option>
+                <option value="portuguese" data-i18n="rag_lang_portuguese">Portugués</option>
+              </select>
             </div>
             <div class="form-field" style="margin-bottom: 0;">
               <label for="rag-branch-desc-input"><strong data-i18n="rag_branch_desc">Descripción (opcional):</strong></label>

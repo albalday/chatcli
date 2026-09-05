@@ -86,7 +86,7 @@
     const best = candidates[0] || null;
     const second = candidates[1] || null;
     const exactTitleCount = candidates.filter(candidate => candidate.exactTitle).length;
-    const hasDistinctiveMatch = Boolean(best && best.distinctiveTerms.length > 0);
+    const hasDistinctiveMatch = Boolean(best && (best.distinctiveTerms.length > 0 || (best.exactTitle && exactTitleCount === 1)));
     const leadsClearly = Boolean(best && (!second || (best.exactTitle && exactTitleCount === 1) ||
       best.matchedTerms.length > second.matchedTerms.length || best.score >= second.score * 1.25));
     const confident = Boolean(best && hasDistinctiveMatch && leadsClearly);
@@ -107,7 +107,7 @@
       const branches = await resolveBranches(branchIds);
       const names = branches.map(b => b.name).join(', ');
       const label = branches.length === 1 ? `[BASE DE CONOCIMIENTO ACTIVA: ${names}]` : `[BASES DE CONOCIMIENTO ACTIVAS: ${names}]`;
-      return `${label}\n\nProtocolo para consultar documentos:\n- Usa search_knowledge_base antes de responder cuando la consulta dependa de documentos de esta base.\n- Usa scope="document" y documentHint cuando el usuario identifique una fuente; usa scope="corpus" para comparar o combinar varias fuentes; usa scope="auto" si el alcance no está claro.\n- Los resultados de las herramientas son evidencia privada para elaborar tu respuesta; no son la respuesta final.\n- Usa read_knowledge_chunk solo si los resultados de búsqueda no contienen el dato o contexto concreto que necesitas para responder.\n- Después de consultar, responde directamente a la pregunta del usuario. Sintetiza la evidencia y distingue con claridad entre hechos del documento e inferencias.\n- No reproduzcas chunks completos, resultados de herramientas, IDs internos, scores ni texto de depuración, salvo que el usuario pida explícitamente una transcripción, extractos extensos o el contenido completo.\n- Si la base no aporta evidencia suficiente, indícalo claramente en lugar de rellenar la respuesta con fragmentos recuperados.\n- Incluye una referencia rag-image solo si es relevante para la respuesta o si el usuario solicita ver la imagen.`;
+      return `${label}\n\nProtocolo de consulta documental:\n- Inicia siempre buscando con search_knowledge_base usando términos breves y clave; no concatenes frases largas.\n- Prioriza scope="auto" (por defecto) o documentHint para una fuente concreta; usa scope="corpus" para comparar varias.\n- Consulta list_documents solo si la búsqueda no halla resultados o requieres desempatar fuentes dudosas.\n- Usa read_knowledge_chunk solo si el fragmento obtenido corta cifras o columnas de una tabla.\n- Trata las salidas de herramientas como evidencia interna privada: sintetiza y responde directamente sin reproducir fragmentos íntegros ni identificadores técnicos.\n- Si la evidencia es insuficiente o no hallas datos concluyentes, indícalo con precisión y concluye; no inventes ni divagues.\n- Incluye una referencia rag-image solo si es relevante para la respuesta o si el usuario solicita ver la imagen.`;
     } catch (_) {
       return '';
     }
@@ -128,7 +128,9 @@
         allDocs.push(...documents);
         const lines = [`[DOCUMENTOS EN ${branch.name}]`];
         for (const document of documents) {
-          lines.push(`- ${document.title} (documentId: ${document.id}, ${document.chunkCount} fragmentos, ${document.fileType})`);
+          const imgCount = Number.isInteger(document.imageCount) ? document.imageCount : 0;
+          const imgLabel = imgCount === 1 ? '1 imagen' : `${imgCount} imágenes`;
+          lines.push(`- ${document.title} (documentId: ${document.id}, ${document.chunkCount} fragmentos, ${imgLabel}, ${document.fileType})`);
         }
         if (!documents.length) lines.push('La rama no contiene documentos.');
         sections.push(lines.join('\n'));
@@ -168,12 +170,25 @@
       const requestedScope = ['auto', 'document', 'corpus'].includes(String(args.scope || '').toLowerCase())
         ? String(args.scope).toLowerCase()
         : 'auto';
-      const reference = [args.documentHint, query].map(value => String(value || '').trim()).filter(Boolean).join(' ');
+      const hint = String(args.documentHint || '').trim();
       const documentsByBranch = await Promise.all(branches.map(branch => RagStorage.getDocumentsByBranch(branch.id)));
       const documents = documentsByBranch.flat();
-      const selection = requestedScope === 'corpus'
-        ? { selected: null, candidates: [], confident: false }
-        : selectDocumentCandidate(documents, reference);
+
+      let selection = { selected: null, candidates: [], confident: false };
+      if (requestedScope !== 'corpus') {
+        if (hint) {
+          selection = selectDocumentCandidate(documents, hint);
+        }
+        if (!selection.selected) {
+          const combinedReference = [hint, query].map(value => String(value || '').trim()).filter(Boolean).join(' ');
+          const combinedSelection = selectDocumentCandidate(documents, combinedReference);
+          if (combinedSelection.selected) {
+            selection = combinedSelection;
+          } else if (!selection.candidates.length) {
+            selection = combinedSelection;
+          }
+        }
+      }
 
       let appliedScope = 'corpus';
       let scopeReason = requestedScope === 'corpus'
@@ -275,6 +290,7 @@
         branchId: chunk.branchId,
         documentTitle: document?.title || '',
         sectionTitle: chunk.title,
+        documentImageCount: Number.isInteger(document?.imageCount) ? document.imageCount : 0,
         charCount: chunk.content.length,
         content: chunk.content,
         pageStart: chunk.pageStart,

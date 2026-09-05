@@ -7,7 +7,7 @@
 
   const definition = {
     name: 'list_documents',
-    description: 'Lista los documentos disponibles en las ramas activas de la base de conocimiento local.',
+    description: 'Devuelve el catálogo de documentos disponibles con su número de fragmentos e imágenes. Úsala para saber qué documentos contienen imágenes o como apoyo cuando no conozcas las fuentes de la base.',
     parameters: { type: 'object', properties: {}, required: [] }
   };
 

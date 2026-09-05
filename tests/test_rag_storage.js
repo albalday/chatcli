@@ -13,14 +13,15 @@ test('RagStorage - usa el esquema RAG unificado de ZeroChatDB', () => {
   assert.equal(RagStorage.STORE_CHUNKS, 'rag_chunks');
 });
 
-test('RagStorage - CRUD de ramas', async () => {
-  const created = await RagStorage.createBranch('Manuales', 'Documentación técnica');
-  assert.equal(created.language, 'spanish');
-  assert.equal((await RagStorage.getBranches()).length, 1);
-  assert.equal((await RagStorage.getBranchById(created.id)).name, 'Manuales');
+test('RagStorage - CRUD de ramas con soporte de idioma', async () => {
+  const created = await RagStorage.createBranch('Manuales', 'Documentación técnica', 'english');
+  assert.equal(created.name, 'Manuales');
+  assert.equal(created.language, 'english');
+  assert.equal((await RagStorage.getBranchById(created.id)).language, 'english');
 
-  const updated = await RagStorage.updateBranch(created.id, { name: 'Guías' });
+  const updated = await RagStorage.updateBranch(created.id, { name: 'Guías', language: 'french' });
   assert.equal(updated.name, 'Guías');
+  assert.equal(updated.language, 'french');
   assert.equal(updated.description, 'Documentación técnica');
 });
 

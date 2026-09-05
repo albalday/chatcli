@@ -139,7 +139,7 @@
     }
   }
 
-  async function parseCMaps(allObjects, fullText, bytes, objOffsets) {
+  async function parseCMaps(allObjects, fullText, bytes, objOffsets, security = null) {
     const cmap = new Map();
     const toUnicodeObjNums = new Set();
     const cmapByObject = new Map();
@@ -187,11 +187,16 @@
           }
           try {
             const rawBytes = bytes.subarray(dataStart, dataEnd);
-            const decomp = await decompressDeflateData(rawBytes);
-            if (decomp) {
-              const text = new TextDecoder('latin1').decode(decomp);
-              parseCMapData(text, localCmap);
-              parseCMapData(text, cmap);
+            const generation = Number(body?.match(/^\s*\d+\s+(\d+)\s+obj/)?.[1] || 0);
+            const streamBytes = security?.encrypted
+              ? decryptPdfObjectBytes(rawBytes, security, Number(objNum), generation)
+              : rawBytes;
+            const decomp = await decompressDeflateData(streamBytes);
+            const toParse = decomp ? new TextDecoder('latin1').decode(decomp) : (streamBytes ? new TextDecoder('latin1').decode(streamBytes) : '');
+            if (toParse && (toParse.includes('beginbfchar') || toParse.includes('beginbfrange'))) {
+              parseCMapData(toParse, localCmap);
+              parseCMapData(toParse, cmap);
+              cmapByObject.set(String(objNum), localCmap);
             }
           } catch (e) {}
         }
@@ -648,7 +653,8 @@
 
       try {
         let rawSlice = uint8Array;
-        if (uint8Array.length > 6 && uint8Array[0] === 0x78) {
+        const isZlib = uint8Array.length > 6 && (uint8Array[0] & 0x0F) === 8 && (((uint8Array[0] << 8) | uint8Array[1]) % 31 === 0);
+        if (isZlib) {
           rawSlice = uint8Array.subarray(2, uint8Array.length - 4);
         }
         const dsRaw = new DecompressionStream('deflate-raw');
@@ -1684,11 +1690,11 @@
       }
     }
 
-    // 3. Extracción exhaustiva de CMaps / ToUnicode (incluyendo objetos dentro de ObjStm)
-    const cmap = await parseCMaps(allObjects, fullText, bytes, objOffsets);
+    // 3. Extracción de contexto de seguridad y CMaps / ToUnicode
+    const security = createPdfSecurityContext(allObjects, fullText);
+    const cmap = await parseCMaps(allObjects, fullText, bytes, objOffsets, security);
 
     // 3b. Extracción de imágenes XObject (/Subtype /Image)
-    const security = createPdfSecurityContext(allObjects, fullText);
     const imagesByObjNum = extractImagesFromPdfObjects(allObjects, objOffsets, bytes, security);
     const assignedImages = new Set();
     const allExtractedImages = [];
@@ -1766,11 +1772,15 @@
 
             try {
               let streamString = '';
-              const decompressed = await decompressDeflateData(rawBytes);
+              const generation = Number(cBody.match(/^\s*\d+\s+(\d+)\s+obj/)?.[1] || 0);
+              const streamBytes = security?.encrypted
+                ? decryptPdfObjectBytes(rawBytes, security, Number(cNum), generation)
+                : rawBytes;
+              const decompressed = await decompressDeflateData(streamBytes);
               if (decompressed) {
                 streamString = decoder.decode(decompressed);
               } else {
-                streamString = decoder.decode(rawBytes);
+                streamString = decoder.decode(streamBytes);
               }
 
               if (streamString) {
@@ -1883,13 +1893,19 @@
 
             if (!isFontOrMeta && !isDCT) {
               let streamString = '';
+              const objNumMatch = dictSlice.match(/(\d+)\s+(\d+)\s+obj[^\w]*$/);
+              const objNum = objNumMatch ? Number(objNumMatch[1]) : 0;
+              const generation = objNumMatch ? Number(objNumMatch[2]) : 0;
+              const streamBytes = (security?.encrypted && objNum)
+                ? decryptPdfObjectBytes(rawStreamBytes, security, objNum, generation)
+                : rawStreamBytes;
               if (isFlate) {
-                const decompressed = await decompressDeflateData(rawStreamBytes);
+                const decompressed = await decompressDeflateData(streamBytes);
                 if (decompressed) {
                   streamString = decoder.decode(decompressed);
                 }
               } else if (!isDCT) {
-                streamString = decoder.decode(rawStreamBytes);
+                streamString = decoder.decode(streamBytes);
               }
 
               if (streamString) {
