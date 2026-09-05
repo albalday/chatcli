@@ -28,6 +28,13 @@
     modelListing: true    // Soporte para descubrimiento automático de modelos (/models, /api/tags)
   };
 
+  function serializeContent(content) {
+    if (typeof content === 'string') return content;
+    if (content === undefined) return '';
+    if (typeof content === 'object') return JSON.stringify(content);
+    return String(content);
+  }
+
   /**
    * Adaptador Base genérico (compatible con OpenAI, LM Studio, vLLM, LocalAI, DeepSeek).
    */
@@ -1095,7 +1102,7 @@
         } else if (m.role === 'tool') {
           const toolCallId = m.tool_call_id || `call_${Date.now()}`;
           const toolName = m.name || 'tool';
-          const toolContent = typeof m.content === 'object' ? JSON.stringify(m.content) : String(m.content !== undefined ? m.content : '');
+          const toolContent = serializeContent(m.content);
 
           // Validar que el mensaje previo sea un assistant con la llamada correspondiente
           let prevMsg = formatted.length > 0 ? formatted[formatted.length - 1] : null;

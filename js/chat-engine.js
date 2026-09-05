@@ -54,6 +54,13 @@
     return fallback || key;
   }
 
+  function serializeContent(content) {
+    if (typeof content === 'string') return content;
+    if (content === undefined) return '';
+    if (typeof content === 'object') return JSON.stringify(content);
+    return String(content);
+  }
+
   /**
    * Genera el ancla de fecha diaria para maximizar la autoridad del contexto y 100% de aciertos en Context-Cache.
    * @param {string} [lang='es'] - Código de idioma ('es' o 'en').
@@ -154,7 +161,7 @@
       } else if (m.role === 'tool') {
         const toolCallId = m.tool_call_id || `call_${Date.now()}`;
         const toolName = m.name || 'tool';
-        const toolContent = typeof m.content === 'object' ? JSON.stringify(m.content) : String(m.content !== undefined ? m.content : '');
+        const toolContent = serializeContent(m.content);
 
         // Validar que el mensaje previo sea un assistant con el tool_call correspondiente
         const prevMsg = messages.length > 0 ? messages[messages.length - 1] : null;

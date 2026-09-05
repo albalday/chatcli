@@ -1015,68 +1015,38 @@
     }
   }
 
+  const I18N_DOM_BINDINGS = [
+    { attr: 'data-i18n', prop: 'textContent' },
+    { attr: 'data-i18n-html', prop: 'innerHTML' },
+    { attr: 'data-i18n-title', targetAttr: 'title' },
+    { attr: 'data-i18n-placeholder', targetAttr: 'placeholder' },
+    { attr: 'data-i18n-aria', targetAttr: 'aria-label' }
+  ];
+
   /**
    * Aplica las traducciones a todos los elementos del DOM marcados con atributos data-i18n*.
    */
   function applyTranslations(rootElement = document) {
     if (!rootElement || typeof rootElement.querySelectorAll !== 'function') return;
 
-    // 1. data-i18n -> textContent
-    rootElement.querySelectorAll('[data-i18n]').forEach(el => {
-      const key = el.getAttribute('data-i18n');
-      if (key) {
+    for (const binding of I18N_DOM_BINDINGS) {
+      rootElement.querySelectorAll(`[${binding.attr}]`).forEach(el => {
+        const key = el.getAttribute(binding.attr);
+        if (!key) return;
         const val = t(key);
-        if (val !== key || !el.textContent.trim()) {
-          el.textContent = val;
+        if (binding.prop) {
+          if (val !== key || !el[binding.prop].trim()) {
+            el[binding.prop] = val;
+          }
+        } else if (binding.targetAttr) {
+          if (val !== key || !el.getAttribute(binding.targetAttr)) {
+            el.setAttribute(binding.targetAttr, val);
+          }
         }
-      }
-    });
+      });
+    }
 
-    // 2. data-i18n-html -> innerHTML
-    rootElement.querySelectorAll('[data-i18n-html]').forEach(el => {
-      const key = el.getAttribute('data-i18n-html');
-      if (key) {
-        const val = t(key);
-        if (val !== key || !el.innerHTML.trim()) {
-          el.innerHTML = val;
-        }
-      }
-    });
-
-    // 3. data-i18n-title -> title attribute
-    rootElement.querySelectorAll('[data-i18n-title]').forEach(el => {
-      const key = el.getAttribute('data-i18n-title');
-      if (key) {
-        const val = t(key);
-        if (val !== key || !el.getAttribute('title')) {
-          el.setAttribute('title', val);
-        }
-      }
-    });
-
-    // 4. data-i18n-placeholder -> placeholder attribute
-    rootElement.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
-      const key = el.getAttribute('data-i18n-placeholder');
-      if (key) {
-        const val = t(key);
-        if (val !== key || !el.getAttribute('placeholder')) {
-          el.setAttribute('placeholder', val);
-        }
-      }
-    });
-
-    // 5. data-i18n-aria -> aria-label attribute
-    rootElement.querySelectorAll('[data-i18n-aria]').forEach(el => {
-      const key = el.getAttribute('data-i18n-aria');
-      if (key) {
-        const val = t(key);
-        if (val !== key || !el.getAttribute('aria-label')) {
-          el.setAttribute('aria-label', val);
-        }
-      }
-    });
-
-    // 6. Actualizar título de la página
+    // Actualizar título de la página
     if (typeof document !== 'undefined') {
       document.title = t('app_title');
       const metaDesc = document.querySelector('meta[name="description"]');

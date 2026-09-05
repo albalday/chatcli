@@ -11,31 +11,17 @@
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  function getI18n() {
-    return (typeof window !== 'undefined' && window.ChatI18n)
-      ? window.ChatI18n
-      : (typeof require !== 'undefined' ? (function () { try { return require('./i18n.js'); } catch (e) { return null; } })() : null);
+  function resolveDep(globalName, relPath) {
+    if (typeof window !== 'undefined' && window[globalName]) return window[globalName];
+    if (typeof globalThis !== 'undefined' && globalThis[globalName]) return globalThis[globalName];
+    if (typeof require !== 'undefined') { try { return require(relPath); } catch (e) { return null; } }
+    return null;
   }
 
-  function getStorage() {
-    return (typeof window !== 'undefined' && window.ChatStorage)
-      ? window.ChatStorage
-      : (typeof globalThis !== 'undefined' && (globalThis.ChatStorage || globalThis.Storage))
-        ? (globalThis.ChatStorage || globalThis.Storage)
-        : (typeof require !== 'undefined' ? (function () { try { return require('./cookies.js'); } catch (e) { return null; } })() : null);
-  }
-
-  function getAgentCore() {
-    return (typeof window !== 'undefined' && window.ChatAgentCore)
-      ? window.ChatAgentCore
-      : (typeof require !== 'undefined' ? (function () { try { return require('./agent-core.js'); } catch (e) { return null; } })() : null);
-  }
-
-  function getMarkdown() {
-    return (typeof window !== 'undefined' && window.ChatMarkdown)
-      ? window.ChatMarkdown
-      : (typeof require !== 'undefined' ? (function () { try { return require('./markdown.js'); } catch (e) { return null; } })() : null);
-  }
+  const getI18n = () => resolveDep('ChatI18n', './i18n.js');
+  const getStorage = () => resolveDep('ChatStorage', './cookies.js') || (typeof globalThis !== 'undefined' ? globalThis.Storage : null);
+  const getAgentCore = () => resolveDep('ChatAgentCore', './agent-core.js');
+  const getMarkdown = () => resolveDep('ChatMarkdown', './markdown.js');
 
   function t(key, params) {
     const I18n = getI18n();

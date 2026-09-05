@@ -184,11 +184,18 @@
   const DEFAULT_MAX_ACTIVE_TOOL_CHARS = 30000;      // ~7.500 tokens para la herramienta del turno actual
   const DEFAULT_MAX_HISTORICAL_TOOL_CHARS = 1200;   // ~300 tokens para herramientas de turnos pasados
 
+  function serializeContent(content) {
+    if (typeof content === 'string') return content;
+    if (content === undefined) return '';
+    if (typeof content === 'object') return JSON.stringify(content);
+    return String(content);
+  }
+
   /**
    * Trunca de forma segura el contenido de un resultado de herramienta.
    */
   function truncateToolContent(content, maxChars = DEFAULT_MAX_ACTIVE_TOOL_CHARS, toolName = 'tool') {
-    const str = typeof content === 'object' ? JSON.stringify(content) : String(content !== undefined ? content : '');
+    const str = serializeContent(content);
     if (str.length <= maxChars) {
       return str;
     }
@@ -203,7 +210,7 @@
    */
   function pruneHistoricalToolMessage(m, maxHistoricalToolChars = DEFAULT_MAX_HISTORICAL_TOOL_CHARS) {
     if (!m || m.role !== 'tool') return m;
-    const contentStr = typeof m.content === 'object' ? JSON.stringify(m.content) : String(m.content !== undefined ? m.content : '');
+    const contentStr = serializeContent(m.content);
 
     if (contentStr.length <= maxHistoricalToolChars) {
       return m;
@@ -464,7 +471,7 @@ Responde estrictamente con el siguiente formato:
           });
         }
       } else if (m.role === 'tool') {
-        const contentStr = typeof m.content === 'object' ? JSON.stringify(m.content) : String(m.content || '');
+        const contentStr = serializeContent(m.content);
         lines.push(`[Resultado de herramienta ${m.name || 'tool'}]: ${contentStr.slice(0, 800)}`);
       }
     });

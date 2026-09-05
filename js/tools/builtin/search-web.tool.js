@@ -20,6 +20,7 @@
   }
 
   function createCardWrapper(ui) {
+    if (ui?.createCardWrapper) return ui.createCardWrapper();
     const doc = ui?.document || (typeof document !== 'undefined' ? document : null);
     if (!doc) return null;
     const cardDiv = doc.createElement('div');
@@ -27,10 +28,6 @@
     return cardDiv;
   }
 
-  const SPINNER_SVG = '<svg class="ui-icon ui-icon-spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"></path></svg>';
-  const CHECK_SVG = '<svg class="ui-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>';
-  const ERROR_SVG = '<svg class="ui-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>';
-  const CHEVRON_SVG = '<svg class="ui-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>';
   const SEARCH_ICON_SVG = '<svg class="ui-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>';
   const LINK_ICON_SVG = '<svg class="ui-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>';
 
@@ -39,7 +36,9 @@
     if (!cardDiv) return null;
     const Markdown = ui?.markdown || { escapeHtml: (value) => String(value || '') };
     const t = ui?.t || ((key) => key);
-    cardDiv.innerHTML = `<div class="web-search-card"><div class="search-card-header"><div class="search-card-title"><span>${SEARCH_ICON_SVG}</span><span>${t('tool_search_title') || 'Búsqueda en Internet'}</span></div><div class="tool-card-header-actions"><span class="search-card-badge status-loading">${SPINNER_SVG} <span>${t('tool_badge_searching') || 'Buscando...'}</span></span><button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Minimizar'}">${CHEVRON_SVG}</button></div></div><div class="tool-card-collapsible-body"><div class="search-query-section"><div class="section-label">${t('tool_search_query')}</div><div class="query-badge">${SEARCH_ICON_SVG} <strong>${Markdown.escapeHtml(getQuery(args))}</strong></div></div><div class="search-results-section"><div class="section-label search-sources-label">${t('tool_search_searching') || 'Buscando fuentes...'}</div><div class="search-results-list tool-loading-placeholder">${SPINNER_SVG} <span>${t('tool_loading_search') || 'Consultando motores de búsqueda...'}</span></div></div></div></div>`;
+    const spinner = ui?.SPINNER_SVG || '';
+    const chevron = ui?.CHEVRON_SVG || '';
+    cardDiv.innerHTML = `<div class="web-search-card"><div class="search-card-header"><div class="search-card-title"><span>${SEARCH_ICON_SVG}</span><span>${t('tool_search_title') || 'Búsqueda en Internet'}</span></div><div class="tool-card-header-actions"><span class="search-card-badge status-loading">${spinner} <span>${t('tool_badge_searching') || 'Buscando...'}</span></span><button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Minimizar'}">${chevron}</button></div></div><div class="tool-card-collapsible-body"><div class="search-query-section"><div class="section-label">${t('tool_search_query')}</div><div class="query-badge">${SEARCH_ICON_SVG} <strong>${Markdown.escapeHtml(getQuery(args))}</strong></div></div><div class="search-results-section"><div class="section-label search-sources-label">${t('tool_search_searching') || 'Buscando fuentes...'}</div><div class="search-results-list tool-loading-placeholder">${spinner} <span>${t('tool_loading_search') || 'Consultando motores de búsqueda...'}</span></div></div></div></div>`;
     return cardDiv;
   }
 
@@ -47,14 +46,16 @@
     if (!cardDiv) return;
     const Markdown = ui?.markdown || { escapeHtml: (value) => String(value || ''), sanitizeUrl: (value) => String(value || ''), renderMarkdown: (value) => String(value || '') };
     const t = ui?.t || ((key) => key);
+    const checkSvg = ui?.CHECK_SVG || '';
+    const errorSvg = ui?.ERROR_SVG || '';
     const isSuccess = result?.success !== false && !result?.error;
     const count = result?.count || (Array.isArray(result?.results) ? result.results.length : 0);
     const badge = cardDiv.querySelector('.search-card-badge');
     if (badge) {
       badge.className = `search-card-badge ${isSuccess ? 'status-success' : 'status-error'}`;
       badge.innerHTML = isSuccess
-        ? `${CHECK_SVG} <span>${count} fuentes (${elapsedMs || 0}ms)</span>`
-        : `${ERROR_SVG} <span>Error búsqueda (${elapsedMs || 0}ms)</span>`;
+        ? `${checkSvg} <span>${count} fuentes (${elapsedMs || 0}ms)</span>`
+        : `${errorSvg} <span>Error búsqueda (${elapsedMs || 0}ms)</span>`;
     }
     const label = cardDiv.querySelector('.search-sources-label');
     if (label) label.textContent = t('tool_search_sources_label') || 'Fuentes y resultados encontrados:';

@@ -16,6 +16,7 @@
   }
 
   function createCardWrapper(ui) {
+    if (ui?.createCardWrapper) return ui.createCardWrapper();
     const doc = ui?.document || (typeof document !== 'undefined' ? document : null);
     if (!doc) return null;
     const cardDiv = doc.createElement('div');
@@ -23,10 +24,6 @@
     return cardDiv;
   }
 
-  const SPINNER_SVG = '<svg class="ui-icon ui-icon-spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"></path></svg>';
-  const CHECK_SVG = '<svg class="ui-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>';
-  const ERROR_SVG = '<svg class="ui-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>';
-  const CHEVRON_SVG = '<svg class="ui-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>';
   const PDF_ICON_SVG = '<svg class="ui-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>';
 
   function createLiveCard(args, ui) {
@@ -34,8 +31,10 @@
     if (!cardDiv) return null;
     const Markdown = ui?.markdown || { escapeHtml: (value) => String(value || ''), sanitizeUrl: (value) => String(value || '') };
     const t = ui?.t || ((key) => key);
+    const spinner = ui?.SPINNER_SVG || '';
+    const chevron = ui?.CHEVRON_SVG || '';
     const url = getUrl(args);
-    cardDiv.innerHTML = `<div class="web-request-card pdf-request-card"><div class="web-card-header"><div class="web-card-title"><span>${PDF_ICON_SVG}</span><span>${t('tool_pdf_title')}</span></div><div class="tool-card-header-actions"><span class="web-card-badge status-loading">${SPINNER_SVG} <span>${t('tool_badge_downloading') || 'Descargando...'}</span></span><button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Minimizar'}">${CHEVRON_SVG}</button></div></div><div class="tool-card-collapsible-body"><div class="web-card-section web-request-section"><div class="section-label">${t('tool_web_requested_url')}</div><div class="url-badge"><a href="${Markdown.sanitizeUrl(url)}" target="_blank" rel="noopener noreferrer">${Markdown.escapeHtml(url)}</a></div></div><div class="web-card-section web-response-section"><div class="section-label section-response-label">${t('tool_web_receiving') || 'Recibiendo contenido...'}</div><div class="web-response-body tool-loading-placeholder">${SPINNER_SVG} <span>${t('tool_loading_pdf')}</span></div></div></div></div>`;
+    cardDiv.innerHTML = `<div class="web-request-card pdf-request-card"><div class="web-card-header"><div class="web-card-title"><span>${PDF_ICON_SVG}</span><span>${t('tool_pdf_title')}</span></div><div class="tool-card-header-actions"><span class="web-card-badge status-loading">${spinner} <span>${t('tool_badge_downloading') || 'Descargando...'}</span></span><button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Minimizar'}">${chevron}</button></div></div><div class="tool-card-collapsible-body"><div class="web-card-section web-request-section"><div class="section-label">${t('tool_web_requested_url')}</div><div class="url-badge"><a href="${Markdown.sanitizeUrl(url)}" target="_blank" rel="noopener noreferrer">${Markdown.escapeHtml(url)}</a></div></div><div class="web-card-section web-response-section"><div class="section-label section-response-label">${t('tool_web_receiving') || 'Recibiendo contenido...'}</div><div class="web-response-body tool-loading-placeholder">${spinner} <span>${t('tool_loading_pdf')}</span></div></div></div></div>`;
     return cardDiv;
   }
 
@@ -43,14 +42,16 @@
     if (!cardDiv) return;
     const Markdown = ui?.markdown || { escapeHtml: (value) => String(value || '') };
     const t = ui?.t || ((key) => key);
+    const checkSvg = ui?.CHECK_SVG || '';
+    const errorSvg = ui?.ERROR_SVG || '';
     const success = result?.success !== false && !result?.error;
     const content = result?.content || result?.error || '';
     const badge = cardDiv.querySelector('.web-card-badge');
     if (badge) {
       badge.className = `web-card-badge ${success ? 'status-success' : 'status-error'}`;
       badge.innerHTML = success
-        ? `${CHECK_SVG} <span>PDF OK (${elapsedMs || 0}ms)</span>`
-        : `${ERROR_SVG} <span>Error PDF (${elapsedMs || 0}ms)</span>`;
+        ? `${checkSvg} <span>PDF OK (${elapsedMs || 0}ms)</span>`
+        : `${errorSvg} <span>Error PDF (${elapsedMs || 0}ms)</span>`;
     }
     const label = cardDiv.querySelector('.section-response-label');
     if (label) label.textContent = t('tool_web_content_received', { size: `${content.length} chars` }) || `Contenido recibido (${content.length} caracteres):`;

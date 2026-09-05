@@ -221,6 +221,26 @@ def minify_css_external(css: str) -> Optional[str]:
     return None
 
 
+def minify_js_external(js: str) -> Optional[str]:
+    """
+    Intenta minificar JavaScript utilizando esbuild si está disponible en el entorno.
+    Preserva nombres de funciones y clases maestras mediante --keep-names para compatibilidad.
+    """
+    try:
+        res = subprocess.run(
+            ['npx', '--yes', 'esbuild', '--minify', '--keep-names'],
+            input=js,
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        if res.stdout and res.stdout.strip():
+            return res.stdout.strip()
+    except Exception:
+        pass
+    return None
+
+
 def minify_css_fallback(css: str) -> str:
     """
     Minificador CSS seguro en Python puro.
@@ -577,12 +597,28 @@ def build_standalone_html(input_file: str, output_file: str, mode: str = "prod",
     concatenated_js = version_bootstrap + ";\n".join(js_parts)
     raw_js_size = len(concatenated_js.encode("utf-8"))
 
-    # 4. Eliminar comentarios de forma segura
+    # 4. Eliminar comentarios y optimizar JavaScript
     clean_js = strip_js_comments(concatenated_js)
     clean_js_size = len(clean_js.encode("utf-8"))
 
+    js_engine = "Python FSM"
+    if mode == "dev":
+        final_js = concatenated_js
+        js_engine = "Unminified (Dev)"
+    elif not force_fallback:
+        js_ext = minify_js_external(clean_js)
+        if js_ext is not None:
+            final_js = js_ext
+            js_engine = "esbuild JS"
+        else:
+            final_js = clean_js
+    else:
+        final_js = clean_js
+
+    final_js_size = len(final_js.encode("utf-8"))
+
     # 5. Comprimir con Gzip level 9 y convertir a Base64
-    b64_js, gzip_bytes, b64_bytes = compress_js_to_gzip_base64(clean_js)
+    b64_js, gzip_bytes, b64_bytes = compress_js_to_gzip_base64(final_js)
 
     # 6. Limpiar e integrar en HTML
     html_cleaned = raw_html
@@ -619,17 +655,17 @@ def build_standalone_html(input_file: str, output_file: str, mode: str = "prod",
     print("\n" + "=" * 70)
     print(f"✨ Bundle autónomo ('{os.path.basename(output_path)}') generado con éxito")
     print("=" * 70)
-    print(f"⚙️  Modo: {mode.upper()} | Compresión: Gzip Level 9 (Base64 Stream) | Motor CSS: {css_engine}")
+    print(f"⚙️  Modo: {mode.upper()} | Gzip L9 Base64 | CSS: {css_engine} | JS: {js_engine}")
     print(f"⏱️  Tiempo de compilación: {elapsed_time:.1f} ms")
     print("-" * 70)
     html_reduction = (1 - min_html_size / raw_html_size) * 100 if raw_html_size else 0
     css_reduction = (1 - min_css_size / raw_css_size) * 100 if raw_css_size else 0
-    js_reduction = (1 - clean_js_size / raw_js_size) * 100 if raw_js_size else 0
-    gzip_reduction = (1 - gzip_bytes / clean_js_size) * 100 if clean_js_size else 0
+    js_reduction = (1 - final_js_size / raw_js_size) * 100 if raw_js_size else 0
+    gzip_reduction = (1 - gzip_bytes / final_js_size) * 100 if final_js_size else 0
     print(f"  • HTML Markup:       {raw_html_size:>8,} bytes  ➜  {min_html_size:>8,} bytes  ({html_reduction:>5.1f}% reducción)")
     print(f"  • CSS Styles:        {raw_css_size:>8,} bytes  ➜  {min_css_size:>8,} bytes  ({css_reduction:>5.1f}% reducción)")
     print(f"  • JS Concatenado:    {raw_js_size:>8,} bytes")
-    print(f"  • JS Sin Comentarios:{clean_js_size:>8,} bytes  ({js_reduction:>5.1f}% reducción)")
+    print(f"  • JS Optimizado:     {final_js_size:>8,} bytes  ({js_reduction:>5.1f}% reducción)")
     print(f"  • JS Gzip (L9):      {gzip_bytes:>8,} bytes  ({gzip_reduction:>5.1f}% compresión)")
     print(f"  • JS Base64 Payload: {b64_bytes:>8,} bytes")
     print("-" * 70)

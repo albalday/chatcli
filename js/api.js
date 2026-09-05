@@ -19,6 +19,103 @@
   const ProvidersModule = typeof window !== 'undefined' ? (window.ChatProviders || {}) : (typeof require !== 'undefined' ? (() => { try { return require('./providers.js'); } catch(e) { return {}; } })() : {});
   const registry = ProvidersModule.registry || (ProvidersModule.ProviderRegistry ? new ProvidersModule.ProviderRegistry() : null);
 
+  const TOOL_NAME_MAP = Object.freeze({
+    // 1. Descarga y extracción de PDF
+    download_pdf: 'download_pdf',
+    fetch_pdf: 'download_pdf',
+    download_pdf_document: 'download_pdf',
+    fetch_pdf_document: 'download_pdf',
+    download_file: 'download_pdf',
+    downloadpdf: 'download_pdf',
+    fetchpdf: 'download_pdf',
+    downloadpdfdocument: 'download_pdf',
+    fetchpdfdocument: 'download_pdf',
+    downloadfile: 'download_pdf',
+    getpdf: 'download_pdf',
+    readpdf: 'download_pdf',
+
+    // 2. Navegación / Consulta de página web
+    fetch_web_page: 'fetch_web_page',
+    fetch_web: 'fetch_web_page',
+    fetch_url: 'fetch_web_page',
+    get_web_page: 'fetch_web_page',
+    read_web_page: 'fetch_web_page',
+    web_fetch: 'fetch_web_page',
+    browse_web: 'fetch_web_page',
+    fetchwebpage: 'fetch_web_page',
+    fetchweb: 'fetch_web_page',
+    fetchurl: 'fetch_web_page',
+    getwebpage: 'fetch_web_page',
+    readwebpage: 'fetch_web_page',
+    webpage: 'fetch_web_page',
+    browse: 'fetch_web_page',
+
+    // 3. Búsqueda en internet
+    search_web: 'search_web',
+    web_search: 'search_web',
+    duckduckgo_search: 'search_web',
+    duckduckgo: 'search_web',
+    search_internet: 'search_web',
+    internet_search: 'search_web',
+    searchweb: 'search_web',
+    websearch: 'search_web',
+    duckduckgosearch: 'search_web',
+    searchinternet: 'search_web',
+    internetsearch: 'search_web',
+    search: 'search_web',
+
+    // 4. Ejecución de JavaScript
+    execute_javascript: 'execute_javascript',
+    execute_js: 'execute_javascript',
+    run_javascript: 'execute_javascript',
+    run_js: 'execute_javascript',
+    executejavascript: 'execute_javascript',
+    executejs: 'execute_javascript',
+    runjavascript: 'execute_javascript',
+    runjs: 'execute_javascript',
+    javascript: 'execute_javascript',
+    evaljs: 'execute_javascript',
+    evaljavascript: 'execute_javascript',
+
+    // 5. Renderizado de Gráficos (render_chart)
+    render_chart: 'render_chart',
+    draw_chart: 'render_chart',
+    create_chart: 'render_chart',
+    plot_chart: 'render_chart',
+    generate_chart: 'render_chart',
+    show_chart: 'render_chart',
+    renderchart: 'render_chart',
+    drawchart: 'render_chart',
+    createchart: 'render_chart',
+    plotchart: 'render_chart',
+    chart: 'render_chart',
+    grafico: 'render_chart',
+
+    // 6. Base de Conocimiento RAG
+    read_knowledge_chunk: 'read_knowledge_chunk',
+    readknowledgechunk: 'read_knowledge_chunk',
+    list_documents: 'list_documents',
+    listdocuments: 'list_documents',
+    list_knowledge_base: 'list_documents',
+    listknowledgebase: 'list_documents',
+    list_docs: 'list_documents',
+    listdocs: 'list_documents',
+    get_documents: 'list_documents',
+    getdocuments: 'list_documents',
+    listar_documentos: 'list_documents',
+    listardocumentos: 'list_documents',
+    search_knowledge_base: 'search_knowledge_base',
+    searchknowledgebase: 'search_knowledge_base',
+    search_kb: 'search_knowledge_base',
+    searchkb: 'search_knowledge_base',
+    search_documents: 'search_knowledge_base',
+    searchdocuments: 'search_knowledge_base',
+    search_knowledge: 'search_knowledge_base',
+    searchknowledge: 'search_knowledge_base',
+    buscar_en_documentos: 'search_knowledge_base',
+    buscarendocumentos: 'search_knowledge_base'
+  });
+
   /**
    * Normaliza los nombres de las herramientas admitiendo variaciones con y sin guiones bajos.
    */
@@ -26,107 +123,7 @@
     if (!rawName) return '';
     const clean = String(rawName).trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
     const noUnderscore = clean.replace(/_/g, '');
-
-    // 1. Descarga y extracción de PDF
-    if (
-      clean === 'download_pdf' ||
-      clean === 'fetch_pdf' ||
-      clean === 'download_pdf_document' ||
-      clean === 'fetch_pdf_document' ||
-      clean === 'download_file' ||
-      noUnderscore === 'downloadpdf' ||
-      noUnderscore === 'fetchpdf' ||
-      noUnderscore === 'downloadpdfdocument' ||
-      noUnderscore === 'fetchpdfdocument' ||
-      noUnderscore === 'downloadfile' ||
-      noUnderscore === 'getpdf' ||
-      noUnderscore === 'readpdf'
-    ) {
-      return 'download_pdf';
-    }
-
-    // 2. Navegación / Consulta de página web
-    if (
-      clean === 'fetch_web_page' ||
-      clean === 'fetch_web' ||
-      clean === 'fetch_url' ||
-      clean === 'get_web_page' ||
-      clean === 'read_web_page' ||
-      clean === 'web_fetch' ||
-      clean === 'browse_web' ||
-      noUnderscore === 'fetchwebpage' ||
-      noUnderscore === 'fetchweb' ||
-      noUnderscore === 'fetchurl' ||
-      noUnderscore === 'getwebpage' ||
-      noUnderscore === 'readwebpage' ||
-      noUnderscore === 'webpage' ||
-      noUnderscore === 'browse'
-    ) {
-      return 'fetch_web_page';
-    }
-
-    // 3. Búsqueda en internet
-    if (
-      clean === 'search_web' ||
-      clean === 'web_search' ||
-      clean === 'duckduckgo_search' ||
-      clean === 'duckduckgo' ||
-      clean === 'search_internet' ||
-      clean === 'internet_search' ||
-      noUnderscore === 'searchweb' ||
-      noUnderscore === 'websearch' ||
-      noUnderscore === 'duckduckgosearch' ||
-      noUnderscore === 'searchinternet' ||
-      noUnderscore === 'internetsearch' ||
-      noUnderscore === 'search'
-    ) {
-      return 'search_web';
-    }
-
-    // 4. Ejecución de JavaScript
-    if (
-      clean === 'execute_javascript' ||
-      clean === 'execute_js' ||
-      clean === 'run_javascript' ||
-      clean === 'run_js' ||
-      noUnderscore === 'executejavascript' ||
-      noUnderscore === 'executejs' ||
-      noUnderscore === 'runjavascript' ||
-      noUnderscore === 'runjs' ||
-      noUnderscore === 'javascript' ||
-      noUnderscore === 'evaljs' ||
-      noUnderscore === 'evaljavascript'
-    ) {
-      return 'execute_javascript';
-    }
-
-    // 5. Renderizado de Gráficos (render_chart)
-    if (
-      clean === 'render_chart' ||
-      clean === 'draw_chart' ||
-      clean === 'create_chart' ||
-      clean === 'plot_chart' ||
-      clean === 'generate_chart' ||
-      clean === 'show_chart' ||
-      noUnderscore === 'renderchart' ||
-      noUnderscore === 'drawchart' ||
-      noUnderscore === 'createchart' ||
-      noUnderscore === 'plotchart' ||
-      noUnderscore === 'chart' ||
-      noUnderscore === 'grafico'
-    ) {
-      return 'render_chart';
-    }
-
-    // 6. Base de Conocimiento RAG (read_knowledge_chunk)
-    if (
-      clean === 'read_knowledge_chunk' ||
-      noUnderscore === 'readknowledgechunk'
-    ) {
-      return 'read_knowledge_chunk';
-    }
-
-    return clean;
+    return TOOL_NAME_MAP[clean] || TOOL_NAME_MAP[noUnderscore] || clean;
   }
 
   /**

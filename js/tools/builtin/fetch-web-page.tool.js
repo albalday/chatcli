@@ -16,6 +16,7 @@
   }
 
   function createCardWrapper(ui) {
+    if (ui?.createCardWrapper) return ui.createCardWrapper();
     const doc = ui?.document || (typeof document !== 'undefined' ? document : null);
     if (!doc) return null;
     const cardDiv = doc.createElement('div');
@@ -23,10 +24,6 @@
     return cardDiv;
   }
 
-  const SPINNER_SVG = '<svg class="ui-icon ui-icon-spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"></path></svg>';
-  const CHECK_SVG = '<svg class="ui-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>';
-  const ERROR_SVG = '<svg class="ui-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>';
-  const CHEVRON_SVG = '<svg class="ui-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>';
   const GLOBE_ICON_SVG = '<svg class="ui-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>';
 
   function createLiveCard(args, ui) {
@@ -34,8 +31,10 @@
     if (!cardDiv) return null;
     const Markdown = ui?.markdown || { escapeHtml: (value) => String(value || ''), sanitizeUrl: (value) => String(value || '') };
     const t = ui?.t || ((key) => key);
+    const spinner = ui?.SPINNER_SVG || '';
+    const chevron = ui?.CHEVRON_SVG || '';
     const url = getUrl(args);
-    cardDiv.innerHTML = `<div class="web-request-card"><div class="web-card-header"><div class="web-card-title"><span>${GLOBE_ICON_SVG}</span><span>${t('tool_web_title')}</span></div><div class="tool-card-header-actions"><span class="web-card-badge status-loading">${SPINNER_SVG} <span>${t('tool_badge_fetching') || 'Consultando...'}</span></span><button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Minimizar'}">${CHEVRON_SVG}</button></div></div><div class="tool-card-collapsible-body"><div class="web-card-section web-request-section"><div class="section-label">${t('tool_web_requested_url')}</div><div class="url-badge"><a href="${Markdown.sanitizeUrl(url)}" target="_blank" rel="noopener noreferrer">${Markdown.escapeHtml(url)}</a></div></div><div class="web-card-section web-response-section"><div class="section-label section-response-label">${t('tool_web_receiving') || 'Recibiendo contenido...'}</div><div class="web-response-body tool-loading-placeholder">${SPINNER_SVG} <span>${t('tool_loading_web')}</span></div></div></div></div>`;
+    cardDiv.innerHTML = `<div class="web-request-card"><div class="web-card-header"><div class="web-card-title"><span>${GLOBE_ICON_SVG}</span><span>${t('tool_web_title')}</span></div><div class="tool-card-header-actions"><span class="web-card-badge status-loading">${spinner} <span>${t('tool_badge_fetching') || 'Consultando...'}</span></span><button type="button" class="btn-tool-collapse" title="${t('tool_btn_collapse') || 'Minimizar'}">${chevron}</button></div></div><div class="tool-card-collapsible-body"><div class="web-card-section web-request-section"><div class="section-label">${t('tool_web_requested_url')}</div><div class="url-badge"><a href="${Markdown.sanitizeUrl(url)}" target="_blank" rel="noopener noreferrer">${Markdown.escapeHtml(url)}</a></div></div><div class="web-card-section web-response-section"><div class="section-label section-response-label">${t('tool_web_receiving') || 'Recibiendo contenido...'}</div><div class="web-response-body tool-loading-placeholder">${spinner} <span>${t('tool_loading_web')}</span></div></div></div></div>`;
     return cardDiv;
   }
 
@@ -43,6 +42,8 @@
     if (!cardDiv) return;
     const Markdown = ui?.markdown || { escapeHtml: (value) => String(value || '') };
     const t = ui?.t || ((key) => key);
+    const checkSvg = ui?.CHECK_SVG || '';
+    const errorSvg = ui?.ERROR_SVG || '';
     const success = result?.success !== false && !result?.error;
     const status = result?.status || (success ? 200 : 500);
     const content = result?.content || result?.error || '';
@@ -50,8 +51,8 @@
     if (badge) {
       badge.className = `web-card-badge ${success ? 'status-success' : 'status-error'}`;
       badge.innerHTML = success
-        ? `${CHECK_SVG} <span>HTTP ${status} OK (${elapsedMs || 0}ms)</span>`
-        : `${ERROR_SVG} <span>HTTP ${status} Error (${elapsedMs || 0}ms)</span>`;
+        ? `${checkSvg} <span>HTTP ${status} OK (${elapsedMs || 0}ms)</span>`
+        : `${errorSvg} <span>HTTP ${status} Error (${elapsedMs || 0}ms)</span>`;
     }
     const label = cardDiv.querySelector('.section-response-label');
     if (label) label.textContent = t('tool_web_content_received', { size: `${content.length} chars` }) || `Contenido recibido (${content.length} caracteres):`;

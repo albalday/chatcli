@@ -22,6 +22,7 @@
   };
 
   function createCardWrapper(ui) {
+    if (ui?.createCardWrapper) return ui.createCardWrapper();
     const doc = ui?.document || (typeof document !== 'undefined' ? document : null);
     if (!doc) return null;
     const cardDiv = doc.createElement('div');

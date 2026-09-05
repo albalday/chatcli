@@ -11,17 +11,14 @@
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  function getI18n() {
-    return (typeof window !== 'undefined' && window.ChatI18n)
-      ? window.ChatI18n
-      : (typeof require !== 'undefined' ? (function () { try { return require('./i18n.js'); } catch (e) { return null; } })() : null);
+  function resolveDep(globalName, relPath) {
+    if (typeof window !== 'undefined' && window[globalName]) return window[globalName];
+    if (typeof require !== 'undefined') { try { return require(relPath); } catch (e) { return null; } }
+    return null;
   }
 
-  function getApi() {
-    return (typeof window !== 'undefined' && window.ChatAPI)
-      ? window.ChatAPI
-      : (typeof require !== 'undefined' ? (function () { try { return require('./api.js'); } catch (e) { return null; } })() : null);
-  }
+  const getI18n = () => resolveDep('ChatI18n', './i18n.js');
+  const getApi = () => resolveDep('ChatAPI', './api.js');
 
   function t(key, params) {
     const I18n = getI18n();
