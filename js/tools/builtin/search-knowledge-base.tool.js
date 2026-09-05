@@ -7,11 +7,11 @@
 
   const definition = {
     name: 'search_knowledge_base',
-    description: 'Busca fragmentos relevantes en la base de conocimiento. Usa scope="auto" (por defecto) para resolver la fuente automáticamente. Usa scope="document" y documentHint para concentrar en un archivo, o scope="corpus" para rastreo transversal.',
+    description: 'Busca fragmentos relevantes o imágenes en la base de conocimiento. Usa scope="document" con documentHint si el usuario menciona un documento concreto o filtro (ej: "AMD_2015_10K.pdf"), scope="corpus" para búsquedas transversales o scope="auto" (por defecto).',
     parameters: {
       type: 'object',
       properties: {
-        query: { type: 'string', description: 'Término, tema o pregunta clave a buscar en la base de conocimiento.' },
+        query: { type: 'string', description: 'Término, tema, magnitud o palabra clave a buscar en el documento o base.' },
         scope: {
           type: 'string',
           enum: ['auto', 'document', 'corpus'],
@@ -19,7 +19,7 @@
         },
         documentHint: {
           type: 'string',
-          description: 'Nombre, título o términos distintivos de la fuente buscada. Recomendado con scope=document; no inventes un identificador interno.'
+          description: 'Nombre exacto, archivo o filtro de la fuente indicada por el usuario (ej: "AMD_2015_10K.pdf", "WALMART_2015_10K.pdf").'
         },
         limit: { type: 'integer', description: 'Número opcional de fragmentos a devolver (por defecto 10).' }
       },

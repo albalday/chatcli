@@ -7,7 +7,7 @@
 
   const definition = {
     name: 'list_documents',
-    description: 'Devuelve el catálogo de documentos disponibles con su número de fragmentos e imágenes. Úsala para saber qué documentos contienen imágenes o como apoyo cuando no conozcas las fuentes de la base.',
+    description: 'Devuelve el catálogo de documentos disponibles (título, fragmentos e imágenes). Úsala como apoyo cuando no conozcas las fuentes de la base o si una búsqueda previa no encuentra el documento.',
     parameters: { type: 'object', properties: {}, required: [] }
   };
 

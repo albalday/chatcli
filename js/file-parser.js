@@ -1828,7 +1828,7 @@
           if (combinedRefs.includes(imgObjNum + ' 0 R')) {
             assignedImages.add(imgObjNum);
             imgData.page = pageNum;
-            imgData.label = `Diagrama / Esquema (Pág. ${pageNum})`;
+            imgData.label = `Diagrama / Imagen (Pág. ${pageNum})`;
             pageImages.push(imgData);
             allExtractedImages.push(imgData);
           }
@@ -1851,7 +1851,7 @@
       if (!assignedImages.has(imgObjNum)) {
         assignedImages.add(imgObjNum);
         imgData.page = 1;
-        imgData.label = `Diagrama / Esquema (Pág. 1)`;
+        imgData.label = `Diagrama / Imagen (Pág. 1)`;
         allExtractedImages.push(imgData);
         if (pages.length > 0) {
           pages[0] += `\n\n![${imgData.label}](rag-image://__DOC_ID__:${imgData.id})\n\n`;
